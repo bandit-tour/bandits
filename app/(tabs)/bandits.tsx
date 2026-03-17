@@ -10,12 +10,13 @@ import {
 } from 'react-native';
 
 import {
-  // getBandits, 
+  // getBandits,
   // ↑ Earlier method WITHOUT vibes/tags.
   // Kept commented intentionally for reference / rollback.
   getBanditsWithTags, // ✅ Correct method: fetches bandits + bandit_tags + tags
   getUniqueCities,
   toggleBanditLike,
+  getUserLikedBanditIds,
 } from '@/app/services/bandits';
 
 import { getBanditEventCategories } from '@/app/services/events';
@@ -65,7 +66,7 @@ export default function BanditsScreen() {
 
   const loadInitialData = async () => {
     try {
-      const [banditsData, citiesData] = await Promise.all([
+      const [banditsData, citiesData, likedBanditIds] = await Promise.all([
         // IMPORTANT:
         // Using getBanditsWithTags so bandit_tags are available
         // for:
@@ -73,9 +74,15 @@ export default function BanditsScreen() {
         // 2. Client-side vibe filtering
         getBanditsWithTags(),
         getUniqueCities(),
+        getUserLikedBanditIds(),
       ]);
 
-      setBandits(banditsData);
+      const banditsWithUserLikes = banditsData.map((bandit: any) => ({
+        ...bandit,
+        is_liked: likedBanditIds.has(bandit.id),
+      }));
+
+      setBandits(banditsWithUserLikes);
       setCities(citiesData);
 
       // Auto-select city if only one exists

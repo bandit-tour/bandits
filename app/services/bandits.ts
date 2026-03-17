@@ -42,15 +42,47 @@ export async function getBanditsWithTags() {
   return data || [];
 }
 
-export async function toggleBanditLike(id: string, currentLikeStatus: boolean): Promise<void> {
-  const { error } = await supabase
-    .from('bandit')
-    .update({ is_liked: !currentLikeStatus })
-    .eq('id', id);
+export async function toggleBanditLike(
+  id: string,
+  currentLikeStatus: boolean
+): Promise<void> {
+  const {
+    data: { user },
+    error: userError,
+  } = await supabase.auth.getUser();
 
-  if (error) {
-    console.error('Error toggling bandit like:', error);
-    throw error;
+  if (userError) {
+    console.error('Error getting current user for bandit like:', userError);
+    throw userError;
+  }
+
+  if (!user) {
+    throw new Error('User not authenticated');
+  }
+
+  if (currentLikeStatus) {
+    // Remove like for this user/bandit pair
+    const { error } = await supabase
+      .from('bandit_user_likes')
+      .delete()
+      .eq('user_id', user.id)
+      .eq('bandit_id', id);
+
+    if (error) {
+      console.error('Error removing bandit like:', error);
+      throw error;
+    }
+  } else {
+    // Add like for this user/bandit pair
+    const { error } = await supabase.from('bandit_user_likes').insert({
+      user_id: user.id,
+      bandit_id: id,
+    });
+
+    if (error) {
+      console.error('Error adding bandit like:', error);
+      throw error;
+    }
   }
 }
 
@@ -149,4 +181,33 @@ export async function getBanditTags(banditId: string): Promise<string[]> {
       ?.map((row: any) => row.tags?.name)
       .filter(Boolean) || []
   );
+}
+
+// Get all liked bandit IDs for current user (efficient for bulk checking)
+export async function getUserLikedBanditIds(): Promise<Set<string>> {
+  const {
+    data: { user },
+    error: userError,
+  } = await supabase.auth.getUser();
+
+  if (userError) {
+    console.error('Error getting current user for bandit liked IDs:', userError);
+    throw userError;
+  }
+
+  if (!user) {
+    return new Set();
+  }
+
+  const { data, error } = await supabase
+    .from('bandit_user_likes')
+    .select('bandit_id')
+    .eq('user_id', user.id);
+
+  if (error) {
+    console.error('Error fetching user liked bandit IDs:', error);
+    throw error;
+  }
+
+  return new Set(data?.map((item: any) => item.bandit_id) || []);
 }
