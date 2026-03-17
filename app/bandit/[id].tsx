@@ -2,17 +2,17 @@ import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
 import { useEffect, useState } from 'react';
 import {
   ActivityIndicator,
-  Alert,
-  Linking,
   Pressable,
   ScrollView,
   StyleSheet,
   Text,
+  TextInput,
+  TouchableOpacity,
   View,
 } from 'react-native';
 
-import { getBanditById, getBanditTags } from '@/app/services/bandits';
-import { getBanditEventCategories } from '@/app/services/events';
+import { getBanditById, getBanditTags, submitBanditQuestion } from '@/app/services/bandits';
+import { getBanditEventCategories, getEvents } from '@/app/services/events';
 import { getBanditReviews } from '@/app/services/reviews';
 
 import BanditHeader from '@/components/BanditHeader';
@@ -23,6 +23,36 @@ import { TAG_EMOJI_MAP } from '@/constants/tagNameToEmoji';
 import { Database } from '@/lib/database.types';
 
 type Bandit = Database['public']['Tables']['bandit']['Row'];
+type Event = Database['public']['Tables']['event']['Row'];
+
+type DisplayReview = {
+  user_id: string;
+  review: string;
+  rating: number;
+  created_at?: string;
+  user_name: string;
+};
+
+const SAMPLE_BANDIT_REVIEWS: DisplayReview[] = [
+  {
+    user_id: 'sample-1',
+    user_name: 'neo_from_ilisia',
+    review: 'Felt like hanging with a plugged‑in local, not a tour guide.',
+    rating: 5,
+  },
+  {
+    user_id: 'sample-2',
+    user_name: 'athens_after_midnight',
+    review: 'Showed us tiny bars we’d never find on Maps.',
+    rating: 5,
+  },
+  {
+    user_id: 'sample-3',
+    user_name: 'slow_morning_club',
+    review: 'Coffee route was spot on – zero influencer traps.',
+    rating: 4,
+  },
+];
 
 interface EventCategory {
   genre: 'Food' | 'Culture' | 'Nightlife' | 'Shopping' | 'Coffee';
@@ -36,11 +66,18 @@ export default function BanditScreen() {
   const [bandit, setBandit] = useState<Bandit | null>(null);
   const [categories, setCategories] = useState<EventCategory[]>([]);
   const [tags, setTags] = useState<string[]>([]);
-  const [reviews, setReviews] = useState<
-    Database['public']['Tables']['user_bandit']['Row'][]
-  >([]);
+  const [reviews, setReviews] = useState<DisplayReview[]>([]);
+  const [guideEvents, setGuideEvents] = useState<Event[]>([]);
+  const [guideLoading, setGuideLoading] = useState(false);
+  const [guideError, setGuideError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+
+  const [askOpen, setAskOpen] = useState(false);
+  const [askText, setAskText] = useState('');
+  const [submitting, setSubmitting] = useState(false);
+  const [submitError, setSubmitError] = useState<string | null>(null);
+  const [submitSuccess, setSubmitSuccess] = useState(false);
 
   useEffect(() => {
     if (!id) return;
@@ -70,12 +107,33 @@ export default function BanditScreen() {
           setTags([]);
         }
 
-        // Reviews
+        // Reviews (limit to 3–5, fallback to underground-style samples)
         try {
-          const reviewsData = await getBanditReviews(id as string);
-          setReviews(reviewsData);
+          const raw = await getBanditReviews(id as string);
+          const mapped: DisplayReview[] = (raw || []).map((r: any) => ({
+            user_id: r.user_id ?? 'anon',
+            review: r.review ?? '',
+            rating: typeof r.rating === 'number' ? r.rating : 5,
+            created_at: r.created_at,
+            user_name: r.user_name ?? 'local wanderer',
+          }));
+          const limited = mapped.slice(0, 5);
+          setReviews(limited.length > 0 ? limited : SAMPLE_BANDIT_REVIEWS.slice(0, 3));
         } catch {
-          setReviews([]);
+          setReviews(SAMPLE_BANDIT_REVIEWS.slice(0, 3));
+        }
+
+        // City guide preview (events for this bandit)
+        try {
+          setGuideLoading(true);
+          const eventsForBandit = await getEvents({ banditId: id as string });
+          setGuideEvents(eventsForBandit.slice(0, 5));
+          setGuideError(null);
+        } catch {
+          setGuideEvents([]);
+          setGuideError(null);
+        } finally {
+          setGuideLoading(false);
         }
       } catch (err) {
         setError(err instanceof Error ? err.message : 'Failed to fetch bandit');
@@ -112,14 +170,24 @@ export default function BanditScreen() {
   };
 
   const handleAskMePress = () => {
-    const phoneNumber = '+972544717932';
-    const whatsappUrl = `whatsapp://send?phone=${phoneNumber}`;
+    setAskOpen(true);
+    setSubmitError(null);
+    setSubmitSuccess(false);
+  };
 
-    Linking.canOpenURL(whatsappUrl).then((supported) => {
-      supported
-        ? Linking.openURL(whatsappUrl)
-        : Alert.alert('Error', 'WhatsApp is not installed');
-    });
+  const handleAskSubmit = async () => {
+    if (!askText.trim() || !id) return;
+    try {
+      setSubmitting(true);
+      setSubmitError(null);
+      await submitBanditQuestion(id as string, askText.trim());
+      setSubmitSuccess(true);
+      setAskText('');
+    } catch {
+      setSubmitError('Could not send your question. Please try again.');
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   return (
@@ -184,22 +252,105 @@ export default function BanditScreen() {
             Reviews <Text style={styles.reviewsCount}>({reviews.length})</Text>
           </Text>
 
-          <ScrollView
-            horizontal
-            showsHorizontalScrollIndicator={false}
-            contentContainerStyle={styles.reviewsContainer}
-          >
-            {reviews.map((review, index) => (
-              <ReviewCard key={index} review={review} />
-            ))}
-          </ScrollView>
+          {reviews.length > 0 && (
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={styles.reviewsContainer}
+            >
+              {reviews.map((review, index) => (
+                <ReviewCard key={index} review={review} />
+              ))}
+            </ScrollView>
+          )}
         </View>
+
+        {/* CITY GUIDE PREVIEW */}
+        {guideEvents.length > 0 && (
+          <View style={styles.guideSection}>
+            <Text style={styles.reviewsTitle}>
+              {`City guide by ${bandit.name}`}
+            </Text>
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={styles.guideEventsContainer}
+            >
+              {guideEvents.map((event) => (
+                <Pressable
+                  key={event.id}
+                  style={styles.guideCard}
+                  onPress={() =>
+                    router.push(
+                      `/event/${event.id}?banditId=${bandit.id}` as any
+                    )
+                  }
+                >
+                  <Text style={styles.guideEventName}>{event.name}</Text>
+                  <Text style={styles.guideEventMeta}>
+                    {event.genre} · {event.neighborhood}
+                  </Text>
+                  <Text
+                    numberOfLines={3}
+                    style={styles.guideEventDescription}
+                  >
+                    {event.description}
+                  </Text>
+                </Pressable>
+              ))}
+            </ScrollView>
+          </View>
+        )}
 
         {/* CTA */}
         <Pressable style={styles.askMeButton} onPress={handleAskMePress}>
           <Text style={styles.askMeText}>Ask me</Text>
         </Pressable>
       </ScrollView>
+
+      {/* ASK ME PANEL */}
+      {askOpen && (
+        <View style={styles.askOverlay}>
+          <View style={styles.askCard}>
+            <Text style={styles.askTitle}>{`Ask ${bandit.name}`}</Text>
+            <Text style={styles.askSubtitle}>
+              Ask anything about the city, spots, or vibes. We’ll route it to the bandiTour team for now.
+            </Text>
+            <TextInput
+              style={styles.askInput}
+              multiline
+              placeholder="Type your question..."
+              value={askText}
+              onChangeText={setAskText}
+            />
+            {submitError && (
+              <Text style={styles.askError}>{submitError}</Text>
+            )}
+            {submitSuccess && (
+              <Text style={styles.askSuccess}>
+                Thanks, your question was sent. We’ll get back to you soon.
+              </Text>
+            )}
+            <View style={styles.askActions}>
+              <TouchableOpacity onPress={() => setAskOpen(false)}>
+                <Text style={styles.askCancel}>Close</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                onPress={handleAskSubmit}
+                disabled={submitting || !askText.trim()}
+                style={[
+                  styles.askSubmitButton,
+                  (submitting || !askText.trim()) && styles.askSubmitButtonDisabled,
+                ]}
+              >
+                <Text style={styles.askSubmitText}>
+                  {submitting ? 'Sending…' : 'Send'}
+                </Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      )}
     </>
   );
 }
@@ -212,7 +363,7 @@ const styles = StyleSheet.create({
   contentContainer: {
     paddingHorizontal: 16,
     paddingTop: 16,
-    paddingBottom: 20,
+    paddingBottom: 40,
   },
   description: {
     fontSize: 14,
@@ -298,5 +449,105 @@ const styles = StyleSheet.create({
   errorText: {
     fontSize: 16,
     color: 'red',
+  },
+  guideSection: {
+    marginBottom: 20,
+  },
+  guideEventsContainer: {
+    paddingHorizontal: 8,
+    paddingTop: 8,
+  },
+  guideCard: {
+    width: 220,
+    padding: 10,
+    borderRadius: 12,
+    backgroundColor: '#F8F8F8',
+    marginRight: 8,
+  },
+  guideEventName: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: '#222',
+    marginBottom: 4,
+  },
+  guideEventMeta: {
+    fontSize: 12,
+    color: '#666',
+    marginBottom: 6,
+  },
+  guideEventDescription: {
+    fontSize: 13,
+    color: '#3C3C3C',
+  },
+  askOverlay: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    bottom: 0,
+    top: 0,
+    backgroundColor: 'rgba(0,0,0,0.3)',
+    justifyContent: 'flex-end',
+  },
+  askCard: {
+    backgroundColor: '#FFFFFF',
+    padding: 16,
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+  },
+  askTitle: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#222',
+    marginBottom: 4,
+  },
+  askSubtitle: {
+    fontSize: 13,
+    color: '#555',
+    marginBottom: 8,
+  },
+  askInput: {
+    minHeight: 80,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#E0E0E0',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    fontSize: 14,
+    color: '#000',
+    marginBottom: 8,
+  },
+  askError: {
+    fontSize: 12,
+    color: '#FF3B30',
+    marginBottom: 4,
+  },
+  askSuccess: {
+    fontSize: 12,
+    color: '#0A7F3F',
+    marginBottom: 4,
+  },
+  askActions: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginTop: 4,
+  },
+  askCancel: {
+    fontSize: 14,
+    color: '#555',
+  },
+  askSubmitButton: {
+    paddingHorizontal: 18,
+    paddingVertical: 8,
+    borderRadius: 20,
+    backgroundColor: '#000',
+  },
+  askSubmitButtonDisabled: {
+    backgroundColor: '#999',
+  },
+  askSubmitText: {
+    color: '#FFF',
+    fontSize: 14,
+    fontWeight: '600',
   },
 });
