@@ -3,6 +3,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { ActivityIndicator, Image, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 
 import { getSpotsByBanditId } from '@/app/services/spots';
+import { getEvents } from '@/app/services/events';
 import { getTrailsByBanditId, TrailWithStops } from '@/app/services/trails';
 import { generateAiTrailFromSpots, GeneratedTrail } from '@/app/services/aiTrails';
 import EventCategories from '@/components/EventCategories';
@@ -23,33 +24,12 @@ function categoryToGenre(category: string): Event['genre'] {
   return EVENT_GENRES.includes(cap as Event['genre']) ? (cap as Event['genre']) : 'Food';
 }
 
-function spotToEventLike(spot: Spot): Event {
-  return {
-    id: spot.id,
-    name: spot.name,
-    genre: categoryToGenre(spot.category),
-    start_time: '',
-    end_time: '',
-    timing_info: '',
-    location_lat: 0,
-    location_lng: 0,
-    address: spot.city ?? '',
-    city: spot.city ?? '',
-    neighborhood: '',
-    description: spot.description ?? '',
-    rating: 0,
-    created_at: spot.created_at ?? new Date().toISOString(),
-    image_url: 'https://zubcakeamyfqatdmleqx.supabase.co/storage/v1/object/public/banditsassets4/assets/jazzInjazz.png',
-    link: '',
-    image_gallery: null,
-  };
-}
-
 export default function CityGuideScreen() {
   const { banditId, genre } = useLocalSearchParams();
   const router = useRouter();
   const [bandit, setBandit] = useState<Bandit | null>(null);
-  const [allSpots, setAllSpots] = useState<Spot[]>([]);
+  const [allSpots, setAllSpots] = useState<Spot[]>([]); // for AI vibes only
+  const [events, setEvents] = useState<Event[]>([]);
   const [trails, setTrails] = useState<TrailWithStops[]>([]);
   const [selectedGenre, setSelectedGenre] = useState<string>(genre as string || '');
   const [loading, setLoading] = useState(true);
@@ -71,12 +51,20 @@ export default function CityGuideScreen() {
         if (banditError) throw banditError;
         setBandit(banditData);
 
-        const [spotsData, trailsData] = await Promise.all([
-          getSpotsByBanditId(banditId as string),
+        const [spotsData, trailsData, eventsData] = await Promise.all([
+          getSpotsByBanditId(banditId as string), // AI-only
           getTrailsByBanditId(banditId as string),
+          getEvents({ banditId: banditId as string }), // primary city guide source
         ]);
+        console.log('[CityGuide] loaded', {
+          banditId,
+          spotsCount: spotsData?.length ?? 0,
+          eventsCount: eventsData?.length ?? 0,
+          trailsCount: trailsData?.length ?? 0,
+        });
         setAllSpots(spotsData);
         setTrails(trailsData);
+        setEvents(eventsData ?? []);
       } catch (err) {
         setError(err instanceof Error ? err.message : 'Failed to fetch data');
       } finally {
@@ -87,22 +75,22 @@ export default function CityGuideScreen() {
     fetchData();
   }, [banditId]);
 
-  const eventLikeList = useMemo(() => allSpots.map(spotToEventLike), [allSpots]);
-
-  const filteredEvents = selectedGenre
-    ? eventLikeList.filter((e) => e.genre === selectedGenre)
-    : eventLikeList;
+  const filteredEvents = useMemo(() => {
+    const base = events;
+    if (!selectedGenre) return base;
+    return base.filter((e) => e.genre === selectedGenre);
+  }, [events, selectedGenre]);
 
   const eventCategories = useMemo(() => {
     const categoryCounts: { [key: string]: number } = {};
-    eventLikeList.forEach((e) => {
+    events.forEach((e) => {
       if (e.genre) categoryCounts[e.genre] = (categoryCounts[e.genre] || 0) + 1;
     });
     return Object.entries(categoryCounts).map(([g, count]) => ({
       genre: g as EventGenre,
       count,
     }));
-  }, [eventLikeList]);
+  }, [events]);
 
   const handleGetVibe = () => {
     if (!allSpots.length) {
@@ -213,9 +201,14 @@ export default function CityGuideScreen() {
 
         {/* AI vibe button + inline trail */}
         <View style={styles.aiSection}>
+          <Text style={styles.aiPunchline}>For when the map feels too clean.</Text>
+          <Text style={styles.aiPunchlineText}>
+            No bus tours. No best‑of lists.
+            Just a loose thread into the parts of Athens locals don’t post about.
+          </Text>
           <Pressable style={styles.aiButton} onPress={handleGetVibe}>
             <Text style={styles.aiButtonText}>{aiLoading ? 'Finding a vibe…' : 'Get a vibe'}</Text>
-            <Text style={styles.aiButtonSubtext}>Loose, AI-suggested trail from existing spots.</Text>
+            <Text style={styles.aiButtonSubtext}>Pull a trail from local‑coded spots.</Text>
           </Pressable>
           {aiTrail && (
             <View style={styles.aiTrailContainer}>
@@ -369,6 +362,21 @@ const styles = StyleSheet.create({
     fontWeight: '400',
     fontSize: 12,
     color: '#D0D0D0',
+  },
+  aiPunchline: {
+    fontFamily: 'Caros',
+    fontWeight: '700',
+    fontSize: 14,
+    color: '#111',
+    marginBottom: 4,
+  },
+  aiPunchlineText: {
+    fontFamily: 'Caros',
+    fontWeight: '400',
+    fontSize: 12,
+    color: '#4A4A4A',
+    marginBottom: 10,
+    lineHeight: 18,
   },
   aiTrailContainer: {
     backgroundColor: '#F5F5F5',

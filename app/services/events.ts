@@ -39,7 +39,9 @@ export async function getEvents(filters: EventFilters = {}): Promise<Event[]> {
   if (filters.banditId) {
     query = supabase
       .from('bandit_event')
-      .select('event:event(*)')
+      // Join correctly via the event_id foreign key
+      // bandit_event.event_id -> event.id
+      .select('event:event_id(*)')
       .eq('bandit_id', filters.banditId);
     
     const result = await query;
@@ -50,6 +52,12 @@ export async function getEvents(filters: EventFilters = {}): Promise<Event[]> {
     if (data) {
       data = data.map((item: any) => item.event);
     }
+
+    console.log('[getEvents] banditId join result', {
+      banditId: filters.banditId,
+      rawCount: result.data?.length ?? 0,
+      eventsCount: data?.length ?? 0,
+    });
     
     // Apply additional filters to the bandit-filtered results
     if (data && (filters.searchQuery || filters.genre || filters.city || filters.neighborhood)) {
