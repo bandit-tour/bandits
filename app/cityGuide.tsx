@@ -1,32 +1,67 @@
-import { Stack, useLocalSearchParams } from 'expo-router';
-import React, { useEffect, useState } from 'react';
-import { ActivityIndicator, Image, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
+import React, { useEffect, useMemo, useState } from 'react';
+import { ActivityIndicator, Image, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 
-import { getEvents } from '@/app/services/events';
+import { getSpotsByBanditId } from '@/app/services/spots';
+import { getTrailsByBanditId, TrailWithStops } from '@/app/services/trails';
+import { generateAiTrailFromSpots, GeneratedTrail } from '@/app/services/aiTrails';
 import EventCategories from '@/components/EventCategories';
 import EventList from '@/components/EventList';
+import TrailCard from '@/components/TrailCard';
 import { EventGenre } from '@/constants/Genres';
 import { Database } from '@/lib/database.types';
 import { supabase } from '@/lib/supabase';
 
 type Bandit = Database['public']['Tables']['bandit']['Row'];
 type Event = Database['public']['Tables']['event']['Row'];
+type Spot = Database['public']['Tables']['spots']['Row'];
 
+const EVENT_GENRES = ['Food', 'Culture', 'Nightlife', 'Shopping', 'Coffee'] as const;
+
+function categoryToGenre(category: string): Event['genre'] {
+  const cap = category.charAt(0).toUpperCase() + category.slice(1).toLowerCase();
+  return EVENT_GENRES.includes(cap as Event['genre']) ? (cap as Event['genre']) : 'Food';
+}
+
+function spotToEventLike(spot: Spot): Event {
+  return {
+    id: spot.id,
+    name: spot.name,
+    genre: categoryToGenre(spot.category),
+    start_time: '',
+    end_time: '',
+    timing_info: '',
+    location_lat: 0,
+    location_lng: 0,
+    address: spot.city ?? '',
+    city: spot.city ?? '',
+    neighborhood: '',
+    description: spot.description ?? '',
+    rating: 0,
+    created_at: spot.created_at ?? new Date().toISOString(),
+    image_url: 'https://zubcakeamyfqatdmleqx.supabase.co/storage/v1/object/public/banditsassets4/assets/jazzInjazz.png',
+    link: '',
+    image_gallery: null,
+  };
+}
 
 export default function CityGuideScreen() {
   const { banditId, genre } = useLocalSearchParams();
+  const router = useRouter();
   const [bandit, setBandit] = useState<Bandit | null>(null);
-  const [allEvents, setAllEvents] = useState<Event[]>([]); // All events for this bandit
+  const [allSpots, setAllSpots] = useState<Spot[]>([]);
+  const [trails, setTrails] = useState<TrailWithStops[]>([]);
   const [selectedGenre, setSelectedGenre] = useState<string>(genre as string || '');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [aiTrail, setAiTrail] = useState<GeneratedTrail | null>(null);
+  const [aiLoading, setAiLoading] = useState(false);
 
   useEffect(() => {
     const fetchData = async () => {
       try {
         setLoading(true);
-        
-        // Fetch bandit data
+
         const { data: banditData, error: banditError } = await supabase
           .from('bandit')
           .select('*')
@@ -36,9 +71,12 @@ export default function CityGuideScreen() {
         if (banditError) throw banditError;
         setBandit(banditData);
 
-        // Load all events for this bandit once
-        const allEventsData = await getEvents({ banditId: banditId as string });
-        setAllEvents(allEventsData);
+        const [spotsData, trailsData] = await Promise.all([
+          getSpotsByBanditId(banditId as string),
+          getTrailsByBanditId(banditId as string),
+        ]);
+        setAllSpots(spotsData);
+        setTrails(trailsData);
       } catch (err) {
         setError(err instanceof Error ? err.message : 'Failed to fetch data');
       } finally {
@@ -49,32 +87,48 @@ export default function CityGuideScreen() {
     fetchData();
   }, [banditId]);
 
-  // Filter events locally based on selected genre
-  const filteredEvents = selectedGenre 
-    ? allEvents.filter(event => event.genre === selectedGenre)
-    : allEvents;
+  const eventLikeList = useMemo(() => allSpots.map(spotToEventLike), [allSpots]);
 
-  // Calculate category counts from all events
-  const getEventCategories = () => {
+  const filteredEvents = selectedGenre
+    ? eventLikeList.filter((e) => e.genre === selectedGenre)
+    : eventLikeList;
+
+  const eventCategories = useMemo(() => {
     const categoryCounts: { [key: string]: number } = {};
-    
-    allEvents.forEach(event => {
-      if (event.genre) {
-        categoryCounts[event.genre] = (categoryCounts[event.genre] || 0) + 1;
-      }
+    eventLikeList.forEach((e) => {
+      if (e.genre) categoryCounts[e.genre] = (categoryCounts[e.genre] || 0) + 1;
     });
-
-    return Object.entries(categoryCounts).map(([genre, count]) => ({
-      genre: genre as EventGenre,
-      count
+    return Object.entries(categoryCounts).map(([g, count]) => ({
+      genre: g as EventGenre,
+      count,
     }));
+  }, [eventLikeList]);
+
+  const handleGetVibe = () => {
+    if (!allSpots.length) {
+      setAiTrail(null);
+      return;
+    }
+    setAiLoading(true);
+    try {
+      // Simple mapping: use selected genre to influence mood, otherwise default to hidden gems
+      const moodHint =
+        (selectedGenre || '').toLowerCase() === 'coffee'
+          ? 'coffee morning'
+          : (selectedGenre || '').toLowerCase() === 'nightlife'
+          ? 'after dark'
+          : (selectedGenre || '').toLowerCase() === 'culture'
+          ? 'art day'
+          : (selectedGenre || '').toLowerCase() === 'food'
+          ? 'food crawl'
+          : 'hidden gems';
+
+      const generated = generateAiTrailFromSpots(moodHint, allSpots);
+      setAiTrail(generated);
+    } finally {
+      setAiLoading(false);
+    }
   };
-
-  const eventCategories = getEventCategories();
-
-
-
-
   if (loading) {
     return (
       <View style={styles.loadingContainer}>
@@ -129,8 +183,8 @@ export default function CityGuideScreen() {
           </View>
         </View>
 
-        {/* Event Categories - Only show if there are events in DB */}
-        {allEvents.length > 0 && eventCategories.length > 0 && (
+        {/* Event Categories - Only show if there are spots in DB */}
+        {allSpots.length > 0 && eventCategories.length > 0 && (
           <>
             <Text style={styles.interestsText}>Select Your Interests</Text>
             <EventCategories
@@ -141,13 +195,61 @@ export default function CityGuideScreen() {
           </>
         )}
 
-        {/* Events List */}
+        {/* Curated Trails */}
+        {trails.length > 0 && (
+          <>
+            <Text style={styles.interestsText}>Curated Trails</Text>
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={styles.trailsContainer}
+            >
+              {trails.map((t) => (
+                <TrailCard key={t.id} trail={t} />
+              ))}
+            </ScrollView>
+          </>
+        )}
+
+        {/* AI vibe button + inline trail */}
+        <View style={styles.aiSection}>
+          <Pressable style={styles.aiButton} onPress={handleGetVibe}>
+            <Text style={styles.aiButtonText}>{aiLoading ? 'Finding a vibe…' : 'Get a vibe'}</Text>
+            <Text style={styles.aiButtonSubtext}>Loose, AI-suggested trail from existing spots.</Text>
+          </Pressable>
+          {aiTrail && (
+            <View style={styles.aiTrailContainer}>
+              <Text style={styles.aiTrailLabel}>AI trail idea</Text>
+              {/* Reuse the trail detail layout inline */}
+              <TrailDetailView
+                trail={{
+                  title: aiTrail.title,
+                  description: aiTrail.description,
+                  mood: aiTrail.mood,
+                  duration: aiTrail.duration,
+                  stops: aiTrail.stops.map((s) => ({
+                    position: s.position,
+                    stop_name: s.stop_name,
+                    note: s.note,
+                  })),
+                }}
+                inline
+                containerStyle={{ padding: 0 }}
+              />
+            </View>
+          )}
+        </View>
+
+        {/* Spots List (mapped to Event-like for card UI) */}
         <EventList
           events={filteredEvents}
           variant="horizontal"
           showButton={false}
           imageHeight={120}
           banditId={banditId as string}
+          showRecommendations={false}
+          likedEventIds={new Set()}
+          onEventPress={(e) => router.push(`/spot/${e.id}` as any)}
           contentContainerStyle={styles.eventsContainer}
         />
 
@@ -240,4 +342,46 @@ const styles = StyleSheet.create({
     marginBottom: 20,
     marginTop: 8,
   },
+  trailsContainer: {
+    paddingHorizontal: 8,
+    marginBottom: 20,
+    paddingTop: 4,
+  },
+  aiSection: {
+    marginBottom: 24,
+  },
+  aiButton: {
+    backgroundColor: '#111',
+    borderRadius: 14,
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    marginBottom: 12,
+  },
+  aiButtonText: {
+    fontFamily: 'Caros',
+    fontWeight: '700',
+    fontSize: 15,
+    color: '#FFFFFF',
+    marginBottom: 2,
+  },
+  aiButtonSubtext: {
+    fontFamily: 'Caros',
+    fontWeight: '400',
+    fontSize: 12,
+    color: '#D0D0D0',
+  },
+  aiTrailContainer: {
+    backgroundColor: '#F5F5F5',
+    borderRadius: 14,
+    padding: 12,
+  },
+  aiTrailLabel: {
+    fontFamily: 'Caros',
+    fontWeight: '600',
+    fontSize: 13,
+    color: '#555',
+    marginBottom: 8,
+  },
 }); 
+
+import TrailDetailView from '@/components/TrailDetailView';
