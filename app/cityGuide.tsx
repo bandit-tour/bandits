@@ -2,10 +2,10 @@ import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
 import React, { useEffect, useMemo, useState } from 'react';
 import { ActivityIndicator, Image, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 
-import { getSpotsByBanditId } from '@/app/services/spots';
+import { getSpotsByBanditId } from '@/services/spots';
 import { getEvents } from '@/app/services/events';
-import { getTrailsByBanditId, TrailWithStops } from '@/app/services/trails';
-import { generateAiTrailFromSpots, GeneratedTrail } from '@/app/services/aiTrails';
+import { getTrailsByBanditId, TrailWithStops } from '@/services/trails';
+import { generateAiTrailFromSpots, GeneratedTrail } from '@/services/aiTrails';
 import EventCategories from '@/components/EventCategories';
 import EventList from '@/components/EventList';
 import TrailCard from '@/components/TrailCard';

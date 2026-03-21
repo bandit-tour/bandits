@@ -1,12 +1,25 @@
 import { Database } from '@/lib/database.types';
 import { useRouter } from 'expo-router';
-import { useEffect, useState } from 'react';
-import { Image, Platform, Pressable, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import Constants from 'expo-constants';
+import { useEffect, useRef, useState } from 'react';
+import {
+  ActivityIndicator,
+  Image,
+  Platform,
+  Pressable,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
+} from 'react-native';
 
-import { getEventBanditRecommendations } from '@/app/services/events';
+import { getEventBanditRecommendations, getBanditEventPersonalTip } from '@/app/services/events';
 
 type Event = Database['public']['Tables']['event']['Row'];
 type BanditRecommendation = Pick<Database['public']['Tables']['bandit']['Row'], 'id' | 'image_url'>;
+
+// Cache resolved real photo URLs so we don't repeatedly call Google for the same place.
+const EVENT_PHOTO_URL_CACHE = new Map<string, string>();
 
 interface EventCardProps {
   event: Event;
@@ -21,6 +34,7 @@ interface EventCardProps {
   onPress?: () => void;
   banditId?: string; // Optional bandit ID for navigation context
   showRecommendations?: boolean; // Show bandit recommendation icons
+  isHighlighted?: boolean;
 }
 
 export default function EventCard({
@@ -34,11 +48,149 @@ export default function EventCard({
   imageHeight,
   onPress,
   banditId,
-  showRecommendations = false
+  showRecommendations = false,
+  isHighlighted = false,
 }: EventCardProps) {
   const router = useRouter();
   const isHorizontal = variant === 'horizontal';
   const [recommendingBandits, setRecommendingBandits] = useState<BanditRecommendation[]>([]);
+  const [personalTip, setPersonalTip] = useState<string | null>(null);
+  const photoUrlCache = EVENT_PHOTO_URL_CACHE;
+  const hasResolvedPhotoRef = useRef(false);
+
+  const sanitizeImageUrl = (uri: string | null | undefined) => {
+    if (!uri) return null;
+    const trimmed = uri.trim();
+    if (!trimmed) return null;
+    const lowered = trimmed.toLowerCase();
+    // If DB stored the app logo as a placeholder, don't render it.
+    if (
+      lowered.includes('logobanditourapp') ||
+      lowered.includes('banditour') ||
+      lowered.includes('bandit-tour')
+    ) {
+      return null;
+    }
+    return trimmed;
+  };
+
+  const galleryImages = (() => {
+    if (!event.image_gallery) return [];
+    try {
+      const parsed = JSON.parse(event.image_gallery);
+      if (!Array.isArray(parsed)) return [];
+      return parsed
+        .filter((u) => typeof u === 'string' && u.trim())
+        .map((u) => sanitizeImageUrl(u as string))
+        .filter((u): u is string => Boolean(u));
+    } catch {
+      return event.image_gallery
+        .split(',')
+        .map((u) => sanitizeImageUrl(u))
+        .filter((u): u is string => Boolean(u));
+    }
+  })();
+  const primaryImage = galleryImages[0] || sanitizeImageUrl(event.image_url) || null;
+
+  const [resolvedPrimaryImageUri, setResolvedPrimaryImageUri] = useState<string | null>(
+    null
+  );
+  const [imageLoading, setImageLoading] = useState<boolean>(true);
+
+  const getGoogleApiKey = () => {
+    return (
+      (process.env.EXPO_PUBLIC_GOOGLE_MAPS_KEY as string | undefined) ??
+      (Constants.expoConfig as any)?.android?.config?.googleMaps?.apiKey ??
+      (Constants.expoConfig as any)?.ios?.config?.googleMapsApiKey ??
+      ''
+    );
+  };
+
+  const isLogoLikeImageUri = (uri: string) => {
+    const lowered = uri.toLowerCase();
+    return (
+      lowered.includes('logobanditourapp') ||
+      lowered.includes('banditour') ||
+      lowered.includes('bandit-tour')
+    );
+  };
+
+  const fetchGooglePlacePhotoUrl = async () => {
+    const apiKey = getGoogleApiKey();
+    if (!apiKey) return null;
+
+    const query = [event.name, event.address, event.city, event.neighborhood]
+      .filter(Boolean)
+      .join(' ');
+
+    if (!query.trim()) return null;
+
+    // 1) Find place_id from a text query
+    const findUrl = `https://maps.googleapis.com/maps/api/place/findplacefromtext/json?key=${encodeURIComponent(
+      apiKey
+    )}&input=${encodeURIComponent(query)}&inputtype=textquery&fields=place_id`;
+
+    const findResp = await fetch(findUrl);
+    const findJson = await findResp.json();
+    const placeId = findJson?.candidates?.[0]?.place_id as string | undefined;
+    if (!placeId) return null;
+
+    // 2) Ask for photos via Place Details
+    const detailsUrl = `https://maps.googleapis.com/maps/api/place/details/json?key=${encodeURIComponent(
+      apiKey
+    )}&place_id=${encodeURIComponent(placeId)}&fields=photos`;
+
+    const detailsResp = await fetch(detailsUrl);
+    const detailsJson = await detailsResp.json();
+    const photoRef = detailsJson?.result?.photos?.[0]?.photo_reference as
+      | string
+      | undefined;
+    if (!photoRef) return null;
+
+    // 3) Build an actual photo URL
+    return `https://maps.googleapis.com/maps/api/place/photo?maxwidth=800&photoreference=${encodeURIComponent(
+      photoRef
+    )}&key=${encodeURIComponent(apiKey)}`;
+  };
+
+  useEffect(() => {
+    let cancelled = false;
+    const run = async () => {
+      if (resolvedPrimaryImageUri) return;
+      if (hasResolvedPhotoRef.current) return;
+      hasResolvedPhotoRef.current = true;
+      setImageLoading(true);
+
+      const cached = photoUrlCache.get(event.id);
+      if (cached) {
+        if (!cancelled) setResolvedPrimaryImageUri(cached);
+        setImageLoading(false);
+        return;
+      }
+
+      try {
+        const photoUrl = await fetchGooglePlacePhotoUrl();
+        if (cancelled) return;
+
+        if (photoUrl && !isLogoLikeImageUri(photoUrl)) {
+          photoUrlCache.set(event.id, photoUrl);
+          setResolvedPrimaryImageUri(photoUrl);
+        } else if (primaryImage && !isLogoLikeImageUri(primaryImage)) {
+          // Fallback to stored URL only if it doesn't look like the app logo.
+          setResolvedPrimaryImageUri(primaryImage);
+        }
+      } catch (e) {
+        console.warn('[EventCard] google photo fetch failed', { eventId: event.id, e });
+      } finally {
+        if (!cancelled) setImageLoading(false);
+      }
+    };
+
+    run();
+    return () => {
+      cancelled = true;
+    };
+  }, [event.id, resolvedPrimaryImageUri]);
 
   // Fetch bandit recommendations when showRecommendations is true
   useEffect(() => {
@@ -55,14 +207,28 @@ export default function EventCard({
     }
   }, [event.id, showRecommendations]);
 
+  // Fetch bandit's personal tip for this event when banditId is provided
+  useEffect(() => {
+    if (!banditId) return;
+    const loadTip = async () => {
+      try {
+        const tip = await getBanditEventPersonalTip(banditId, event.id);
+        setPersonalTip(tip);
+      } catch (error) {
+        console.error('Error fetching bandit personal tip:', error);
+      }
+    };
+    loadTip();
+  }, [banditId, event.id]);
+
   const handleCardPress = () => {
     if (onPress) {
       onPress();
     } else {
-      // Default navigation to event detail page
+      // Default navigation to spot detail page
       const url = banditId 
-        ? `/event/${event.id}?banditId=${banditId}` as any
-        : `/event/${event.id}` as any;
+        ? `/spot/${event.id}?banditId=${banditId}` as any
+        : `/spot/${event.id}` as any;
       router.push(url);
     }
   };
@@ -80,16 +246,23 @@ export default function EventCard({
         isHorizontal && styles.imageContainerHorizontal,
         ...(imageHeight ? [{ height: imageHeight }] : [])
       ]}>
-        <Image
-          source={{
-            uri: (event.image_url && event.image_url.trim()) || 'https://zubcakeamyfqatdmleqx.supabase.co/storage/v1/object/public/banditsassets4/assets/jazzInjazz.png'
-          }}
-          style={styles.eventImage}
-          resizeMode="cover"
-          onError={(error) => {
-            console.error('Image failed to load:', event.image_url || 'default image', error);
-          }}
-        />
+        {resolvedPrimaryImageUri ? (
+          <Image
+            source={{ uri: resolvedPrimaryImageUri }}
+            style={styles.eventImage}
+            resizeMode="cover"
+            onError={() => {
+              // If an image URL fails to load, re-resolve via Google.
+              hasResolvedPhotoRef.current = false;
+              setResolvedPrimaryImageUri(null);
+              setImageLoading(true);
+            }}
+          />
+        ) : (
+          <View style={styles.imageLoadingOverlay}>
+            <ActivityIndicator size="small" />
+          </View>
+        )}
         <View style={styles.ratingContainer}>
           <Text style={styles.ratingText}>{(event.rating || 0).toFixed(1)}</Text>
           <Text style={styles.starText}>★</Text>
@@ -110,11 +283,17 @@ export default function EventCard({
                   router.push(`/bandit/${bandit.id}` as any);
                 }}
               >
-                <Image
-                  source={{ uri: bandit.image_url }}
-                  style={styles.banditIconImage}
-                  resizeMode="cover"
-                />
+                {sanitizeImageUrl(bandit.image_url) ? (
+                  <Image
+                    source={{ uri: sanitizeImageUrl(bandit.image_url) as string }}
+                    style={styles.banditIconImage}
+                    resizeMode="cover"
+                  />
+                ) : (
+                  <View style={styles.banditIconImageLoading}>
+                    <ActivityIndicator size="small" />
+                  </View>
+                )}
               </TouchableOpacity>
             ))}
           </View>
@@ -143,9 +322,19 @@ export default function EventCard({
             )
           )}
         </View>
+        {event.genre && (
+          <Text style={styles.eventGenre}>
+            {event.genre}
+          </Text>
+        )}
         <Text style={styles.eventDescription} numberOfLines={3} ellipsizeMode="tail">{event.description || ''}</Text>
+        {personalTip && (
+          <Text style={styles.personalTip}>
+            {`Bandit tip: ${personalTip}`}
+          </Text>
+        )}
         <View style={styles.bottomInfo}>
-          <Text style={styles.eventAddress} numberOfLines={0} adjustsFontSizeToFit={false}>{event.address || ''}</Text>
+          <Text style={styles.eventAddress}>{event.address || ''}</Text>
           {event.timing_info && typeof event.timing_info === 'string' && event.timing_info.trim() && (
             <View style={styles.timeContainer}>
               <Text style={styles.eventTime}>
@@ -163,7 +352,8 @@ export default function EventCard({
       style={[
         styles.eventCard,
         isHorizontal && styles.eventCardHorizontal,
-        !isHorizontal && Platform.OS === 'android' && styles.eventCardAndroid
+        !isHorizontal && Platform.OS === 'android' && styles.eventCardAndroid,
+        isHighlighted && styles.highlightedCard,
       ]}
       onPress={handleCardPress}
     >
@@ -264,7 +454,7 @@ const styles = StyleSheet.create({
   },
   eventImage: {
     width: '100%',
-    height: '90%',
+    height: '100%',
     borderRadius: 8,
   },
   eventContent: {
@@ -282,15 +472,24 @@ const styles = StyleSheet.create({
   imageContainer: {
     position: 'relative',
     width: '100%',
-    height: Platform.OS === 'android' ? 160 : 140,
+    aspectRatio: 4 / 3,
     borderRadius: 8,
     overflow: 'hidden',
     marginBottom: 6,
     flexShrink: 0,
   },
+  imageLoadingOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   imageContainerHorizontal: {
     width: '100%',
-    height: 205,
+    aspectRatio: 4 / 3,
     marginBottom: 8,
     borderTopLeftRadius: 7,
     borderTopRightRadius: 7,
@@ -335,5 +534,30 @@ const styles = StyleSheet.create({
   banditIconImage: {
     width: '100%',
     height: '100%',
+  },
+  banditIconImageLoading: {
+    width: '100%',
+    height: '100%',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'transparent',
+  },
+  eventGenre: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#FF3B30',
+    marginTop: 2,
+    marginBottom: 2,
+  },
+  personalTip: {
+    fontSize: 12,
+    color: '#555',
+    marginTop: 4,
+    marginBottom: 8,
+    lineHeight: 18,
+  },
+  highlightedCard: {
+    borderWidth: 2,
+    borderColor: '#111',
   },
 }); 

@@ -4,7 +4,7 @@
     "slug": "bandits",
     "version": "1.0.1",
     "orientation": "portrait",
-    "icon": "./assets/images/bandiTourMAinLogo.png",
+    "icon": "./assets/icons/logobanditourapp.png",
     "scheme": "bandits",
     "userInterfaceStyle": "automatic",
     "newArchEnabled": false,
@@ -20,7 +20,7 @@
     },
     "android": {
       "adaptiveIcon": {
-        "foregroundImage": "./assets/images/bandiTourMAinLogo.png",
+        "foregroundImage": "./assets/icons/logobanditourapp.png",
         "backgroundColor": "#ffffff"
       },
       "edgeToEdgeEnabled": true,
@@ -49,7 +49,7 @@
     "web": {
       "bundler": "metro",
       "output": "static",
-      "favicon": "./assets/images/bandiTourMAinLogo.png",
+      "favicon": "./assets/icons/logobanditourapp.png",
       "name": "Banditour",
       "shortName": "Banditour",
       "description": "Discover and join local events",
@@ -66,7 +66,7 @@
       [
         "expo-splash-screen",
         {
-          "image": "./assets/images/bandiTourMAinLogo.png",
+          "image": "./assets/icons/logobanditourapp.png",
           "imageWidth": 200,
           "resizeMode": "contain",
           "backgroundColor": "#ffffff"
@@ -79,18 +79,15 @@
     "extra": {
       "router": {},
       "eas": {
-        "projectId": "fd8c0415-2d8c-4de7-8b1b-7eaa77a5a99f"
+        "projectId": "02867d6d-fb41-4f54-80ad-aae3d6831060"
       }
     },
-    "owner": "yuval-dafni",
+    "owner": "banditeam121275",
     "runtimeVersion": {
       "policy": "sdkVersion"
     },
     "updates": {
-      "enabled": true,
-      "checkAutomatically": "ON_LOAD",
-      "fallbackToCacheTimeout": 0,
-      "url": "https://u.expo.dev/fd8c0415-2d8c-4de7-8b1b-7eaa77a5a99f"
+      "enabled": false
     }
   }
 }

@@ -24,11 +24,15 @@ export default function TabLayout() {
   // Check if user's email is verified before allowing access to tabs
   useEffect(() => {
     const checkEmailVerification = async () => {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (user && !user.email_confirmed_at) {
-        console.log('❌ User trying to access tabs without email verification');
-        // Redirect back to auth screen
-        router.replace('/');
+      try {
+        const { data: { user } } = await supabase.auth.getUser();
+        if (user && !user.email_confirmed_at) {
+          console.log('❌ User trying to access tabs without email verification');
+          // Redirect back to auth screen
+          router.replace('/');
+        }
+      } catch (e) {
+        console.error('[TabLayout] getUser failed', e);
       }
     };
 

@@ -1,17 +1,25 @@
-import { supabase } from '@/lib/supabase';
+import { isSupabaseConfigured, supabase } from '@/lib/supabase';
+import * as Linking from 'expo-linking';
 import { useRouter } from 'expo-router';
 import * as WebBrowser from 'expo-web-browser';
 import React, { useEffect, useState } from 'react';
 import { ActivityIndicator, Animated, Image, Platform, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 
-WebBrowser.maybeCompleteAuthSession();
+try {
+  WebBrowser.maybeCompleteAuthSession();
+} catch (e) {
+  console.warn('[Index] maybeCompleteAuthSession failed', e);
+}
 
 // const { width, height } = Dimensions.get('window');
 
 export default function Index() {
   console.log('🚀 Index component rendering...');
   
-  const [user, setUser] = useState<any | undefined>(undefined);
+  /** Session restore finished (success or failure). Avoid infinite spinner when user is null. */
+  const [sessionReady, setSessionReady] = useState(false);
+  const [authInitError, setAuthInitError] = useState<string | null>(null);
+  const [user, setUser] = useState<any | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -22,40 +30,96 @@ export default function Index() {
   const [resendSuccess, setResendSuccess] = useState(false);
   const [googleButtonScale] = useState(new Animated.Value(1));
   const router = useRouter();
-  
+
+  const withTimeout = async <T,>(promise: Promise<T>, label: string, ms = 20000): Promise<T> => {
+    let timeoutHandle: ReturnType<typeof setTimeout> | undefined;
+    const timeoutPromise = new Promise<never>((_, reject) => {
+      timeoutHandle = setTimeout(() => {
+        reject(new Error(`${label} timed out after ${ms}ms`));
+      }, ms);
+    });
+    try {
+      return await Promise.race([promise, timeoutPromise]);
+    } finally {
+      if (timeoutHandle) clearTimeout(timeoutHandle);
+    }
+  };
+
+  /** Strict validation — never start loading until these pass. */
+  const validateSignInFields = (emailRaw: string, passwordRaw: string): { ok: true } | { ok: false; reason: string; message: string } => {
+    const e = emailRaw.trim();
+    const p = passwordRaw.trim();
+    if (!e) return { ok: false, reason: 'empty email', message: 'Please enter your email.' };
+    if (!p) return { ok: false, reason: 'empty password', message: 'Please enter your password.' };
+    return { ok: true };
+  };
+
+  const validateSignUpFields = (emailRaw: string, passwordRaw: string): { ok: true } | { ok: false; reason: string; message: string } => {
+    const e = emailRaw.trim();
+    const p = passwordRaw.trim();
+    if (!e) return { ok: false, reason: 'empty email', message: 'Please enter your email.' };
+    if (!p) return { ok: false, reason: 'empty password', message: 'Please enter your password.' };
+    if (p.length < 6) return { ok: false, reason: 'password too short', message: 'Password must be at least 6 characters.' };
+    return { ok: true };
+  };
+
   console.log('📱 Component state initialized, user:', user, 'error:', error);
 
 
 
   useEffect(() => {
-    console.log('🔐 Auth useEffect running...');
+    console.log('[Index] Auth bootstrap, isSupabaseConfigured:', isSupabaseConfigured);
+    if (!isSupabaseConfigured) {
+      setAuthInitError(
+        'App configuration error: Supabase URL or anon key is missing. Set EXPO_PUBLIC_SUPABASE_URL and EXPO_PUBLIC_SUPABASE_ANON_KEY in .env and restart the dev server.',
+      );
+      setUser(null);
+      setSessionReady(true);
+      return;
+    }
 
-    // Check for existing session
-    const checkSession = async () => {
+    let cancelled = false;
+
+    const restoreSession = async () => {
       try {
-        const { data: { session } } = await supabase.auth.getSession();
-        if (session) {
-          console.log('📋 Session already exists:', session);
+        console.log('[Index] getSession() …');
+        const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+        if (cancelled) return;
+        if (sessionError) {
+          console.error('[Index] getSession error:', sessionError);
+          setAuthInitError(sessionError.message);
+          setUser(null);
+        } else if (session?.user) {
+          console.log('[Index] Existing session for', session.user.email);
           setUser(session.user);
         } else {
-          console.log('👤 No existing session found');
+          console.log('[Index] No stored session');
           setUser(null);
         }
       } catch (err) {
-        console.error('❌ Error checking session:', err);
-        setUser(null);
+        if (!cancelled) {
+          console.error('[Index] getSession threw:', err);
+          setAuthInitError(err instanceof Error ? err.message : 'Could not restore session');
+          setUser(null);
+        }
+      } finally {
+        if (!cancelled) {
+          setSessionReady(true);
+          console.log('[Index] Session restore complete');
+        }
       }
     };
 
-    checkSession();
+    void restoreSession();
 
-    const { data: authListener } = supabase.auth.onAuthStateChange((_event, session) => {
-      console.log('🔄 Auth state changed:', _event, 'session:', session);
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+      console.log('[Index] onAuthStateChange:', event, session?.user?.email ?? 'no user');
       setUser(session?.user ?? null);
     });
+
     return () => {
-      console.log('🧹 Cleaning up auth listener');
-      authListener?.subscription.unsubscribe();
+      cancelled = true;
+      subscription.unsubscribe();
     };
   }, []);
 
@@ -70,80 +134,164 @@ export default function Index() {
   }, [user, router]);
 
   const handleEmailLogin = async () => {
-    if (!email.trim() || !password.trim()) {
-      setError('Please enter both email and password');
+    console.log('sign in pressed');
+    setLoading(false);
+
+    const v = validateSignInFields(email, password);
+    if (!v.ok) {
+      console.log('validation failed reason:', v.reason);
+      setError(v.message);
       return;
     }
+
+    if (!isSupabaseConfigured) {
+      console.log('validation failed reason: supabase not configured');
+      setError('Supabase is not configured.');
+      return;
+    }
+
     setError(null);
     setLoading(true);
-    const { error } = await supabase.auth.signInWithPassword({ email: email.trim(), password });
-    if (error) setError(error.message);
-    setLoading(false);
+    try {
+      console.log('auth request start');
+      const { data, error: signInError } = await withTimeout(
+        supabase.auth.signInWithPassword({
+          email: email.trim(),
+          password: password.trim(),
+        }),
+        'Email sign in',
+      );
+      console.log('auth response', {
+        hasUser: !!data?.user,
+        hasSession: !!data?.session,
+        error: signInError?.message ?? null,
+      });
+
+      if (signInError) {
+        setError(signInError.message);
+        return;
+      }
+
+      if (!data?.session) {
+        setError('Sign in failed: no session returned.');
+      }
+    } catch (err: any) {
+      console.log('catch error', err);
+      setError(err?.message ?? 'Sign in failed. Please try again.');
+    } finally {
+      setLoading(false);
+      console.log('finally reached');
+    }
   };
 
   const handleEmailSignup = async () => {
-    if (!email.trim() || !password.trim()) {
-      setError('Please enter both email and password');
+    console.log('sign up pressed');
+    setLoading(false);
+
+    const v = validateSignUpFields(email, password);
+    if (!v.ok) {
+      console.log('validation failed reason:', v.reason);
+      setError(v.message);
       return;
     }
-    if (password.length < 6) {
-      setError('Password must be at least 6 characters');
+
+    if (!isSupabaseConfigured) {
+      console.log('validation failed reason: supabase not configured');
+      setError('Supabase is not configured. Check EXPO_PUBLIC_SUPABASE_URL and EXPO_PUBLIC_SUPABASE_ANON_KEY.');
       return;
     }
+
     setError(null);
     setLoading(true);
-    
+
     try {
-      const { error, data } = await supabase.auth.signUp({ 
-        email: email.trim(), 
-        password,
-        options: {
-          emailRedirectTo: Platform.OS === 'web' 
-            ? `${window.location.origin}/auth/callback`
-            : 'bandits://auth/callback'
-        }
+      console.log('auth request start');
+      const trimmedPassword = password.trim();
+      const { error, data } = await withTimeout(
+        supabase.auth.signUp({
+          email: email.trim(),
+          password: trimmedPassword,
+          options: {
+            emailRedirectTo: Platform.OS === 'web'
+              ? `${window.location.origin}/auth/callback`
+              : 'bandits://auth/callback',
+          },
+        }),
+        'Email sign up',
+      );
+      console.log('auth response', {
+        hasUser: !!data?.user,
+        hasSession: !!data?.session,
+        error: error?.message ?? null,
       });
-      
+
       if (error) {
         setError(error.message);
       } else if (data.user && !data.session) {
-        // Email confirmation required - user cannot sign in until verified
         setEmailSent(true);
         setError(null);
         console.log('📧 Email verification required for user:', data.user.email);
       } else if (data.user && data.session) {
-        // This shouldn't happen with email verification enabled, but handle it
         setError('Account created but email verification is required. Please check your email.');
-        // Sign out the user to force verification
-        await supabase.auth.signOut();
+        void supabase.auth.signOut();
       }
     } catch (err) {
-      console.error('❌ Signup error:', err);
-      setError('An unexpected error occurred. Please try again.');
+      console.log('catch error', err);
+      setError(err instanceof Error ? err.message : 'Sign up failed. Please try again.');
     } finally {
       setLoading(false);
+      console.log('finally reached');
     }
   };
 
   const handleResendEmail = async () => {
+    console.log('resend email pressed');
+    setLoading(false);
+
+    if (!email.trim()) {
+      console.log('validation failed reason: empty email');
+      setError('Please enter your email.');
+      return;
+    }
+
+    if (!isSupabaseConfigured) {
+      console.log('validation failed reason: supabase not configured');
+      setError('Supabase is not configured.');
+      return;
+    }
+
     setLoading(true);
     setResendSuccess(false);
-    const { error } = await supabase.auth.resend({
-      type: 'signup',
-      email: email.trim(),
-      options: {
-        emailRedirectTo: Platform.OS === 'web' 
-          ? `${window.location.origin}/auth/callback`
-          : 'bandits://auth/callback'
+    try {
+      console.log('auth request start');
+      const { error: resendError } = await withTimeout(
+        supabase.auth.resend({
+          type: 'signup',
+          email: email.trim(),
+          options: {
+            emailRedirectTo: Platform.OS === 'web'
+              ? `${window.location.origin}/auth/callback`
+              : 'bandits://auth/callback',
+          },
+        }),
+        'Resend email',
+      );
+      console.log('auth response', {
+        error: resendError?.message ?? null,
+      });
+      if (resendError) {
+        setError(resendError.message);
+      } else {
+        setError(null);
+        setResendSuccess(true);
       }
-    });
-    if (error) {
-      setError(error.message);
-    } else {
-      setError(null);
-      setResendSuccess(true);
+    } catch (err: any) {
+      console.log('catch error', err);
+      setError(err?.message ?? 'Failed to resend email.');
+    } finally {
+      setLoading(false);
+      console.log('finally reached');
     }
-    setLoading(false);
   };
 
   const handleGoogleButtonPressIn = () => {
@@ -163,79 +311,99 @@ export default function Index() {
   };
 
   const handleGoogleSignIn = async () => {
+    console.log('google auth pressed');
+    setLoading(false);
+    if (!isSupabaseConfigured) {
+      console.log('validation failed reason: supabase not configured');
+      setError('Supabase is not configured.');
+      return;
+    }
     try {
       setError(null);
       setLoading(true);
-      console.log('🔵 Starting Google Sign-In, Platform:', Platform.OS);
+      console.log('auth request start');
 
       // Use production URL for redirect
       const redirectUri = Platform.OS === 'web'
         ? `${window.location.origin}/auth/callback`
         : 'https://bandits-app.netlify.app/auth/callback';
 
-      console.log('🔗 Redirect URI:', redirectUri);
-
-      // Use Supabase OAuth with expo-auth-session
-      const { data, error } = await supabase.auth.signInWithOAuth({
-        provider: 'google',
-        options: {
-          redirectTo: redirectUri,
-          skipBrowserRedirect: Platform.OS !== 'web'
-        }
+      const { data, error } = await withTimeout(
+        supabase.auth.signInWithOAuth({
+          provider: 'google',
+          options: {
+            redirectTo: redirectUri,
+            skipBrowserRedirect: Platform.OS !== 'web',
+          },
+        }),
+        'Google OAuth init',
+      );
+      console.log('auth response', {
+        oauth: { hasUrl: !!data?.url, error: error?.message ?? null },
       });
 
       if (error) {
-        console.error('❌ Supabase OAuth error:', error);
         setError(error.message);
         return;
       }
 
       if (Platform.OS !== 'web' && data?.url) {
-        console.log('📱 Opening browser for OAuth:', data.url);
+        if (typeof WebBrowser.openAuthSessionAsync !== 'function') {
+          throw new Error('openAuthSessionAsync is unavailable on this runtime.');
+        }
 
-        // Open the OAuth URL in browser
-        const result = await WebBrowser.openAuthSessionAsync(
-          data.url,
-          redirectUri
+        const result = await withTimeout(
+          WebBrowser.openAuthSessionAsync(data.url, redirectUri),
+          'Google auth session',
+          45000,
         );
 
-        console.log('📋 Browser result:', result);
+        console.log('auth response', { browser: { type: result.type } });
 
         if (result.type === 'success') {
           const url = result.url;
-          console.log('✅ OAuth success, callback URL:', url);
 
-          // Extract the tokens from the URL
-          const urlParams = new URL(url).searchParams;
-          const accessToken = urlParams.get('access_token');
-          const refreshToken = urlParams.get('refresh_token');
+          const parsed = Linking.parse(url);
+          const query = (parsed.queryParams ?? {}) as Record<string, any>;
+          const accessToken = typeof query.access_token === 'string' ? query.access_token : null;
+          const refreshToken = typeof query.refresh_token === 'string' ? query.refresh_token : null;
+          const hashParams = new URLSearchParams((url.split('#')[1] ?? '').trim());
+          const hashAccessToken = hashParams.get('access_token');
+          const hashRefreshToken = hashParams.get('refresh_token');
+          const finalAccessToken = accessToken ?? hashAccessToken;
+          const finalRefreshToken = refreshToken ?? hashRefreshToken;
 
-          if (accessToken && refreshToken) {
-            // Set the session with the tokens
-            const { error: sessionError } = await supabase.auth.setSession({
-              access_token: accessToken,
-              refresh_token: refreshToken
-            });
+          if (finalAccessToken && finalRefreshToken) {
+            const { error: sessionError } = await withTimeout(
+              supabase.auth.setSession({
+                access_token: finalAccessToken,
+                refresh_token: finalRefreshToken,
+              }),
+              'Google setSession',
+            );
 
             if (sessionError) {
-              console.error('❌ Session error:', sessionError);
-              setError(sessionError.message);
+              throw sessionError;
             } else {
-              console.log('✅ Session set successfully');
+              console.log('auth response', { session: { ok: true } });
             }
+          } else {
+            throw new Error('OAuth callback did not include tokens.');
           }
         } else if (result.type === 'cancel') {
-          console.log('ℹ️ User cancelled the login flow');
+          console.log('auth response', { browser: { cancelled: true } });
+        } else {
+          throw new Error(`OAuth failed with result type: ${result.type}`);
         }
       } else {
-        console.log('✅ Supabase OAuth initiated successfully for web');
+        console.log('auth response', { webOAuth: true });
       }
-    } catch (error: any) {
-      console.error('❌ Google Sign-In error:', error);
-      setError('Google Sign-In failed: ' + (error.message || 'Unknown error'));
+    } catch (err: any) {
+      console.log('catch error', err);
+      setError(err?.message ? `Google Sign-In failed: ${err.message}` : 'Google Sign-In failed');
     } finally {
       setLoading(false);
-      console.log('🏁 Google Sign-In process completed');
+      console.log('finally reached');
     }
   };
 
@@ -243,13 +411,14 @@ export default function Index() {
 
 
 
-  console.log('🎨 Render logic - user:', user, 'user === undefined:', user === undefined);
-  
-  if (user === undefined) {
-    console.log('⏳ Showing loading screen...');
+  console.log('🎨 Render logic - sessionReady:', sessionReady, 'user:', user ? 'yes' : 'no');
+
+  if (!sessionReady) {
+    console.log('⏳ Session restore in progress...');
     return (
       <View style={styles.loadingContainer}>
         <ActivityIndicator size="large" color="#ff0000" />
+        <Text style={styles.loadingHint}>Checking session…</Text>
       </View>
     );
   }
@@ -312,6 +481,12 @@ export default function Index() {
           </View>
         ) : (
           <>
+            {authInitError ? (
+              <View style={styles.configErrorBanner}>
+                <Text style={styles.configErrorTitle}>Connection issue</Text>
+                <Text style={styles.configErrorText}>{authInitError}</Text>
+              </View>
+            ) : null}
             {/* Tab Switcher */}
             <View style={styles.tabContainer}>
               <TouchableOpacity 
@@ -430,8 +605,13 @@ export default function Index() {
     );
   }
 
-  console.log('❌ Unexpected state - returning null, user:', user);
-  return null;
+  console.log('[Index] User signed in, waiting for navigation…');
+  return (
+    <View style={styles.loadingContainer}>
+      <ActivityIndicator size="large" color="#ff0000" />
+      <Text style={styles.loadingHint}>Opening app…</Text>
+    </View>
+  );
 }
 
 const styles = StyleSheet.create({
@@ -449,6 +629,29 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     backgroundColor: '#ffffff',
+  },
+  loadingHint: {
+    marginTop: 16,
+    fontSize: 14,
+    color: '#666666',
+  },
+  configErrorBanner: {
+    backgroundColor: '#fff3f3',
+    borderWidth: 1,
+    borderColor: '#ffcccc',
+    borderRadius: 8,
+    padding: 12,
+    marginBottom: 16,
+  },
+  configErrorTitle: {
+    fontWeight: '700',
+    color: '#cc0000',
+    marginBottom: 6,
+  },
+  configErrorText: {
+    fontSize: 13,
+    color: '#663333',
+    lineHeight: 18,
   },
   logoContainer: {
     alignItems: 'center',
