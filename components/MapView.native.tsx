@@ -1,10 +1,12 @@
+/**
+ * Native map uses a lightweight placeholder (no react-native-maps) so iOS EAS builds
+ * avoid CocoaPods failures. Full maps remain on web. Login and the rest of the app work.
+ */
 import { useMapEvents } from '@/hooks/useMapEvents';
 import { useLocalSearchParams } from 'expo-router';
 import React, { useEffect, useRef } from 'react';
-import { StyleSheet, View } from 'react-native';
-import MapView, { Marker } from 'react-native-maps';
+import { StyleSheet, Text, View } from 'react-native';
 import EventList, { EventListRef } from './EventList';
-import MapMarkers from './MapMarkers';
 
 interface MapViewProps {
   initialRegion: {
@@ -19,94 +21,45 @@ interface MapViewProps {
   children?: React.ReactNode;
 }
 
-export default function PlatformMapView({ 
-  initialRegion, 
-  onMapReady, 
-  onError, 
-  onRegionChange, 
-  children 
+/** Stub for API compatibility with react-native-maps Marker exports. */
+export function Marker() {
+  return null;
+}
+
+export default function PlatformMapView({
+  initialRegion,
+  onMapReady,
+  onError,
+  onRegionChange,
+  children,
 }: MapViewProps) {
   const eventListRef = useRef<EventListRef>(null);
   const { banditId } = useLocalSearchParams();
-  
-  // Create a handler that scrolls to the event instead of navigating (for markers)
-  const handleMarkerPress = (event: any) => {
-    eventListRef.current?.scrollToEvent(event.id);
-  };
-  
-  const { events, loading, error, calculateOptimalMapBounds } = useMapEvents();
+
+  const { events, loading, error } = useMapEvents();
 
   useEffect(() => {
-    // Report errors to parent component
     if (error) {
       onError(new Error(error));
     }
   }, [error, onError]);
 
-  // Calculate optimal region based on events
-  const getOptimalRegion = () => {
-    if (events.length === 0) {
-      return initialRegion;
-    }
+  useEffect(() => {
+    onMapReady();
+    onRegionChange(initialRegion);
+  }, []);
 
-    const mapBounds = calculateOptimalMapBounds(initialRegion);
-    
-    // Convert bounds to region format for react-native-maps
-    const latSpan = mapBounds.bounds.north - mapBounds.bounds.south;
-    const lngSpan = mapBounds.bounds.east - mapBounds.bounds.west;
-    
-    return {
-      latitude: mapBounds.center.latitude,
-      longitude: mapBounds.center.longitude,
-      latitudeDelta: latSpan,
-      longitudeDelta: lngSpan,
-    };
-  };
-
-  console.log('🗺️ PlatformMapView rendering with region:', initialRegion);
-  console.log('📍 Events count:', events.length);
-  
   return (
     <View style={styles.container}>
-      {/* Top 40% - Map */}
       <View style={styles.mapContainer}>
-        <MapView
-          style={styles.map}
-          initialRegion={getOptimalRegion()}
-          showsUserLocation={true}
-          showsMyLocationButton={true}
-          provider={undefined}
-          mapType="standard"
-          onMapReady={() => {
-            console.log('🗺️ MapView onMapReady called');
-            onMapReady();
-          }}
-          onRegionChange={(region) => {
-            console.log('🗺️ MapView onRegionChange:', region);
-            onRegionChange(region);
-          }}
-          loadingEnabled={true}
-          loadingIndicatorColor="#666666"
-          loadingBackgroundColor="#eeeeee"
-        >
-          <MapMarkers
-            events={events}
-            onEventPress={handleMarkerPress}
-            MarkerComponent={Marker}
-            showEventMarkers={true}
-            showCenterMarker={false}
-            centerCoordinates={{
-              latitude: initialRegion.latitude,
-              longitude: initialRegion.longitude,
-            }}
-            centerTitle="Athens"
-            centerDescription="Historic center of Athens, Greece"
-          />
-          {children}
-        </MapView>
+        <View style={styles.placeholder} accessibilityLabel="Map placeholder">
+          <Text style={styles.placeholderTitle}>Map</Text>
+          <Text style={styles.placeholderSub}>
+            {initialRegion.latitude.toFixed(4)}, {initialRegion.longitude.toFixed(4)}
+          </Text>
+        </View>
       </View>
-      
-      {/* Bottom 60% - Events List */}
+
       <EventList
         ref={eventListRef}
         events={events}
@@ -118,9 +71,11 @@ export default function PlatformMapView({
         imageHeight={120}
         contentContainerStyle={styles.eventsContainer}
       />
+      {children}
     </View>
   );
 }
+
 const styles = StyleSheet.create({
   container: {
     flex: 1,
@@ -129,12 +84,24 @@ const styles = StyleSheet.create({
     height: '40%',
     backgroundColor: '#f0f0f0',
   },
-  map: {
-    width: '100%',
-    height: '100%',
+  placeholder: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 12,
+  },
+  placeholderTitle: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#333',
+    textAlign: 'center',
+  },
+  placeholderSub: {
+    marginTop: 6,
+    fontSize: 12,
+    color: '#666',
   },
   eventsContainer: {
     marginTop: 8,
   },
 });
-export { Marker };

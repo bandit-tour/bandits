@@ -1,3 +1,4 @@
+import { CityProvider } from '@/contexts/CityContext';
 import { supabase } from '@/lib/supabase';
 import { Tabs, useRouter } from 'expo-router';
 import { useEffect, useState } from 'react';
@@ -40,9 +41,11 @@ export default function TabLayout() {
   }, [router]);
 
   return (
+    <CityProvider>
     <View style={{ flex: 1, flexDirection: 'column' }}>
       {/* <ModeHeader /> */}
     <Tabs
+      initialRouteName="bandits"
       screenOptions={{
         headerShown: false,
         tabBarButton: HapticTab,
@@ -101,5 +104,6 @@ export default function TabLayout() {
       onClose={() => setTakePartModalVisible(false)}
     />
     </View>
+    </CityProvider>
   );
 }
