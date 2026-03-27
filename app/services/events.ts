@@ -442,3 +442,7 @@ export async function getEventById(id: string): Promise<Event | null> {
 
   return data;
 } 
+
+export default function EventsServiceRoutePlaceholder() {
+  return null;
+}

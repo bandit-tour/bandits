@@ -22,4 +22,8 @@ export async function getBanditReviews(banditId: string): Promise<UserBanditRevi
   }
 }
 
+export default function ReviewsServiceRoutePlaceholder() {
+  return null;
+}
+
  

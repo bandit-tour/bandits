@@ -246,3 +246,7 @@ export async function submitBanditQuestion(banditId: string, question: string): 
     throw new Error(error.message || 'Could not send your question.');
   }
 }
+
+export default function BanditsServiceRoutePlaceholder() {
+  return null;
+}

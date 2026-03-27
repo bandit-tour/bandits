@@ -63,7 +63,7 @@ export default function PlayWelcomeScreen() {
                 You’re stepping into it.
               </Text>
               <Text style={styles.bodySecondary}>
-                Curated by local banDits.{'\n'}
+                Curated by local insiders.{'\n'}
                 Unlocked for you.
               </Text>
             </View>
