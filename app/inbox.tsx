@@ -1,14 +1,16 @@
 import { Stack, useRouter } from 'expo-router';
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
-  ScrollView,
+  FlatList,
+  Pressable,
   StyleSheet,
   Text,
   View,
 } from 'react-native';
 
 import { supabase } from '@/lib/supabase';
+import { getNotificationsBackendStatus } from '@/services/localFriend';
 
 type NotificationRow = {
   id: string;
@@ -22,45 +24,84 @@ type NotificationRow = {
   created_at: string;
 };
 
-function formatDate(iso: string) {
+type InboxListItem = {
+  id: string;
+  banditName: string;
+  preview: string;
+  timestampLabel: string;
+  sortKey: number;
+  fromServer: boolean;
+};
+
+function formatTimestamp(iso: string): string {
   const d = new Date(iso);
   if (Number.isNaN(d.getTime())) return iso;
+  const now = new Date();
+  const sameDay =
+    d.getFullYear() === now.getFullYear() &&
+    d.getMonth() === now.getMonth() &&
+    d.getDate() === now.getDate();
+  if (sameDay) {
+    return `Today · ${d.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' })}`;
+  }
+  const yesterday = new Date(now);
+  yesterday.setDate(yesterday.getDate() - 1);
+  const ySame =
+    d.getFullYear() === yesterday.getFullYear() &&
+    d.getMonth() === yesterday.getMonth() &&
+    d.getDate() === yesterday.getDate();
+  if (ySame) return 'Yesterday';
   return d.toLocaleDateString(undefined, {
-    year: 'numeric',
+    weekday: 'short',
     month: 'short',
     day: 'numeric',
   });
 }
 
+function banditNameFromNotification(n: NotificationRow): string {
+  const t = n.title?.trim() || '';
+  const fromReply = /^reply\s+from\s+(.+)/i.exec(t);
+  if (fromReply) return fromReply[1].trim();
+  const localFriend = /local friend/i.test(t) ? 'Local Friend' : '';
+  if (localFriend) return 'bandiTour';
+  if (t.length > 0 && t.length < 40) return t;
+  return 'banDit';
+}
+
+function notificationToInboxItem(n: NotificationRow): InboxListItem {
+  return {
+    id: n.id,
+    banditName: banditNameFromNotification(n),
+    preview: n.message?.trim() || n.title || 'New update',
+    timestampLabel: formatTimestamp(n.created_at),
+    sortKey: new Date(n.created_at).getTime(),
+    fromServer: true,
+  };
+}
+
 export default function InboxScreen() {
   const router = useRouter();
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const [items, setItems] = useState<NotificationRow[]>([]);
+  const [serverItems, setServerItems] = useState<InboxListItem[]>([]);
+  const [backendDisabledReason, setBackendDisabledReason] = useState<string | null>(null);
 
   useEffect(() => {
     const load = async () => {
       try {
-        setLoading(true);
-        setError(null);
-        console.log('[Inbox] load start');
-
-        const {
-          data: { user },
-          error: userError,
-        } = await supabase.auth.getUser();
-
-        if (userError) {
-          console.error('[Inbox] getUser error', userError);
-          throw userError;
-        }
-
-        if (!user) {
-          console.log('[Inbox] no authenticated user');
-          setItems([]);
+        const status = await getNotificationsBackendStatus();
+        if (!status.enabled) {
+          setBackendDisabledReason(status.reason || 'Inbox is unavailable right now.');
+          setServerItems([]);
           return;
         }
 
+        const {
+          data: { user },
+        } = await supabase.auth.getUser();
+        if (!user) {
+          setServerItems([]);
+          return;
+        }
         const { data, error: qError } = await supabase
           .from('notifications')
           .select('*')
@@ -68,126 +109,81 @@ export default function InboxScreen() {
           .order('created_at', { ascending: false });
 
         if (qError) {
-          if (qError.code === 'PGRST205' || qError.code === '42P01') {
-            setItems([]);
-            return;
-          }
-          console.error('[Inbox] fetch notifications error', qError);
-          throw qError;
+          throw new Error(qError.message || 'Could not load inbox right now.');
         }
-
-        setItems((data as any) || []);
-        console.log('[Inbox] notifications loaded', { count: data?.length ?? 0 });
-      } catch (err: any) {
-        console.error('[Inbox] load failed', err);
-        setError(err?.message ?? 'Failed to load inbox');
+        const rows = ((data as NotificationRow[]) || []).map(notificationToInboxItem);
+        setServerItems(rows);
+      } catch (e) {
+        const msg = e instanceof Error ? e.message : '';
+        setBackendDisabledReason(msg || 'Inbox is unavailable right now.');
+        setServerItems([]);
       } finally {
         setLoading(false);
       }
     };
-
-    load();
+    void load();
   }, []);
 
-  const empty = useMemo(() => items.length === 0, [items.length]);
+  const rows = useMemo(
+    () => [...serverItems].sort((a, b) => b.sortKey - a.sortKey),
+    [serverItems],
+  );
 
-  const handlePress = async (n: NotificationRow) => {
-    try {
-      // Optimistically mark as read
-      if (!n.is_read) {
-        setItems((prev) =>
-          prev.map((it) => (it.id === n.id ? { ...it, is_read: true } : it))
-        );
-        await supabase
-          .from('notifications')
-          .update({ is_read: true })
-          .eq('id', n.id);
-      }
+  const openChat = useCallback(
+    (item: InboxListItem) => {
+      router.push({
+        pathname: '/chat',
+        params: { banditName: item.banditName },
+      });
+    },
+    [router],
+  );
 
-      // Navigate based on type / reference
-      if (n.type === 'local_friend' || n.type === 'ask_bandit') {
-        router.push('/chat');
-        return;
-      }
-
-      if ((n.type === 'bandit_reply' || n.type === 'local_friend_reply') && n.reference_type === 'chat') {
-        router.push('/chat');
-        return;
-      }
-
-      if (n.type === 'event_alert' && n.reference_type === 'event' && n.reference_id) {
-        router.push(`/spot/${n.reference_id}` as any);
-        return;
-      }
-
-      if (n.type === 'scam_alert' && n.reference_type === 'scam_alert' && n.reference_id) {
-        router.push('/bandiTeam');
-        return;
-      }
-
-      // Fallback: stay on inbox if no route
-    } catch (err) {
-      console.error('[Inbox] failed to handle notification press', err);
-    }
-  };
+  const renderItem = useCallback(
+    ({ item }: { item: InboxListItem }) => (
+      <Pressable style={styles.card} onPress={() => openChat(item)}>
+        <View style={styles.cardTop}>
+          <Text style={styles.banditName}>{item.banditName}</Text>
+          <Text style={styles.time}>{item.timestampLabel}</Text>
+        </View>
+        <Text style={styles.preview} numberOfLines={2} ellipsizeMode="tail">
+          {item.preview}
+        </Text>
+      </Pressable>
+    ),
+    [openChat],
+  );
 
   return (
     <>
-      <Stack.Screen options={{ headerShown: true, title: '' }} />
-
+      <Stack.Screen options={{ headerShown: true, title: 'Inbox' }} />
       <View style={styles.container}>
-        <Text style={styles.title}>Inbox</Text>
         <Text style={styles.subtitle}>
-          New replies and alerts from the city.
+          Replies and alerts from local banDits and the bandiTour crew.
         </Text>
 
-        {loading && (
+        {loading ? (
           <View style={styles.center}>
             <ActivityIndicator size="large" />
           </View>
-        )}
-
-        {!loading && error && (
+        ) : backendDisabledReason ? (
           <View style={styles.center}>
-            <Text style={styles.errorText}>{error}</Text>
+            <Text style={styles.emptyHeading}>Inbox unavailable</Text>
+            <Text style={styles.emptyText}>{backendDisabledReason}</Text>
           </View>
-        )}
-
-        {!loading && !error && empty && (
+        ) : rows.length === 0 ? (
           <View style={styles.center}>
-            <Text style={styles.emptyText}>
-              No new messages or alerts.
-            </Text>
+            <Text style={styles.emptyHeading}>No messages yet</Text>
+            <Text style={styles.emptyText}>When local replies arrive, they appear here.</Text>
           </View>
-        )}
-
-        {!loading && !error && !empty && (
-          <ScrollView contentContainerStyle={styles.listContent}>
-            {items.map((n) => (
-              <View
-                key={n.id}
-                style={[
-                  styles.card,
-                  !n.is_read && styles.cardUnread,
-                ]}
-              >
-                <Text style={styles.notificationTitle}>{n.title}</Text>
-                <Text
-                  style={styles.notificationMessage}
-                  numberOfLines={2}
-                  ellipsizeMode="tail"
-                >
-                  {n.message}
-                </Text>
-                <View style={styles.rowBottom}>
-                  <Text style={styles.dateText}>{formatDate(n.created_at)}</Text>
-                  <Text style={styles.actionText} onPress={() => handlePress(n)}>
-                    Open
-                  </Text>
-                </View>
-              </View>
-            ))}
-          </ScrollView>
+        ) : (
+          <FlatList
+            data={rows}
+            keyExtractor={(item) => item.id}
+            renderItem={renderItem}
+            contentContainerStyle={styles.list}
+            ItemSeparatorComponent={() => <View style={{ height: 10 }} />}
+          />
         )}
       </View>
     </>
@@ -199,86 +195,51 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#FFFFFF',
     paddingHorizontal: 16,
-    paddingTop: 16,
-  },
-  title: {
-    fontFamily: 'Caros',
-    fontWeight: '800',
-    fontSize: 24,
-    color: '#3C3C3C',
-    marginBottom: 4,
+    paddingTop: 12,
   },
   subtitle: {
     fontSize: 13,
-    color: '#666',
+    color: '#555',
     lineHeight: 18,
-    marginBottom: 16,
+    marginBottom: 14,
   },
   center: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    paddingHorizontal: 24,
+    paddingHorizontal: 20,
   },
-  errorText: {
-    color: '#FF3B30',
-    fontSize: 14,
-    textAlign: 'center',
-  },
-  emptyText: {
-    color: '#666',
-    fontSize: 14,
-    textAlign: 'center',
-    lineHeight: 20,
-  },
-  listContent: {
-    paddingBottom: 96, // keep clear of persistent bottom nav
-    gap: 10,
+  emptyHeading: { fontSize: 17, fontWeight: '700', color: '#1a1a1a', marginBottom: 8 },
+  emptyText: { fontSize: 13, color: '#666', textAlign: 'center', lineHeight: 18 },
+  list: {
+    paddingBottom: 96,
   },
   card: {
-    backgroundColor: '#F8F8F8',
+    backgroundColor: '#F6F7F9',
     borderRadius: 14,
-    padding: 12,
+    padding: 14,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: '#E8E8E8',
   },
-  cardUnread: {
-    backgroundColor: '#ECEFFC',
-  },
-  rowTop: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'baseline',
-    marginBottom: 6,
-    gap: 10,
-  },
-  notificationTitle: {
-    fontSize: 14,
-    fontWeight: '700',
-    color: '#222',
-    marginBottom: 2,
-  },
-  notificationMessage: {
-    fontSize: 13,
-    color: '#3C3C3C',
-    marginBottom: 6,
-  },
-  rowBottom: {
+  cardTop: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
+    marginBottom: 8,
   },
-  dateText: {
+  banditName: {
+    fontSize: 16,
+    fontWeight: '800',
+    color: '#111',
+  },
+  time: {
     fontSize: 12,
     color: '#777',
-  },
-  label: {
-    fontSize: 12,
-    color: '#777',
-    marginBottom: 2,
-  },
-  actionText: {
-    fontSize: 12,
-    color: '#000',
     fontWeight: '600',
   },
+  preview: {
+    fontSize: 14,
+    color: '#3C3C3C',
+    lineHeight: 20,
+  },
 });
-

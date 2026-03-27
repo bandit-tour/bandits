@@ -1,7 +1,6 @@
 import { Database } from '@/lib/database.types';
 import { useRouter } from 'expo-router';
-import Constants from 'expo-constants';
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Image,
@@ -14,6 +13,8 @@ import {
 } from 'react-native';
 
 import { getEventBanditRecommendations, getBanditEventPersonalTip } from '@/app/services/events';
+import LocalBanditOctopusIcon from '@/components/LocalBanditOctopusIcon';
+import { getCategoryFallbackImage } from '@/lib/placePhoto';
 
 type Event = Database['public']['Tables']['event']['Row'];
 type BanditRecommendation = Pick<Database['public']['Tables']['bandit']['Row'], 'id' | 'image_url'>;
@@ -56,67 +57,71 @@ export default function EventCard({
   const [recommendingBandits, setRecommendingBandits] = useState<BanditRecommendation[]>([]);
   const [personalTip, setPersonalTip] = useState<string | null>(null);
   const photoUrlCache = EVENT_PHOTO_URL_CACHE;
-  const hasResolvedPhotoRef = useRef(false);
 
   const sanitizeImageUrl = (uri: string | null | undefined) => {
     if (!uri) return null;
     const trimmed = uri.trim();
     if (!trimmed) return null;
     const lowered = trimmed.toLowerCase();
-    // If DB stored the app logo as a placeholder, don't render it.
-    if (
-      lowered.includes('logobanditourapp') ||
-      lowered.includes('banditour') ||
-      lowered.includes('bandit-tour')
-    ) {
+    // Only block known marketing/logo assets — pass Supabase storage URLs through as-is.
+    if (lowered.includes('logobanditourapp') || lowered.includes('bandit-tour')) {
       return null;
     }
     return trimmed;
   };
 
-  const galleryImages = (() => {
-    if (!event.image_gallery) return [];
-    try {
-      const parsed = JSON.parse(event.image_gallery);
-      if (!Array.isArray(parsed)) return [];
-      return parsed
-        .filter((u) => typeof u === 'string' && u.trim())
-        .map((u) => sanitizeImageUrl(u as string))
-        .filter((u): u is string => Boolean(u));
-    } catch {
-      return event.image_gallery
-        .split(',')
-        .map((u) => sanitizeImageUrl(u))
-        .filter((u): u is string => Boolean(u));
-    }
-  })();
-  const primaryImage = galleryImages[0] || sanitizeImageUrl(event.image_url) || null;
-
-  const [resolvedPrimaryImageUri, setResolvedPrimaryImageUri] = useState<string | null>(
-    null
-  );
-  const [imageLoading, setImageLoading] = useState<boolean>(true);
-
-  const getGoogleApiKey = () => {
-    return (
-      (process.env.EXPO_PUBLIC_GOOGLE_MAPS_KEY as string | undefined) ??
-      (Constants.expoConfig as any)?.android?.config?.googleMaps?.apiKey ??
-      (Constants.expoConfig as any)?.ios?.config?.googleMapsApiKey ??
-      ''
-    );
-  };
-
   const isLogoLikeImageUri = (uri: string) => {
     const lowered = uri.toLowerCase();
-    return (
-      lowered.includes('logobanditourapp') ||
-      lowered.includes('banditour') ||
-      lowered.includes('bandit-tour')
-    );
+    return lowered.includes('logobanditourapp') || lowered.includes('bandit-tour');
   };
 
+  /**
+   * Priority: (1) image_gallery URLs in order, (2) image_url, (3) Google Places photo.
+   * Same URL is not listed twice.
+   */
+  const dbImageCandidates = useMemo(() => {
+    const out: string[] = [];
+    const add = (raw: string | null | undefined) => {
+      const t = raw?.trim();
+      if (!t || isLogoLikeImageUri(t)) return;
+      if (!out.includes(t)) out.push(t);
+    };
+    if (event.image_gallery) {
+      try {
+        const parsed = JSON.parse(event.image_gallery);
+        if (Array.isArray(parsed)) {
+          parsed.forEach((u) => typeof u === 'string' && add(u));
+        }
+      } catch {
+        event.image_gallery.split(',').forEach((u) => add(u.trim()));
+      }
+    }
+    add(event.image_url);
+    return out;
+  }, [event.id, event.image_gallery, event.image_url]);
+
+  const [candidateIndex, setCandidateIndex] = useState(0);
+  const [googlePhotoUri, setGooglePhotoUri] = useState<string | null>(null);
+  const [googleLoading, setGoogleLoading] = useState(false);
+  const [googleFetchFinished, setGoogleFetchFinished] = useState(false);
+  const googleFetchStarted = useRef(false);
+
+  const displayUri =
+    candidateIndex < dbImageCandidates.length
+      ? dbImageCandidates[candidateIndex]
+      : googlePhotoUri;
+
+  const resolvedImageUri =
+    displayUri ||
+    (googleFetchFinished
+      ? getCategoryFallbackImage(event.genre, `event-${event.id}`, 800, 600)
+      : null);
+
+  /** Places API (Find Place + Place Details + Photo): use EXPO_PUBLIC_GOOGLE_MAPS_KEY only. */
+  const getPlacesApiKey = () => String(process.env.EXPO_PUBLIC_GOOGLE_MAPS_KEY ?? '').trim();
+
   const fetchGooglePlacePhotoUrl = async () => {
-    const apiKey = getGoogleApiKey();
+    const apiKey = getPlacesApiKey();
     if (!apiKey) return null;
 
     const query = [event.name, event.address, event.city, event.neighborhood]
@@ -153,44 +158,52 @@ export default function EventCard({
     )}&key=${encodeURIComponent(apiKey)}`;
   };
 
-  useEffect(() => {
-    let cancelled = false;
-    const run = async () => {
-      if (resolvedPrimaryImageUri) return;
-      if (hasResolvedPhotoRef.current) return;
-      hasResolvedPhotoRef.current = true;
-      setImageLoading(true);
+  /** Reset when event / DB URLs change; show spinner (not gray) when there are no DB URLs yet. */
+  useLayoutEffect(() => {
+    setCandidateIndex(0);
+    setGooglePhotoUri(null);
+    setGoogleFetchFinished(false);
+    googleFetchStarted.current = false;
+    setGoogleLoading(dbImageCandidates.length === 0);
+  }, [event.id, dbImageCandidates.length]);
 
-      const cached = photoUrlCache.get(event.id);
-      if (cached) {
-        if (!cancelled) setResolvedPrimaryImageUri(cached);
-        setImageLoading(false);
-        return;
-      }
-
+  /** After all DB URLs fail onError, or when there are no DB URLs — Google Places fallback. */
+  const loadGooglePhoto = () => {
+    if (googleFetchStarted.current) return;
+    googleFetchStarted.current = true;
+    const cached = photoUrlCache.get(event.id);
+    if (cached && !isLogoLikeImageUri(cached)) {
+      setGooglePhotoUri(cached);
+      setGoogleLoading(false);
+      setGoogleFetchFinished(true);
+      return;
+    }
+    setGoogleLoading(true);
+    void (async () => {
+      let got: string | null = null;
       try {
         const photoUrl = await fetchGooglePlacePhotoUrl();
-        if (cancelled) return;
-
         if (photoUrl && !isLogoLikeImageUri(photoUrl)) {
           photoUrlCache.set(event.id, photoUrl);
-          setResolvedPrimaryImageUri(photoUrl);
-        } else if (primaryImage && !isLogoLikeImageUri(primaryImage)) {
-          // Fallback to stored URL only if it doesn't look like the app logo.
-          setResolvedPrimaryImageUri(primaryImage);
+          setGooglePhotoUri(photoUrl);
+          got = photoUrl;
         }
       } catch (e) {
         console.warn('[EventCard] google photo fetch failed', { eventId: event.id, e });
       } finally {
-        if (!cancelled) setImageLoading(false);
+        setGoogleLoading(false);
+        setGoogleFetchFinished(true);
       }
-    };
+      if (!got) {
+        setGooglePhotoUri(getCategoryFallbackImage(event.genre, `event-${event.id}`, 800, 600));
+      }
+    })();
+  };
 
-    run();
-    return () => {
-      cancelled = true;
-    };
-  }, [event.id, resolvedPrimaryImageUri]);
+  useEffect(() => {
+    if (dbImageCandidates.length > 0) return;
+    loadGooglePhoto();
+  }, [event.id, dbImageCandidates.length]);
 
   // Fetch bandit recommendations when showRecommendations is true
   useEffect(() => {
@@ -246,21 +259,23 @@ export default function EventCard({
         isHorizontal && styles.imageContainerHorizontal,
         ...(imageHeight ? [{ height: imageHeight }] : [])
       ]}>
-        {resolvedPrimaryImageUri ? (
+        {resolvedImageUri ? (
           <Image
-            source={{ uri: resolvedPrimaryImageUri }}
+            source={{ uri: resolvedImageUri }}
             style={styles.eventImage}
             resizeMode="cover"
             onError={() => {
-              // If an image URL fails to load, re-resolve via Google.
-              hasResolvedPhotoRef.current = false;
-              setResolvedPrimaryImageUri(null);
-              setImageLoading(true);
+              if (candidateIndex + 1 < dbImageCandidates.length) {
+                setCandidateIndex((i) => i + 1);
+                return;
+              }
+              setCandidateIndex(dbImageCandidates.length);
+              loadGooglePhoto();
             }}
           />
         ) : (
           <View style={styles.imageLoadingOverlay}>
-            <ActivityIndicator size="small" />
+            <ActivityIndicator size="small" color="#888" />
           </View>
         )}
         <View style={styles.ratingContainer}>
@@ -290,8 +305,8 @@ export default function EventCard({
                     resizeMode="cover"
                   />
                 ) : (
-                  <View style={styles.banditIconImageLoading}>
-                    <ActivityIndicator size="small" />
+                  <View style={[styles.banditIconImage, styles.octopusInIcon]}>
+                    <LocalBanditOctopusIcon style={{ width: 40, height: 40, marginRight: 0 }} />
                   </View>
                 )}
               </TouchableOpacity>
@@ -330,7 +345,7 @@ export default function EventCard({
         <Text style={styles.eventDescription} numberOfLines={3} ellipsizeMode="tail">{event.description || ''}</Text>
         {personalTip && (
           <Text style={styles.personalTip}>
-            {`Bandit tip: ${personalTip}`}
+            {`banDit tip: ${personalTip}`}
           </Text>
         )}
         <View style={styles.bottomInfo}>
@@ -486,6 +501,11 @@ const styles = StyleSheet.create({
     bottom: 0,
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  octopusInIcon: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#FFF',
   },
   imageContainerHorizontal: {
     width: '100%',

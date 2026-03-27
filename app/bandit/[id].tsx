@@ -1,7 +1,12 @@
-import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
+import { Stack, useLocalSearchParams } from 'expo-router';
 import { useEffect, useState } from 'react';
 import {
   ActivityIndicator,
+  Alert,
+  Keyboard,
+  KeyboardAvoidingView,
+  Modal,
+  Platform,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -11,9 +16,10 @@ import {
   View,
 } from 'react-native';
 
-import { getBanditById, getBanditTags, submitBanditQuestion } from '@/app/services/bandits';
-import { getBanditEventCategories, getEvents } from '@/app/services/events';
+import { getBanditById, getBanditTags, submitBanditQuestion, toggleBanditLike } from '@/app/services/bandits';
 import { getBanditReviews } from '@/app/services/reviews';
+import { resolveWhyFollowText } from '@/services/whyFollowCopy';
+import { getNotificationsBackendStatus } from '@/services/localFriend';
 
 import BanditHeader from '@/components/BanditHeader';
 import ReviewCard from '@/components/ReviewCard';
@@ -23,7 +29,6 @@ import { TAG_EMOJI_MAP } from '@/constants/tagNameToEmoji';
 import { Database } from '@/lib/database.types';
 
 type Bandit = Database['public']['Tables']['bandit']['Row'];
-type Event = Database['public']['Tables']['event']['Row'];
 
 type DisplayReview = {
   user_id: string;
@@ -33,43 +38,26 @@ type DisplayReview = {
   user_name: string;
 };
 
-const SAMPLE_BANDIT_REVIEWS: DisplayReview[] = [
-  {
-    user_id: 'sample-1',
-    user_name: 'neo_from_ilisia',
-    review: 'Felt like hanging with a plugged‑in local, not a tour guide.',
-    rating: 5,
-  },
-  {
-    user_id: 'sample-2',
-    user_name: 'athens_after_midnight',
-    review: 'Showed us tiny bars we’d never find on Maps.',
-    rating: 5,
-  },
-  {
-    user_id: 'sample-3',
-    user_name: 'slow_morning_club',
-    review: 'Coffee route was spot on – zero influencer traps.',
-    rating: 4,
-  },
-];
+const FALLBACK_HANDLES = ['athens.nights', 'city.mosaic', 'street.coffee', 'rooftop.sonic', 'plaka.walks'];
 
-interface EventCategory {
-  genre: 'Food' | 'Culture' | 'Nightlife' | 'Shopping' | 'Coffee';
-  count: number;
+function buildFallbackReviews(banditId: string, banditName: string): DisplayReview[] {
+  return FALLBACK_HANDLES.map((handle, index) => ({
+    user_id: `${banditId}-sample-${index + 1}`,
+    user_name: `${handle}.${String(banditName || 'guide').toLowerCase().replace(/\s+/g, '')}`,
+    review:
+      index % 2 === 0
+        ? `Great picks from ${banditName}. The route felt local and practical.`
+        : `Saved this for my next night out. Spots were real and easy to reach.`,
+    rating: index === 4 ? 4 : 5,
+  }));
 }
 
 export default function BanditScreen() {
   const { id } = useLocalSearchParams();
-  const router = useRouter();
 
   const [bandit, setBandit] = useState<Bandit | null>(null);
-  const [categories, setCategories] = useState<EventCategory[]>([]);
   const [tags, setTags] = useState<string[]>([]);
   const [reviews, setReviews] = useState<DisplayReview[]>([]);
-  const [guideEvents, setGuideEvents] = useState<Event[]>([]);
-  const [guideLoading, setGuideLoading] = useState(false);
-  const [guideError, setGuideError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -78,6 +66,8 @@ export default function BanditScreen() {
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [submitSuccess, setSubmitSuccess] = useState(false);
+  const [askEnabled, setAskEnabled] = useState(false);
+  const [askDisabledReason, setAskDisabledReason] = useState<string | null>(null);
 
   useEffect(() => {
     if (!id) return;
@@ -88,16 +78,8 @@ export default function BanditScreen() {
 
         // Bandit
         const banditData = await getBanditById(id as string);
-        if (!banditData) throw new Error('Bandit not found');
+        if (!banditData) throw new Error('banDit not found');
         setBandit(banditData);
-
-        // Categories (what they recommend)
-        try {
-          const categoriesData = await getBanditEventCategories(id as string);
-          setCategories(categoriesData);
-        } catch {
-          setCategories([]);
-        }
 
         // Vibes (how it feels)
         try {
@@ -118,22 +100,13 @@ export default function BanditScreen() {
             user_name: r.user_name ?? 'local wanderer',
           }));
           const limited = mapped.slice(0, 5);
-          setReviews(limited.length > 0 ? limited : SAMPLE_BANDIT_REVIEWS.slice(0, 3));
+          setReviews(
+            limited.length > 0
+              ? limited
+              : buildFallbackReviews(banditData.id, banditData.name).slice(0, 3),
+          );
         } catch {
-          setReviews(SAMPLE_BANDIT_REVIEWS.slice(0, 3));
-        }
-
-        // City guide preview (events for this bandit)
-        try {
-          setGuideLoading(true);
-          const eventsForBandit = await getEvents({ banditId: id as string });
-          setGuideEvents(eventsForBandit.slice(0, 5));
-          setGuideError(null);
-        } catch {
-          setGuideEvents([]);
-          setGuideError(null);
-        } finally {
-          setGuideLoading(false);
+          setReviews(buildFallbackReviews(banditData.id, banditData.name).slice(0, 3));
         }
       } catch (err) {
         setError(err instanceof Error ? err.message : 'Failed to fetch bandit');
@@ -144,6 +117,19 @@ export default function BanditScreen() {
 
     fetchBanditData();
   }, [id]);
+
+  useEffect(() => {
+    let active = true;
+    (async () => {
+      const status = await getNotificationsBackendStatus();
+      if (!active) return;
+      setAskEnabled(status.enabled);
+      setAskDisabledReason(status.enabled ? null : status.reason || 'Questions are unavailable right now.');
+    })();
+    return () => {
+      active = false;
+    };
+  }, []);
 
   if (loading) {
     return (
@@ -156,18 +142,10 @@ export default function BanditScreen() {
   if (error || !bandit) {
     return (
       <View style={styles.errorContainer}>
-        <Text style={styles.errorText}>{error ?? 'Bandit not found'}</Text>
+        <Text style={styles.errorText}>{error ?? 'banDit not found'}</Text>
       </View>
     );
   }
-
-  const handleCategoryPress = (genre: string) => {
-    router.push(`/cityGuide?banditId=${id}&genre=${genre}`);
-  };
-
-  const handleVibePress = (tag: string) => {
-    router.push(`/cityGuide?vibe=${encodeURIComponent(tag)}`);
-  };
 
   const handleAskMePress = () => {
     setAskOpen(true);
@@ -183,8 +161,9 @@ export default function BanditScreen() {
       await submitBanditQuestion(id as string, askText.trim());
       setSubmitSuccess(true);
       setAskText('');
-    } catch {
-      setSubmitError('Could not send your question. Please try again.');
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : '';
+      setSubmitError(msg.trim() || 'Could not send your question. Please try again.');
     } finally {
       setSubmitting(false);
     }
@@ -201,10 +180,19 @@ export default function BanditScreen() {
         {/* HEADER + CATEGORIES */}
         <BanditHeader
           bandit={bandit}
-          categories={categories}
+          categories={[]}
           variant="detail"
           showActionButtons
-          onCategoryPress={handleCategoryPress}
+          onLike={async (banditId, currentLikeStatus) => {
+            setBandit((prev) => (prev ? { ...prev, is_liked: !currentLikeStatus } : prev));
+            try {
+              await toggleBanditLike(banditId, currentLikeStatus);
+            } catch (e) {
+              setBandit((prev) => (prev ? { ...prev, is_liked: currentLikeStatus } : prev));
+              const msg = e instanceof Error ? e.message : '';
+              Alert.alert('Follow unavailable', msg || 'Could not update follow state.');
+            }
+          }}
         />
 
         {/* VIBES (directly under Categories) */}
@@ -235,16 +223,21 @@ export default function BanditScreen() {
           {`Why follow ${bandit.name}?`}
         </Text>
 
-        {bandit.why_follow && (
-          <Text style={styles.why_follow}>
-            {bandit.why_follow
-              .split('.')
-              .filter((s) => s.trim())
-              .map((sentence, i) => (
-                <Text key={i}>{`\n• ${sentence.trim()}.`}</Text>
-              ))}
-          </Text>
-        )}
+        <View style={styles.why_follow}>
+          {(() => {
+            const wf = resolveWhyFollowText(bandit).trim();
+            if (!wf) return null;
+            const lines = wf
+              .split('\n')
+              .map((l) => l.trim())
+              .filter(Boolean);
+            return lines.map((line, i) => (
+              <Text key={i} style={styles.whyFollowBullet}>
+                {line.startsWith('•') ? `${line}` : `• ${line}`}
+              </Text>
+            ));
+          })()}
+        </View>
 
         {/* REVIEWS */}
         <View style={styles.reviewsSection}>
@@ -265,92 +258,91 @@ export default function BanditScreen() {
           )}
         </View>
 
-        {/* CITY GUIDE PREVIEW */}
-        {guideEvents.length > 0 && (
-          <View style={styles.guideSection}>
-            <Text style={styles.reviewsTitle}>
-              {`City guide by ${bandit.name}`}
-            </Text>
-            <ScrollView
-              horizontal
-              showsHorizontalScrollIndicator={false}
-              contentContainerStyle={styles.guideEventsContainer}
-            >
-              {guideEvents.map((event) => (
-                <Pressable
-                  key={event.id}
-                  style={styles.guideCard}
-                  onPress={() =>
-                    router.push(
-                      `/event/${event.id}?banditId=${bandit.id}` as any
-                    )
-                  }
-                >
-                  <Text style={styles.guideEventName}>{event.name}</Text>
-                  <Text style={styles.guideEventMeta}>
-                    {event.genre} · {event.neighborhood}
-                  </Text>
-                  <Text
-                    numberOfLines={3}
-                    style={styles.guideEventDescription}
-                  >
-                    {event.description}
-                  </Text>
-                </Pressable>
-              ))}
-            </ScrollView>
-          </View>
-        )}
-
         {/* CTA */}
         <Pressable style={styles.askMeButton} onPress={handleAskMePress}>
           <Text style={styles.askMeText}>Ask me</Text>
         </Pressable>
       </ScrollView>
 
-      {/* ASK ME PANEL */}
-      {askOpen && (
-        <View style={styles.askOverlay}>
-          <View style={styles.askCard}>
-            <Text style={styles.askTitle}>{`Ask ${bandit.name}`}</Text>
-            <Text style={styles.askSubtitle}>
-              Ask anything about the city, spots, or vibes. We’ll route it to the bandiTour team for now.
-            </Text>
-            <TextInput
-              style={styles.askInput}
-              multiline
-              placeholder="Type your question..."
-              value={askText}
-              onChangeText={setAskText}
+      <Modal
+        visible={askOpen}
+        transparent
+        animationType="slide"
+        onRequestClose={() => {
+          Keyboard.dismiss();
+          setAskOpen(false);
+        }}
+      >
+        <KeyboardAvoidingView
+          style={styles.askModalRoot}
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+          keyboardVerticalOffset={Platform.OS === 'ios' ? 8 : 0}
+        >
+          <View style={styles.askOverlay}>
+            <Pressable
+              style={StyleSheet.absoluteFill}
+              onPress={() => {
+                Keyboard.dismiss();
+                setAskOpen(false);
+              }}
+              accessibilityLabel="Dismiss"
             />
-            {submitError && (
-              <Text style={styles.askError}>{submitError}</Text>
-            )}
-            {submitSuccess && (
-              <Text style={styles.askSuccess}>
-                Thanks, your question was sent. We’ll get back to you soon.
-              </Text>
-            )}
-            <View style={styles.askActions}>
-              <TouchableOpacity onPress={() => setAskOpen(false)}>
-                <Text style={styles.askCancel}>Close</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                onPress={handleAskSubmit}
-                disabled={submitting || !askText.trim()}
-                style={[
-                  styles.askSubmitButton,
-                  (submitting || !askText.trim()) && styles.askSubmitButtonDisabled,
-                ]}
+            <View style={styles.askCard}>
+              <ScrollView
+                keyboardShouldPersistTaps="handled"
+                showsVerticalScrollIndicator={false}
+                contentContainerStyle={styles.askScrollInner}
               >
-                <Text style={styles.askSubmitText}>
-                  {submitting ? 'Sending…' : 'Send'}
+                <Text style={styles.askTitle}>{`Ask ${bandit.name}`}</Text>
+                <Text style={styles.askSubtitle}>
+                  Ask anything about the city, spots, or vibes. We’ll route it to the bandiTour team for now.
                 </Text>
-              </TouchableOpacity>
+                <TextInput
+                  style={styles.askInput}
+                  multiline
+                  placeholder="Type your question..."
+                  placeholderTextColor="#999"
+                  value={askText}
+                  onChangeText={setAskText}
+                />
+                {submitError && (
+                  <Text style={styles.askError}>{submitError}</Text>
+                )}
+                {!askEnabled && !!askDisabledReason && (
+                  <Text style={styles.askError}>{askDisabledReason}</Text>
+                )}
+                {submitSuccess && (
+                  <Text style={styles.askSuccess}>
+                    Thanks, your question was sent. We’ll get back to you soon.
+                  </Text>
+                )}
+                <View style={styles.askActions}>
+                  <TouchableOpacity
+                    onPress={() => {
+                      Keyboard.dismiss();
+                      setAskOpen(false);
+                    }}
+                  >
+                    <Text style={styles.askCancel}>Close</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    onPress={handleAskSubmit}
+                    disabled={submitting || !askText.trim() || !askEnabled}
+                    style={[
+                      styles.askSubmitButton,
+                      (submitting || !askText.trim() || !askEnabled) && styles.askSubmitButtonDisabled,
+                    ]}
+                  >
+                    <Text style={styles.askSubmitText}>
+                      {submitting ? 'Sending…' : 'Send'}
+                    </Text>
+                  </TouchableOpacity>
+                </View>
+              </ScrollView>
             </View>
           </View>
-        </View>
-      )}
+        </KeyboardAvoidingView>
+      </Modal>
     </>
   );
 }
@@ -377,10 +369,14 @@ const styles = StyleSheet.create({
     marginBottom: 10,
   },
   why_follow: {
+    marginLeft: 8,
+    marginBottom: 8,
+  },
+  whyFollowBullet: {
     fontSize: 14,
     color: '#3C3C3C',
-    marginLeft: 16,
     marginBottom: 8,
+    lineHeight: 20,
   },
 
   reviewsSection: {
@@ -450,41 +446,11 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: 'red',
   },
-  guideSection: {
-    marginBottom: 20,
-  },
-  guideEventsContainer: {
-    paddingHorizontal: 8,
-    paddingTop: 8,
-  },
-  guideCard: {
-    width: 220,
-    padding: 10,
-    borderRadius: 12,
-    backgroundColor: '#F8F8F8',
-    marginRight: 8,
-  },
-  guideEventName: {
-    fontSize: 15,
-    fontWeight: '700',
-    color: '#222',
-    marginBottom: 4,
-  },
-  guideEventMeta: {
-    fontSize: 12,
-    color: '#666',
-    marginBottom: 6,
-  },
-  guideEventDescription: {
-    fontSize: 13,
-    color: '#3C3C3C',
+  askModalRoot: {
+    flex: 1,
   },
   askOverlay: {
-    position: 'absolute',
-    left: 0,
-    right: 0,
-    bottom: 0,
-    top: 0,
+    flex: 1,
     backgroundColor: 'rgba(0,0,0,0.3)',
     justifyContent: 'flex-end',
   },
@@ -493,6 +459,11 @@ const styles = StyleSheet.create({
     padding: 16,
     borderTopLeftRadius: 20,
     borderTopRightRadius: 20,
+    maxHeight: '88%',
+    zIndex: 10,
+  },
+  askScrollInner: {
+    paddingBottom: 24,
   },
   askTitle: {
     fontSize: 16,

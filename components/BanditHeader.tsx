@@ -1,6 +1,6 @@
 import { Database } from '@/lib/database.types';
 import { router } from 'expo-router';
-import React, { useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import {
   Image,
   Pressable,
@@ -10,6 +10,8 @@ import {
   View,
 } from 'react-native';
 
+import LocalBanditOctopusIcon from '@/components/LocalBanditOctopusIcon';
+import { picsumPlaceImage } from '@/lib/placePhoto';
 import TagChip from '@/components/TagChip';
 import { TAG_EMOJI_MAP } from './../constants/tagNameToEmoji';
 import EventCategories from './EventCategories';
@@ -53,11 +55,27 @@ export default function BanditHeader({
   } = bandit as any;
 
   const [imageAspectRatio, setImageAspectRatio] = useState<number>(1);
+  const [heroUriIndex, setHeroUriIndex] = useState(0);
 
   const isListVariant = variant === 'list';
-  const displayImage = isListVariant
-    ? face_image_url || image_url
-    : image_url;
+  const heroCandidates = useMemo(() => {
+    const raw = [isListVariant ? face_image_url || image_url : image_url, face_image_url, image_url];
+    const out: string[] = [];
+    for (const u of raw) {
+      const t = typeof u === 'string' ? u.trim() : '';
+      if (t && /^https?:\/\//i.test(t) && !out.includes(t)) out.push(t);
+    }
+    return out;
+  }, [isListVariant, face_image_url, image_url]);
+
+  const heroUri =
+    heroUriIndex < heroCandidates.length
+      ? heroCandidates[heroUriIndex]
+      : picsumPlaceImage(`banDit-${id}`, 800, 600);
+
+  useEffect(() => {
+    setHeroUriIndex(0);
+  }, [id, isListVariant, face_image_url, image_url]);
 
   const imageHeight = isListVariant ? 238 : undefined;
   const containerPadding = isListVariant ? 0 : 16;
@@ -72,7 +90,7 @@ export default function BanditHeader({
         ]}
       >
         <Image
-          source={{ uri: displayImage }}
+          source={{ uri: heroUri }}
           style={[
             styles.mainImage,
             isListVariant
@@ -83,6 +101,11 @@ export default function BanditHeader({
           onLoad={() => {
             if (!isListVariant) {
               setImageAspectRatio(0.8);
+            }
+          }}
+          onError={() => {
+            if (heroUriIndex < heroCandidates.length) {
+              setHeroUriIndex((i) => i + 1);
             }
           }}
         />
@@ -98,7 +121,7 @@ export default function BanditHeader({
             </Pressable>
 
             <Pressable
-              style={styles.mapButtonTopLeft}
+              style={styles.mapButtonTopRight}
               onPress={() => router.push(`/cityMap?banditId=${id}`)}
             >
               <Image
@@ -118,27 +141,34 @@ export default function BanditHeader({
         ]}
       >
         <View style={styles.nameContainer}>
-          <Text style={styles.name}>{`${name} ${family_name}`}</Text>
+          <View style={styles.nameRow}>
+            <View style={styles.octopusWrap}>
+              <LocalBanditOctopusIcon />
+            </View>
+            <Text style={styles.name}>{`${name} ${family_name}`}</Text>
+          </View>
           <Text style={styles.descriptionLine}>
             {`(${age} y/o, local banDit)`}
           </Text>
           <Text style={styles.occupation}>{occupation}</Text>
+          {isListVariant && (
+            <Text style={styles.openProfileCue}>Open profile</Text>
+          )}
         </View>
 
-        {!isListVariant && (
-          <View style={styles.ratingContainer}>
-            <ThemedText style={styles.stars}>⭐️</ThemedText>
-            <ThemedText style={styles.rating}>{rating}</ThemedText>
-            {onLike && (
-              <Pressable
-                onPress={() => onLike(id, is_liked)}
-                style={styles.likeButton}
-              >
-                <ThemedText>{is_liked ? '❤️' : '🤍'}</ThemedText>
-              </Pressable>
-            )}
-          </View>
-        )}
+        <View style={styles.ratingContainer}>
+          {!isListVariant && (
+            <>
+              <ThemedText style={styles.stars}>⭐️</ThemedText>
+              <ThemedText style={styles.rating}>{rating}</ThemedText>
+            </>
+          )}
+          {onLike && (
+            <Pressable onPress={() => onLike(id, is_liked)} style={styles.followButton}>
+              <Text style={styles.followButtonText}>{is_liked ? 'Following' : 'Follow'}</Text>
+            </Pressable>
+          )}
+        </View>
       </View>
 
       {/* CATEGORIES + VIBES */}
@@ -241,10 +271,10 @@ const styles = StyleSheet.create({
     gap: 4,
     elevation: 3,
   },
-  mapButtonTopLeft: {
+  mapButtonTopRight: {
     position: 'absolute',
     top: 16,
-    left: 16,
+    right: 16,
   },
   mapIcon: {
     width: 47,
@@ -267,7 +297,7 @@ const styles = StyleSheet.create({
     marginBottom: 16,
   },
   listInfoContainer: {
-    height: 80,
+    minHeight: 88,
     paddingHorizontal: 16,
     paddingVertical: 14,
     marginBottom: 0,
@@ -279,6 +309,20 @@ const styles = StyleSheet.create({
   },
   nameContainer: {
     flex: 1,
+  },
+  nameRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flexWrap: 'nowrap',
+  },
+  octopusWrap: {
+    flexShrink: 0,
+  },
+  openProfileCue: {
+    marginTop: 6,
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#0a7ea4',
   },
   name: {
     fontWeight: '700',
@@ -308,8 +352,17 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '700',
   },
-  likeButton: {
+  followButton: {
     marginLeft: 8,
+    borderRadius: 999,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    backgroundColor: '#111',
+  },
+  followButtonText: {
+    color: '#fff',
+    fontSize: 12,
+    fontWeight: '700',
   },
   vibesContainer: {
     flexDirection: 'row',

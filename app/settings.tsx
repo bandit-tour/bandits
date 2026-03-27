@@ -1,58 +1,115 @@
 import { Stack, useRouter } from 'expo-router';
-import { useState } from 'react';
-import { StyleSheet, Switch, Text, TouchableOpacity, View } from 'react-native';
+import { useCallback, useEffect, useState } from 'react';
+import {
+  ScrollView,
+  StyleSheet,
+  Switch,
+  Text,
+  TouchableOpacity,
+  View,
+} from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+
 import { supabase } from '@/lib/supabase';
 
 export default function SettingsScreen() {
   const router = useRouter();
+  const insets = useSafeAreaInsets();
   const [pushEnabled, setPushEnabled] = useState(true);
   const [emailEnabled, setEmailEnabled] = useState(true);
+  const [savingPrefs, setSavingPrefs] = useState(false);
+
+  const load = useCallback(async () => {
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+    if (!user) return;
+  }, []);
+
+  useEffect(() => {
+    void load();
+  }, [load]);
+
+  const savePreferences = async () => {
+    setSavingPrefs(true);
+    setTimeout(() => {
+      setSavingPrefs(false);
+    }, 500);
+  };
 
   return (
     <>
       <Stack.Screen options={{ headerShown: true, title: 'Settings' }} />
-      <View style={styles.container}>
+      <ScrollView
+        style={styles.scroll}
+        contentContainerStyle={[styles.container, { paddingBottom: 24 + insets.bottom }]}
+        keyboardShouldPersistTaps="handled"
+      >
         <Text style={styles.title}>Settings</Text>
+        <Text style={styles.subtitle}>Notifications, preferences, and account</Text>
 
+        <Text style={styles.blockLabel}>Notifications</Text>
         <View style={styles.optionRow}>
           <Text style={styles.optionLabel}>Push notifications</Text>
           <Switch value={pushEnabled} onValueChange={setPushEnabled} />
         </View>
-
         <View style={styles.optionRow}>
           <Text style={styles.optionLabel}>Email updates</Text>
           <Switch value={emailEnabled} onValueChange={setEmailEnabled} />
         </View>
 
+        <Text style={[styles.blockLabel, styles.blockSpaced]}>Preferences</Text>
+        <Text style={styles.fieldHint}>Choose how you want app updates delivered.</Text>
+        <TouchableOpacity style={styles.primaryBtn} onPress={savePreferences}>
+          <Text style={styles.primaryBtnText}>{savingPrefs ? 'Saving...' : 'Save preferences'}</Text>
+        </TouchableOpacity>
+
         <TouchableOpacity
           style={styles.signOutButton}
           onPress={async () => {
             await supabase.auth.signOut();
-            router.replace('/');
+            router.push('/login');
           }}
         >
           <Text style={styles.signOutText}>Sign out</Text>
         </TouchableOpacity>
-      </View>
+      </ScrollView>
     </>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
+  scroll: {
     flex: 1,
     backgroundColor: '#FFFFFF',
+  },
+  container: {
     padding: 20,
   },
   title: {
     fontSize: 22,
     fontWeight: '700',
     color: '#111',
-    marginBottom: 12,
+    marginBottom: 4,
+  },
+  subtitle: {
+    fontSize: 14,
+    color: '#666',
+    marginBottom: 20,
+  },
+  blockLabel: {
+    fontSize: 12,
+    fontWeight: '800',
+    color: '#888',
+    letterSpacing: 0.6,
+    textTransform: 'uppercase',
+    marginBottom: 8,
+  },
+  blockSpaced: {
+    marginTop: 8,
   },
   optionRow: {
-    marginTop: 12,
-    paddingVertical: 10,
+    paddingVertical: 12,
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
@@ -63,8 +120,25 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: '#333',
   },
+  fieldHint: {
+    fontSize: 13,
+    color: '#555',
+    marginBottom: 8,
+  },
+  primaryBtn: {
+    alignSelf: 'flex-start',
+    backgroundColor: '#111',
+    paddingHorizontal: 20,
+    paddingVertical: 10,
+    borderRadius: 10,
+  },
+  primaryBtnText: {
+    color: '#FFF',
+    fontWeight: '700',
+    fontSize: 14,
+  },
   signOutButton: {
-    marginTop: 20,
+    marginTop: 28,
     paddingVertical: 12,
     borderRadius: 10,
     backgroundColor: '#111',

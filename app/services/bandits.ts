@@ -21,6 +21,7 @@ export async function getBandits(): Promise<Bandit[]> {
 
 // additional function included to deal with the tags connection with the bandits fetch as well, i didnt remove the previous method, just in case.
 export async function getBanditsWithTags() {
+  const likedIds = await getUserLikedBanditIds();
   const { data, error } = await supabase
     .from('bandit')
     .select(`
@@ -39,7 +40,10 @@ export async function getBanditsWithTags() {
     throw error;
   }
 
-  return data || [];
+  return ((data || []) as any[]).map((row) => ({
+    ...row,
+    is_liked: likedIds.has(row.id),
+  }));
 }
 
 export async function toggleBanditLike(
@@ -146,6 +150,7 @@ export async function deleteBandit(id: string): Promise<void> {
 }
 
 export async function getBanditById(id: string): Promise<Bandit | null> {
+  const likedIds = await getUserLikedBanditIds();
   const { data, error } = await supabase
     .from('bandit')
     .select('*')
@@ -158,7 +163,11 @@ export async function getBanditById(id: string): Promise<Bandit | null> {
     throw error;
   }
 
-  return data;
+  if (!data) return null;
+  return {
+    ...data,
+    is_liked: likedIds.has(data.id),
+  };
 }
 
 export async function getBanditTags(banditId: string): Promise<string[]> {
@@ -210,4 +219,30 @@ export async function getUserLikedBanditIds(): Promise<Set<string>> {
   }
 
   return new Set(data?.map((item: any) => item.bandit_id) || []);
+}
+
+export async function submitBanditQuestion(banditId: string, question: string): Promise<void> {
+  const text = question.trim();
+  if (!text) throw new Error('Question is required.');
+
+  const {
+    data: { user },
+    error: userError,
+  } = await supabase.auth.getUser();
+
+  if (userError) throw new Error(userError.message || 'Could not verify your session.');
+  if (!user) throw new Error('Sign in to ask a question.');
+
+  const { error } = await supabase.from('notifications').insert({
+    user_id: user.id,
+    type: 'bandit_question',
+    title: 'Question for bandit',
+    message: text,
+    reference_id: banditId,
+    reference_type: 'bandit',
+  });
+
+  if (error) {
+    throw new Error(error.message || 'Could not send your question.');
+  }
 }

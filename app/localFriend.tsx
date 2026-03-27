@@ -1,5 +1,5 @@
 import { Stack, useRouter } from 'expo-router';
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   KeyboardAvoidingView,
   Platform,
@@ -13,7 +13,7 @@ import {
   View,
 } from 'react-native';
 
-import { sendLocalFriendMessage } from '@/services/localFriend';
+import { getNotificationsBackendStatus, sendLocalFriendMessage } from '@/services/localFriend';
 
 export default function LocalFriendScreen() {
   const router = useRouter();
@@ -21,9 +21,30 @@ export default function LocalFriendScreen() {
   const [sending, setSending] = useState(false);
   const [success, setSuccess] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [backendReady, setBackendReady] = useState(false);
+  const [backendReason, setBackendReason] = useState<string | null>(null);
+
+  useEffect(() => {
+    let active = true;
+    (async () => {
+      try {
+        const status = await getNotificationsBackendStatus();
+        if (!active) return;
+        setBackendReady(status.enabled);
+        setBackendReason(status.enabled ? null : status.reason || 'Messaging is unavailable right now.');
+      } catch {
+        if (!active) return;
+        setBackendReady(false);
+        setBackendReason('Messaging is unavailable right now.');
+      }
+    })();
+    return () => {
+      active = false;
+    };
+  }, []);
 
   const handleSend = async () => {
-    if (!message.trim()) return;
+    if (!message.trim() || !backendReady) return;
 
     const payload = message.trim();
     setSending(true);
@@ -34,8 +55,14 @@ export default function LocalFriendScreen() {
       await sendLocalFriendMessage(payload);
       setMessage('');
       setSuccess('Message sent. A local friend will get back to you.');
-    } catch (e: any) {
-      setError(e?.message ?? 'Failed to send message.');
+    } catch (e: unknown) {
+      const msg =
+        e instanceof Error
+          ? e.message
+          : typeof e === 'object' && e !== null && 'message' in e
+            ? String((e as { message: unknown }).message ?? '')
+            : '';
+      if (msg.trim()) setError(msg.trim());
     } finally {
       setSending(false);
     }
@@ -51,7 +78,7 @@ export default function LocalFriendScreen() {
         >
           <View style={styles.logoBar}>
             <Image
-              source={require('@/assets/icons/logobanditourapp.png')}
+              source={require('@/assets/icons/banditLocalpng.png')}
               style={styles.logo}
               resizeMode="contain"
             />
@@ -60,7 +87,7 @@ export default function LocalFriendScreen() {
           <View style={styles.copyBlock}>
             <Text style={styles.title}>Send something into the city</Text>
             <Text style={styles.subtitle}>
-              This isn’t chat. It’s more like a note in a bottle that drifts through locals and bandits.
+              This isn’t chat. It’s more like a note in a bottle that drifts through locals and banDits.
             </Text>
           </View>
 
@@ -77,9 +104,9 @@ export default function LocalFriendScreen() {
             <TouchableOpacity
               style={[
                 styles.sendButton,
-                (sending || !message.trim()) && styles.sendButtonDisabled,
+                (sending || !message.trim() || !backendReady) && styles.sendButtonDisabled,
               ]}
-              disabled={sending || !message.trim()}
+              disabled={sending || !message.trim() || !backendReady}
               onPress={handleSend}
             >
               {sending ? (
@@ -91,13 +118,16 @@ export default function LocalFriendScreen() {
 
             {!!error && <Text style={styles.errorText}>{error}</Text>}
             {!!success && <Text style={styles.successText}>{success}</Text>}
+            {!backendReady && !!backendReason && <Text style={styles.errorText}>{backendReason}</Text>}
           </View>
 
           <TouchableOpacity
             style={styles.exitButton}
-            onPress={() => router.replace('/(tabs)/bandits')}
+            onPress={() => {
+              router.replace('/bandits');
+            }}
           >
-            <Text style={styles.exitButtonText}>Back to bandits</Text>
+            <Text style={styles.exitButtonText}>Back to banDits</Text>
           </TouchableOpacity>
         </ScrollView>
       </KeyboardAvoidingView>

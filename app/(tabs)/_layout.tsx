@@ -1,109 +1,138 @@
-import { CityProvider } from '@/contexts/CityContext';
-import { supabase } from '@/lib/supabase';
-import { Tabs, useRouter } from 'expo-router';
-import { useEffect, useState } from 'react';
-import { View } from 'react-native';
+import { Stack, usePathname, useRouter } from 'expo-router';
+import React from 'react';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
 
-import ExploreIcon from '@/assets/icons/explore.svg';
-import LocalBanditsIcon from '@/assets/icons/localBandits.svg';
-import BottomNavigation from '@/components/BottomNavigation';
-import { HapticTab } from '@/components/HapticTab';
-import ProfileModal from '@/components/modals/ProfileModal';
-import TakePartModal from '@/components/modals/TakePartModal';
-import { IconSymbol } from '@/components/ui/IconSymbol';
-import TabBarBackground from '@/components/ui/TabBarBackground';
-import { Colors } from '@/constants/Colors';
+import MainBottomNav from '@/components/MainBottomNav';
 import { useColorScheme } from '@/hooks/useColorScheme';
+import { CityProvider } from '@/contexts/CityContext';
 
-export default function TabLayout() {
-  const colorScheme = useColorScheme();
-  const iconColor = 'white';
+type LowerTabKey = 'home' | 'localFriend' | 'chat' | 'inbox' | 'menu';
+type UpperTabKey = 'bandits' | 'mySpots' | 'explore';
+
+function getLowerTabFromPath(pathname: string | null): LowerTabKey {
+  if (!pathname) return 'home';
+  if (pathname.includes('/chat')) return 'chat';
+  if (pathname.includes('/inbox')) return 'inbox';
+  if (pathname.includes('/localFriend')) return 'localFriend';
+  if (pathname.includes('/menu')) return 'menu';
+  return 'home';
+}
+
+function getUpperTabFromPath(pathname: string | null): UpperTabKey | null {
+  if (!pathname) return 'bandits';
+  if (
+    pathname.includes('/chat') ||
+    pathname.includes('/inbox') ||
+    pathname.includes('/menu') ||
+    pathname.includes('/localFriend') ||
+    pathname.includes('/profile') ||
+    pathname.includes('/settings')
+  ) {
+    return null;
+  }
+  if (pathname.includes('/mySpots')) return 'mySpots';
+  if (pathname.includes('/explore')) return 'explore';
+  if (pathname.includes('/bandits')) return 'bandits';
+  return 'bandits';
+}
+
+export default function TabsLayout() {
+  const pathname = usePathname();
   const router = useRouter();
-  const [profileModalVisible, setProfileModalVisible] = useState(false);
-  const [takePartModalVisible, setTakePartModalVisible] = useState(false);
+  const colorScheme = useColorScheme();
 
-  // Check if user's email is verified before allowing access to tabs
-  useEffect(() => {
-    const checkEmailVerification = async () => {
-      try {
-        const { data: { user } } = await supabase.auth.getUser();
-        if (user && !user.email_confirmed_at) {
-          console.log('❌ User trying to access tabs without email verification');
-          // Redirect back to auth screen
-          router.replace('/');
-        }
-      } catch (e) {
-        console.error('[TabLayout] getUser failed', e);
-      }
-    };
+  const lowerTab = getLowerTabFromPath(pathname) as LowerTabKey;
+  const upperTab = getUpperTabFromPath(pathname);
+  const showUpperTabs = upperTab !== null;
 
-    checkEmailVerification();
-  }, [router]);
+  const tabColor = colorScheme === 'dark' ? '#0a7ea4' : '#0a7ea4';
+  const inactiveColor = colorScheme === 'dark' ? '#A0A0A0' : '#777';
+  const go = (path: '/bandits' | '/mySpots' | '/explore' | '/localFriend' | '/chat' | '/inbox' | '/menu') => {
+    router.navigate(path);
+  };
 
   return (
     <CityProvider>
-    <View style={{ flex: 1, flexDirection: 'column' }}>
-      {/* <ModeHeader /> */}
-    <Tabs
-      initialRouteName="bandits"
-      screenOptions={{
-        headerShown: false,
-        tabBarButton: HapticTab,
-        tabBarBackground: TabBarBackground,
-        tabBarPosition: 'top',
-        tabBarStyle: {
-          borderTopWidth: 0,
-          borderBottomWidth: 1,
-          borderBottomColor: Colors[colorScheme ?? 'light'].tabIconDefault,
-          height: 60,
-          flexShrink: 0, // Prevent the tab bar from shrinking
-        },
-        // Ensure content area takes remaining space
-        contentStyle: {
-          flex: 1,
-        },
-      }}>
-      <Tabs.Screen
-        name="bandits"
-        options={{
-          title: 'local banDit',
-            tabBarIcon: () => <LocalBanditsIcon width={28} height={28} fill={iconColor} />,
-        }}
-      />
+      <View style={styles.container}>
+        {showUpperTabs && (
+          <View style={styles.upperTabs}>
+            <UpperTabButton
+              label="Local banDits"
+              active={upperTab === 'bandits'}
+              onPress={() => go('/bandits')}
+              color={tabColor}
+              inactiveColor={inactiveColor}
+            />
+            <UpperTabButton
+              label="My Spots"
+              active={upperTab === 'mySpots'}
+              onPress={() => go('/mySpots')}
+              color={tabColor}
+              inactiveColor={inactiveColor}
+            />
+            <UpperTabButton
+              label="Explore"
+              active={upperTab === 'explore'}
+              onPress={() => go('/explore')}
+              color={tabColor}
+              inactiveColor={inactiveColor}
+            />
+          </View>
+        )}
 
-      <Tabs.Screen
-        name="mySpots"
-        options={{
-        title: 'My Spots',
-          tabBarIcon: () => <IconSymbol name="heart" size={28} color="#000000" />,
-        }}
-      />
+        <View style={styles.content}>
+          <Stack screenOptions={{ headerShown: false }} />
+        </View>
 
-      <Tabs.Screen
-        name="explore"
-        options={{
-          title: 'Explore',
-          tabBarIcon: () => <ExploreIcon width={28} height={28} fill={iconColor} />,
-        }}
-      />
-
-
-    </Tabs>
-    <BottomNavigation
-      onProfilePress={() => setProfileModalVisible(true)}
-      onTakePartPress={() => setTakePartModalVisible(true)}
-    />
-
-    <ProfileModal
-      visible={profileModalVisible}
-      onClose={() => setProfileModalVisible(false)}
-    />
-
-    <TakePartModal
-      visible={takePartModalVisible}
-      onClose={() => setTakePartModalVisible(false)}
-    />
-    </View>
+        <MainBottomNav
+          activeTab={lowerTab}
+          onHome={() => go('/bandits')}
+          onLocalFriend={() => go('/localFriend')}
+          onChat={() => go('/chat')}
+          onInbox={() => go('/inbox')}
+          onMenu={() => go('/menu')}
+        />
+      </View>
     </CityProvider>
   );
 }
+
+function UpperTabButton({
+  label,
+  active,
+  onPress,
+  color,
+  inactiveColor,
+}: {
+  label: string;
+  active: boolean;
+  onPress: () => void;
+  color: string;
+  inactiveColor: string;
+}) {
+  return (
+    <Pressable onPress={onPress} style={styles.upperTabButton}>
+      <Text style={{ color: active ? color : inactiveColor, fontWeight: active ? '700' : '600' }}>
+        {label}
+      </Text>
+      {active ? <View style={[styles.upperTabUnderline, { backgroundColor: color }]} /> : null}
+    </Pressable>
+  );
+}
+
+const styles = StyleSheet.create({
+  container: { flex: 1, backgroundColor: '#FFFFFF' },
+  content: { flex: 1 },
+  upperTabs: {
+    flexDirection: 'row',
+    justifyContent: 'space-around',
+    paddingHorizontal: 10,
+    paddingTop: 12,
+    paddingBottom: 8,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: '#e5e5e5',
+    backgroundColor: '#FFFFFF',
+  },
+  upperTabButton: { alignItems: 'center', width: '33%' },
+  upperTabUnderline: { height: 3, width: 60, marginTop: 8, borderRadius: 999 },
+});

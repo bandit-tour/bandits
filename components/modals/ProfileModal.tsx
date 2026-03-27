@@ -1,19 +1,7 @@
 import React from 'react';
-import {
-  View,
-  Text,
-  TouchableOpacity,
-  StyleSheet,
-  ScrollView,
-  Alert,
-} from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
 import BaseModal from './BaseModal';
-import { ThemedText } from '@/components/ThemedText';
-import { ThemedView } from '@/components/ThemedView';
 import { IconSymbol } from '@/components/ui/IconSymbol';
-import { useColorScheme } from '@/hooks/useColorScheme';
-import { Colors } from '@/constants/Colors';
-import { supabase } from '@/lib/supabase';
 import { useRouter } from 'expo-router';
 
 interface ProfileModalProps {
@@ -22,47 +10,23 @@ interface ProfileModalProps {
 }
 
 export default function ProfileModal({ visible, onClose }: ProfileModalProps) {
-  const colorScheme = useColorScheme();
   const router = useRouter();
 
-  const handleLogout = async () => {
-    console.log('🔥 Logout button pressed!');
-
-    try {
-      console.log('🔒 Starting logout process...');
-      console.log('📡 Supabase client:', supabase ? 'Available' : 'Not available');
-
-      const { error } = await supabase.auth.signOut();
-
-      if (error) {
-        console.error('❌ Supabase logout error:', error);
-        Alert.alert('Logout Error', error.message || 'Failed to logout. Please try again.');
-        return;
-      }
-
-      console.log('✅ Supabase logout successful');
-      onClose(); // Close modal first
-      console.log('🚀 Redirecting to login...');
-      router.replace('/');
-
-    } catch (error) {
-      console.error('❌ Unexpected logout error:', error);
-      Alert.alert('Error', 'An unexpected error occurred. Please try again.');
-    }
-  };
-
   return (
-    <BaseModal visible={visible} onClose={onClose} height={200}>
+    <BaseModal visible={visible} onClose={onClose} height={220}>
       <View style={styles.container}>
         <View style={styles.content}>
           <TouchableOpacity
-            style={[styles.logoutButton, { borderColor: '#FF6B6B' }]}
-            onPress={handleLogout}
+            style={styles.settingsButton}
+            onPress={() => {
+              onClose();
+              router.push('/settings');
+            }}
             activeOpacity={0.7}
             hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
           >
-            <IconSymbol name="rectangle.portrait.and.arrow.right" size={24} color="#FF6B6B" />
-            <Text style={styles.logoutText}>Logout</Text>
+            <IconSymbol name="gearshape.fill" size={22} color="#0a7ea4" />
+            <Text style={styles.settingsText}>Open Settings</Text>
           </TouchableOpacity>
         </View>
       </View>
@@ -80,19 +44,21 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
   },
-  logoutButton: {
+  settingsButton: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     padding: 20,
     borderRadius: 12,
-    borderWidth: 2,
+    borderWidth: 1,
+    borderColor: '#BFDCE5',
+    backgroundColor: '#F3FBFE',
     minWidth: 150,
   },
-  logoutText: {
+  settingsText: {
     marginLeft: 12,
     fontSize: 18,
     fontWeight: '600',
-    color: '#FF6B6B',
+    color: '#0a7ea4',
   },
 });
