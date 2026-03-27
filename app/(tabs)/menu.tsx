@@ -27,6 +27,8 @@ export default function MenuScreen() {
           style={styles.logo}
           resizeMode="contain"
         />
+        <Text style={styles.headerTitle}>Guest Menu</Text>
+        <Text style={styles.headerSubtitle}>PLAY Theatrou Athens</Text>
       </View>
 
       <View style={styles.section}>
@@ -56,8 +58,21 @@ const styles = StyleSheet.create({
     marginBottom: 18,
   },
   logo: {
-    width: 110,
-    height: 110,
+    width: 84,
+    height: 84,
+    marginBottom: 10,
+  },
+  headerTitle: {
+    fontSize: 20,
+    fontWeight: '800',
+    color: '#111',
+    marginBottom: 4,
+  },
+  headerSubtitle: {
+    fontSize: 12,
+    color: '#6D6D6D',
+    letterSpacing: 0.4,
+    textTransform: 'uppercase',
   },
   section: {
     borderRadius: 14,

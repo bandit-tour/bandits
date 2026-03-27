@@ -1,10 +1,10 @@
 {
   "expo": {
-    "name": "bandits",
+    "name": "PLAY Theatrou Athens",
     "slug": "bandits",
     "version": "1.0.1",
     "orientation": "portrait",
-    "icon": "./assets/icons/logobanditourapp.png",
+    "icon": "./assets/icons/banditLocalpng.png",
     "scheme": "bandits",
     "userInterfaceStyle": "automatic",
     "newArchEnabled": false,
@@ -20,7 +20,7 @@
     },
     "android": {
       "adaptiveIcon": {
-        "foregroundImage": "./assets/icons/logobanditourapp.png",
+        "foregroundImage": "./assets/icons/banditLocalpng.png",
         "backgroundColor": "#ffffff"
       },
       "edgeToEdgeEnabled": true,
@@ -48,10 +48,10 @@
     },
     "web": {
       "bundler": "metro",
-      "output": "static",
-      "favicon": "./assets/icons/logobanditourapp.png",
-      "name": "Banditour",
-      "shortName": "Banditour",
+      "output": "single",
+      "favicon": "./assets/icons/banditLocalpng.png",
+      "name": "PLAY Theatrou Athens",
+      "shortName": "PLAY",
       "description": "Discover and join local events",
       "lang": "en",
       "scope": "/",
@@ -74,7 +74,7 @@
       [
         "expo-splash-screen",
         {
-          "image": "./assets/icons/logobanditourapp.png",
+          "image": "./assets/icons/banditLocalpng.png",
           "imageWidth": 200,
           "resizeMode": "contain",
           "backgroundColor": "#ffffff"

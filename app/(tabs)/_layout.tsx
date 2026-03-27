@@ -81,7 +81,7 @@ export default function TabsLayout() {
         )}
 
         <View style={styles.content}>
-          <Stack screenOptions={{ headerShown: false }} />
+          <Stack screenOptions={{ headerShown: false, headerBackTitleVisible: false }} />
         </View>
 
         <MainBottomNav

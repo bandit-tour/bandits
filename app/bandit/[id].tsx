@@ -38,18 +38,31 @@ type DisplayReview = {
   user_name: string;
 };
 
-const FALLBACK_HANDLES = ['athens.nights', 'city.mosaic', 'street.coffee', 'rooftop.sonic', 'plaka.walks'];
+const FALLBACK_HANDLES = [
+  'athens.nights',
+  'city.mosaic',
+  'street.coffee',
+  'rooftop.sonic',
+  'plaka.walks',
+  'vinyl.corner',
+  'gallery.loop',
+];
 
 function buildFallbackReviews(banditId: string, banditName: string): DisplayReview[] {
-  return FALLBACK_HANDLES.map((handle, index) => ({
+  const nameSeed = (banditName || 'local').replace(/\s+/g, '').toLowerCase();
+  const shift = nameSeed.split('').reduce((acc, c) => acc + c.charCodeAt(0), 0) % FALLBACK_HANDLES.length;
+  return FALLBACK_HANDLES.map((_, index) => {
+    const handle = FALLBACK_HANDLES[(index + shift) % FALLBACK_HANDLES.length];
+    return {
     user_id: `${banditId}-sample-${index + 1}`,
-    user_name: `${handle}.${String(banditName || 'guide').toLowerCase().replace(/\s+/g, '')}`,
+    user_name: `${handle}.${nameSeed}`,
     review:
       index % 2 === 0
         ? `Great picks from ${banditName}. The route felt local and practical.`
         : `Saved this for my next night out. Spots were real and easy to reach.`,
     rating: index === 4 ? 4 : 5,
-  }));
+    };
+  });
 }
 
 export default function BanditScreen() {
@@ -313,7 +326,7 @@ export default function BanditScreen() {
                 )}
                 {submitSuccess && (
                   <Text style={styles.askSuccess}>
-                    Thanks, your question was sent. We’ll get back to you soon.
+                    Sent. You can track replies in Inbox.
                   </Text>
                 )}
                 <View style={styles.askActions}>

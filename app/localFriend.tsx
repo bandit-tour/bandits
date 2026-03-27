@@ -54,7 +54,7 @@ export default function LocalFriendScreen() {
     try {
       await sendLocalFriendMessage(payload);
       setMessage('');
-      setSuccess('Message sent. A local friend will get back to you.');
+      setSuccess('Sent. Waiting for reply in Inbox.');
     } catch (e: unknown) {
       const msg =
         e instanceof Error
@@ -118,6 +118,7 @@ export default function LocalFriendScreen() {
 
             {!!error && <Text style={styles.errorText}>{error}</Text>}
             {!!success && <Text style={styles.successText}>{success}</Text>}
+            {!!success && <Text style={styles.waitingText}>Status: waiting for reply</Text>}
             {!backendReady && !!backendReason && <Text style={styles.errorText}>{backendReason}</Text>}
           </View>
 
@@ -127,7 +128,7 @@ export default function LocalFriendScreen() {
               router.replace('/bandits');
             }}
           >
-            <Text style={styles.exitButtonText}>Back to banDits</Text>
+            <Text style={styles.exitButtonText}>Back to Home</Text>
           </TouchableOpacity>
         </ScrollView>
       </KeyboardAvoidingView>
@@ -213,6 +214,11 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: '#0A7D32',
     fontWeight: '600',
+  },
+  waitingText: {
+    marginTop: 4,
+    fontSize: 12,
+    color: '#666',
   },
   exitButton: {
     marginTop: 24,

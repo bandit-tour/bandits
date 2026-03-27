@@ -47,6 +47,9 @@ export default function HotelierScreen() {
           <Image source={PLAY_HOTEL_LOGO} style={styles.logoImage} resizeMode="contain" />
         </View>
 
+        <View style={styles.kickerPill}>
+          <Text style={styles.kickerText}>Hotel Partner Program</Text>
+        </View>
         <Text style={styles.partnerLine}>PLAY Theatrou Athens - Local Insider Program</Text>
         <Text style={styles.bodyLead}>Turn your guests into explorers.</Text>
         <Text style={styles.body}>
@@ -123,6 +126,21 @@ const styles = StyleSheet.create({
   logoImage: {
     width: 140,
     height: 44,
+  },
+  kickerPill: {
+    alignSelf: 'center',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 999,
+    backgroundColor: '#F1F6FB',
+    marginBottom: 10,
+  },
+  kickerText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#29435C',
+    letterSpacing: 0.4,
+    textTransform: 'uppercase',
   },
   partnerLine: {
     fontSize: 18,

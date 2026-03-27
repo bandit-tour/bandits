@@ -2,8 +2,10 @@ import React, { useEffect, useState } from 'react';
 import { getBanditEventPersonalTip, isEventLiked, toggleEventLike } from '@/app/services/events';
 import { ThemedView } from '@/components/ThemedView';
 import { Database } from '@/lib/database.types';
+import { getCategoryFallbackImage } from '@/lib/placePhoto';
 import { supabase } from '@/lib/supabase';
 import { useLocalSearchParams, useRouter } from 'expo-router';
+import LocalBanditOctopusIcon from '@/components/LocalBanditOctopusIcon';
 import {
   Dimensions,
   Image,
@@ -135,7 +137,7 @@ export default function EventDetailScreen() {
         <View style={styles.mainImageContainer}>
           <Image
             source={{ 
-              uri: event.image_url || 'https://zubcakeamyfqatdmleqx.supabase.co/storage/v1/object/public/banditsassets4/assets/jazzInjazz.png'
+              uri: event.image_url || getCategoryFallbackImage(event.genre, `event-detail-${event.id}`, 1200, 900)
             }}
             style={styles.mainImage}
             resizeMode="cover"
@@ -173,7 +175,10 @@ export default function EventDetailScreen() {
         {/* Personal Tip Section (only shown if navigated from bandit's city guide) */}
         {bandit && personalTip && (
           <View style={styles.personalTipContainer}>
-            <Text style={styles.personalTipTitle}>{`${bandit.name}'s Personal Tip`}</Text>
+            <View style={styles.personalTipTitleRow}>
+              <LocalBanditOctopusIcon />
+              <Text style={styles.personalTipTitle}>{`${bandit.name}'s Personal Tip`}</Text>
+            </View>
             <Text style={styles.personalTipText}>{personalTip || ''}</Text>
           </View>
         )}
@@ -326,12 +331,18 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     paddingBottom: 20,
   },
+  personalTipTitleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 10,
+  },
   personalTipTitle: {
     fontSize: 17,
     fontWeight: 'bold',
     color: '#3C3C3C',
-    marginBottom: 10,
+    marginBottom: 0,
     fontFamily: 'Caros',
+    flexShrink: 1,
   },
   personalTipText: {
     fontSize: 14,
