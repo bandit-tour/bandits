@@ -14,7 +14,7 @@
     "eas:sync-env": "node scripts/sync-eas-env.cjs",
     "deploy": "npm run build && npx netlify-cli deploy  --dir=dist",
     "deploy-prod": "npm run build && npx netlify-cli deploy  --prod --dir=dist",
-    "build": "npx expo export --platform web && node scripts/prepare-pwa.js && npx workbox-cli generateSW workbox-config.js && node scripts/inject-sw.js"
+    "build": "npx expo export --platform web && node scripts/prepare-pwa.js && npx workbox-cli generateSW workbox-config.js && node scripts/inject-sw.js && node scripts/mirror-hotel-index.cjs"
   },
   "dependencies": {
     "@expo/vector-icons": "^15.0.3",

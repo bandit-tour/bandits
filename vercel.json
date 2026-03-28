@@ -12,6 +12,10 @@
   ],
   "rewrites": [
     {
+      "source": "/hotel/:path*",
+      "destination": "/index.html"
+    },
+    {
       "source": "/(.*)",
       "destination": "/index.html"
     }
