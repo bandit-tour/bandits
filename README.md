@@ -32,7 +32,7 @@ This repo is **Expo web** (`expo export` → **`dist/`**), not Next.js. If Verce
    - **Root Directory**: repository root (where `package.json` and `vercel.json` live).
    - **Build Command**: `npm run build`
    - **Output Directory**: `dist`
-   - **Install Command**: `npm install`
+   - **Install Command**: `npm install` or `npm ci` (avoid `npm install --legacy-peer-deps` — the lockfile now resolves React Navigation + react-leaflet peers; see `package.json` `overrides`).
    - **Git** → confirm the repo is **`bandit-tour/bandits`** and the right branch (e.g. `main`).
    - Redeploy **Production**.
 
