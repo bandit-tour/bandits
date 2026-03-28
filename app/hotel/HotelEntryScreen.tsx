@@ -22,6 +22,8 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 const { height: WINDOW_H } = Dimensions.get('window');
 
+const BANDITOUR_LOGO = require('@/assets/icons/logobanditourapp.png');
+
 export type HotelEntryScreenProps = {
   slug: string;
 };
