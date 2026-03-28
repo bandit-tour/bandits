@@ -9,6 +9,7 @@ import * as Linking from 'expo-linking';
 import { Stack, useRouter } from 'expo-router';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
+  Alert,
   Animated,
   Dimensions,
   Platform,
@@ -20,13 +21,21 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-/** Replace when the App Store listing is live (numeric id from App Store Connect). */
-const APP_STORE_URL =
-  (typeof process !== 'undefined' && process.env.EXPO_PUBLIC_APP_STORE_URL?.trim()) ||
-  'https://apps.apple.com/search?term=PLAY+Theatrou+Athens';
+/**
+ * Store URLs must be set when listings are public; otherwise we avoid broken search/404 pages.
+ * Vercel / EAS: EXPO_PUBLIC_APP_STORE_URL, EXPO_PUBLIC_PLAY_STORE_URL
+ * iOS: https://apps.apple.com/app/idXXXXXXXXX
+ * Android: https://play.google.com/store/apps/details?id=...
+ */
+function readEnvUrl(key: string): string | undefined {
+  if (typeof process === 'undefined') return undefined;
+  const v = process.env[key]?.trim();
+  return v || undefined;
+}
 
-const GOOGLE_PLAY_URL =
-  'https://play.google.com/store/apps/details?id=com.yuvaldafni.bandits';
+const STORE_UNAVAILABLE_TITLE = 'Use your browser for now';
+const STORE_UNAVAILABLE_BODY =
+  'The native apps are not listed in the stores yet. Tap “Continue to the city guide” below — you get the full experience here, no install required.';
 
 const { height: WINDOW_H } = Dimensions.get('window');
 
@@ -49,6 +58,9 @@ export function HotelEntryScreen({ slug: rawSlug }: HotelEntryScreenProps) {
   const backOpacity = useRef(new Animated.Value(0)).current;
 
   const slugNorm = useMemo(() => String(rawSlug ?? '').trim().toLowerCase(), [rawSlug]);
+
+  const appStoreUrl = useMemo(() => readEnvUrl('EXPO_PUBLIC_APP_STORE_URL'), []);
+  const playStoreUrl = useMemo(() => readEnvUrl('EXPO_PUBLIC_PLAY_STORE_URL'), []);
 
   const isKnownHotel = Boolean(slugNorm && HOTEL_BY_SLUG[slugNorm]);
 
@@ -91,12 +103,20 @@ export function HotelEntryScreen({ slug: rawSlug }: HotelEntryScreenProps) {
   }, [showBack, frontOpacity, backOpacity]);
 
   const openAppStore = useCallback(() => {
-    void Linking.openURL(APP_STORE_URL);
-  }, []);
+    if (appStoreUrl) {
+      void Linking.openURL(appStoreUrl);
+      return;
+    }
+    Alert.alert(STORE_UNAVAILABLE_TITLE, STORE_UNAVAILABLE_BODY);
+  }, [appStoreUrl]);
 
   const openPlayStore = useCallback(() => {
-    void Linking.openURL(GOOGLE_PLAY_URL);
-  }, []);
+    if (playStoreUrl) {
+      void Linking.openURL(playStoreUrl);
+      return;
+    }
+    Alert.alert(STORE_UNAVAILABLE_TITLE, STORE_UNAVAILABLE_BODY);
+  }, [playStoreUrl]);
 
   const onContinueInGuide = useCallback(async () => {
     if (busyContinue) return;
@@ -163,24 +183,52 @@ export function HotelEntryScreen({ slug: rawSlug }: HotelEntryScreenProps) {
                 Go to reception, show that you downloaded the app, and receive your gift.
               </Text>
 
-              <View style={styles.storeRow}>
+              <View
+                style={[
+                  styles.storeRow,
+                  appStoreUrl && playStoreUrl ? styles.storeRowWhenBothLive : null,
+                ]}
+              >
                 <Pressable
-                  style={({ pressed }) => [styles.storeBtn, pressed && styles.storeBtnPressed]}
+                  style={({ pressed }) => [
+                    styles.storeBtn,
+                    !appStoreUrl && styles.storeBtnMuted,
+                    pressed && styles.storeBtnPressed,
+                  ]}
                   onPress={openAppStore}
                   accessibilityRole="button"
-                  accessibilityLabel="Download on the App Store"
+                  accessibilityLabel={
+                    appStoreUrl ? 'Download on the App Store' : 'App Store — coming soon, use continue below'
+                  }
                 >
-                  <Text style={styles.storeBtnText}>Download on the App Store</Text>
+                  <Text style={styles.storeBtnText}>
+                    {appStoreUrl ? 'Download on the App Store' : 'App Store (coming soon)'}
+                  </Text>
                 </Pressable>
                 <Pressable
-                  style={({ pressed }) => [styles.storeBtn, styles.storeBtnOutline, pressed && styles.storeBtnPressed]}
+                  style={({ pressed }) => [
+                    styles.storeBtn,
+                    styles.storeBtnOutline,
+                    !playStoreUrl && styles.storeBtnOutlineMuted,
+                    pressed && styles.storeBtnPressed,
+                  ]}
                   onPress={openPlayStore}
                   accessibilityRole="button"
-                  accessibilityLabel="Get it on Google Play"
+                  accessibilityLabel={
+                    playStoreUrl ? 'Get it on Google Play' : 'Google Play — coming soon, use continue below'
+                  }
                 >
-                  <Text style={styles.storeBtnTextOutline}>Get it on Google Play</Text>
+                  <Text style={styles.storeBtnTextOutline}>
+                    {playStoreUrl ? 'Get it on Google Play' : 'Google Play (coming soon)'}
+                  </Text>
                 </Pressable>
               </View>
+
+              {!appStoreUrl || !playStoreUrl ? (
+                <Text style={styles.storeFootnote}>
+                  Full experience works in your browser — use Continue below until store listings are live.
+                </Text>
+              ) : null}
 
               <Text style={styles.keyLine}>Your key to the city starts here</Text>
 
@@ -290,7 +338,18 @@ const styles = StyleSheet.create({
   },
   storeRow: {
     gap: 12,
+    marginBottom: 12,
+  },
+  storeRowWhenBothLive: {
     marginBottom: 28,
+  },
+  storeFootnote: {
+    fontSize: 13,
+    lineHeight: 20,
+    color: 'rgba(250,250,250,0.5)',
+    textAlign: 'center',
+    marginBottom: 20,
+    paddingHorizontal: 4,
   },
   storeBtn: {
     backgroundColor: '#FAFAFA',
@@ -299,10 +358,17 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     alignItems: 'center',
   },
+  storeBtnMuted: {
+    opacity: 0.78,
+  },
   storeBtnOutline: {
     backgroundColor: 'transparent',
     borderWidth: 1,
     borderColor: 'rgba(255,255,255,0.45)',
+  },
+  storeBtnOutlineMuted: {
+    opacity: 0.78,
+    borderColor: 'rgba(255,255,255,0.32)',
   },
   storeBtnPressed: {
     opacity: 0.85,

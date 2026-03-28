@@ -40,4 +40,11 @@ This repo is **Expo web** (`expo export` → **`dist/`**), not Next.js. If Verce
 
 **Verify after deploy:** `GET /` should **not** be a random Next app; `GET /hotel/play-theatrou` should return **200** (SPA + `dist/hotel/play-theatrou/index.html` from the build).
 
+**App Store / Play (hotel QR side B):** When native listings are live, set in Vercel **Environment Variables** (Production):
+
+- `EXPO_PUBLIC_APP_STORE_URL` — e.g. `https://apps.apple.com/app/idYOUR_NUMERIC_ID`
+- `EXPO_PUBLIC_PLAY_STORE_URL` — e.g. `https://play.google.com/store/apps/details?id=your.package`
+
+If unset, the hotel screen shows **coming soon** on those buttons and nudges guests to **Continue to the city guide** (PWA) instead of broken search/404 pages.
+
 ---
