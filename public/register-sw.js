@@ -4,6 +4,8 @@ if ('serviceWorker' in navigator) {
       .register('/sw.js')
       .then(registration => {
         console.log('✅ Service Worker registered with scope:', registration.scope);
+        // Ask for the latest sw.js on each load so new deploys replace stale precache sooner.
+        void registration.update();
 
         // Check for updates periodically
         registration.addEventListener('updatefound', () => {

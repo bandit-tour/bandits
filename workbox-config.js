@@ -6,6 +6,8 @@ module.exports = {
   swDest: 'dist/sw.js',
   clientsClaim: true,
   skipWaiting: true,
+  /** Drop old precache entries after each new build (helps QR guests get new UI). */
+  cleanupOutdatedCaches: true,
   runtimeCaching: [
     {
       urlPattern: /^https:\/\/fonts\.googleapis\.com/,

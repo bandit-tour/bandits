@@ -5,13 +5,12 @@ import {
   syncPilotHotelProfileIfNeeded,
 } from '@/lib/pilotSession';
 import * as Haptics from 'expo-haptics';
-import * as Linking from 'expo-linking';
 import { Stack, useRouter } from 'expo-router';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
-  Alert,
   Animated,
   Dimensions,
+  Image,
   Platform,
   Pressable,
   ScrollView,
@@ -21,22 +20,6 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-/**
- * Store URLs must be set when listings are public; otherwise we avoid broken search/404 pages.
- * Vercel / EAS: EXPO_PUBLIC_APP_STORE_URL, EXPO_PUBLIC_PLAY_STORE_URL
- * iOS: https://apps.apple.com/app/idXXXXXXXXX
- * Android: https://play.google.com/store/apps/details?id=...
- */
-function readEnvUrl(key: string): string | undefined {
-  if (typeof process === 'undefined') return undefined;
-  const v = process.env[key]?.trim();
-  return v || undefined;
-}
-
-const STORE_UNAVAILABLE_TITLE = 'Use your browser for now';
-const STORE_UNAVAILABLE_BODY =
-  'The native apps are not listed in the stores yet. Tap “Continue to the city guide” below — you get the full experience here, no install required.';
-
 const { height: WINDOW_H } = Dimensions.get('window');
 
 export type HotelEntryScreenProps = {
@@ -44,8 +27,7 @@ export type HotelEntryScreenProps = {
 };
 
 /**
- * QR / web landing — emotional hook first, then gift + store actions.
- * Continue skips intro video (goes straight to /bandits).
+ * QR / web landing — flip flow, then Continue → /playWelcome → /playIntro (video) → /bandits.
  */
 export function HotelEntryScreen({ slug: rawSlug }: HotelEntryScreenProps) {
   const router = useRouter();
@@ -58,9 +40,6 @@ export function HotelEntryScreen({ slug: rawSlug }: HotelEntryScreenProps) {
   const backOpacity = useRef(new Animated.Value(0)).current;
 
   const slugNorm = useMemo(() => String(rawSlug ?? '').trim().toLowerCase(), [rawSlug]);
-
-  const appStoreUrl = useMemo(() => readEnvUrl('EXPO_PUBLIC_APP_STORE_URL'), []);
-  const playStoreUrl = useMemo(() => readEnvUrl('EXPO_PUBLIC_PLAY_STORE_URL'), []);
 
   const isKnownHotel = Boolean(slugNorm && HOTEL_BY_SLUG[slugNorm]);
 
@@ -102,29 +81,13 @@ export function HotelEntryScreen({ slug: rawSlug }: HotelEntryScreenProps) {
     });
   }, [showBack, frontOpacity, backOpacity]);
 
-  const openAppStore = useCallback(() => {
-    if (appStoreUrl) {
-      void Linking.openURL(appStoreUrl);
-      return;
-    }
-    Alert.alert(STORE_UNAVAILABLE_TITLE, STORE_UNAVAILABLE_BODY);
-  }, [appStoreUrl]);
-
-  const openPlayStore = useCallback(() => {
-    if (playStoreUrl) {
-      void Linking.openURL(playStoreUrl);
-      return;
-    }
-    Alert.alert(STORE_UNAVAILABLE_TITLE, STORE_UNAVAILABLE_BODY);
-  }, [playStoreUrl]);
-
   const onContinueInGuide = useCallback(async () => {
     if (busyContinue) return;
     setBusyContinue(true);
     try {
       await ensureAnonymousSession();
       await syncPilotHotelProfileIfNeeded();
-      router.replace('/bandits');
+      router.replace('/playWelcome');
     } finally {
       setBusyContinue(false);
     }
@@ -180,67 +143,26 @@ export function HotelEntryScreen({ slug: rawSlug }: HotelEntryScreenProps) {
             >
               <Text style={styles.sideBTitle}>A gift is waiting for you</Text>
               <Text style={styles.sideBBody}>
-                Go to reception, show that you downloaded the app, and receive your gift.
+                Go to reception, show that you opened this guide, and receive your gift.
               </Text>
-
-              <View
-                style={[
-                  styles.storeRow,
-                  appStoreUrl && playStoreUrl ? styles.storeRowWhenBothLive : null,
-                ]}
-              >
-                <Pressable
-                  style={({ pressed }) => [
-                    styles.storeBtn,
-                    !appStoreUrl && styles.storeBtnMuted,
-                    pressed && styles.storeBtnPressed,
-                  ]}
-                  onPress={openAppStore}
-                  accessibilityRole="button"
-                  accessibilityLabel={
-                    appStoreUrl ? 'Download on the App Store' : 'App Store — coming soon, use continue below'
-                  }
-                >
-                  <Text style={styles.storeBtnText}>
-                    {appStoreUrl ? 'Download on the App Store' : 'App Store (coming soon)'}
-                  </Text>
-                </Pressable>
-                <Pressable
-                  style={({ pressed }) => [
-                    styles.storeBtn,
-                    styles.storeBtnOutline,
-                    !playStoreUrl && styles.storeBtnOutlineMuted,
-                    pressed && styles.storeBtnPressed,
-                  ]}
-                  onPress={openPlayStore}
-                  accessibilityRole="button"
-                  accessibilityLabel={
-                    playStoreUrl ? 'Get it on Google Play' : 'Google Play — coming soon, use continue below'
-                  }
-                >
-                  <Text style={styles.storeBtnTextOutline}>
-                    {playStoreUrl ? 'Get it on Google Play' : 'Google Play (coming soon)'}
-                  </Text>
-                </Pressable>
-              </View>
-
-              {!appStoreUrl || !playStoreUrl ? (
-                <Text style={styles.storeFootnote}>
-                  Full experience works in your browser — use Continue below until store listings are live.
-                </Text>
-              ) : null}
 
               <Text style={styles.keyLine}>Your key to the city starts here</Text>
 
               <Pressable
-                style={({ pressed }) => [styles.continueLink, pressed && styles.continueLinkPressed]}
+                style={({ pressed }) => [styles.continueBandi, pressed && styles.continueBandiPressed]}
                 onPress={onContinueInGuide}
                 disabled={busyContinue}
                 accessibilityRole="button"
-                accessibilityLabel="Continue to the city guide in your browser"
+                accessibilityLabel="Continue to bandiTour"
               >
-                <Text style={styles.continueLinkText}>
-                  {busyContinue ? 'Opening…' : 'Continue to the city guide'}
+                <Image
+                  source={BANDITOUR_LOGO}
+                  style={styles.bandiLogo}
+                  resizeMode="contain"
+                  accessibilityIgnoresInvertColors
+                />
+                <Text style={styles.continueBandiText}>
+                  {busyContinue ? 'Opening…' : 'Continue to bandiTour'}
                 </Text>
               </Pressable>
               <Text style={styles.continueHint}>No install required — opens in your browser.</Text>
@@ -336,72 +258,39 @@ const styles = StyleSheet.create({
     color: 'rgba(250,250,250,0.85)',
     marginBottom: 32,
   },
-  storeRow: {
-    gap: 12,
-    marginBottom: 12,
-  },
-  storeRowWhenBothLive: {
-    marginBottom: 28,
-  },
-  storeFootnote: {
-    fontSize: 13,
-    lineHeight: 20,
-    color: 'rgba(250,250,250,0.5)',
-    textAlign: 'center',
-    marginBottom: 20,
-    paddingHorizontal: 4,
-  },
-  storeBtn: {
-    backgroundColor: '#FAFAFA',
-    paddingVertical: 14,
-    paddingHorizontal: 20,
-    borderRadius: 8,
-    alignItems: 'center',
-  },
-  storeBtnMuted: {
-    opacity: 0.78,
-  },
-  storeBtnOutline: {
-    backgroundColor: 'transparent',
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.45)',
-  },
-  storeBtnOutlineMuted: {
-    opacity: 0.78,
-    borderColor: 'rgba(255,255,255,0.32)',
-  },
-  storeBtnPressed: {
-    opacity: 0.85,
-  },
-  storeBtnText: {
-    color: '#0A0A0A',
-    fontSize: 14,
-    fontWeight: '700',
-  },
-  storeBtnTextOutline: {
-    color: '#FAFAFA',
-    fontSize: 14,
-    fontWeight: '700',
-  },
   keyLine: {
     fontSize: 13,
     color: 'rgba(250,250,250,0.45)',
     letterSpacing: 0.4,
-    marginBottom: 28,
+    marginBottom: 24,
     textAlign: 'center',
   },
-  continueLink: {
-    paddingVertical: 12,
+  continueBandi: {
+    flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'center',
+    alignSelf: 'center',
+    gap: 12,
+    paddingVertical: 14,
+    paddingHorizontal: 20,
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.35)',
+    backgroundColor: 'rgba(255,255,255,0.06)',
+    maxWidth: '100%',
   },
-  continueLinkPressed: {
-    opacity: 0.7,
+  continueBandiPressed: {
+    opacity: 0.82,
   },
-  continueLinkText: {
-    color: 'rgba(250,250,250,0.75)',
-    fontSize: 15,
+  bandiLogo: {
+    width: 36,
+    height: 36,
+  },
+  continueBandiText: {
+    color: '#FAFAFA',
+    fontSize: 16,
     fontWeight: '600',
-    textDecorationLine: 'underline',
+    letterSpacing: 0.2,
   },
   continueHint: {
     fontSize: 12,
