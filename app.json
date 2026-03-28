@@ -4,13 +4,14 @@
     "slug": "bandits",
     "version": "1.0.1",
     "orientation": "portrait",
-    "icon": "./assets/images/play-theatrou.jpg",
+    "icon": "./assets/images/play-theatrou.png",
     "scheme": "bandits",
     "userInterfaceStyle": "automatic",
     "newArchEnabled": false,
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.yuvaldafni.bandits",
+      "associatedDomains": ["applinks:bandit-tours.vercel.app"],
       "infoPlist": {
         "ITSAppUsesNonExemptEncryption": false,
         "NSLocationWhenInUseUsageDescription": "bandiTour uses your location while the app is open to suggest nearby places, events, and safety alerts—only when you are close."
@@ -21,10 +22,11 @@
     },
     "android": {
       "adaptiveIcon": {
-        "foregroundImage": "./assets/images/play-theatrou.jpg",
+        "foregroundImage": "./assets/images/play-theatrou.png",
         "backgroundColor": "#ffffff"
       },
       "edgeToEdgeEnabled": true,
+      "softwareKeyboardLayoutMode": "resize",
       "package": "com.yuvaldafni.bandits",
       "config": {
         "googleMaps": {
@@ -37,20 +39,28 @@
           "autoVerify": true,
           "data": [
             {
-              "scheme": "1225319192681736"
+              "scheme": "https",
+              "host": "bandit-tours.vercel.app",
+              "pathPrefix": "/hotel"
             }
           ],
-          "category": [
-            "BROWSABLE",
-            "DEFAULT"
-          ]
+          "category": ["BROWSABLE", "DEFAULT"]
+        },
+        {
+          "action": "VIEW",
+          "data": [
+            {
+              "scheme": "bandits"
+            }
+          ],
+          "category": ["BROWSABLE", "DEFAULT"]
         }
       ]
     },
     "web": {
       "bundler": "metro",
       "output": "single",
-      "favicon": "./assets/images/play-theatrou.jpg",
+      "favicon": "./assets/images/play-theatrou.png",
       "name": "PLAY Theatrou Athens",
       "shortName": "PLAY",
       "description": "Discover and join local events",
@@ -74,6 +84,12 @@
         {
           "ios": {
             "deploymentTarget": "15.1"
+          },
+          "android": {
+            "minSdkVersion": 24,
+            "compileSdkVersion": 36,
+            "targetSdkVersion": 36,
+            "buildToolsVersion": "36.0.0"
           }
         }
       ],
@@ -81,7 +97,7 @@
       [
         "expo-splash-screen",
         {
-          "image": "./assets/images/play-theatrou.jpg",
+          "image": "./assets/images/play-theatrou.png",
           "imageWidth": 200,
           "resizeMode": "contain",
           "backgroundColor": "#ffffff"
