@@ -67,7 +67,7 @@ export default function MainBottomNav({
       />
 
       <NavButton
-        label="Inbox"
+        label="Notifications"
         iconName="tray.full.fill"
         color={getColor('inbox')}
         onPress={onInbox}

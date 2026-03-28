@@ -1,6 +1,6 @@
 import { useFocusEffect } from '@react-navigation/native';
-import React, { useEffect, useState } from 'react';
-import { Alert, StyleSheet, Text, View } from 'react-native';
+import React, { useCallback, useEffect, useState } from 'react';
+import { Alert, Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { getUserLikedEvents, toggleEventLike } from '@/app/services/events';
 import EventList from '@/components/EventList';
@@ -14,37 +14,48 @@ type Event = Database['public']['Tables']['event']['Row'];
 export default function MySpotsScreen() {
   const [likedEvents, setLikedEvents] = useState<Event[]>([]);
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
   const { selectedCity } = useCity();
 
-  useEffect(() => {
-    loadLikedEvents();
-  }, []);
+  const loadLikedEvents = useCallback(
+    async (silent?: boolean) => {
+      try {
+        if (!silent) setLoading(true);
+        const events = await getUserLikedEvents();
 
-  // Reload liked events on every navigation to this screen
-  useFocusEffect(
-    React.useCallback(() => {
-      loadLikedEvents();
-    }, [selectedCity])
+        const filteredEvents = selectedCity
+          ? events.filter((event) => event.city === selectedCity)
+          : events;
+
+        setLikedEvents(filteredEvents);
+      } catch (error) {
+        console.error('Error loading liked events:', error);
+        Alert.alert('Error', 'Failed to load your liked events');
+      } finally {
+        if (!silent) setLoading(false);
+      }
+    },
+    [selectedCity],
   );
 
-  const loadLikedEvents = async () => {
+  useEffect(() => {
+    void loadLikedEvents(false);
+  }, [loadLikedEvents]);
+
+  useFocusEffect(
+    React.useCallback(() => {
+      void loadLikedEvents(false);
+    }, [loadLikedEvents]),
+  );
+
+  const onRefresh = useCallback(async () => {
+    setRefreshing(true);
     try {
-      setLoading(true);
-      const events = await getUserLikedEvents();
-      
-      // Filter events by selected city if a city is selected
-      const filteredEvents = selectedCity 
-        ? events.filter(event => event.city === selectedCity)
-        : events;
-      
-      setLikedEvents(filteredEvents);
-    } catch (error) {
-      console.error('Error loading liked events:', error);
-      Alert.alert('Error', 'Failed to load your liked events');
+      await loadLikedEvents(true);
     } finally {
-      setLoading(false);
+      setRefreshing(false);
     }
-  };
+  }, [loadLikedEvents]);
 
   const handleEventRemove = async (eventId: string) => {
     try {
@@ -72,6 +83,9 @@ export default function MySpotsScreen() {
         <Text style={styles.headerText}>
           My Spots {selectedCity ? `in ${selectedCity}` : ''}
         </Text>
+        <Pressable style={styles.refreshBtn} onPress={() => void onRefresh()}>
+          <Text style={styles.refreshBtnText}>Refresh</Text>
+        </Pressable>
       </View>
       
       <EventList
@@ -84,6 +98,8 @@ export default function MySpotsScreen() {
         buttonType="remove"
         buttonText="Remove"
         scrollViewStyle={styles.scrollView}
+        refreshing={refreshing}
+        onRefresh={onRefresh}
       />
     </View>
   );
@@ -101,13 +117,29 @@ const styles = StyleSheet.create({
   },
   headerContainer: {
     alignItems: 'center',
+    justifyContent: 'center',
     paddingTop: 20,
     paddingBottom: 10,
+    minHeight: 52,
   },
   headerText: {
     fontSize: 24,
     fontWeight: 'bold',
     color: '#3C3C3C',
+  },
+  refreshBtn: {
+    position: 'absolute',
+    right: 16,
+    top: 16,
+    backgroundColor: '#111',
+    borderRadius: 999,
+    paddingHorizontal: 12,
+    paddingVertical: 7,
+  },
+  refreshBtnText: {
+    color: '#FFF',
+    fontSize: 12,
+    fontWeight: '700',
   },
   scrollView: {
     flex: 1,

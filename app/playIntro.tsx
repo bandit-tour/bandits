@@ -1,3 +1,4 @@
+import { ensureAnonymousSession, syncPilotHotelProfileIfNeeded } from '@/lib/pilotSession';
 import { useVideoPlayer, VideoView } from 'expo-video';
 import { Stack, router } from 'expo-router';
 import React, { useEffect, useRef } from 'react';
@@ -40,7 +41,9 @@ export default function PlayIntroScreen() {
       toValue: 1,
       duration: 500,
       useNativeDriver: true,
-    }).start(() => {
+    }).start(async () => {
+      await ensureAnonymousSession();
+      await syncPilotHotelProfileIfNeeded();
       router.replace('/bandits');
     });
   };
@@ -60,7 +63,7 @@ export default function PlayIntroScreen() {
           player={player}
           style={styles.video}
           nativeControls={false}
-          contentFit="cover"
+          contentFit="contain"
           allowsFullscreen={false}
           allowsPictureInPicture={false}
         />

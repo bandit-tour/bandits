@@ -2,11 +2,54 @@ import { getEvents } from '@/app/services/events';
 import { useMapEvents as useMapEventsHook } from '@/hooks/useMapEvents';
 import { Database } from '@/lib/database.types';
 import { useLocalSearchParams } from 'expo-router';
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { StyleSheet, View } from 'react-native';
 import EventList, { EventListRef } from './EventList';
 
 type Event = Database['public']['Tables']['event']['Row'];
+
+function boundsFromEvents(
+  events: Event[],
+  initialRegion: {
+    latitude: number;
+    longitude: number;
+    latitudeDelta: number;
+    longitudeDelta: number;
+  },
+): { center: [number, number]; zoom: number } {
+  const valid = events.filter(
+    (e) =>
+      e.location_lat != null &&
+      e.location_lng != null &&
+      typeof e.location_lat === 'number' &&
+      typeof e.location_lng === 'number',
+  );
+  if (valid.length === 0) {
+    return {
+      center: [initialRegion.latitude, initialRegion.longitude],
+      zoom: 13,
+    };
+  }
+  const lats = valid.map((e) => e.location_lat as number);
+  const lngs = valid.map((e) => e.location_lng as number);
+  const minLat = Math.min(...lats);
+  const maxLat = Math.max(...lats);
+  const minLng = Math.min(...lngs);
+  const maxLng = Math.max(...lngs);
+  const latSpan = Math.max(maxLat - minLat, 0.0001);
+  const paddedLatSpan = latSpan * 1.2;
+  let zoom = 14;
+  if (paddedLatSpan > 0.1) zoom = 10;
+  else if (paddedLatSpan > 0.05) zoom = 11;
+  else if (paddedLatSpan > 0.02) zoom = 12;
+  else if (paddedLatSpan > 0.01) zoom = 13;
+  else if (paddedLatSpan > 0.005) zoom = 14;
+  else zoom = 15;
+  if (valid.length === 1) zoom = Math.min(15, zoom + 1);
+  const centerLat = (minLat + maxLat) / 2;
+  const centerLng = (minLng + maxLng) / 2;
+  return { center: [centerLat, centerLng], zoom };
+}
 
 // Dynamic imports for Leaflet (client-side only)
 let MapContainer: any = null;
@@ -63,7 +106,6 @@ export default function LeafletMapView({
   const events = banditId ? customEvents : hookData.events;
   const loading = banditId ? customLoading : hookData.loading;
   const error = banditId ? customError : hookData.error;
-  const calculateOptimalMapBounds = hookData.calculateOptimalMapBounds;
 
   // Fetch events for specific banditId when in mini mode
   useEffect(() => {
@@ -238,23 +280,10 @@ export default function LeafletMapView({
     });
   };
 
-  // Calculate bounds for map
-  const getMapBounds = () => {
-    if (events.length === 0) {
-      return {
-        center: [initialRegion.latitude, initialRegion.longitude] as [number, number],
-        zoom: 13
-      };
-    }
-
-    const mapBounds = calculateOptimalMapBounds(initialRegion);
-    return {
-      center: [mapBounds.center.latitude, mapBounds.center.longitude] as [number, number],
-      zoom: mapBounds.zoom || 13
-    };
-  };
-
-  const mapBounds = getMapBounds();
+  const mapBounds = useMemo(
+    () => boundsFromEvents(events, initialRegion),
+    [events, initialRegion.latitude, initialRegion.longitude],
+  );
 
   // Handle map events
   const MapEventHandler = () => {
@@ -282,6 +311,13 @@ export default function LeafletMapView({
   };
 
   if (!leafletLoaded) {
+    if (miniMode) {
+      return (
+        <View style={[styles.miniMapContainer, styles.miniLoadingBox]}>
+          <div style={{ textAlign: 'center', fontSize: 11, color: '#888' }}>…</div>
+        </View>
+      );
+    }
     return (
       <View style={styles.container}>
         <View style={styles.mapContainer}>
@@ -315,6 +351,7 @@ export default function LeafletMapView({
           crossOrigin=""
         />
         <MapContainer
+          key={`${mapBounds.center[0]}-${mapBounds.center[1]}-${mapBounds.zoom}-${events.length}`}
           center={mapBounds.center}
           zoom={mapBounds.zoom}
           style={{ height: '100%', width: '100%' }}
@@ -412,6 +449,11 @@ const styles = StyleSheet.create({
   miniMapContainer: {
     flex: 1,
     backgroundColor: '#f0f0f0',
+  },
+  miniLoadingBox: {
+    justifyContent: 'center',
+    alignItems: 'center',
+    minHeight: 48,
   },
   loadingContainer: {
     flex: 1,

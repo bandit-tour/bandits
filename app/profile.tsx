@@ -1,6 +1,7 @@
-import { Stack, useRouter } from 'expo-router';
+import * as ImagePicker from 'expo-image-picker';
+import { Stack } from 'expo-router';
 import { useCallback, useEffect, useState } from 'react';
-import { Image, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Alert, Image, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { supabase } from '@/lib/supabase';
@@ -11,12 +12,20 @@ function initialsFromEmail(email: string | null | undefined): string {
   return part.slice(0, 2).toUpperCase();
 }
 
+function joinedDateLabel(createdAt?: string): string {
+  if (!createdAt) return 'Recently joined';
+  const date = new Date(createdAt);
+  if (Number.isNaN(date.getTime())) return 'Recently joined';
+  return `Joined ${date.toLocaleDateString(undefined, { month: 'short', year: 'numeric' })}`;
+}
+
 export default function ProfileScreen() {
-  const router = useRouter();
   const insets = useSafeAreaInsets();
   const [email, setEmail] = useState<string>('');
   const [displayName, setDisplayName] = useState<string>('');
   const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
+  const [joinedLabel, setJoinedLabel] = useState<string>('Recently joined');
+  const [uploadingAvatar, setUploadingAvatar] = useState(false);
 
   const load = useCallback(async () => {
     const {
@@ -26,6 +35,7 @@ export default function ProfileScreen() {
       setEmail('');
       setDisplayName('Guest');
       setAvatarUrl(null);
+      setJoinedLabel('Sign in to personalize your profile');
       return;
     }
     setEmail(user.email ?? '');
@@ -37,11 +47,133 @@ export default function ProfileScreen() {
     setDisplayName(name);
     const url = typeof meta?.avatar_url === 'string' ? meta.avatar_url : null;
     setAvatarUrl(url?.trim() || null);
+    setJoinedLabel(joinedDateLabel(user.created_at));
   }, []);
 
   useEffect(() => {
     void load();
   }, [load]);
+
+  const uploadAvatarFromPicker = async (fromCamera: boolean) => {
+    const {
+      data: { user },
+      error: userError,
+    } = await supabase.auth.getUser();
+    if (userError || !user) {
+      Alert.alert('Sign in required', 'Please sign in to upload a profile photo.');
+      return;
+    }
+
+    const permission = fromCamera
+      ? await ImagePicker.requestCameraPermissionsAsync()
+      : await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (!permission.granted) {
+      Alert.alert('Permission needed', 'Please allow photo access to upload your profile image.');
+      return;
+    }
+
+    const result = fromCamera
+      ? await ImagePicker.launchCameraAsync({
+          mediaTypes: ImagePicker.MediaTypeOptions.Images,
+          allowsEditing: true,
+          aspect: [1, 1],
+          quality: 0.85,
+        })
+      : await ImagePicker.launchImageLibraryAsync({
+          mediaTypes: ImagePicker.MediaTypeOptions.Images,
+          allowsEditing: true,
+          aspect: [1, 1],
+          quality: 0.85,
+        });
+    if (result.canceled || !result.assets?.[0]?.uri) return;
+
+    try {
+      setUploadingAvatar(true);
+      const asset = result.assets[0];
+      const response = await fetch(asset.uri);
+      const arrayBuffer = await response.arrayBuffer();
+
+      const ext = asset.uri.toLowerCase().includes('.png') ? 'png' : 'jpg';
+      const contentType = ext === 'png' ? 'image/png' : 'image/jpeg';
+      const objectPath = `profile_avatars/${user.id}/${Date.now()}.${ext}`;
+
+      const { error: uploadError } = await supabase.storage
+        .from('banditsassets4')
+        .upload(objectPath, arrayBuffer, {
+          contentType,
+          upsert: true,
+        });
+      if (uploadError) throw uploadError;
+
+      const { data: publicData } = supabase.storage.from('banditsassets4').getPublicUrl(objectPath);
+      const publicUrl = publicData.publicUrl;
+      if (!publicUrl) throw new Error('Could not resolve avatar URL.');
+
+      const mergedMeta = {
+        ...(user.user_metadata ?? {}),
+        avatar_url: publicUrl,
+      };
+      const { error: updateError } = await supabase.auth.updateUser({
+        data: mergedMeta,
+      });
+      if (updateError) throw updateError;
+
+      setAvatarUrl(publicUrl);
+      Alert.alert('Profile updated', 'Your profile photo was updated.');
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Could not upload profile photo.';
+      const policyHint =
+        message.toLowerCase().includes('row-level') || message.toLowerCase().includes('policy');
+      Alert.alert(
+        'Upload failed',
+        policyHint
+          ? `${message}\n\nStorage policy may be blocking writes for this user.`
+          : message,
+      );
+    } finally {
+      setUploadingAvatar(false);
+    }
+  };
+
+  const onUploadAvatar = async () => {
+    if (uploadingAvatar) return;
+    await uploadAvatarFromPicker(false);
+  };
+
+  const onTakeAvatarPhoto = async () => {
+    if (uploadingAvatar) return;
+    await uploadAvatarFromPicker(true);
+  };
+
+  const onRemoveAvatar = async () => {
+    if (uploadingAvatar) return;
+    const {
+      data: { user },
+      error: userError,
+    } = await supabase.auth.getUser();
+    if (userError || !user) {
+      Alert.alert('Sign in required', 'Please sign in to update your profile photo.');
+      return;
+    }
+    try {
+      setUploadingAvatar(true);
+      const mergedMeta = {
+        ...(user.user_metadata ?? {}),
+        avatar_url: null,
+      };
+      const { error: updateError } = await supabase.auth.updateUser({
+        data: mergedMeta,
+      });
+      if (updateError) throw updateError;
+      setAvatarUrl(null);
+      Alert.alert('Profile updated', 'Your profile photo was removed.');
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Could not remove profile photo.';
+      Alert.alert('Update failed', message);
+    } finally {
+      setUploadingAvatar(false);
+    }
+  };
 
   return (
     <>
@@ -59,24 +191,77 @@ export default function ProfileScreen() {
                 <Text style={styles.avatarInitials}>{initialsFromEmail(email)}</Text>
               </View>
             )}
+            {uploadingAvatar ? (
+              <View style={styles.avatarUploadingOverlay}>
+                <ActivityIndicator size="small" color="#FFFFFF" />
+              </View>
+            ) : null}
           </View>
+          <Pressable
+            onPress={onTakeAvatarPhoto}
+            style={({ pressed }) => [
+              styles.uploadButton,
+              pressed && styles.uploadButtonPressed,
+              uploadingAvatar && styles.uploadButtonDisabled,
+            ]}
+            disabled={uploadingAvatar}
+          >
+            <Text style={styles.uploadButtonText}>
+              {uploadingAvatar ? 'Uploading photo...' : 'Take photo'}
+            </Text>
+          </Pressable>
+          <Pressable
+            onPress={onUploadAvatar}
+            style={({ pressed }) => [
+              styles.uploadButtonSecondary,
+              pressed && styles.uploadButtonPressed,
+              uploadingAvatar && styles.uploadButtonDisabled,
+            ]}
+            disabled={uploadingAvatar}
+          >
+            <Text style={styles.uploadButtonSecondaryText}>Upload from library</Text>
+          </Pressable>
+          {avatarUrl ? (
+            <Pressable
+              onPress={onRemoveAvatar}
+              style={({ pressed }) => [
+                styles.removeButton,
+                pressed && styles.uploadButtonPressed,
+                uploadingAvatar && styles.uploadButtonDisabled,
+              ]}
+              disabled={uploadingAvatar}
+            >
+              <Text style={styles.removeButtonText}>Remove photo</Text>
+            </Pressable>
+          ) : null}
           <Text style={styles.name}>{displayName}</Text>
           <Text style={styles.email}>{email || 'Sign in to sync your account'}</Text>
         </View>
 
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Account</Text>
+          <Text style={styles.sectionTitle}>Profile</Text>
           <Text style={styles.sectionBody}>
-            Your bandiTour profile ties together saved spots, inbox replies, and Local Friend notes.
+            This is your guest identity for PLAY city access.
           </Text>
         </View>
 
-        <Pressable style={styles.row} onPress={() => router.push('/settings')}>
-          <Text style={styles.rowLabel}>Settings</Text>
-          <Text style={styles.rowChevron}>›</Text>
-        </Pressable>
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Account Snapshot</Text>
+          <Text style={styles.sectionBody}>
+            {joinedLabel}
+            {'\n'}
+            Inbox, follow list, and requests are tied to this profile.
+          </Text>
+        </View>
 
-        <Text style={styles.footerHint}>Account actions are available in Settings.</Text>
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>PLAY Guest Access</Text>
+          <Text style={styles.sectionBody}>
+            - Local banDits recommendations by neighborhood{'\n'}
+            - City routes with map context and live spots{'\n'}
+            - Local Friend requests and replies in Inbox
+          </Text>
+        </View>
       </ScrollView>
     </>
   );
@@ -108,10 +293,70 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
+  avatarUploadingOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    borderRadius: 52,
+    backgroundColor: 'rgba(0,0,0,0.35)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   avatarInitials: {
     color: '#FFF',
     fontSize: 32,
     fontWeight: '800',
+  },
+  uploadButton: {
+    backgroundColor: '#111',
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: 999,
+    marginBottom: 8,
+  },
+  uploadButtonSecondary: {
+    borderWidth: 1,
+    borderColor: '#111',
+    backgroundColor: '#FFF',
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: 999,
+    marginBottom: 8,
+  },
+  uploadButtonPressed: {
+    opacity: 0.9,
+  },
+  uploadButtonDisabled: {
+    opacity: 0.65,
+  },
+  uploadButtonText: {
+    color: '#FFF',
+    fontSize: 12,
+    fontWeight: '700',
+    letterSpacing: 0.2,
+  },
+  uploadButtonSecondaryText: {
+    color: '#111',
+    fontSize: 12,
+    fontWeight: '700',
+    letterSpacing: 0.2,
+  },
+  removeButton: {
+    borderWidth: 1,
+    borderColor: '#D23B3B',
+    backgroundColor: '#FFF',
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: 999,
+    marginBottom: 12,
+  },
+  removeButtonText: {
+    color: '#C62828',
+    fontSize: 12,
+    fontWeight: '700',
+    letterSpacing: 0.2,
   },
   name: {
     fontSize: 22,
@@ -143,30 +388,5 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: '#444',
     lineHeight: 20,
-  },
-  row: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingVertical: 16,
-    paddingHorizontal: 4,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: '#EEE',
-  },
-  rowLabel: {
-    fontSize: 16,
-    fontWeight: '700',
-    color: '#0a7ea4',
-  },
-  rowChevron: {
-    fontSize: 22,
-    color: '#999',
-    fontWeight: '300',
-  },
-  footerHint: {
-    marginTop: 24,
-    fontSize: 13,
-    color: '#666',
-    textAlign: 'center',
   },
 });

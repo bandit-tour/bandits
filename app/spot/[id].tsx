@@ -13,8 +13,16 @@ import {
 } from 'react-native';
 
 import { Database } from '@/lib/database.types';
+import {
+  fetchGooglePlacePhotoUrl as resolveGooglePlacePhotoUrl,
+  getCategoryFallbackImage,
+  isLikelyLogoOrBadPlaceImage,
+  normalizeEventImageUri,
+} from '@/lib/placePhoto';
+import { getCuratedEventImageCandidates } from '@/lib/eventImageCuration';
 import { supabase } from '@/lib/supabase';
 import ReviewCard from '@/components/ReviewCard';
+import { trackEvent } from '@/lib/analytics';
 
 // For City Guide, the ID passed into /spot/[id] comes from the event card,
 // so this screen should load from the event table, not spots.
@@ -28,16 +36,24 @@ type SpotReview = {
   user_name: string;
 };
 
-function parseGalleryImages(raw: string | null, fallback: string | null): string[] {
+function parseGalleryImages(raw: string | null, fallback: string | null, curated: string[] = []): string[] {
   const out: string[] = [];
-  if (fallback?.trim()) out.push(fallback.trim());
-  if (!raw) return out;
+  const pushNorm = (u: string) => {
+    const n = normalizeEventImageUri(u);
+    if (n) out.push(n);
+  };
+  curated.forEach((u) => pushNorm(u));
+  if (fallback?.trim()) pushNorm(fallback.trim());
+  if (!raw) {
+    const unique = Array.from(new Set(out));
+    return unique.filter((u) => !isLikelyLogoOrBadPlaceImage(u)).slice(0, 5);
+  }
 
   try {
     const parsed = JSON.parse(raw);
     if (Array.isArray(parsed)) {
       parsed.forEach((v) => {
-        if (typeof v === 'string' && v.trim()) out.push(v.trim());
+        if (typeof v === 'string' && v.trim()) pushNorm(v.trim());
       });
     }
   } catch {
@@ -45,19 +61,11 @@ function parseGalleryImages(raw: string | null, fallback: string | null): string
       .split(',')
       .map((v) => v.trim())
       .filter(Boolean)
-      .forEach((v) => out.push(v));
+      .forEach((v) => pushNorm(v));
   }
 
   const unique = Array.from(new Set(out));
-  // Filter out app/logo placeholders if they exist in DB as a placeholder.
-  const sanitized = unique.filter((u) => {
-    const lowered = u.toLowerCase();
-    return !(
-      lowered.includes('logobanditourapp') ||
-      lowered.includes('banditour') ||
-      lowered.includes('bandit-tour')
-    );
-  });
+  const sanitized = unique.filter((u) => !isLikelyLogoOrBadPlaceImage(u));
   return sanitized.slice(0, 5);
 }
 
@@ -67,51 +75,8 @@ export default function SpotDetailScreen() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [reviews, setReviews] = useState<SpotReview[]>([]);
-  const [gallery, setGallery] = useState<string[]>([]);
+  const [visibleGallery, setVisibleGallery] = useState<string[]>([]);
   const [galleryLoading, setGalleryLoading] = useState(false);
-
-  const getGoogleApiKey = () => {
-    return (
-      (process.env.EXPO_PUBLIC_GOOGLE_MAPS_KEY as string | undefined) ??
-      (Constants.expoConfig as any)?.android?.config?.googleMaps?.apiKey ??
-      (Constants.expoConfig as any)?.ios?.config?.googleMapsApiKey ??
-      ''
-    );
-  };
-
-  const fetchGooglePlacePhotoUrl = async (event: Spot): Promise<string | null> => {
-    const apiKey = getGoogleApiKey();
-    if (!apiKey) return null;
-
-    const query = [event.name, event.address, event.city, event.neighborhood]
-      .filter(Boolean)
-      .join(' ');
-    if (!query.trim()) return null;
-
-    const findUrl = `https://maps.googleapis.com/maps/api/place/findplacefromtext/json?key=${encodeURIComponent(
-      apiKey
-    )}&input=${encodeURIComponent(query)}&inputtype=textquery&fields=place_id`;
-
-    const findResp = await fetch(findUrl);
-    const findJson = await findResp.json();
-    const placeId = findJson?.candidates?.[0]?.place_id as string | undefined;
-    if (!placeId) return null;
-
-    const detailsUrl = `https://maps.googleapis.com/maps/api/place/details/json?key=${encodeURIComponent(
-      apiKey
-    )}&place_id=${encodeURIComponent(placeId)}&fields=photos`;
-
-    const detailsResp = await fetch(detailsUrl);
-    const detailsJson = await detailsResp.json();
-    const photoRef = detailsJson?.result?.photos?.[0]?.photo_reference as
-      | string
-      | undefined;
-    if (!photoRef) return null;
-
-    return `https://maps.googleapis.com/maps/api/place/photo?maxwidth=800&photoreference=${encodeURIComponent(
-      photoRef
-    )}&key=${encodeURIComponent(apiKey)}`;
-  };
 
   useEffect(() => {
     const fetchSpot = async () => {
@@ -129,15 +94,31 @@ export default function SpotDetailScreen() {
 
         if (err) throw err;
         setSpot(data);
-        const parsedGallery = parseGalleryImages(data.image_gallery, data.image_url);
-        setGallery(parsedGallery);
+        void trackEvent({
+          eventName: 'spot_opened',
+          referenceType: 'spot',
+          referenceId: String(data.id),
+          onceKey: `spot_opened:${data.id}`,
+        });
+        setGalleryLoading(false);
+        const curated = getCuratedEventImageCandidates(data as any);
+        const parsedGallery = parseGalleryImages(data.image_gallery, data.image_url, curated);
+        setVisibleGallery(parsedGallery);
 
-        // If stored images are missing/invalid, resolve a real Google Places photo.
+        // If stored images are missing/invalid, optionally resolve via Google Places (spinner only during this fetch).
         if (parsedGallery.length === 0) {
           setGalleryLoading(true);
           try {
-            const photoUrl = await fetchGooglePlacePhotoUrl(data as any);
-            if (photoUrl) setGallery([photoUrl]);
+            const photoUrl = await resolveGooglePlacePhotoUrl({
+              placeId: (data as any).google_place_id ?? null,
+              name: String(data.name ?? ''),
+              address: String(data.address ?? ''),
+              city: String(data.city ?? ''),
+              neighborhood: String(data.neighborhood ?? ''),
+            });
+            if (photoUrl) {
+              setVisibleGallery([normalizeEventImageUri(photoUrl) ?? photoUrl]);
+            }
           } catch (e) {
             console.warn('[SpotDetail] google photo fetch failed', { spotId: id, e });
           } finally {
@@ -182,19 +163,35 @@ export default function SpotDetailScreen() {
           showsHorizontalScrollIndicator={false}
           contentContainerStyle={styles.galleryRow}
         >
-          {gallery.length > 0 ? (
-            gallery.map((uri, index) => (
+          {visibleGallery.length > 0 ? (
+            visibleGallery.map((uri, index) => (
               <Image
                 key={`${uri}-${index}`}
                 source={{ uri }}
                 style={styles.image}
                 resizeMode="cover"
+                onError={() =>
+                  setVisibleGallery((prev) => prev.filter((u) => u !== uri))
+                }
               />
             ))
-          ) : (
+          ) : galleryLoading ? (
             <View style={styles.imageLoadingOverlay}>
               <ActivityIndicator size="small" />
             </View>
+          ) : (
+            <Image
+              source={{
+                uri: getCategoryFallbackImage(
+                  spot.genre,
+                  `spot-detail-${spot.id}`,
+                  900,
+                  600,
+                ),
+              }}
+              style={styles.image}
+              resizeMode="cover"
+            />
           )}
         </ScrollView>
         <Text style={styles.name}>{spot.name}</Text>
@@ -254,6 +251,9 @@ const styles = StyleSheet.create({
     marginRight: 10,
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  imagePlaceholder: {
+    backgroundColor: '#E8E8E8',
   },
   galleryRow: { paddingBottom: 16 },
   name: { fontSize: 22, fontWeight: '700', color: '#222', marginBottom: 8 },

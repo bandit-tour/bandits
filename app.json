@@ -12,7 +12,8 @@
       "supportsTablet": true,
       "bundleIdentifier": "com.yuvaldafni.bandits",
       "infoPlist": {
-        "ITSAppUsesNonExemptEncryption": false
+        "ITSAppUsesNonExemptEncryption": false,
+        "NSLocationWhenInUseUsageDescription": "bandiTour uses your location while the app is open to suggest nearby places, events, and safety alerts—only when you are close."
       },
       "config": {
         "googleMapsApiKey": "AIzaSyBfv6k8wNTEtWYL6iKTw1O3XC0vf_CS7Xg"
@@ -55,13 +56,19 @@
       "description": "Discover and join local events",
       "lang": "en",
       "scope": "/",
-      "startUrl": "/",
+      "startUrl": "/hotel/play-theatrou",
       "backgroundColor": "#ffffff",
       "themeColor": "#ffffff",
       "display": "standalone",
       "orientation": "portrait"
     },
     "plugins": [
+      [
+        "expo-location",
+        {
+          "locationWhenInUsePermission": "bandiTour uses your location while the app is open to suggest nearby places, events, and safety alerts—only when you are close."
+        }
+      ],
       [
         "expo-build-properties",
         {

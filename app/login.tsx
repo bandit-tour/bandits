@@ -1,6 +1,7 @@
 import { isSupabaseConfigured, supabase } from '@/lib/supabase';
+import { navigateAfterAuth } from '@/services/userProfile';
 import * as Linking from 'expo-linking';
-import { useRouter } from 'expo-router';
+import { Redirect, useLocalSearchParams, useRouter } from 'expo-router';
 import * as WebBrowser from 'expo-web-browser';
 import React, { useEffect, useState } from 'react';
 import {
@@ -18,6 +19,8 @@ import {
 } from 'react-native';
 
 export default function Login() {
+  const { forceAuth: rawForceAuth } = useLocalSearchParams<{ forceAuth?: string }>();
+  const forceAuth = (Array.isArray(rawForceAuth) ? rawForceAuth[0] : rawForceAuth) === '1';
   
   /** Session restore finished (success or failure). Avoid infinite spinner when user is null. */
   const [sessionReady, setSessionReady] = useState(false);
@@ -32,6 +35,7 @@ export default function Login() {
   const [emailSent, setEmailSent] = useState(false);
   const [resendSuccess, setResendSuccess] = useState(false);
   const [googleButtonScale] = useState(new Animated.Value(1));
+  const [profileGate, setProfileGate] = useState<'idle' | 'pending' | 'done' | 'needs'>('idle');
   const router = useRouter();
 
   useEffect(() => {
@@ -123,19 +127,16 @@ export default function Login() {
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
       setUser(session?.user ?? null);
+      if (event === 'SIGNED_IN' && session?.user) {
+        void navigateAfterAuth(router);
+      }
     });
 
     return () => {
       cancelled = true;
       subscription.unsubscribe();
     };
-  }, []);
-
-  useEffect(() => {
-    if (user) {
-      router.replace('/(tabs)/bandits');
-    }
-  }, [user, router]);
+  }, [router]);
 
   const handleEmailLogin = async () => {
     setLoading(false);
@@ -169,7 +170,9 @@ export default function Login() {
 
       if (!data?.session) {
         setError('Sign in failed: no session returned.');
+        return;
       }
+      await navigateAfterAuth(router);
     } catch (err: any) {
       setError(err?.message ?? 'Sign in failed. Please try again.');
     } finally {
@@ -300,14 +303,17 @@ export default function Login() {
         },
       });
 
-      if (data?.session || data?.url) {
+      const oauthSession = data && typeof data === 'object' && 'session' in data ? (data as { session?: unknown }).session : undefined;
+
+      if (oauthSession || data?.url) {
         setError(null);
       } else if (error) {
         setError(error.message);
         return;
       }
 
-      if (data?.session) {
+      if (oauthSession) {
+        await navigateAfterAuth(router);
         return;
       }
 
@@ -343,6 +349,7 @@ export default function Login() {
             if (sessionError) {
               throw sessionError;
             }
+            await navigateAfterAuth(router);
           } else {
             throw new Error('OAuth callback did not include tokens.');
           }
@@ -356,6 +363,7 @@ export default function Login() {
       const { data: sessionProbe } = await supabase.auth.getSession();
       if (sessionProbe?.session) {
         setError(null);
+        await navigateAfterAuth(router);
         return;
       }
       if (err?.message) {
@@ -375,13 +383,16 @@ export default function Login() {
     );
   }
 
-  if (!user) {
-    return (
-      <ScrollView style={styles.container} contentContainerStyle={styles.scrollContent}>
+  if (user && !forceAuth) {
+    return <Redirect href="/bandits" />;
+  }
+
+  return (
+    <ScrollView style={styles.container} contentContainerStyle={styles.scrollContent}>
         {/* Logo */}
         <View style={styles.logoContainer}>
           <Image
-            source={require('@/assets/icons/logobanditourapp.png')}
+            source={require('@/assets/icons/banditLocalpng.png')}
             style={styles.logo}
             resizeMode="contain"
           />
@@ -553,14 +564,6 @@ export default function Login() {
           </>
         )}
       </ScrollView>
-    );
-  }
-
-  return (
-    <View style={styles.loadingContainer}>
-      <ActivityIndicator size="large" color="#ff0000" />
-      <Text style={styles.loadingHint}>Opening app…</Text>
-    </View>
   );
 }
 

@@ -1,6 +1,6 @@
 import { Database } from '@/lib/database.types';
 import React, { forwardRef, useImperativeHandle, useRef } from 'react';
-import { ScrollView, StyleSheet, Text, View } from 'react-native';
+import { RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native';
 import EventCard from './EventCard';
 
 type Event = Database['public']['Tables']['event']['Row'];
@@ -26,6 +26,8 @@ interface EventListProps {
   // ScrollView props
   scrollViewStyle?: any;
   contentContainerStyle?: any;
+  refreshing?: boolean;
+  onRefresh?: () => void;
   // Loading and error states (from EventsList)
   loading?: boolean;
   error?: string | null;
@@ -46,6 +48,8 @@ const EventList = forwardRef<EventListRef, EventListProps>(({
   onEventPress,
   scrollViewStyle,
   contentContainerStyle,
+  refreshing = false,
+  onRefresh,
   loading = false,
   error = null
 }, ref) => {
@@ -115,8 +119,13 @@ const EventList = forwardRef<EventListRef, EventListProps>(({
         contentContainerStyle: [styles.verticalContentContainer, contentContainerStyle]
       };
 
+  const refreshControl =
+    onRefresh != null ? (
+      <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
+    ) : undefined;
+
   const content = (
-    <ScrollView {...scrollViewProps} ref={scrollViewRef}>
+    <ScrollView {...scrollViewProps} ref={scrollViewRef} refreshControl={refreshControl}>
       <View style={isHorizontal ? styles.horizontalContainer : styles.verticalContainer}>
         {events.map((event) => (
           <View

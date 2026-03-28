@@ -1,17 +1,21 @@
+import { picsumPlaceImage } from '@/lib/placePhoto';
 import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
 import React, { useEffect, useMemo, useState } from 'react';
-import { ActivityIndicator, Image, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Image, Pressable, RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native';
 
 import { getSpotsByBanditId } from '@/services/spots';
 import { getEvents } from '@/app/services/events';
 import { getTrailsByBanditId, TrailWithStops } from '@/services/trails';
-import { generateAiTrailFromSpots, GeneratedTrail } from '@/services/aiTrails';
+import type { GeneratedTrail } from '@/services/aiTrails';
 import EventCategories from '@/components/EventCategories';
+import LocalBanditOctopusIcon from '@/components/LocalBanditOctopusIcon';
 import EventList from '@/components/EventList';
 import TrailCard from '@/components/TrailCard';
+import TrailDetailView from '@/components/TrailDetailView';
 import { EventGenre } from '@/constants/Genres';
 import { Database } from '@/lib/database.types';
 import { supabase } from '@/lib/supabase';
+import { trackEvent } from '@/lib/analytics';
 
 type Bandit = Database['public']['Tables']['bandit']['Row'];
 type Event = Database['public']['Tables']['event']['Row'];
@@ -25,19 +29,63 @@ function categoryToGenre(category: string): Event['genre'] {
 }
 
 export default function CityGuideScreen() {
-  const { banditId, genre } = useLocalSearchParams();
+  const params = useLocalSearchParams<{ banditId?: string; genre?: string }>();
+  const rawBanditId = params.banditId;
+  const banditIdParam = Array.isArray(rawBanditId) ? rawBanditId[0] : rawBanditId;
+  const rawGenre = params.genre;
+  const genreParam = Array.isArray(rawGenre) ? rawGenre[0] : rawGenre;
+
   const router = useRouter();
+  const [effectiveBanditId, setEffectiveBanditId] = useState<string | null>(
+    banditIdParam ?? null,
+  );
   const [bandit, setBandit] = useState<Bandit | null>(null);
   const [allSpots, setAllSpots] = useState<Spot[]>([]); // for AI vibes only
   const [events, setEvents] = useState<Event[]>([]);
   const [trails, setTrails] = useState<TrailWithStops[]>([]);
-  const [selectedGenre, setSelectedGenre] = useState<string>(genre as string || '');
+  const [selectedGenre, setSelectedGenre] = useState<string>(genreParam || '');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [aiTrail, setAiTrail] = useState<GeneratedTrail | null>(null);
-  const [aiLoading, setAiLoading] = useState(false);
+  const [aiTrail] = useState<GeneratedTrail | null>(null);
+  const [aiLoading] = useState(false);
+  const [avatarLoadFailed, setAvatarLoadFailed] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
 
   useEffect(() => {
+    if (banditIdParam) {
+      setEffectiveBanditId(banditIdParam);
+      return;
+    }
+    let cancelled = false;
+    (async () => {
+      const { data: neo } = await supabase
+        .from('bandit')
+        .select('id')
+        .ilike('name', '%Neo%')
+        .limit(1)
+        .maybeSingle();
+      if (cancelled) return;
+      if (neo?.id) {
+        setEffectiveBanditId(neo.id);
+        return;
+      }
+      const { data: anyBandit } = await supabase.from('bandit').select('id').limit(1).maybeSingle();
+      if (cancelled) return;
+      if (anyBandit?.id) {
+        setEffectiveBanditId(anyBandit.id);
+        return;
+      }
+      setError('No bandits available');
+      setLoading(false);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [banditIdParam]);
+
+  useEffect(() => {
+    if (!effectiveBanditId) return;
+
     const fetchData = async () => {
       try {
         setLoading(true);
@@ -45,23 +93,23 @@ export default function CityGuideScreen() {
         const { data: banditData, error: banditError } = await supabase
           .from('bandit')
           .select('*')
-          .eq('id', banditId as string)
+          .eq('id', effectiveBanditId)
           .single();
 
         if (banditError) throw banditError;
         setBandit(banditData);
+        void trackEvent({
+          eventName: 'city_guide_opened',
+          referenceType: 'bandit',
+          referenceId: banditData.id,
+          onceKey: `city_guide_opened:${banditData.id}`,
+        });
 
         const [spotsData, trailsData, eventsData] = await Promise.all([
-          getSpotsByBanditId(banditId as string), // AI-only
-          getTrailsByBanditId(banditId as string),
-          getEvents({ banditId: banditId as string }), // primary city guide source
+          getSpotsByBanditId(effectiveBanditId), // AI-only
+          getTrailsByBanditId(effectiveBanditId),
+          getEvents({ banditId: effectiveBanditId }), // primary city guide source
         ]);
-        console.log('[CityGuide] loaded', {
-          banditId,
-          spotsCount: spotsData?.length ?? 0,
-          eventsCount: eventsData?.length ?? 0,
-          trailsCount: trailsData?.length ?? 0,
-        });
         setAllSpots(spotsData);
         setTrails(trailsData);
         setEvents(eventsData ?? []);
@@ -73,7 +121,34 @@ export default function CityGuideScreen() {
     };
 
     fetchData();
-  }, [banditId]);
+  }, [effectiveBanditId]);
+
+  const refreshNow = async () => {
+    if (!effectiveBanditId) return;
+    setRefreshing(true);
+    try {
+      const { data: banditData } = await supabase
+        .from('bandit')
+        .select('*')
+        .eq('id', effectiveBanditId)
+        .single();
+      if (banditData) setBandit(banditData);
+      const [spotsData, trailsData, eventsData] = await Promise.all([
+        getSpotsByBanditId(effectiveBanditId),
+        getTrailsByBanditId(effectiveBanditId),
+        getEvents({ banditId: effectiveBanditId }),
+      ]);
+      setAllSpots(spotsData);
+      setTrails(trailsData);
+      setEvents(eventsData ?? []);
+    } finally {
+      setRefreshing(false);
+    }
+  };
+
+  useEffect(() => {
+    setAvatarLoadFailed(false);
+  }, [bandit?.id]);
 
   const filteredEvents = useMemo(() => {
     const base = events;
@@ -92,31 +167,6 @@ export default function CityGuideScreen() {
     }));
   }, [events]);
 
-  const handleGetVibe = () => {
-    if (!allSpots.length) {
-      setAiTrail(null);
-      return;
-    }
-    setAiLoading(true);
-    try {
-      // Simple mapping: use selected genre to influence mood, otherwise default to hidden gems
-      const moodHint =
-        (selectedGenre || '').toLowerCase() === 'coffee'
-          ? 'coffee morning'
-          : (selectedGenre || '').toLowerCase() === 'nightlife'
-          ? 'after dark'
-          : (selectedGenre || '').toLowerCase() === 'culture'
-          ? 'art day'
-          : (selectedGenre || '').toLowerCase() === 'food'
-          ? 'food crawl'
-          : 'hidden gems';
-
-      const generated = generateAiTrailFromSpots(moodHint, allSpots);
-      setAiTrail(generated);
-    } finally {
-      setAiLoading(false);
-    }
-  };
   if (loading) {
     return (
       <View style={styles.loadingContainer}>
@@ -143,11 +193,21 @@ export default function CityGuideScreen() {
 
   return (
     <>
-      <Stack.Screen options={{ headerShown: true, title: '' }} />
+      <Stack.Screen options={{ headerShown: true, title: '', headerBackTitle: 'Back' }} />
 
-      <ScrollView style={styles.container} contentContainerStyle={styles.scrollContent}>
+      <ScrollView
+        style={styles.container}
+        contentContainerStyle={styles.scrollContent}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => void refreshNow()} />}
+      >
         {/* Header */}
         <Text style={styles.headerText}>City Guide</Text>
+        <View style={styles.banditNameRow}>
+          <LocalBanditOctopusIcon />
+          <Text style={styles.banditNameLabel}>
+            {`${bandit.name} ${bandit.family_name ?? ''}`.trim()}
+          </Text>
+        </View>
 
         {/* Bandit Profile Section */}
         <View style={styles.profileSection}>
@@ -162,10 +222,23 @@ export default function CityGuideScreen() {
             </Text>
 
             <View style={styles.profileImageContainer}>
-              <Image
-                source={{ uri: bandit.image_url }}
-                style={styles.profileImage}
-              />
+              {(() => {
+                const raw = bandit.image_url?.trim();
+                const validUrl =
+                  raw && /^https?:\/\//i.test(raw) ? raw : null;
+                const uri =
+                  !avatarLoadFailed && validUrl
+                    ? validUrl
+                    : picsumPlaceImage(`cg-banDit-${bandit.id}`, 400, 400);
+                return (
+                  <Image
+                    source={{ uri }}
+                    style={styles.profileImage}
+                    resizeMode="cover"
+                    onError={() => setAvatarLoadFailed(true)}
+                  />
+                );
+              })()}
             </View>
 
           </View>
@@ -206,9 +279,16 @@ export default function CityGuideScreen() {
             No bus tours. No best‑of lists.
             Just a loose thread into the parts of Athens locals don’t post about.
           </Text>
-          <Pressable style={styles.aiButton} onPress={handleGetVibe}>
-            <Text style={styles.aiButtonText}>{aiLoading ? 'Finding a vibe…' : 'Get a vibe'}</Text>
-            <Text style={styles.aiButtonSubtext}>Pull a trail from local‑coded spots.</Text>
+          <Pressable
+            onPress={() => {
+              router.push(`/vibe/${encodeURIComponent(bandit.id)}` as any);
+            }}
+            style={{ alignSelf: 'stretch' }}
+          >
+            <View style={styles.aiButton}>
+              <Text style={styles.aiButtonText}>{aiLoading ? 'Finding a vibe…' : 'Get a vibe'}</Text>
+              <Text style={styles.aiButtonSubtext}>Pull a trail from local‑coded spots.</Text>
+            </View>
           </Pressable>
           {aiTrail && (
             <View style={styles.aiTrailContainer}>
@@ -239,7 +319,7 @@ export default function CityGuideScreen() {
           variant="horizontal"
           showButton={false}
           imageHeight={120}
-          banditId={banditId as string}
+          banditId={effectiveBanditId as string}
           showRecommendations={false}
           likedEventIds={new Set()}
           onEventPress={(e) => router.push(`/spot/${e.id}` as any)}
@@ -282,7 +362,19 @@ const styles = StyleSheet.create({
     fontSize: 24,
     color: '#3C3C3C',
     textAlign: 'center',
+    marginBottom: 8,
+  },
+  banditNameRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
     marginBottom: 20,
+    paddingHorizontal: 16,
+  },
+  banditNameLabel: {
+    fontWeight: '700',
+    fontSize: 17,
+    color: '#222',
   },
   profileSection: {
     alignItems: 'center',
@@ -299,6 +391,9 @@ const styles = StyleSheet.create({
   profileImage: {
     width: '100%',
     height: '100%',
+  },
+  profileImagePlaceholder: {
+    backgroundColor: '#E8E8E8',
   },
 
   descriptionContent: {
@@ -390,6 +485,4 @@ const styles = StyleSheet.create({
     color: '#555',
     marginBottom: 8,
   },
-}); 
-
-import TrailDetailView from '@/components/TrailDetailView';
+});

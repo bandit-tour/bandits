@@ -1,11 +1,11 @@
 import { supabase } from '@/lib/supabase';
-import { useLocalSearchParams, useRouter } from 'expo-router';
+import { navigateAfterAuth } from '@/services/userProfile';
+import { useRouter } from 'expo-router';
 import React, { useEffect } from 'react';
 import { ActivityIndicator, StyleSheet, Text, View } from 'react-native';
 
 export default function AuthCallback() {
   const router = useRouter();
-  const params = useLocalSearchParams();
 
   useEffect(() => {
     const handleAuthCallback = async () => {
@@ -19,8 +19,7 @@ export default function AuthCallback() {
         }
 
         if (data.session) {
-          // Successfully authenticated, redirect to main app
-          router.replace('/(tabs)/bandits');
+          await navigateAfterAuth(router);
         } else {
           // No session, redirect back to login
           router.replace('/');

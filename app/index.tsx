@@ -1,47 +1,8 @@
-import * as React from 'react';
-import { useRouter } from 'expo-router';
-import { useEffect } from 'react';
-import { ActivityIndicator, StyleSheet, View } from 'react-native';
-import { isSupabaseConfigured, supabase } from '@/lib/supabase';
+import { PLAY_THEATROU_GUEST_ENTRY_PATH } from '@/lib/pilotSession';
+import { Redirect } from 'expo-router';
+import React from 'react';
 
+/** Same path as PLAY_THEATROU_GUEST_ENTRY_URL — hotel context, then welcome → intro → home. */
 export default function Index() {
-  const router = useRouter();
-
-  useEffect(() => {
-    let cancelled = false;
-    const go = async () => {
-      if (!isSupabaseConfigured()) {
-        if (!cancelled) router.replace('/login');
-        return;
-      }
-      const {
-        data: { session },
-      } = await supabase.auth.getSession();
-      if (cancelled) return;
-      if (session?.user) {
-        router.replace('/(tabs)/bandits');
-      } else {
-        router.replace('/login');
-      }
-    };
-    void go();
-    return () => {
-      cancelled = true;
-    };
-  }, [router]);
-
-  return (
-    <View style={styles.root}>
-      <ActivityIndicator size="large" color="#ff0000" />
-    </View>
-  );
+  return <Redirect href={PLAY_THEATROU_GUEST_ENTRY_PATH} />;
 }
-
-const styles = StyleSheet.create({
-  root: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    backgroundColor: '#ffffff',
-  },
-});

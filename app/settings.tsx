@@ -1,30 +1,22 @@
-import { Stack, useRouter } from 'expo-router';
+import { Stack } from 'expo-router';
 import { useCallback, useEffect, useState } from 'react';
 import {
+  Pressable,
   ScrollView,
   StyleSheet,
   Switch,
   Text,
-  TouchableOpacity,
   View,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { supabase } from '@/lib/supabase';
-
 export default function SettingsScreen() {
-  const router = useRouter();
   const insets = useSafeAreaInsets();
   const [pushEnabled, setPushEnabled] = useState(true);
   const [emailEnabled, setEmailEnabled] = useState(true);
   const [savingPrefs, setSavingPrefs] = useState(false);
 
-  const load = useCallback(async () => {
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
-    if (!user) return;
-  }, []);
+  const load = useCallback(async () => {}, []);
 
   useEffect(() => {
     void load();
@@ -46,7 +38,7 @@ export default function SettingsScreen() {
         keyboardShouldPersistTaps="handled"
       >
         <Text style={styles.title}>Settings</Text>
-        <Text style={styles.subtitle}>Notifications, preferences, and account</Text>
+        <Text style={styles.subtitle}>Notifications and guest preferences</Text>
 
         <Text style={styles.blockLabel}>Notifications</Text>
         <View style={styles.optionRow}>
@@ -60,19 +52,9 @@ export default function SettingsScreen() {
 
         <Text style={[styles.blockLabel, styles.blockSpaced]}>Preferences</Text>
         <Text style={styles.fieldHint}>Choose how you want app updates delivered.</Text>
-        <TouchableOpacity style={styles.primaryBtn} onPress={savePreferences}>
+        <Pressable style={styles.primaryBtn} onPress={savePreferences}>
           <Text style={styles.primaryBtnText}>{savingPrefs ? 'Saving...' : 'Save preferences'}</Text>
-        </TouchableOpacity>
-
-        <TouchableOpacity
-          style={styles.signOutButton}
-          onPress={async () => {
-            await supabase.auth.signOut();
-            router.push('/login');
-          }}
-        >
-          <Text style={styles.signOutText}>Sign out</Text>
-        </TouchableOpacity>
+        </Pressable>
       </ScrollView>
     </>
   );
@@ -136,17 +118,5 @@ const styles = StyleSheet.create({
     color: '#FFF',
     fontWeight: '700',
     fontSize: 14,
-  },
-  signOutButton: {
-    marginTop: 28,
-    paddingVertical: 12,
-    borderRadius: 10,
-    backgroundColor: '#111',
-    alignItems: 'center',
-  },
-  signOutText: {
-    color: '#FFF',
-    fontSize: 14,
-    fontWeight: '700',
   },
 });

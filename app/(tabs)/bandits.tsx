@@ -1,13 +1,14 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
   FlatList,
+  RefreshControl,
   StyleSheet,
   Text,
   View,
 } from 'react-native';
-import { useRouter } from 'expo-router';
+import { useLocalSearchParams, useRouter } from 'expo-router';
 
 import { getBanditsWithTags, toggleBanditLike } from '@/app/services/bandits';
 import { getBanditEventCategories } from '@/app/services/events';
@@ -29,9 +30,30 @@ type Row = { bandit: BanditWithTags; categories: EventCategory[] };
 
 export default function BanditsScreen() {
   const router = useRouter();
+  const params = useLocalSearchParams<{ focusBanditId?: string }>();
+  const rawFocus = params.focusBanditId;
+  const focusBanditId = Array.isArray(rawFocus) ? rawFocus[0] : rawFocus;
+  const listRef = useRef<FlatList<Row>>(null);
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
   const [rows, setRows] = useState<Row[]>([]);
   const [updatingLikeId, setUpdatingLikeId] = useState<string | null>(null);
+
+  const fetchRows = useCallback(async () => {
+    const data = await getBanditsWithTags();
+    const list = (data || []) as BanditWithTags[];
+    const withCats = await Promise.all(
+      list.map(async (b): Promise<Row> => {
+        try {
+          const categories = await getBanditEventCategories(b.id);
+          return { bandit: b, categories };
+        } catch {
+          return { bandit: b, categories: [] };
+        }
+      }),
+    );
+    setRows(withCats);
+  }, []);
 
   useEffect(() => {
     let isMounted = true;
@@ -39,21 +61,7 @@ export default function BanditsScreen() {
     const load = async () => {
       setLoading(true);
       try {
-        const data = await getBanditsWithTags();
-        const list = (data || []) as BanditWithTags[];
-        const withCats = await Promise.all(
-          list.map(async (b): Promise<Row> => {
-            try {
-              const categories = await getBanditEventCategories(b.id);
-              return { bandit: b, categories };
-            } catch {
-              return { bandit: b, categories: [] };
-            }
-          }),
-        );
-        if (isMounted) {
-          setRows(withCats);
-        }
+        await fetchRows();
       } finally {
         if (isMounted) {
           setLoading(false);
@@ -61,12 +69,35 @@ export default function BanditsScreen() {
       }
     };
 
-    load();
+    void load();
 
     return () => {
       isMounted = false;
     };
-  }, []);
+  }, [fetchRows]);
+
+  const onRefresh = useCallback(async () => {
+    setRefreshing(true);
+    try {
+      await fetchRows();
+    } finally {
+      setRefreshing(false);
+    }
+  }, [fetchRows]);
+
+  useEffect(() => {
+    if (!focusBanditId || rows.length === 0) return;
+    const index = rows.findIndex((r) => r.bandit.id === focusBanditId);
+    if (index < 0) return;
+    const t = setTimeout(() => {
+      listRef.current?.scrollToIndex({
+        index,
+        animated: true,
+        viewPosition: 0.15,
+      });
+    }, 120);
+    return () => clearTimeout(t);
+  }, [focusBanditId, rows]);
 
   const empty = useMemo(
     () => (
@@ -87,10 +118,17 @@ export default function BanditsScreen() {
 
   return (
     <FlatList
+      ref={listRef}
       data={rows}
       keyExtractor={(item) => item.bandit.id}
       contentContainerStyle={styles.listContent}
       ListEmptyComponent={empty}
+      refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => void onRefresh()} />}
+      onScrollToIndexFailed={({ index }) => {
+        setTimeout(() => {
+          listRef.current?.scrollToIndex({ index, animated: true, viewPosition: 0.15 });
+        }, 200);
+      }}
       renderItem={({ item }) => (
         <BanditHeader
           bandit={item.bandit as any}
@@ -122,7 +160,7 @@ export default function BanditsScreen() {
             }
           }}
           onCategoryPress={(genre) =>
-            router.push(`/cityGuide?banditId=${item.bandit.id}&genre=${encodeURIComponent(genre)}` as any)
+            router.push(`/explore?banditId=${item.bandit.id}&genre=${encodeURIComponent(genre)}` as any)
           }
         />
       )}

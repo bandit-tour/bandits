@@ -1,6 +1,9 @@
 import { Stack, useRouter } from 'expo-router';
 import React from 'react';
-import { Image, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Alert, Image, Pressable, RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native';
+
+import { supabase } from '@/lib/supabase';
+import { getOperatorUserId } from '@/services/localFriend';
 
 type MenuItem = {
   title: string;
@@ -16,23 +19,50 @@ const MENU_ITEMS: MenuItem[] = [
 
 export default function MenuScreen() {
   const router = useRouter();
+  const [isOperator, setIsOperator] = React.useState(false);
+  const [refreshing, setRefreshing] = React.useState(false);
+
+  const refreshOperator = React.useCallback(async () => {
+    const operatorId = getOperatorUserId();
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+    setIsOperator(!!operatorId && !!user && user.id === operatorId);
+  }, []);
+
+  React.useEffect(() => {
+    void refreshOperator();
+  }, [refreshOperator]);
+
+  const onRefresh = React.useCallback(async () => {
+    setRefreshing(true);
+    try {
+      await refreshOperator();
+    } finally {
+      setRefreshing(false);
+    }
+  }, [refreshOperator]);
+
+  const items = isOperator
+    ? [...MENU_ITEMS, { title: 'Pilot Desk', route: '/operatorDesk' }]
+    : MENU_ITEMS;
 
   return (
-    <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
+    <ScrollView
+      contentContainerStyle={styles.content}
+      keyboardShouldPersistTaps="handled"
+      refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => void onRefresh()} />}
+    >
       <Stack.Screen options={{ headerShown: true, title: 'Menu' }} />
 
       <View style={styles.header}>
-        <Image
-          source={require('@/assets/icons/banditLocalpng.png')}
-          style={styles.logo}
-          resizeMode="contain"
-        />
+        <Image source={require('@/assets/icons/logobanditourapp.png')} style={styles.wordmark} resizeMode="contain" />
         <Text style={styles.headerTitle}>Guest Menu</Text>
         <Text style={styles.headerSubtitle}>PLAY Theatrou Athens</Text>
       </View>
 
       <View style={styles.section}>
-        {MENU_ITEMS.map((item) => (
+        {items.map((item) => (
           <Pressable
             key={item.title}
             style={styles.row}
@@ -42,6 +72,17 @@ export default function MenuScreen() {
           </Pressable>
         ))}
       </View>
+
+      <Pressable
+        style={styles.signOut}
+        onPress={async () => {
+          await supabase.auth.signOut();
+          Alert.alert('Signed out', 'You have been signed out successfully.');
+          router.replace('/login');
+        }}
+      >
+        <Text style={styles.signOutText}>Sign out</Text>
+      </Pressable>
     </ScrollView>
   );
 }
@@ -57,10 +98,10 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginBottom: 18,
   },
-  logo: {
-    width: 84,
-    height: 84,
-    marginBottom: 10,
+  wordmark: {
+    width: 176,
+    height: 56,
+    marginBottom: 8,
   },
   headerTitle: {
     fontSize: 20,
@@ -91,6 +132,19 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '700',
     color: '#0a7ea4',
+  },
+  signOut: {
+    marginTop: 18,
+    backgroundColor: '#111',
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 14,
+  },
+  signOutText: {
+    color: '#FFF',
+    fontSize: 14,
+    fontWeight: '700',
   },
 });
 

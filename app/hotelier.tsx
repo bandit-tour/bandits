@@ -1,110 +1,79 @@
+import { PLAY_THEATROU_GUEST_ENTRY_URL } from '@/lib/pilotSession';
 import { Stack } from 'expo-router';
-import { useState } from 'react';
+import React from 'react';
 import {
-  Alert,
   Image,
   ScrollView,
   StyleSheet,
   Text,
-  TextInput,
-  TouchableOpacity,
   View,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-const PLAY_HOTEL_LOGO = require('@/assets/icons/banditLocalpng.png');
-const HERO_IMAGE = require('@/assets/images/play-psyri.jpg');
+const HERO_THEATROU = require('@/assets/images/play-theatrou.png');
+const HERO_PSYRI = require('@/assets/images/play-psyri.png');
 
 export default function HotelierScreen() {
   const insets = useSafeAreaInsets();
-  const [businessName, setBusinessName] = useState('');
-  const [city, setCity] = useState('');
-  const [contactEmail, setContactEmail] = useState('');
-  const [submitted, setSubmitted] = useState(false);
-
-  const submit = () => {
-    if (!businessName.trim() || !city.trim() || !contactEmail.trim()) {
-      Alert.alert('Missing fields', 'Add business name, city, and contact email.');
-      return;
-    }
-    setSubmitted(true);
-    Alert.alert(
-      'Request received',
-      `Thanks — we’ll email ${contactEmail.trim()} about PLAY Theatrou Athens guest access partnerships.`,
-    );
-  };
 
   return (
     <>
-      <Stack.Screen options={{ headerShown: true, title: 'Hotelier' }} />
+      <Stack.Screen options={{ headerShown: true, title: 'Hotelier', headerBackTitle: 'Back' }} />
       <ScrollView
         style={styles.scroll}
         contentContainerStyle={[styles.content, { paddingBottom: 32 + insets.bottom }]}
         keyboardShouldPersistTaps="handled"
       >
-        <Image source={HERO_IMAGE} style={styles.heroImage} resizeMode="cover" />
-        <View style={styles.logoBlock}>
-          <Image source={PLAY_HOTEL_LOGO} style={styles.logoImage} resizeMode="contain" />
+        <View style={styles.heroRow}>
+          <Image source={HERO_THEATROU} style={styles.heroImage} resizeMode="cover" />
+          <Image source={HERO_PSYRI} style={styles.heroImage} resizeMode="cover" />
         </View>
 
         <View style={styles.kickerPill}>
-          <Text style={styles.kickerText}>Hotel Partner Program</Text>
+          <Text style={styles.kickerText}>Pilot Partner Showcase</Text>
         </View>
-        <Text style={styles.partnerLine}>PLAY Theatrou Athens - Local Insider Program</Text>
-        <Text style={styles.bodyLead}>Turn your guests into explorers.</Text>
+        <Text style={styles.partnerLine}>PLAY Theatrou Athens - Curated Guest City Layer</Text>
+        <Text style={styles.bodyLead}>Turn each stay into a signature local experience.</Text>
         <Text style={styles.body}>
-          The PLAY guest flow connects travelers with curated local experiences designed for this property.
+          This page showcases the active pilot partner inside bandiTour.
+          {'\n'}
+          {'\n'}
+          PLAY Theatrou Athens is currently our featured hospitality partner.
         </Text>
 
-        <Text style={styles.sectionTitle}>Give your guests:</Text>
-        <Text style={styles.bullet}>- insider recommendations</Text>
-        <Text style={styles.bullet}>- hidden spots</Text>
-        <Text style={styles.bullet}>- real local vibes</Text>
-
-        <Text style={styles.sectionTitle}>And give your property:</Text>
-        <Text style={styles.bullet}>- higher guest satisfaction</Text>
-        <Text style={styles.bullet}>- shareable experiences</Text>
-        <Text style={styles.bullet}>- a unique edge over other hotels</Text>
-
-        <Text style={styles.body}>Tell us about your property to get started.</Text>
-
-        <View style={styles.form}>
-          <Text style={styles.label}>Business name</Text>
-          <TextInput
-            style={styles.input}
-            value={businessName}
-            onChangeText={setBusinessName}
-            placeholder="e.g. Acropolis View Hotel"
-            placeholderTextColor="#999"
-            autoCapitalize="words"
-          />
-
-          <Text style={styles.label}>City</Text>
-          <TextInput
-            style={styles.input}
-            value={city}
-            onChangeText={setCity}
-            placeholder="e.g. Athens"
-            placeholderTextColor="#999"
-            autoCapitalize="words"
-          />
-
-          <Text style={styles.label}>Contact email</Text>
-          <TextInput
-            style={styles.input}
-            value={contactEmail}
-            onChangeText={setContactEmail}
-            placeholder="partners@yourbusiness.com"
-            placeholderTextColor="#999"
-            keyboardType="email-address"
-            autoCapitalize="none"
-            autoCorrect={false}
-          />
-
-          <TouchableOpacity style={styles.submit} onPress={submit} activeOpacity={0.85}>
-            <Text style={styles.submitText}>{submitted ? 'Submit again' : 'Submit partner request'}</Text>
-          </TouchableOpacity>
+        <View style={styles.infoCard}>
+          <Text style={styles.infoTitle}>Pilot partner profile</Text>
+          <Text style={styles.infoLine}>Hotel: PLAY Theatrou Athens</Text>
+          <Text style={styles.infoLine}>Group: Israel Canada</Text>
+          <Text style={styles.infoLine}>City: Athens</Text>
+          <Text style={styles.infoLine}>Program: PLAY x bandiTour guest city access</Text>
         </View>
+
+        <View style={styles.guestEntryCard}>
+          <Text style={styles.guestEntryTitle}>Official guest entry (QR, email, Wi‑Fi)</Text>
+          <Text style={styles.guestEntryBody}>
+            Use this single link for all PLAY Theatrou guests. It opens the in-browser guest experience (PWA) — no app
+            store redirect, no download prompt, no login required.
+          </Text>
+          <Text style={styles.guestEntryUrl} selectable>
+            {PLAY_THEATROU_GUEST_ENTRY_URL}
+          </Text>
+        </View>
+
+        <Text style={styles.sectionTitle}>What PLAY guests receive:</Text>
+        <Text style={styles.bullet}>- curated routes and places by local insiders</Text>
+        <Text style={styles.bullet}>- category-aware discovery (food, culture, nightlife, shopping)</Text>
+        <Text style={styles.bullet}>- premium arrival journey from welcome screen to city guide</Text>
+
+        <Text style={styles.sectionTitle}>What this pilot validates:</Text>
+        <Text style={styles.bullet}>- hotel-branded onboarding experience</Text>
+        <Text style={styles.bullet}>- local discovery engagement from real guests</Text>
+        <Text style={styles.bullet}>- scalable model for future multi-hotel dashboards</Text>
+
+        <Text style={styles.footerNote}>
+          Note: During pilot phase this screen is informational and partner-facing only.
+          Multi-hotel dashboards and tooling will be enabled in the next rollout stage.
+        </Text>
       </ScrollView>
     </>
   );
@@ -113,19 +82,15 @@ export default function HotelierScreen() {
 const styles = StyleSheet.create({
   scroll: { flex: 1, backgroundColor: '#FFFFFF' },
   content: { paddingHorizontal: 20, paddingTop: 12 },
-  heroImage: {
-    width: '100%',
-    height: 180,
-    borderRadius: 16,
+  heroRow: {
+    flexDirection: 'row',
+    gap: 10,
     marginBottom: 16,
   },
-  logoBlock: {
-    alignItems: 'center',
-    marginBottom: 20,
-  },
-  logoImage: {
-    width: 140,
-    height: 44,
+  heroImage: {
+    flex: 1,
+    height: 170,
+    borderRadius: 16,
   },
   kickerPill: {
     alignSelf: 'center',
@@ -174,35 +139,59 @@ const styles = StyleSheet.create({
     lineHeight: 21,
     marginBottom: 2,
   },
-  form: {
-    gap: 0,
-  },
-  label: {
-    fontSize: 13,
-    fontWeight: '700',
-    color: '#333',
-    marginBottom: 6,
-    marginTop: 12,
-  },
-  input: {
-    borderWidth: 1,
-    borderColor: '#DDD',
-    borderRadius: 12,
-    paddingHorizontal: 14,
-    paddingVertical: 12,
-    fontSize: 16,
-    color: '#111',
-  },
-  submit: {
-    marginTop: 24,
-    backgroundColor: '#E63946',
-    paddingVertical: 16,
+  guestEntryCard: {
+    marginTop: 8,
+    marginBottom: 20,
+    padding: 16,
     borderRadius: 14,
-    alignItems: 'center',
+    backgroundColor: '#F4F6F8',
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: '#E2E6EB',
   },
-  submitText: {
-    color: '#FFFFFF',
-    fontSize: 16,
+  guestEntryTitle: {
+    fontSize: 15,
     fontWeight: '800',
+    color: '#111',
+    marginBottom: 8,
+  },
+  guestEntryBody: {
+    fontSize: 13,
+    color: '#444',
+    lineHeight: 19,
+    marginBottom: 12,
+  },
+  guestEntryUrl: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#0a5c8a',
+    lineHeight: 20,
+  },
+  infoCard: {
+    marginBottom: 16,
+    borderRadius: 14,
+    padding: 14,
+    backgroundColor: '#F7F9FC',
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: '#DCE3EC',
+  },
+  infoTitle: {
+    fontSize: 13,
+    fontWeight: '800',
+    color: '#1F2D3D',
+    textTransform: 'uppercase',
+    letterSpacing: 0.4,
+    marginBottom: 8,
+  },
+  infoLine: {
+    fontSize: 14,
+    color: '#2E3D4E',
+    lineHeight: 20,
+    marginBottom: 3,
+  },
+  footerNote: {
+    marginTop: 16,
+    fontSize: 13,
+    color: '#5A6573',
+    lineHeight: 20,
   },
 });

@@ -179,7 +179,7 @@ export default function BandiTeamScreen() {
 
   return (
     <>
-      <Stack.Screen options={{ headerShown: true, title: 'bandiTEAM' }} />
+      <Stack.Screen options={{ headerShown: true, title: 'bandiTEAM', headerBackTitle: 'Back' }} />
       <KeyboardAvoidingView
         style={{ flex: 1 }}
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}

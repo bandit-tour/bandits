@@ -1,3 +1,4 @@
+import { ensureAnonymousSession, syncPilotHotelProfileIfNeeded } from '@/lib/pilotSession';
 import * as Haptics from 'expo-haptics';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Stack, router } from 'expo-router';
@@ -12,9 +13,9 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { markPlayWelcomeSeen } from '@/lib/playWelcomeStorage';
-
-const HERO = require('@/assets/images/play-theatrou.jpg');
+const HERO = require('@/assets/images/play-theatrou.png');
+const BRAND_MARK = require('@/assets/images/play-psyri.png');
+const BANDITOUR_LOGO = require('@/assets/icons/logobanditourapp.png');
 
 export default function PlayWelcomeScreen() {
   const insets = useSafeAreaInsets();
@@ -24,7 +25,6 @@ export default function PlayWelcomeScreen() {
     if (busy) return;
     setBusy(true);
     try {
-      await markPlayWelcomeSeen();
       if (Platform.OS !== 'web') {
         try {
           await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
@@ -39,7 +39,8 @@ export default function PlayWelcomeScreen() {
   };
 
   const onSkip = async () => {
-    await markPlayWelcomeSeen();
+    await ensureAnonymousSession();
+    await syncPilotHotelProfileIfNeeded();
     router.replace('/bandits');
   };
 
@@ -54,7 +55,15 @@ export default function PlayWelcomeScreen() {
         >
           <View style={[styles.inner, { paddingTop: insets.top + 12, paddingBottom: insets.bottom + 24 }]}>
             <View style={styles.copyBlock}>
+              <View style={styles.brandMarkWrap}>
+                <ImageBackground source={BRAND_MARK} style={styles.brandMark} imageStyle={styles.brandMarkImage} />
+              </View>
               <Text style={styles.kicker}>Israel Canada Group</Text>
+              <ImageBackground
+                source={BANDITOUR_LOGO}
+                style={styles.bandiTourWordmark}
+                imageStyle={styles.bandiTourWordmarkImage}
+              />
               <Text style={styles.title}>PLAY Theatrou Athens</Text>
               <Text style={styles.subtitle}>Exclusive city access for PLAY guests</Text>
               <View style={styles.rule} />
@@ -114,6 +123,19 @@ const styles = StyleSheet.create({
     alignSelf: 'center',
     width: '100%',
   },
+  brandMarkWrap: {
+    marginBottom: 22,
+    alignItems: 'flex-start',
+  },
+  brandMark: {
+    width: 72,
+    height: 72,
+  },
+  brandMarkImage: {
+    borderRadius: 36,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.45)',
+  },
   kicker: {
     fontSize: 11,
     letterSpacing: 0.25,
@@ -121,6 +143,14 @@ const styles = StyleSheet.create({
     textTransform: 'uppercase',
     marginBottom: 14,
     fontWeight: '700',
+  },
+  bandiTourWordmark: {
+    width: 162,
+    height: 46,
+    marginBottom: 14,
+  },
+  bandiTourWordmarkImage: {
+    resizeMode: 'contain',
   },
   title: {
     fontSize: 34,

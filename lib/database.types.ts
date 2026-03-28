@@ -176,6 +176,41 @@ export type Database = {
           user_name?: string;
         };
       };
+      user_profile: {
+        Row: {
+          id: string;
+          name: string;
+          interests: string[];
+          city: string;
+          location_permission: boolean;
+          hotel_id: string | null;
+          entry_source: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id: string;
+          name?: string;
+          interests?: string[];
+          city?: string;
+          location_permission?: boolean;
+          hotel_id?: string | null;
+          entry_source?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          name?: string;
+          interests?: string[];
+          city?: string;
+          location_permission?: boolean;
+          hotel_id?: string | null;
+          entry_source?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+      };
     };
   };
 };

@@ -1,15 +1,9 @@
 import { Database } from '@/lib/database.types';
 import { router } from 'expo-router';
 import React, { useEffect, useMemo, useState } from 'react';
-import {
-  Image,
-  Pressable,
-  StyleSheet,
-  Text,
-  TouchableOpacity,
-  View,
-} from 'react-native';
+import { Image, Pressable, StyleSheet, Text, View } from 'react-native';
 
+import BanditMiniMapPreview from '@/components/BanditMiniMapPreview';
 import LocalBanditOctopusIcon from '@/components/LocalBanditOctopusIcon';
 import { picsumPlaceImage } from '@/lib/placePhoto';
 import TagChip from '@/components/TagChip';
@@ -56,6 +50,7 @@ export default function BanditHeader({
 
   const [imageAspectRatio, setImageAspectRatio] = useState<number>(1);
   const [heroUriIndex, setHeroUriIndex] = useState(0);
+  const [useLocalFallback, setUseLocalFallback] = useState(false);
 
   const isListVariant = variant === 'list';
   const heroCandidates = useMemo(() => {
@@ -75,51 +70,69 @@ export default function BanditHeader({
 
   useEffect(() => {
     setHeroUriIndex(0);
+    setUseLocalFallback(false);
   }, [id, isListVariant, face_image_url, image_url]);
 
   const imageHeight = isListVariant ? 238 : undefined;
   const containerPadding = isListVariant ? 0 : 16;
 
-  const content = (
-    <>
-      {/* IMAGE */}
-      <View
+  const goFocusHome = () => {
+    router.push(`/bandits?focusBanditId=${encodeURIComponent(id)}` as any);
+  };
+
+  const heroBlock = (
+    <View
+      style={[
+        styles.imageContainer,
+        isListVariant && styles.listImageContainer,
+      ]}
+    >
+      <Image
+        source={
+          useLocalFallback
+            ? require('@/assets/images/play-theatrou.png')
+            : { uri: heroUri }
+        }
         style={[
-          styles.imageContainer,
-          isListVariant && styles.listImageContainer,
+          styles.mainImage,
+          isListVariant
+            ? { height: imageHeight }
+            : { aspectRatio: imageAspectRatio },
+          isListVariant && styles.listImage,
         ]}
-      >
-        <Image
-          source={{ uri: heroUri }}
-          style={[
-            styles.mainImage,
-            isListVariant
-              ? { height: imageHeight }
-              : { aspectRatio: imageAspectRatio },
-            isListVariant && styles.listImage,
-          ]}
-          onLoad={() => {
-            if (!isListVariant) {
-              setImageAspectRatio(0.8);
-            }
-          }}
-          onError={() => {
-            if (heroUriIndex < heroCandidates.length) {
-              setHeroUriIndex((i) => i + 1);
-            }
-          }}
-        />
+        onLoad={() => {
+          if (!isListVariant) {
+            setImageAspectRatio(0.8);
+          }
+        }}
+        onError={() => {
+          if (heroUriIndex < heroCandidates.length) {
+            setHeroUriIndex((i) => i + 1);
+            return;
+          }
+          setUseLocalFallback(true);
+        }}
+      />
 
-        {showActionButtons && (
-          <>
-            <Pressable
-              style={styles.exploreButton}
-              onPress={() => router.push(`/cityGuide?banditId=${id}`)}
-            >
-              <Text style={styles.plusSign}>+</Text>
-              <Text style={styles.exploreText}>CITY GUIDE</Text>
-            </Pressable>
+      {isListVariant && (
+        <Pressable style={styles.heroTapArea} onPress={goFocusHome} accessibilityRole="button" />
+      )}
 
+      {showActionButtons && (
+        <>
+          <Pressable
+            style={styles.exploreButton}
+            onPress={() => router.push(`/cityGuide?banditId=${id}`)}
+          >
+            <Text style={styles.plusSign}>+</Text>
+            <Text style={styles.exploreText}>CITY GUIDE</Text>
+          </Pressable>
+
+          {isListVariant ? (
+            <View style={styles.mapMiniWrap} pointerEvents="box-none">
+              <BanditMiniMapPreview banditId={id} />
+            </View>
+          ) : (
             <Pressable
               style={styles.mapButtonTopRight}
               onPress={() => router.push(`/cityMap?banditId=${id}`)}
@@ -129,11 +142,14 @@ export default function BanditHeader({
                 style={styles.mapIcon}
               />
             </Pressable>
-          </>
-        )}
-      </View>
+          )}
+        </>
+      )}
+    </View>
+  );
 
-      {/* INFO */}
+  const infoBlock = (
+    <>
       <View
         style={[
           styles.infoContainer,
@@ -152,7 +168,12 @@ export default function BanditHeader({
           </Text>
           <Text style={styles.occupation}>{occupation}</Text>
           {isListVariant && (
-            <Text style={styles.openProfileCue}>Open profile</Text>
+            <Pressable
+              onPress={() => router.push(`/bandit/${id}` as any)}
+              hitSlop={6}
+            >
+              <Text style={styles.openProfileCue}>Open profile</Text>
+            </Pressable>
           )}
         </View>
 
@@ -171,7 +192,6 @@ export default function BanditHeader({
         </View>
       </View>
 
-      {/* CATEGORIES + VIBES */}
       <View style={isListVariant ? styles.listCategoriesWrapper : undefined}>
         <EventCategories
           categories={categories}
@@ -206,15 +226,20 @@ export default function BanditHeader({
       ]}
     >
       {isListVariant ? (
-        <TouchableOpacity
-          onPress={() => router.push(`/bandit/${id}`)}
-          activeOpacity={0.8}
-          style={styles.touchableContainer}
-        >
-          {content}
-        </TouchableOpacity>
+        <View style={styles.touchableContainer}>
+          {heroBlock}
+          <Pressable
+            onPress={goFocusHome}
+            style={({ pressed }) => [styles.listBodyPressable, pressed && { opacity: 0.97 }]}
+          >
+            {infoBlock}
+          </Pressable>
+        </View>
       ) : (
-        content
+        <>
+          {heroBlock}
+          {infoBlock}
+        </>
       )}
     </View>
   );
@@ -238,6 +263,20 @@ const styles = StyleSheet.create({
   touchableContainer: {
     overflow: 'hidden',
     borderRadius: 20,
+  },
+  listBodyPressable: {
+    backgroundColor: '#FFFFFF',
+  },
+  heroTapArea: {
+    ...StyleSheet.absoluteFillObject,
+    zIndex: 2,
+  },
+  mapMiniWrap: {
+    position: 'absolute',
+    top: 12,
+    right: 12,
+    zIndex: 10,
+    elevation: 8,
   },
   imageContainer: {
     alignItems: 'center',
@@ -269,7 +308,8 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     borderRadius: 20,
     gap: 4,
-    elevation: 3,
+    elevation: 6,
+    zIndex: 10,
   },
   mapButtonTopRight: {
     position: 'absolute',

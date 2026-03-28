@@ -2,7 +2,7 @@
   "name": "Banditour",
   "short_name": "Banditour",
   "description": "Discover and join local events",
-  "start_url": "/?source=pwa",
+  "start_url": "/hotel/play-theatrou",
   "scope": "/",
   "display": "standalone",
   "orientation": "portrait",

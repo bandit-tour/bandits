@@ -10,9 +10,11 @@ import {
   TextInput,
   TouchableOpacity,
   ScrollView,
+  RefreshControl,
   View,
 } from 'react-native';
 
+import { isDemoMode, scheduleDemoLocalFriendReply } from '@/lib/demoMode';
 import { getNotificationsBackendStatus, sendLocalFriendMessage } from '@/services/localFriend';
 
 export default function LocalFriendScreen() {
@@ -23,25 +25,32 @@ export default function LocalFriendScreen() {
   const [error, setError] = useState<string | null>(null);
   const [backendReady, setBackendReady] = useState(false);
   const [backendReason, setBackendReason] = useState<string | null>(null);
+  const [statusStep, setStatusStep] = useState<'idle' | 'released' | 'matching' | 'waiting'>('idle');
+  const [refreshing, setRefreshing] = useState(false);
+
+  const refreshBackendStatus = React.useCallback(async () => {
+    try {
+      const status = await getNotificationsBackendStatus();
+      setBackendReady(status.enabled);
+      setBackendReason(status.enabled ? null : status.reason || 'Messaging is unavailable right now.');
+    } catch {
+      setBackendReady(false);
+      setBackendReason('Messaging is unavailable right now.');
+    }
+  }, []);
 
   useEffect(() => {
-    let active = true;
-    (async () => {
-      try {
-        const status = await getNotificationsBackendStatus();
-        if (!active) return;
-        setBackendReady(status.enabled);
-        setBackendReason(status.enabled ? null : status.reason || 'Messaging is unavailable right now.');
-      } catch {
-        if (!active) return;
-        setBackendReady(false);
-        setBackendReason('Messaging is unavailable right now.');
-      }
-    })();
-    return () => {
-      active = false;
-    };
-  }, []);
+    void refreshBackendStatus();
+  }, [refreshBackendStatus]);
+
+  const onRefresh = React.useCallback(async () => {
+    setRefreshing(true);
+    try {
+      await refreshBackendStatus();
+    } finally {
+      setRefreshing(false);
+    }
+  }, [refreshBackendStatus]);
 
   const handleSend = async () => {
     if (!message.trim() || !backendReady) return;
@@ -52,9 +61,18 @@ export default function LocalFriendScreen() {
     setError(null);
 
     try {
+      setStatusStep('released');
       await sendLocalFriendMessage(payload);
       setMessage('');
-      setSuccess('Sent. Waiting for reply in Inbox.');
+      setStatusStep('waiting');
+      setSuccess(
+        isDemoMode()
+          ? 'Bottle released. In pilot demo mode, a sample reply will appear in Inbox shortly (30–90s).'
+          : 'Bottle released. A like-minded local friend may answer soon.',
+      );
+      if (isDemoMode()) {
+        scheduleDemoLocalFriendReply();
+      }
     } catch (e: unknown) {
       const msg =
         e instanceof Error
@@ -63,18 +81,25 @@ export default function LocalFriendScreen() {
             ? String((e as { message: unknown }).message ?? '')
             : '';
       if (msg.trim()) setError(msg.trim());
+      setStatusStep('idle');
     } finally {
       setSending(false);
     }
   };
 
+  useEffect(() => {
+    if (!sending) return;
+    setStatusStep('matching');
+  }, [sending]);
+
   return (
     <>
-      <Stack.Screen options={{ headerShown: true, title: 'Local Friend' }} />
+      <Stack.Screen options={{ headerShown: true, title: 'Local Friend', headerBackTitle: 'Back' }} />
       <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
         <ScrollView
           contentContainerStyle={styles.scrollContent}
           keyboardShouldPersistTaps="handled"
+          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => void onRefresh()} />}
         >
           <View style={styles.logoBar}>
             <Image
@@ -87,7 +112,9 @@ export default function LocalFriendScreen() {
           <View style={styles.copyBlock}>
             <Text style={styles.title}>Send something into the city</Text>
             <Text style={styles.subtitle}>
-              This isn’t chat. It’s more like a note in a bottle that drifts through locals and banDits.
+              This isn’t regular chat. It’s a note in a bottle.
+              {'\n'}
+              Random on the surface. Matched by vibe underneath.
             </Text>
           </View>
 
@@ -116,10 +143,27 @@ export default function LocalFriendScreen() {
               )}
             </TouchableOpacity>
 
+            <View style={styles.statusRow}>
+              <StatusPill label="Bottle released" active={statusStep === 'released'} />
+              <StatusPill label="Matching vibe" active={statusStep === 'matching'} />
+              <StatusPill label="Waiting reply" active={statusStep === 'waiting'} />
+            </View>
+
             {!!error && <Text style={styles.errorText}>{error}</Text>}
             {!!success && <Text style={styles.successText}>{success}</Text>}
-            {!!success && <Text style={styles.waitingText}>Status: waiting for reply</Text>}
+            {!!success && (
+              <Text style={styles.waitingText}>
+                During pilot, replies are curated by the bandiTour team and appear in Notifications.
+              </Text>
+            )}
             {!backendReady && !!backendReason && <Text style={styles.errorText}>{backendReason}</Text>}
+          </View>
+
+          <View style={styles.howItWorks}>
+            <Text style={styles.howTitle}>How Local Friend works</Text>
+            <Text style={styles.howBullet}>- you drop one message into the city</Text>
+            <Text style={styles.howBullet}>- we route it to a like-minded local vibe</Text>
+            <Text style={styles.howBullet}>- you get the reply in Notifications</Text>
           </View>
 
           <TouchableOpacity
@@ -133,6 +177,14 @@ export default function LocalFriendScreen() {
         </ScrollView>
       </KeyboardAvoidingView>
     </>
+  );
+}
+
+function StatusPill({ label, active }: { label: string; active: boolean }) {
+  return (
+    <View style={[styles.statusPill, active && styles.statusPillActive]}>
+      <Text style={[styles.statusPillText, active && styles.statusPillTextActive]}>{label}</Text>
+    </View>
   );
 }
 
@@ -204,6 +256,32 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '600',
   },
+  statusRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 6,
+    marginTop: 10,
+  },
+  statusPill: {
+    borderWidth: 1,
+    borderColor: '#D8D8D8',
+    borderRadius: 999,
+    paddingHorizontal: 9,
+    paddingVertical: 4,
+    backgroundColor: '#F8F8F8',
+  },
+  statusPillActive: {
+    borderColor: '#0A7D32',
+    backgroundColor: '#ECF8F0',
+  },
+  statusPillText: {
+    fontSize: 11,
+    color: '#666',
+    fontWeight: '600',
+  },
+  statusPillTextActive: {
+    color: '#0A7D32',
+  },
   errorText: {
     marginTop: 8,
     fontSize: 12,
@@ -219,6 +297,26 @@ const styles = StyleSheet.create({
     marginTop: 4,
     fontSize: 12,
     color: '#666',
+    lineHeight: 17,
+  },
+  howItWorks: {
+    marginTop: 16,
+    borderWidth: 1,
+    borderColor: '#E8E8E8',
+    borderRadius: 12,
+    padding: 12,
+    backgroundColor: '#FAFAFA',
+  },
+  howTitle: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#1F1F1F',
+    marginBottom: 6,
+  },
+  howBullet: {
+    fontSize: 12,
+    color: '#444',
+    lineHeight: 18,
   },
   exitButton: {
     marginTop: 24,

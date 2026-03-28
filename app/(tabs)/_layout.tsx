@@ -1,10 +1,14 @@
 import { Stack, usePathname, useRouter } from 'expo-router';
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import MainBottomNav from '@/components/MainBottomNav';
+import NearbyContextRunner from '@/components/NearbyContextRunner';
 import { useColorScheme } from '@/hooks/useColorScheme';
 import { CityProvider } from '@/contexts/CityContext';
+import { ensureAnonymousSession, syncPilotHotelProfileIfNeeded } from '@/lib/pilotSession';
+import { supabase } from '@/lib/supabase';
 
 type LowerTabKey = 'home' | 'localFriend' | 'chat' | 'inbox' | 'menu';
 type UpperTabKey = 'bandits' | 'mySpots' | 'explore';
@@ -40,10 +44,12 @@ export default function TabsLayout() {
   const pathname = usePathname();
   const router = useRouter();
   const colorScheme = useColorScheme();
+  const insets = useSafeAreaInsets();
 
   const lowerTab = getLowerTabFromPath(pathname) as LowerTabKey;
   const upperTab = getUpperTabFromPath(pathname);
   const showUpperTabs = upperTab !== null;
+  const [inboxBadgeCount, setInboxBadgeCount] = useState(0);
 
   const tabColor = colorScheme === 'dark' ? '#0a7ea4' : '#0a7ea4';
   const inactiveColor = colorScheme === 'dark' ? '#A0A0A0' : '#777';
@@ -51,11 +57,46 @@ export default function TabsLayout() {
     router.navigate(path);
   };
 
+  useEffect(() => {
+    void (async () => {
+      await ensureAnonymousSession();
+      await syncPilotHotelProfileIfNeeded();
+    })();
+  }, []);
+
+  useEffect(() => {
+    let active = true;
+    const loadUnread = async () => {
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+      if (!user || !active) {
+        if (active) setInboxBadgeCount(0);
+        return;
+      }
+      const { count } = await supabase
+        .from('notifications')
+        .select('id', { count: 'exact', head: true })
+        .eq('user_id', user.id)
+        .eq('is_read', false);
+      if (active) setInboxBadgeCount(count || 0);
+    };
+    void loadUnread();
+    const timer = setInterval(() => {
+      void loadUnread();
+    }, 15000);
+    return () => {
+      active = false;
+      clearInterval(timer);
+    };
+  }, []);
+
   return (
     <CityProvider>
+      <NearbyContextRunner />
       <View style={styles.container}>
         {showUpperTabs && (
-          <View style={styles.upperTabs}>
+          <View style={[styles.upperTabs, { paddingTop: Math.max(insets.top, 8) + 6 }]}>
             <UpperTabButton
               label="Local banDits"
               active={upperTab === 'bandits'}
@@ -91,6 +132,7 @@ export default function TabsLayout() {
           onChat={() => go('/chat')}
           onInbox={() => go('/inbox')}
           onMenu={() => go('/menu')}
+          inboxBadgeCount={inboxBadgeCount}
         />
       </View>
     </CityProvider>
@@ -127,12 +169,16 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-around',
     paddingHorizontal: 10,
-    paddingTop: 12,
-    paddingBottom: 8,
+    paddingBottom: 10,
     borderBottomWidth: StyleSheet.hairlineWidth,
     borderBottomColor: '#e5e5e5',
     backgroundColor: '#FFFFFF',
   },
-  upperTabButton: { alignItems: 'center', width: '33%' },
+  upperTabButton: {
+    alignItems: 'center',
+    width: '33%',
+    minHeight: 34,
+    justifyContent: 'center',
+  },
   upperTabUnderline: { height: 3, width: 60, marginTop: 8, borderRadius: 999 },
 });

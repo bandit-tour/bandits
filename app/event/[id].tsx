@@ -2,7 +2,8 @@ import React, { useEffect, useState } from 'react';
 import { getBanditEventPersonalTip, isEventLiked, toggleEventLike } from '@/app/services/events';
 import { ThemedView } from '@/components/ThemedView';
 import { Database } from '@/lib/database.types';
-import { getCategoryFallbackImage } from '@/lib/placePhoto';
+import { getCategoryFallbackImage, isLikelyLogoOrBadPlaceImage } from '@/lib/placePhoto';
+import { getCuratedEventImageCandidates } from '@/lib/eventImageCuration';
 import { supabase } from '@/lib/supabase';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import LocalBanditOctopusIcon from '@/components/LocalBanditOctopusIcon';
@@ -31,6 +32,7 @@ export default function EventDetailScreen() {
   const [personalTip, setPersonalTip] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [isLiked, setIsLiked] = useState(false);
+  const [imageFailed, setImageFailed] = useState(false);
 
   useEffect(() => {
     const fetchEventData = async () => {
@@ -82,6 +84,10 @@ export default function EventDetailScreen() {
     fetchEventData();
   }, [id, banditId]);
 
+  useEffect(() => {
+    setImageFailed(false);
+  }, [event?.id]);
+
   const handleLikePress = async () => {
     try {
       const eventIdString = typeof id === 'string' ? id : id[0];
@@ -117,6 +123,10 @@ export default function EventDetailScreen() {
   const galleryImages = event.image_gallery
     ? (event.image_gallery || '').split(',').map(url => url.trim()).filter(url => url)
     : [];
+  const safeMainImage =
+    event.image_url && !isLikelyLogoOrBadPlaceImage(event.image_url) ? event.image_url : null;
+  const curatedCandidates = getCuratedEventImageCandidates(event as any);
+  const curatedMain = curatedCandidates[0] ?? null;
 
   return (
     <ThemedView style={styles.container}>
@@ -137,10 +147,14 @@ export default function EventDetailScreen() {
         <View style={styles.mainImageContainer}>
           <Image
             source={{ 
-              uri: event.image_url || getCategoryFallbackImage(event.genre, `event-detail-${event.id}`, 1200, 900)
+              uri:
+                !imageFailed && (safeMainImage || curatedMain)
+                  ? (safeMainImage || curatedMain)
+                  : getCategoryFallbackImage(event.genre, `event-detail-${event.id}`, 1200, 900),
             }}
             style={styles.mainImage}
             resizeMode="cover"
+            onError={() => setImageFailed(true)}
           />
         </View>
 

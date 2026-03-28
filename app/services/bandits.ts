@@ -1,9 +1,18 @@
 import { Database } from '@/lib/database.types';
+import { trackEvent } from '@/lib/analytics';
 import { supabase } from '@/lib/supabase';
+import { getOperatorUserId } from '@/services/localFriend';
 
 type Bandit = Database['public']['Tables']['bandit']['Row'];
 type BanditInsert = Database['public']['Tables']['bandit']['Insert'];
 type BanditUpdate = Database['public']['Tables']['bandit']['Update'];
+
+function isNotificationsPolicyError(error: { message?: string; code?: string }): boolean {
+  const code = String(error.code ?? '');
+  const msg = String(error.message ?? '').toLowerCase();
+  if (code === '42501') return true;
+  return /row-level security|rls|policy|permission denied/i.test(msg);
+}
 
 export async function getBandits(): Promise<Bandit[]> {
   const { data, error } = await supabase
@@ -232,19 +241,32 @@ export async function submitBanditQuestion(banditId: string, question: string): 
 
   if (userError) throw new Error(userError.message || 'Could not verify your session.');
   if (!user) throw new Error('Sign in to ask a question.');
+  const operatorUserId = getOperatorUserId();
+  if (!operatorUserId) {
+    throw new Error('Operator routing is not configured. Set EXPO_PUBLIC_OPERATOR_USER_ID.');
+  }
 
   const { error } = await supabase.from('notifications').insert({
-    user_id: user.id,
+    user_id: operatorUserId,
     type: 'bandit_question',
-    title: 'Question for bandit',
+    title: `Question for bandit:${banditId}`,
     message: text,
-    reference_id: banditId,
-    reference_type: 'bandit',
+    reference_id: user.id,
+    reference_type: 'bandit_question_request',
   });
 
   if (error) {
+    if (isNotificationsPolicyError(error)) {
+      throw new Error('Ask is temporarily unavailable until notifications permissions are updated.');
+    }
     throw new Error(error.message || 'Could not send your question.');
   }
+
+  void trackEvent({
+    eventName: 'ask_me_sent',
+    referenceType: 'bandit',
+    referenceId: banditId,
+  });
 }
 
 export default function BanditsServiceRoutePlaceholder() {

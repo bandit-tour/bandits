@@ -1,4 +1,5 @@
 import { supabase } from '@/lib/supabase';
+import { trackEvent } from '@/lib/analytics';
 
 export type SubmitScamAlertInput = {
   city: string;
@@ -63,4 +64,10 @@ export async function submitScamAlert(input: SubmitScamAlertInput): Promise<void
   if (error) {
     throw new Error(error.message || 'Could not save report.');
   }
+
+  void trackEvent({
+    eventName: 'bandiTEAM_report_created',
+    referenceType: 'report',
+    referenceId: String(row.title),
+  });
 }

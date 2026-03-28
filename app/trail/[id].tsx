@@ -2,8 +2,10 @@ import { Stack, useLocalSearchParams } from 'expo-router';
 import { useEffect, useState } from 'react';
 import { ActivityIndicator, StyleSheet, Text, View } from 'react-native';
 
+import { isDemoMode } from '@/lib/demoMode';
 import { getTrailById, TrailWithStops } from '@/services/trails';
 import TrailDetailView, { BasicTrail, BasicTrailStop } from '@/components/TrailDetailView';
+import { trackEvent } from '@/lib/analytics';
 
 export default function TrailDetailScreen() {
   const { id } = useLocalSearchParams();
@@ -23,6 +25,14 @@ export default function TrailDetailScreen() {
           stopsCount: data?.trail_stops?.length ?? 0,
         });
         setTrail(data);
+        if (data?.id) {
+          void trackEvent({
+            eventName: 'trail_opened',
+            referenceType: 'trail',
+            referenceId: data.id,
+            onceKey: `trail_opened:${data.id}`,
+          });
+        }
       } catch (err) {
         setError(err instanceof Error ? err.message : 'Failed to load trail');
       } finally {
@@ -124,6 +134,13 @@ export default function TrailDetailScreen() {
   return (
     <>
       <Stack.Screen options={{ headerShown: true, title: '' }} />
+      {isDemoMode() ? (
+        <View style={styles.demoBanner}>
+          <Text style={styles.demoBannerText}>
+            Pilot demo mode — trail and stops load from your project; scroll feels instant on device.
+          </Text>
+        </View>
+      ) : null}
       <TrailDetailView trail={basicTrail} containerStyle={styles.content} />
     </>
   );
@@ -134,4 +151,12 @@ const styles = StyleSheet.create({
   content: { padding: 16, paddingBottom: 40 },
   center: { flex: 1, justifyContent: 'center', alignItems: 'center' },
   errorText: { fontSize: 16, color: '#FF3B30' },
+  demoBanner: {
+    backgroundColor: '#FFF8E6',
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: '#E8DCB8',
+  },
+  demoBannerText: { fontSize: 12, color: '#5a4a00', lineHeight: 17 },
 });

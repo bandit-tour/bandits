@@ -56,6 +56,8 @@ module.exports = {
       ...(appJson.expo.extra || {}),
       EXPO_PUBLIC_SUPABASE_URL: resolvedUrl,
       EXPO_PUBLIC_SUPABASE_ANON_KEY: resolvedAnon,
+      /** Pilot: client-only simulated inbox / Local Friend replies — set EXPO_PUBLIC_DEMO_MODE=true */
+      EXPO_PUBLIC_DEMO_MODE: String(process.env.EXPO_PUBLIC_DEMO_MODE ?? '').trim() || 'false',
     },
   },
 };

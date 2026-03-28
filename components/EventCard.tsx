@@ -1,20 +1,18 @@
 import { Database } from '@/lib/database.types';
+import { Image as ExpoImage } from 'expo-image';
 import { useRouter } from 'expo-router';
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
-import {
-  ActivityIndicator,
-  Image,
-  Platform,
-  Pressable,
-  StyleSheet,
-  Text,
-  TouchableOpacity,
-  View,
-} from 'react-native';
+import { Image, Platform, Pressable, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 
 import { getEventBanditRecommendations, getBanditEventPersonalTip } from '@/app/services/events';
 import LocalBanditOctopusIcon from '@/components/LocalBanditOctopusIcon';
-import { getCategoryFallbackImage } from '@/lib/placePhoto';
+import {
+  fetchGooglePlacePhotoUrl,
+  getCategoryFallbackImage,
+  isLikelyLogoOrBadPlaceImage,
+  normalizeEventImageUri,
+} from '@/lib/placePhoto';
+import { getCuratedEventImageCandidates } from '@/lib/eventImageCuration';
 
 type Event = Database['public']['Tables']['event']['Row'];
 type BanditRecommendation = Pick<Database['public']['Tables']['bandit']['Row'], 'id' | 'image_url'>;
@@ -59,21 +57,12 @@ export default function EventCard({
   const photoUrlCache = EVENT_PHOTO_URL_CACHE;
 
   const sanitizeImageUrl = (uri: string | null | undefined) => {
-    if (!uri) return null;
-    const trimmed = uri.trim();
-    if (!trimmed) return null;
-    const lowered = trimmed.toLowerCase();
-    // Only block known marketing/logo assets — pass Supabase storage URLs through as-is.
-    if (lowered.includes('logobanditourapp') || lowered.includes('bandit-tour')) {
-      return null;
-    }
-    return trimmed;
+    const n = normalizeEventImageUri(uri);
+    if (!n || isLikelyLogoOrBadPlaceImage(n)) return null;
+    return n;
   };
 
-  const isLogoLikeImageUri = (uri: string) => {
-    const lowered = uri.toLowerCase();
-    return lowered.includes('logobanditourapp') || lowered.includes('bandit-tour');
-  };
+  const isLogoLikeImageUri = (uri: string) => isLikelyLogoOrBadPlaceImage(uri);
 
   /**
    * Priority: (1) image_gallery URLs in order, (2) image_url, (3) Google Places photo.
@@ -81,10 +70,14 @@ export default function EventCard({
    */
   const dbImageCandidates = useMemo(() => {
     const out: string[] = [];
+    getCuratedEventImageCandidates(event as any).forEach((u) => {
+      const n = normalizeEventImageUri(u);
+      if (n && !out.includes(n)) out.push(n);
+    });
     const add = (raw: string | null | undefined) => {
-      const t = raw?.trim();
-      if (!t || isLogoLikeImageUri(t)) return;
-      if (!out.includes(t)) out.push(t);
+      const n = normalizeEventImageUri(raw);
+      if (!n || isLogoLikeImageUri(n)) return;
+      if (!out.includes(n)) out.push(n);
     };
     if (event.image_gallery) {
       try {
@@ -101,70 +94,41 @@ export default function EventCard({
   }, [event.id, event.image_gallery, event.image_url]);
 
   const [candidateIndex, setCandidateIndex] = useState(0);
+  const [useLocalFallback, setUseLocalFallback] = useState(false);
   const [googlePhotoUri, setGooglePhotoUri] = useState<string | null>(null);
-  const [googleLoading, setGoogleLoading] = useState(false);
   const [googleFetchFinished, setGoogleFetchFinished] = useState(false);
   const googleFetchStarted = useRef(false);
 
-  const displayUri =
-    candidateIndex < dbImageCandidates.length
-      ? dbImageCandidates[candidateIndex]
-      : googlePhotoUri;
+  const displayUri = useMemo(() => {
+    const raw =
+      candidateIndex < dbImageCandidates.length
+        ? dbImageCandidates[candidateIndex]
+        : googlePhotoUri;
+    return normalizeEventImageUri(raw);
+  }, [candidateIndex, dbImageCandidates, googlePhotoUri]);
 
+  /** Always have a visible image: remote/Google when available, else category stock (no blank web tiles). */
   const resolvedImageUri =
     displayUri ||
-    (googleFetchFinished
-      ? getCategoryFallbackImage(event.genre, `event-${event.id}`, 800, 600)
-      : null);
+    getCategoryFallbackImage(event.genre, `event-${event.id}`, 800, 600);
 
-  /** Places API (Find Place + Place Details + Photo): use EXPO_PUBLIC_GOOGLE_MAPS_KEY only. */
-  const getPlacesApiKey = () => String(process.env.EXPO_PUBLIC_GOOGLE_MAPS_KEY ?? '').trim();
-
-  const fetchGooglePlacePhotoUrl = async () => {
-    const apiKey = getPlacesApiKey();
-    if (!apiKey) return null;
-
-    const query = [event.name, event.address, event.city, event.neighborhood]
-      .filter(Boolean)
-      .join(' ');
-
-    if (!query.trim()) return null;
-
-    // 1) Find place_id from a text query
-    const findUrl = `https://maps.googleapis.com/maps/api/place/findplacefromtext/json?key=${encodeURIComponent(
-      apiKey
-    )}&input=${encodeURIComponent(query)}&inputtype=textquery&fields=place_id`;
-
-    const findResp = await fetch(findUrl);
-    const findJson = await findResp.json();
-    const placeId = findJson?.candidates?.[0]?.place_id as string | undefined;
-    if (!placeId) return null;
-
-    // 2) Ask for photos via Place Details
-    const detailsUrl = `https://maps.googleapis.com/maps/api/place/details/json?key=${encodeURIComponent(
-      apiKey
-    )}&place_id=${encodeURIComponent(placeId)}&fields=photos`;
-
-    const detailsResp = await fetch(detailsUrl);
-    const detailsJson = await detailsResp.json();
-    const photoRef = detailsJson?.result?.photos?.[0]?.photo_reference as
-      | string
-      | undefined;
-    if (!photoRef) return null;
-
-    // 3) Build an actual photo URL
-    return `https://maps.googleapis.com/maps/api/place/photo?maxwidth=800&photoreference=${encodeURIComponent(
-      photoRef
-    )}&key=${encodeURIComponent(apiKey)}`;
+  const fetchPlacePhoto = async () => {
+    return fetchGooglePlacePhotoUrl({
+      placeId: (event as any).google_place_id ?? null,
+      name: String(event.name ?? ''),
+      address: String(event.address ?? ''),
+      city: String(event.city ?? ''),
+      neighborhood: String(event.neighborhood ?? ''),
+    });
   };
 
-  /** Reset when event / DB URLs change; show spinner (not gray) when there are no DB URLs yet. */
+  /** Reset when event / DB URLs change. */
   useLayoutEffect(() => {
     setCandidateIndex(0);
+    setUseLocalFallback(false);
     setGooglePhotoUri(null);
     setGoogleFetchFinished(false);
     googleFetchStarted.current = false;
-    setGoogleLoading(dbImageCandidates.length === 0);
   }, [event.id, dbImageCandidates.length]);
 
   /** After all DB URLs fail onError, or when there are no DB URLs — Google Places fallback. */
@@ -174,15 +138,13 @@ export default function EventCard({
     const cached = photoUrlCache.get(event.id);
     if (cached && !isLogoLikeImageUri(cached)) {
       setGooglePhotoUri(cached);
-      setGoogleLoading(false);
       setGoogleFetchFinished(true);
       return;
     }
-    setGoogleLoading(true);
     void (async () => {
       let got: string | null = null;
       try {
-        const photoUrl = await fetchGooglePlacePhotoUrl();
+        const photoUrl = await fetchPlacePhoto();
         if (photoUrl && !isLogoLikeImageUri(photoUrl)) {
           photoUrlCache.set(event.id, photoUrl);
           setGooglePhotoUri(photoUrl);
@@ -191,7 +153,6 @@ export default function EventCard({
       } catch (e) {
         console.warn('[EventCard] google photo fetch failed', { eventId: event.id, e });
       } finally {
-        setGoogleLoading(false);
         setGoogleFetchFinished(true);
       }
       if (!got) {
@@ -259,25 +220,29 @@ export default function EventCard({
         isHorizontal && styles.imageContainerHorizontal,
         ...(imageHeight ? [{ height: imageHeight }] : [])
       ]}>
-        {resolvedImageUri ? (
-          <Image
-            source={{ uri: resolvedImageUri }}
-            style={styles.eventImage}
-            resizeMode="cover"
-            onError={() => {
-              if (candidateIndex + 1 < dbImageCandidates.length) {
-                setCandidateIndex((i) => i + 1);
-                return;
-              }
-              setCandidateIndex(dbImageCandidates.length);
+        <ExpoImage
+          source={
+            useLocalFallback
+              ? require('@/assets/images/play-theatrou.png')
+              : { uri: resolvedImageUri }
+          }
+          style={isHorizontal ? styles.eventImageHorizontal : styles.eventImage}
+          contentFit="cover"
+          transition={150}
+          onError={() => {
+            if (useLocalFallback) return;
+            if (candidateIndex + 1 < dbImageCandidates.length) {
+              setCandidateIndex((i) => i + 1);
+              return;
+            }
+            setCandidateIndex(dbImageCandidates.length);
+            if (!googleFetchFinished) {
               loadGooglePhoto();
-            }}
-          />
-        ) : (
-          <View style={styles.imageLoadingOverlay}>
-            <ActivityIndicator size="small" color="#888" />
-          </View>
-        )}
+              return;
+            }
+            setUseLocalFallback(true);
+          }}
+        />
         <View style={styles.ratingContainer}>
           <Text style={styles.ratingText}>{(event.rating || 0).toFixed(1)}</Text>
           <Text style={styles.starText}>★</Text>
@@ -295,7 +260,7 @@ export default function EventCard({
                 ]}
                 onPress={(e) => {
                   e.stopPropagation();
-                  router.push(`/bandit/${bandit.id}` as any);
+                  router.push(`/bandits?focusBanditId=${encodeURIComponent(bandit.id)}` as any);
                 }}
               >
                 {sanitizeImageUrl(bandit.image_url) ? (
@@ -467,9 +432,14 @@ const styles = StyleSheet.create({
   timeContainer: {
     marginTop: 4,
   },
+  /** Default: fill aspect-ratio box. Horizontal Explore grid: explicit ratio fixes blank tiles on web. */
   eventImage: {
+    ...StyleSheet.absoluteFillObject,
+    borderRadius: 8,
+  },
+  eventImageHorizontal: {
     width: '100%',
-    height: '100%',
+    aspectRatio: 4 / 3,
     borderRadius: 8,
   },
   eventContent: {
@@ -492,15 +462,7 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
     marginBottom: 6,
     flexShrink: 0,
-  },
-  imageLoadingOverlay: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-    alignItems: 'center',
-    justifyContent: 'center',
+    backgroundColor: '#EAEAEA',
   },
   octopusInIcon: {
     alignItems: 'center',
@@ -509,7 +471,6 @@ const styles = StyleSheet.create({
   },
   imageContainerHorizontal: {
     width: '100%',
-    aspectRatio: 4 / 3,
     marginBottom: 8,
     borderTopLeftRadius: 7,
     borderTopRightRadius: 7,

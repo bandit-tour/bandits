@@ -27,6 +27,7 @@ import TagChip from '@/components/TagChip';
 
 import { TAG_EMOJI_MAP } from '@/constants/tagNameToEmoji';
 import { Database } from '@/lib/database.types';
+import { trackEvent } from '@/lib/analytics';
 
 type Bandit = Database['public']['Tables']['bandit']['Row'];
 
@@ -93,6 +94,12 @@ export default function BanditScreen() {
         const banditData = await getBanditById(id as string);
         if (!banditData) throw new Error('banDit not found');
         setBandit(banditData);
+        void trackEvent({
+          eventName: 'bandit_profile_opened',
+          referenceType: 'bandit',
+          referenceId: banditData.id,
+          onceKey: `bandit_profile_opened:${banditData.id}`,
+        });
 
         // Vibes (how it feels)
         try {
@@ -184,7 +191,7 @@ export default function BanditScreen() {
 
   return (
     <>
-      <Stack.Screen options={{ headerShown: true, title: '' }} />
+      <Stack.Screen options={{ headerShown: true, title: '', headerBackTitle: 'Back' }} />
 
       <ScrollView
         style={styles.container}
@@ -326,7 +333,7 @@ export default function BanditScreen() {
                 )}
                 {submitSuccess && (
                   <Text style={styles.askSuccess}>
-                    Sent. You can track replies in Inbox.
+                    Sent to bandiTour operator. Open Notifications to track replies.
                   </Text>
                 )}
                 <View style={styles.askActions}>
