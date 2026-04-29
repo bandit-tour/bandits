@@ -45,6 +45,17 @@ type ChatMessage = {
   senderLabel?: string;
 };
 
+function pickTravelerLabel(
+  candidate: string,
+  personaName: string,
+  fallbackName: string,
+): string {
+  const c = String(candidate || '').trim();
+  const p = String(personaName || '').trim();
+  if (c && (!p || c.toLowerCase() !== p.toLowerCase())) return c;
+  return String(fallbackName || '').trim() || 'Traveler';
+}
+
 export default function ChatScreen() {
   const insets = useSafeAreaInsets();
   const navigation = useNavigation();
@@ -223,6 +234,16 @@ export default function ChatScreen() {
           data: { session },
         } = await supabase.auth.getSession();
         const user = session?.user;
+        const userMeta = (user?.user_metadata && typeof user.user_metadata === 'object' ? user.user_metadata : {}) || {};
+        const metaDisplayName =
+          (typeof userMeta.full_name === 'string' && userMeta.full_name.trim()) ||
+          (typeof userMeta.name === 'string' && userMeta.name.trim()) ||
+          '';
+        const { data: selfProfile } = user?.id
+          ? await supabase.from('user_profile').select('name').eq('id', user.id).maybeSingle()
+          : { data: null };
+        const selfDisplayName =
+          String((selfProfile as { name?: string } | null)?.name || '').trim() || String(metaDisplayName || '').trim();
         const isOperator = !!operatorUserId && user?.id === operatorUserId;
 
         const nid = String(notificationId || '').trim();
@@ -482,9 +503,10 @@ export default function ChatScreen() {
                 effectiveType === 'bandit_reply'));
           if (openBody.trim() || (replies || []).length > 0) {
             if (openBody.trim()) {
-              const openingSender =
-                String((aTitle || pTitle || '').trim()) ||
-                (guestAskFirstBubble ? 'User' : displayPersona);
+              const rawOpeningSender = String((aTitle || pTitle || '').trim());
+              const openingSender = guestAskFirstBubble
+                ? pickTravelerLabel(rawOpeningSender, displayPersona, selfDisplayName)
+                : displayPersona;
               thread.push({
                 id: `open-${nid}`,
                 role: guestAskFirstBubble ? 'user' : 'bandit',
@@ -513,13 +535,13 @@ export default function ChatScreen() {
               !operatorNav && (effectiveType === 'bandit_question' || guestRootType === 'bandit_question');
             if (isGuestAskThread && thread.length > 0) {
               const first = thread[0];
+              const rawFirstSender = String((aTitle || pTitle || '').trim());
               thread[0] = {
                 ...first,
                 role: 'user',
                 senderLabel:
                   first.senderLabel ||
-                  String((aTitle || pTitle || '').trim()) ||
-                  'Traveler',
+                  pickTravelerLabel(rawFirstSender, displayPersona, selfDisplayName),
               };
             }
             setMessages(thread);
@@ -561,12 +583,19 @@ export default function ChatScreen() {
             bodyAfterAskMeAboutLine(rawOpen) ||
             rawOpen.trim();
           if (opening.trim()) {
-            const travelerLabel =
-              String((requestNotif as { title?: string }).title || '').trim() || 'Traveler';
+            let travelerLabel = String((requestNotif as { title?: string }).title || '').trim();
+            if (!travelerLabel && rid) {
+              const { data: requesterProfile } = await supabase
+                .from('user_profile')
+                .select('name')
+                .eq('id', rid)
+                .maybeSingle();
+              travelerLabel = String((requesterProfile as { name?: string } | null)?.name || '').trim();
+            }
             thread.push({
               id: `open-${nid}`,
               role: 'traveler',
-              senderLabel: travelerLabel,
+              senderLabel: travelerLabel || 'Traveler',
               body: opening.trim(),
               sentAt: 'Thread',
             });
