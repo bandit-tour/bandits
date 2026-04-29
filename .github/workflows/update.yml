@@ -38,6 +38,4 @@ jobs:
 
       - name: Deploy Changes
         run: |
-          eas update --auto --platform all --branch main --message "Update from GitHub"
-          npx expo export --platform web
-          eas deploy
+          eas update --auto --platform all --branch main --message "Update from GitHub" --non-interactive
