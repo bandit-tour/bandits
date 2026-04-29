@@ -142,7 +142,7 @@ export default function MenuScreen() {
         >
           <Text style={styles.staffSignInTitle}>Sign in with email</Text>
           <Text style={styles.staffSignInSub}>
-            Unlocks Hotelier for any account. Pilot Desk stays limited to authorized operators.
+            Unlocks Hotelier access for your account.
           </Text>
         </Pressable>
       ) : null}
