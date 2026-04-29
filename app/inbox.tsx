@@ -6,12 +6,13 @@ import {
   SectionList,
   TextInput,
   Pressable,
-  RefreshControl,
   StyleSheet,
   Text,
   View,
 } from 'react-native';
 
+import { BANDIT_QUESTION_GUEST_ECHO_REF, bodyAfterAskMeAboutLine } from '@/lib/askMeMessageFormat';
+import { ensureAnonymousSession } from '@/lib/pilotSession';
 import { supabase } from '@/lib/supabase';
 import {
   type DemoNotificationStorage,
@@ -19,8 +20,10 @@ import {
   getStoredDemoNotifications,
   isDemoMode,
 } from '@/lib/demoMode';
+import { usePremiumRefreshControl } from '@/lib/mobilePullToRefresh';
 import { getNearbyStoredNotifications, type NearbyInboxEntry } from '@/lib/nearbyAlertsStorage';
-import { getNotificationsBackendStatus, getOperatorUserId, sendPilotLiveAlert } from '@/services/localFriend';
+import { getNotificationsBackendStatus } from '@/services/localFriend';
+import { getOperatorUserId } from '@/lib/operatorConfig';
 import { trackEvent } from '@/lib/analytics';
 
 type NotificationRow = {
@@ -44,6 +47,25 @@ type InboxListItem = {
   fromServer: boolean;
   notification: NotificationRow;
 };
+
+function isOperatorInboundRequestRowForDualRoleUser(
+  n: NotificationRow,
+  currentUserId: string,
+  operatorUserId: string,
+): boolean {
+  if (!currentUserId || !operatorUserId) return false;
+  if (currentUserId.toLowerCase() !== operatorUserId.toLowerCase()) return false;
+  const t = String(n.type || '').trim();
+  const rt = String(n.reference_type || '').trim();
+  /**
+   * Same account (traveler + operator): keep traveler-side inbox clean.
+   * Pilot Desk still reads these rows from `/operatorDesk`.
+   */
+  return (
+    (t === 'bandit_question' && rt === 'bandit_question_request') ||
+    (t === 'local_friend' && rt === 'local_friend_request')
+  );
+}
 
 function formatTimestamp(iso: string): string {
   const d = new Date(iso);
@@ -73,8 +95,19 @@ function formatTimestamp(iso: string): string {
 function banditNameFromNotification(n: NotificationRow): string {
   if (n.reference_type === 'nearby_route') return 'Around You';
   const t = n.title?.trim() || '';
+  if (n.reference_type === BANDIT_QUESTION_GUEST_ECHO_REF) {
+    if (t.length > 0 && t.length < 64) return `Chat · ${t}`;
+    return 'Chat';
+  }
   if (n.type === 'demo_banditeam') return 'bandiTEAM';
   if (n.type === 'live_alert') return 'bandiTour LIVE';
+  if (n.type === 'bandit_question') {
+    if (t.length > 0 && t.length < 64) return `Ask Me · ${t}`;
+    return 'Ask Me';
+  }
+  if (n.type === 'local_friend' && t.length > 0 && t.length < 64) {
+    return `Local Friend · ${t}`;
+  }
   const fromReply = /^reply\s+from\s+(.+)/i.exec(t);
   if (fromReply) return fromReply[1].trim();
   const localFriend = /local friend/i.test(t) ? 'Local Friend' : '';
@@ -84,10 +117,17 @@ function banditNameFromNotification(n: NotificationRow): string {
 }
 
 function notificationToInboxItem(n: NotificationRow, fromServer = true): InboxListItem {
+  const raw = n.message?.trim() || '';
+  const previewBody =
+    n.reference_type === BANDIT_QUESTION_GUEST_ECHO_REF
+      ? raw
+      : n.type === 'bandit_question' && raw
+        ? bodyAfterAskMeAboutLine(raw)
+        : raw;
   return {
     id: n.id,
     banditName: banditNameFromNotification(n),
-    preview: n.message?.trim() || n.title || 'New update',
+    preview: previewBody || n.title || 'New update',
     timestampLabel: formatTimestamp(n.created_at),
     sortKey: new Date(n.created_at).getTime(),
     fromServer,
@@ -128,11 +168,6 @@ export default function InboxScreen() {
   const [loading, setLoading] = useState(true);
   const [serverItems, setServerItems] = useState<InboxListItem[]>([]);
   const [backendDisabledReason, setBackendDisabledReason] = useState<string | null>(null);
-  const [isOperator, setIsOperator] = useState(false);
-  const [liveTitle, setLiveTitle] = useState('');
-  const [liveMessage, setLiveMessage] = useState('');
-  const [sendingLive, setSendingLive] = useState(false);
-  const [liveFeedback, setLiveFeedback] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState(false);
   const [demoExtras, setDemoExtras] = useState<InboxListItem[]>([]);
   const [nearbyExtras, setNearbyExtras] = useState<InboxListItem[]>([]);
@@ -182,6 +217,7 @@ export default function InboxScreen() {
     try {
       if (!silent) setLoading(true);
       setBackendDisabledReason(null);
+      await ensureAnonymousSession().catch(() => undefined);
       const status = await getNotificationsBackendStatus();
       if (!status.enabled) {
         setBackendDisabledReason(status.reason || 'Inbox is unavailable right now.');
@@ -192,8 +228,6 @@ export default function InboxScreen() {
       const {
         data: { user },
       } = await supabase.auth.getUser();
-      const operatorUserId = getOperatorUserId();
-      setIsOperator(!!operatorUserId && user?.id === operatorUserId);
       if (!user) {
         setServerItems([]);
         return;
@@ -207,10 +241,15 @@ export default function InboxScreen() {
       if (qError) {
         throw new Error(qError.message || 'Could not load inbox right now.');
       }
-      const rows = ((data as NotificationRow[]) || []).map((n) => notificationToInboxItem(n));
+      const uid = String(user.id || '').trim();
+      const opId = String(getOperatorUserId() || '').trim();
+      const filteredRows = ((data as NotificationRow[]) || []).filter(
+        (n) => !isOperatorInboundRequestRowForDualRoleUser(n, uid, opId),
+      );
+      const rows = filteredRows.map((n) => notificationToInboxItem(n));
       setServerItems(rows);
-      const unreadIds = ((data as NotificationRow[]) || []).filter((n) => !n.is_read).map((n) => n.id);
-      const unreadReplies = ((data as NotificationRow[]) || []).filter(
+      const unreadIds = filteredRows.filter((n) => !n.is_read).map((n) => n.id);
+      const unreadReplies = filteredRows.filter(
         (n) => !n.is_read && n.type === 'bandit_reply',
       );
       unreadReplies.forEach((n) => {
@@ -255,6 +294,8 @@ export default function InboxScreen() {
     }
   }, [loadInbox, refreshDemoExtras, refreshNearbyExtras]);
 
+  const inboxRefreshControl = usePremiumRefreshControl(refreshing, onRefreshInbox);
+
   const rows = useMemo(() => {
     const merged = [...serverItems, ...demoExtras, ...nearbyExtras];
     const byId = new Map<string, InboxListItem>();
@@ -277,33 +318,25 @@ export default function InboxScreen() {
     return out;
   }, [rows]);
 
-  const sendLiveAlertNow = useCallback(async () => {
-    if (sendingLive) return;
-    try {
-      setSendingLive(true);
-      setLiveFeedback(null);
-      const result = await sendPilotLiveAlert({
-        title: liveTitle,
-        message: liveMessage,
-      });
-      setLiveFeedback(`Live alert sent to ${result.recipientCount} users.`);
-      setLiveTitle('');
-      setLiveMessage('');
-    } catch (e) {
-      const msg = e instanceof Error ? e.message : 'Could not send live alert.';
-      setLiveFeedback(msg);
-    } finally {
-      setSendingLive(false);
-    }
-  }, [sendingLive, liveTitle, liveMessage]);
-
-  const openChat = useCallback(
+  const openItem = useCallback(
     (item: InboxListItem) => {
       void trackEvent({
         eventName: 'notification_opened',
         referenceType: 'notification',
         referenceId: item.notification.id,
       });
+      if (item.notification.type === 'live_alert') {
+        router.push({
+          pathname: '/notification/[id]',
+          params: {
+            id: item.notification.id,
+            title: item.notification.title ?? '',
+            message: item.notification.message ?? '',
+            createdAt: item.notification.created_at ?? '',
+          },
+        });
+        return;
+      }
       if (item.notification.reference_type === 'nearby_route' && item.notification.reference_id) {
         try {
           const route = JSON.parse(item.notification.reference_id) as {
@@ -335,15 +368,20 @@ export default function InboxScreen() {
         });
         return;
       }
+      const chatBanditHeader =
+        item.notification.reference_type === BANDIT_QUESTION_GUEST_ECHO_REF
+          ? item.notification.title?.trim() || item.banditName
+          : item.banditName;
       router.push({
         pathname: '/chat',
         params: {
-          banditName: item.banditName,
+          banditName: chatBanditHeader,
           notificationId: item.notification.id,
           notificationType: item.notification.type,
           referenceId: item.notification.reference_id ?? '',
           referenceType: item.notification.reference_type ?? '',
           notificationTitle: item.notification.title ?? '',
+          notificationMessage: item.notification.message ?? '',
         },
       });
     },
@@ -352,7 +390,7 @@ export default function InboxScreen() {
 
   const renderItem = useCallback(
     ({ item }: { item: InboxListItem }) => (
-      <Pressable style={styles.card} onPress={() => openChat(item)}>
+      <Pressable style={styles.card} onPress={() => openItem(item)}>
         <View style={styles.cardTop}>
           <Text style={styles.banditName}>{item.banditName}</Text>
           <Text style={styles.time}>{item.timestampLabel}</Text>
@@ -362,53 +400,22 @@ export default function InboxScreen() {
         </Text>
       </Pressable>
     ),
-    [openChat],
+    [openItem],
   );
 
   return (
     <>
-      <Stack.Screen options={{ headerShown: true, title: 'Inbox', headerBackTitle: 'Back' }} />
+      <Stack.Screen options={{ headerShown: true, title: 'Notifications', headerBackTitle: 'Back' }} />
       <View style={styles.container}>
         <Text style={styles.subtitle}>
-          Replies and alerts from local banDits and the bandiTour crew.
+          Notifications: one-off updates. Open a thread in Chat to reply in a two-way chat with Pilot.
         </Text>
-        <Text style={styles.tagline}>Right here, right now.</Text>
+        <Text style={styles.tagline}>Live alerts open as details only, not a chat thread.</Text>
         {isDemoMode() ? (
           <Text style={styles.demoPill}>
             Pilot demo mode — sample activity is mixed in; nothing here overwrites real user data.
           </Text>
         ) : null}
-        {isOperator && (
-          <View style={styles.operatorCard}>
-            <Text style={styles.operatorTitle}>Pilot live alert</Text>
-            <TextInput
-              style={styles.operatorInput}
-              placeholder="Alert title (e.g. Tonight: rooftop party)"
-              value={liveTitle}
-              onChangeText={setLiveTitle}
-              placeholderTextColor="#888"
-            />
-            <TextInput
-              style={[styles.operatorInput, styles.operatorTextarea]}
-              placeholder="Alert message..."
-              value={liveMessage}
-              onChangeText={setLiveMessage}
-              placeholderTextColor="#888"
-              multiline
-            />
-            <Pressable
-              style={[
-                styles.operatorButton,
-                (sendingLive || !liveTitle.trim() || !liveMessage.trim()) && styles.operatorButtonDisabled,
-              ]}
-              onPress={sendLiveAlertNow}
-              disabled={sendingLive || !liveTitle.trim() || !liveMessage.trim()}
-            >
-              <Text style={styles.operatorButtonText}>{sendingLive ? 'Sending…' : 'Send live alert'}</Text>
-            </Pressable>
-            {!!liveFeedback && <Text style={styles.operatorFeedback}>{liveFeedback}</Text>}
-          </View>
-        )}
 
         {loading ? (
           <View style={styles.center}>
@@ -416,18 +423,18 @@ export default function InboxScreen() {
           </View>
         ) : backendDisabledReason && rows.length === 0 && !isDemoMode() ? (
           <View style={styles.center}>
-            <Text style={styles.emptyHeading}>Inbox unavailable</Text>
+            <Text style={styles.emptyHeading}>Notifications unavailable</Text>
             <Text style={styles.emptyText}>{backendDisabledReason}</Text>
           </View>
         ) : backendDisabledReason && isDemoMode() && rows.length === 0 ? (
           <View style={styles.center}>
-            <Text style={styles.emptyHeading}>Loading demo inbox…</Text>
+            <Text style={styles.emptyHeading}>Loading demo notifications…</Text>
             <Text style={styles.emptyText}>{backendDisabledReason}</Text>
           </View>
         ) : rows.length === 0 ? (
           <View style={styles.center}>
-            <Text style={styles.emptyHeading}>No messages yet</Text>
-            <Text style={styles.emptyText}>When local replies arrive, they appear here.</Text>
+            <Text style={styles.emptyHeading}>No notifications yet</Text>
+            <Text style={styles.emptyText}>Live updates from Pilot Desk will appear here.</Text>
           </View>
         ) : (
           <SectionList
@@ -441,7 +448,7 @@ export default function InboxScreen() {
             contentContainerStyle={styles.list}
             ItemSeparatorComponent={() => <View style={{ height: 10 }} />}
             stickySectionHeadersEnabled={false}
-            refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => void onRefreshInbox()} />}
+            refreshControl={inboxRefreshControl}
           />
         )}
       </View>
@@ -505,56 +512,6 @@ const styles = StyleSheet.create({
     padding: 14,
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: '#E8E8E8',
-  },
-  operatorCard: {
-    borderWidth: 1,
-    borderColor: '#E3E6EB',
-    borderRadius: 14,
-    padding: 12,
-    backgroundColor: '#F8FAFD',
-    marginBottom: 12,
-  },
-  operatorTitle: {
-    fontSize: 14,
-    fontWeight: '800',
-    color: '#1A2430',
-    marginBottom: 8,
-  },
-  operatorInput: {
-    borderWidth: 1,
-    borderColor: '#D9DEE5',
-    borderRadius: 10,
-    paddingHorizontal: 10,
-    paddingVertical: 9,
-    fontSize: 14,
-    color: '#111',
-    backgroundColor: '#FFF',
-    marginBottom: 8,
-  },
-  operatorTextarea: {
-    minHeight: 72,
-    textAlignVertical: 'top',
-  },
-  operatorButton: {
-    alignSelf: 'flex-start',
-    backgroundColor: '#111',
-    borderRadius: 999,
-    paddingHorizontal: 14,
-    paddingVertical: 8,
-  },
-  operatorButtonDisabled: {
-    opacity: 0.55,
-  },
-  operatorButtonText: {
-    color: '#FFF',
-    fontSize: 12,
-    fontWeight: '700',
-  },
-  operatorFeedback: {
-    marginTop: 8,
-    fontSize: 12,
-    color: '#2E3D4E',
-    lineHeight: 18,
   },
   cardTop: {
     flexDirection: 'row',

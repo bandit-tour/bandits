@@ -17,7 +17,10 @@ import {
 } from 'react-native';
 
 import { getBanditById, getBanditTags, submitBanditQuestion, toggleBanditLike } from '@/app/services/bandits';
+import { formatAskMeModalSubtitle } from '@/lib/askMeMessageFormat';
+import { useAppState } from '@/contexts/AppStateContext';
 import { getBanditReviews } from '@/app/services/reviews';
+import { ensureAnonymousSession } from '@/lib/pilotSession';
 import { resolveWhyFollowText } from '@/services/whyFollowCopy';
 import { getNotificationsBackendStatus } from '@/services/localFriend';
 
@@ -68,6 +71,7 @@ function buildFallbackReviews(banditId: string, banditName: string): DisplayRevi
 
 export default function BanditScreen() {
   const { id } = useLocalSearchParams();
+  const { getCurrentUser } = useAppState();
 
   const [bandit, setBandit] = useState<Bandit | null>(null);
   const [tags, setTags] = useState<string[]>([]);
@@ -82,6 +86,7 @@ export default function BanditScreen() {
   const [submitSuccess, setSubmitSuccess] = useState(false);
   const [askEnabled, setAskEnabled] = useState(false);
   const [askDisabledReason, setAskDisabledReason] = useState<string | null>(null);
+  const [likeUserId, setLikeUserId] = useState<string | null>(null);
 
   useEffect(() => {
     if (!id) return;
@@ -90,8 +95,12 @@ export default function BanditScreen() {
       try {
         setLoading(true);
 
+        const user = await getCurrentUser();
+        const uid = user?.id ?? null;
+        setLikeUserId(uid);
+
         // Bandit
-        const banditData = await getBanditById(id as string);
+        const banditData = await getBanditById(id as string, uid);
         if (!banditData) throw new Error('banDit not found');
         setBandit(banditData);
         void trackEvent({
@@ -136,11 +145,12 @@ export default function BanditScreen() {
     };
 
     fetchBanditData();
-  }, [id]);
+  }, [id, getCurrentUser]);
 
   useEffect(() => {
     let active = true;
     (async () => {
+      await ensureAnonymousSession();
       const status = await getNotificationsBackendStatus();
       if (!active) return;
       setAskEnabled(status.enabled);
@@ -178,6 +188,7 @@ export default function BanditScreen() {
     try {
       setSubmitting(true);
       setSubmitError(null);
+      await ensureAnonymousSession();
       await submitBanditQuestion(id as string, askText.trim());
       setSubmitSuccess(true);
       setAskText('');
@@ -206,7 +217,7 @@ export default function BanditScreen() {
           onLike={async (banditId, currentLikeStatus) => {
             setBandit((prev) => (prev ? { ...prev, is_liked: !currentLikeStatus } : prev));
             try {
-              await toggleBanditLike(banditId, currentLikeStatus);
+              await toggleBanditLike(banditId, currentLikeStatus, likeUserId);
             } catch (e) {
               setBandit((prev) => (prev ? { ...prev, is_liked: currentLikeStatus } : prev));
               const msg = e instanceof Error ? e.message : '';
@@ -315,7 +326,7 @@ export default function BanditScreen() {
               >
                 <Text style={styles.askTitle}>{`Ask ${bandit.name}`}</Text>
                 <Text style={styles.askSubtitle}>
-                  Ask anything about the city, spots, or vibes. We’ll route it to the bandiTour team for now.
+                  {`Ask anything about the city, spots, or vibes. ${bandit.name} gets your question — you’ll see your message in Chat, and replies there too.`}
                 </Text>
                 <TextInput
                   style={styles.askInput}
@@ -332,9 +343,7 @@ export default function BanditScreen() {
                   <Text style={styles.askError}>{askDisabledReason}</Text>
                 )}
                 {submitSuccess && (
-                  <Text style={styles.askSuccess}>
-                    Sent to bandiTour operator. Open Notifications to track replies.
-                  </Text>
+                  <Text style={styles.askSuccess}>Your local banDit will reply soon.</Text>
                 )}
                 <View style={styles.askActions}>
                   <TouchableOpacity
