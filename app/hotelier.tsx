@@ -1,20 +1,23 @@
+import { RequireHotelierGate } from '@/components/RequireHotelierGate';
 import { PLAY_THEATROU_GUEST_ENTRY_URL } from '@/lib/pilotSession';
+import { Image as ExpoImage } from 'expo-image';
 import { Stack } from 'expo-router';
 import React from 'react';
-import {
-  Image,
-  ScrollView,
-  StyleSheet,
-  Text,
-  View,
-} from 'react-native';
+import { ScrollView, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-const HERO_THEATROU = require('@/assets/images/play-theatrou.png');
-const HERO_PSYRI = require('@/assets/images/play-psyri.png');
+/** Full uncropped property art — same 375×380 source used for PLAY Athenian hero; `contain` shows all branding. */
+const HOTELIER_BANNER = require('@/assets/images/play_athens_bg.png');
 
-export default function HotelierScreen() {
+/** Viewport for `contain` — wide enough to fit the full square; no `cover` crop. */
+const BANNER_VIEWPORT_H = 200;
+
+function HotelierScreen() {
   const insets = useSafeAreaInsets();
+  const { width: winW } = useWindowDimensions();
+  const pad = 20;
+  const maxRow = winW - pad * 2;
+  const bannerW = Math.min(400, maxRow);
 
   return (
     <>
@@ -24,15 +27,22 @@ export default function HotelierScreen() {
         contentContainerStyle={[styles.content, { paddingBottom: 32 + insets.bottom }]}
         keyboardShouldPersistTaps="handled"
       >
-        <View style={styles.heroRow}>
-          <Image source={HERO_THEATROU} style={styles.heroImage} resizeMode="cover" />
-          <Image source={HERO_PSYRI} style={styles.heroImage} resizeMode="cover" />
+        <View style={[styles.bannerCard, { width: bannerW }]}>
+          <ExpoImage
+            source={HOTELIER_BANNER}
+            style={{ width: bannerW, height: BANNER_VIEWPORT_H }}
+            contentFit="contain"
+            contentPosition="center"
+            cachePolicy="memory-disk"
+            allowDownscaling
+            accessibilityLabel="PLAY Theatrou Athens"
+          />
         </View>
 
         <View style={styles.kickerPill}>
           <Text style={styles.kickerText}>Pilot Partner Showcase</Text>
         </View>
-        <Text style={styles.partnerLine}>PLAY Theatrou Athens - Curated Guest City Layer</Text>
+        <Text style={styles.partnerLine}>PLAY Theatrou Athens – Curated Guest City Layer</Text>
         <Text style={styles.bodyLead}>Turn each stay into a signature local experience.</Text>
         <Text style={styles.body}>
           This page showcases the active pilot partner inside bandiTour.
@@ -79,18 +89,24 @@ export default function HotelierScreen() {
   );
 }
 
+export default function HotelierRoute() {
+  return (
+    <RequireHotelierGate>
+      <HotelierScreen />
+    </RequireHotelierGate>
+  );
+}
+
 const styles = StyleSheet.create({
-  scroll: { flex: 1, backgroundColor: '#FFFFFF' },
+  scroll: { flex: 1, backgroundColor: '#FAFAF8' },
   content: { paddingHorizontal: 20, paddingTop: 12 },
-  heroRow: {
-    flexDirection: 'row',
-    gap: 10,
-    marginBottom: 16,
-  },
-  heroImage: {
-    flex: 1,
-    height: 170,
-    borderRadius: 16,
+  bannerCard: {
+    maxWidth: 400,
+    alignSelf: 'center',
+    borderRadius: 14,
+    overflow: 'hidden',
+    backgroundColor: '#0E0C0A',
+    marginBottom: 20,
   },
   kickerPill: {
     alignSelf: 'center',

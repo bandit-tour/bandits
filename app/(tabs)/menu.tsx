@@ -1,9 +1,15 @@
+import type { User } from '@supabase/supabase-js';
+import { useFocusEffect } from '@react-navigation/native';
 import { Stack, useRouter } from 'expo-router';
 import React from 'react';
-import { Alert, Image, Pressable, RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Alert, Image, Platform, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 
+import { canAccessHotelier, isAnonymousSupabaseSession } from '@/lib/appAdminAccess';
+import { usePremiumRefreshControl } from '@/lib/mobilePullToRefresh';
+import { getHotelWhiteLabelOrDefault } from '@/lib/hotelWhiteLabel';
+import { getHotelEntry } from '@/lib/pilotSession';
+import { resolvePilotDeskAccess } from '@/lib/pilotDeskGate';
 import { supabase } from '@/lib/supabase';
-import { getOperatorUserId } from '@/services/localFriend';
 
 type MenuItem = {
   title: string;
@@ -12,53 +18,107 @@ type MenuItem = {
 
 const MENU_ITEMS: MenuItem[] = [
   { title: 'Profile', route: '/profile' },
+  { title: 'Following', route: '/following' },
   { title: 'Settings', route: '/settings' },
   { title: 'bandiTeam', route: '/bandiTeam' },
-  { title: 'Hotelier', route: '/hotelier' },
 ];
 
 export default function MenuScreen() {
   const router = useRouter();
-  const [isOperator, setIsOperator] = React.useState(false);
+  const [isAppAdmin, setIsAppAdmin] = React.useState(false);
+  const [hotelierAllowed, setHotelierAllowed] = React.useState(false);
+  const [pilotDeskAllowed, setPilotDeskAllowed] = React.useState(false);
+  const [canStaffSignOut, setCanStaffSignOut] = React.useState(false);
   const [refreshing, setRefreshing] = React.useState(false);
+  const [menuLocationLine, setMenuLocationLine] = React.useState(
+    () => getHotelWhiteLabelOrDefault(null).menuLocationLine,
+  );
+  const [menuSessionUser, setMenuSessionUser] = React.useState<User | null>(null);
 
-  const refreshOperator = React.useCallback(async () => {
-    const operatorId = getOperatorUserId();
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
-    setIsOperator(!!operatorId && !!user && user.id === operatorId);
+  const refreshMenuAccess = React.useCallback(async () => {
+    /** Same snapshot as Pilot Desk: merged session + `getUser()` (see `resolvePilotDeskAccess`). */
+    const { user, canUsePilotDesk, operatorId, isAppAdmin } = await resolvePilotDeskAccess();
+    setMenuSessionUser(user);
+    setIsAppAdmin(isAppAdmin);
+    setHotelierAllowed(canAccessHotelier(user));
+    setPilotDeskAllowed(canUsePilotDesk);
+    setCanStaffSignOut(
+      isAppAdmin ||
+        (!!user &&
+          !!operatorId &&
+          String(user.id).toLowerCase() === String(operatorId).toLowerCase()),
+    );
   }, []);
 
   React.useEffect(() => {
-    void refreshOperator();
-  }, [refreshOperator]);
+    void refreshMenuAccess();
+  }, [refreshMenuAccess]);
+
+  React.useEffect(() => {
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange(() => {
+      void refreshMenuAccess();
+    });
+    return () => subscription.unsubscribe();
+  }, [refreshMenuAccess]);
+
+  useFocusEffect(
+    React.useCallback(() => {
+      void refreshMenuAccess();
+    }, [refreshMenuAccess]),
+  );
+
+  React.useEffect(() => {
+    void getHotelEntry().then((entry) => {
+      setMenuLocationLine(getHotelWhiteLabelOrDefault(entry?.slug ?? null).menuLocationLine);
+    });
+  }, []);
 
   const onRefresh = React.useCallback(async () => {
     setRefreshing(true);
     try {
-      await refreshOperator();
+      await refreshMenuAccess();
     } finally {
       setRefreshing(false);
     }
-  }, [refreshOperator]);
+  }, [refreshMenuAccess]);
 
-  const items = isOperator
-    ? [...MENU_ITEMS, { title: 'Pilot Desk', route: '/operatorDesk' }]
-    : MENU_ITEMS;
+  const menuRefreshControl = usePremiumRefreshControl(refreshing, onRefresh);
+
+  const items: MenuItem[] = React.useMemo(() => {
+    const out: MenuItem[] = [...MENU_ITEMS];
+    if (hotelierAllowed) out.push({ title: 'Hotelier', route: '/hotelier' });
+    if (pilotDeskAllowed) out.push({ title: 'Pilot Desk', route: '/operatorDesk' });
+    return out;
+  }, [hotelierAllowed, pilotDeskAllowed]);
+
+  const showGuestMenuTitle =
+    !hotelierAllowed && !pilotDeskAllowed && !canStaffSignOut;
+  const headerTitle = showGuestMenuTitle ? 'Guest Menu' : 'Menu';
+  /** “Staff” line only for Pilot Desk / operator — not for general Hotelier users. */
+  const showPilotStaffChrome = pilotDeskAllowed || canStaffSignOut;
+  /** Guests need email login for Hotelier; signed-in users never see this banner. */
+  const showStaffSignIn =
+    !hotelierAllowed &&
+    !pilotDeskAllowed &&
+    !canStaffSignOut &&
+    (Platform.OS === 'web' || isAnonymousSupabaseSession(menuSessionUser));
 
   return (
     <ScrollView
       contentContainerStyle={styles.content}
       keyboardShouldPersistTaps="handled"
-      refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => void onRefresh()} />}
+      refreshControl={menuRefreshControl}
     >
-      <Stack.Screen options={{ headerShown: true, title: 'Menu' }} />
+      <Stack.Screen options={{ headerShown: true, title: headerTitle }} />
 
       <View style={styles.header}>
         <Image source={require('@/assets/icons/logobanditourapp.png')} style={styles.wordmark} resizeMode="contain" />
-        <Text style={styles.headerTitle}>Guest Menu</Text>
-        <Text style={styles.headerSubtitle}>PLAY Theatrou Athens</Text>
+        <Text style={styles.headerTitle}>{headerTitle}</Text>
+        <Text style={styles.headerSubtitle}>
+          {showPilotStaffChrome ? `Staff · ${menuLocationLine}` : menuLocationLine}
+        </Text>
       </View>
 
       <View style={styles.section}>
@@ -66,23 +126,39 @@ export default function MenuScreen() {
           <Pressable
             key={item.title}
             style={styles.row}
-            onPress={() => router.push(item.route)}
+            onPress={() => router.push(item.route as never)}
           >
             <Text style={styles.rowText}>{item.title}</Text>
           </Pressable>
         ))}
       </View>
 
-      <Pressable
-        style={styles.signOut}
-        onPress={async () => {
-          await supabase.auth.signOut();
-          Alert.alert('Signed out', 'You have been signed out successfully.');
-          router.replace('/login');
-        }}
-      >
-        <Text style={styles.signOutText}>Sign out</Text>
-      </Pressable>
+      {showStaffSignIn ? (
+        <Pressable
+          style={styles.staffSignIn}
+          onPress={() =>
+            router.push('/login?forceAuth=1&redirect=/menu' as never)
+          }
+        >
+          <Text style={styles.staffSignInTitle}>Sign in with email</Text>
+          <Text style={styles.staffSignInSub}>
+            Unlocks Hotelier for any account. Pilot Desk stays limited to authorized operators.
+          </Text>
+        </Pressable>
+      ) : null}
+
+      {canStaffSignOut ? (
+        <Pressable
+          style={styles.signOut}
+          onPress={async () => {
+            await supabase.auth.signOut();
+            Alert.alert('Signed out', 'You have been signed out successfully.');
+            router.replace('/login?forceAuth=1' as never);
+          }}
+        >
+          <Text style={styles.signOutText}>Sign out</Text>
+        </Pressable>
+      ) : null}
     </ScrollView>
   );
 }
@@ -132,6 +208,26 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '700',
     color: '#0a7ea4',
+  },
+  staffSignIn: {
+    marginTop: 18,
+    borderRadius: 12,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: '#C8E6EF',
+    backgroundColor: '#F5FBFD',
+    paddingVertical: 14,
+    paddingHorizontal: 14,
+  },
+  staffSignInTitle: {
+    fontSize: 15,
+    fontWeight: '800',
+    color: '#0a7ea4',
+    marginBottom: 4,
+  },
+  staffSignInSub: {
+    fontSize: 12,
+    color: '#5a7a82',
+    fontWeight: '600',
   },
   signOut: {
     marginTop: 18,
