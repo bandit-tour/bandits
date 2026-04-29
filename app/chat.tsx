@@ -512,7 +512,15 @@ export default function ChatScreen() {
             const isGuestAskThread =
               !operatorNav && (effectiveType === 'bandit_question' || guestRootType === 'bandit_question');
             if (isGuestAskThread && thread.length > 0) {
-              thread[0] = { ...thread[0], role: 'user' };
+              const first = thread[0];
+              thread[0] = {
+                ...first,
+                role: 'user',
+                senderLabel:
+                  first.senderLabel ||
+                  String((aTitle || pTitle || '').trim()) ||
+                  'Traveler',
+              };
             }
             setMessages(thread);
           } else {
@@ -655,7 +663,7 @@ export default function ChatScreen() {
   const renderItem = useCallback(({ item }: { item: ChatMessage }) => {
     const isUser = item.role === 'user';
     const leftLabel = item.role === 'traveler' ? item.senderLabel || 'Traveler' : displayPersona;
-    const showUserLabel = isUser && operatorMode && !!item.senderLabel;
+    const showUserLabel = isUser && !!item.senderLabel;
     return (
       <View style={[styles.row, isUser ? styles.rowUser : styles.rowBandit]}>
         {showUserLabel && <Text style={styles.userSenderLabel}>{item.senderLabel}</Text>}
