@@ -67,6 +67,60 @@ function isOperatorInboundRequestRowForDualRoleUser(
   );
 }
 
+/** Guest-side Ask rows (echo + banDit replies), keyed by operator thread root `reference_id`. */
+const ASK_ME_GUEST_BANDIT_REPLY_REFS = new Set(['operator_reply', 'operator_reply_bandit_question']);
+
+function isAskMeGuestSideNotification(n: NotificationRow): boolean {
+  const rt = String(n.reference_type || '').trim();
+  if (rt === BANDIT_QUESTION_GUEST_ECHO_REF) return true;
+  const t = String(n.type || '').trim();
+  return t === 'bandit_reply' && ASK_ME_GUEST_BANDIT_REPLY_REFS.has(rt);
+}
+
+/**
+ * Pilot operator account: Ask “traveler mirror” rows belong in Pilot Desk + Chat from there only —
+ * do not list duplicate threads in Notifications.
+ */
+function shouldHideAskGuestMirrorForPilotOperator(
+  n: NotificationRow,
+  currentUserId: string,
+  operatorUserId: string,
+): boolean {
+  if (!currentUserId || !operatorUserId) return false;
+  if (currentUserId.toLowerCase() !== operatorUserId.toLowerCase()) return false;
+  return isAskMeGuestSideNotification(n);
+}
+
+/**
+ * One Notifications row per Ask thread: latest row wins (usually `bandit_reply` over guest echo).
+ */
+function dedupeAskMeGuestNotifications(rows: NotificationRow[]): {
+  rows: NotificationRow[];
+  supersededIds: string[];
+} {
+  const askGuest = rows.filter(isAskMeGuestSideNotification);
+  const rest = rows.filter((n) => !isAskMeGuestSideNotification(n));
+  const byRoot = new Map<string, NotificationRow[]>();
+  for (const n of askGuest) {
+    const root = String(n.reference_id || '').trim();
+    if (!root) {
+      rest.push(n);
+      continue;
+    }
+    const g = byRoot.get(root) ?? [];
+    g.push(n);
+    byRoot.set(root, g);
+  }
+  const supersededIds: string[] = [];
+  const kept: NotificationRow[] = [];
+  for (const group of byRoot.values()) {
+    group.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+    kept.push(group[0]);
+    for (let i = 1; i < group.length; i++) supersededIds.push(group[i].id);
+  }
+  return { rows: [...rest, ...kept], supersededIds };
+}
+
 function formatTimestamp(iso: string): string {
   const d = new Date(iso);
   if (Number.isNaN(d.getTime())) return iso;
@@ -243,9 +297,26 @@ export default function InboxScreen() {
       }
       const uid = String(user.id || '').trim();
       const opId = String(getOperatorUserId() || '').trim();
-      const filteredRows = ((data as NotificationRow[]) || []).filter(
-        (n) => !isOperatorInboundRequestRowForDualRoleUser(n, uid, opId),
+      const rawRows = (data as NotificationRow[]) || [];
+
+      let filteredRows = rawRows.filter((n) => !isOperatorInboundRequestRowForDualRoleUser(n, uid, opId));
+
+      const pilotMirrorHiddenIds = filteredRows
+        .filter((n) => shouldHideAskGuestMirrorForPilotOperator(n, uid, opId))
+        .map((n) => n.id);
+
+      filteredRows = filteredRows.filter((n) => !shouldHideAskGuestMirrorForPilotOperator(n, uid, opId));
+
+      const { rows: dedupedAsk, supersededIds } = dedupeAskMeGuestNotifications(filteredRows);
+      filteredRows = dedupedAsk.sort(
+        (a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime(),
       );
+
+      const idsToMarkRead = [...new Set([...supersededIds, ...pilotMirrorHiddenIds])].filter(Boolean);
+      if (idsToMarkRead.length > 0) {
+        await supabase.from('notifications').update({ is_read: true }).in('id', idsToMarkRead);
+      }
+
       const rows = filteredRows.map((n) => notificationToInboxItem(n));
       setServerItems(rows);
       const unreadIds = filteredRows.filter((n) => !n.is_read).map((n) => n.id);
@@ -408,7 +479,7 @@ export default function InboxScreen() {
       <Stack.Screen options={{ headerShown: true, title: 'Notifications', headerBackTitle: 'Back' }} />
       <View style={styles.container}>
         <Text style={styles.subtitle}>
-          Notifications: one-off updates. Open a thread in Chat to reply in a two-way chat with Pilot.
+          Alerts and one-off updates. Conversations with local hosts live under Chat — not duplicated here.
         </Text>
         <Text style={styles.tagline}>Live alerts open as details only, not a chat thread.</Text>
         {isDemoMode() ? (
@@ -434,7 +505,7 @@ export default function InboxScreen() {
         ) : rows.length === 0 ? (
           <View style={styles.center}>
             <Text style={styles.emptyHeading}>No notifications yet</Text>
-            <Text style={styles.emptyText}>Live updates from Pilot Desk will appear here.</Text>
+            <Text style={styles.emptyText}>Updates and alerts will appear here.</Text>
           </View>
         ) : (
           <SectionList
