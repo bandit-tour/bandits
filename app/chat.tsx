@@ -706,11 +706,7 @@ export default function ChatScreen() {
     return (
       <>
         <Stack.Screen options={{ headerShown: true, title: 'Chat', headerBackTitle: 'Back' }} />
-        <View style={[styles.flex, { justifyContent: 'center', paddingHorizontal: 20, backgroundColor: '#F0F2F5' }]}>
-          <Text style={{ fontSize: 15, color: '#333', lineHeight: 22, textAlign: 'center' }}>
-            No conversation open yet.
-          </Text>
-        </View>
+        <View style={[styles.flex, { backgroundColor: '#F0F2F5' }]} />
       </>
     );
   }
