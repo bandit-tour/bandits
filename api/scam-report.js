@@ -31,9 +31,11 @@ function finalizeScamAlertInsertPayload(row) {
 
   for (const key in payload) {
     const value = payload[key];
-    if (typeof value === 'string' && value !== null) {
-      if (!isValidUUID(value)) {
-        console.log('INVALID UUID FIELD:', key, value);
+    if (key.includes('_id') && value !== null) {
+      const raw = typeof value === 'string' ? value : String(value ?? '');
+      if (!isValidUUID(raw)) {
+        console.log('INVALID UUID FIELD:', key, raw);
+        payload[key] = null;
       }
     }
   }
