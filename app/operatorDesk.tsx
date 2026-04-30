@@ -41,6 +41,7 @@ type NotificationRow = {
   is_read: boolean;
   created_at: string;
   ask_target_bandit_id?: string | null;
+  ask_target_bandit_name?: string | null;
 };
 
 type ReportRow = {
@@ -57,6 +58,47 @@ type ReportRow = {
   admin_verified?: boolean | null;
   moderation_status?: string | null;
 };
+
+const INCOMING_ALLOWED = new Set(['local_friend|local_friend_request', 'bandit_question|bandit_question_request']);
+
+function normalizeIncomingRows(rawRows: NotificationRow[] | null | undefined): NotificationRow[] {
+  const list = Array.isArray(rawRows) ? rawRows : [];
+  const byId = new Map<string, NotificationRow>();
+
+  for (const row of list) {
+    const id = String(row?.id || '').trim();
+    if (!id) continue;
+    const type = String(row?.type || '').trim();
+    const ref = String(row?.reference_type || '').trim();
+    if (!INCOMING_ALLOWED.has(`${type}|${ref}`)) continue;
+
+    if (type === 'bandit_question') {
+      const hasTarget = String(row?.ask_target_bandit_id || '').trim().length > 0;
+      const hasAbout = parseAboutBanditFromAskMessage(String(row?.message || '')).trim().length > 0;
+      if (!hasTarget || !hasAbout) continue;
+    }
+
+    const prev = byId.get(id);
+    if (!prev) {
+      byId.set(id, row);
+      continue;
+    }
+    const prevTime = new Date(prev.created_at || 0).getTime();
+    const nextTime = new Date(row.created_at || 0).getTime();
+    if (Number.isFinite(nextTime) && (!Number.isFinite(prevTime) || nextTime >= prevTime)) {
+      byId.set(id, row);
+    }
+  }
+
+  return Array.from(byId.values()).sort((a, b) => {
+    const ta = new Date(a.created_at || 0).getTime();
+    const tb = new Date(b.created_at || 0).getTime();
+    if (!Number.isFinite(ta) && !Number.isFinite(tb)) return 0;
+    if (!Number.isFinite(ta)) return 1;
+    if (!Number.isFinite(tb)) return -1;
+    return tb - ta;
+  });
+}
 
 function fmtTime(iso: string): string {
   const d = new Date(iso);
@@ -75,23 +117,6 @@ function fmtDateTime(iso: string): string {
     hour: '2-digit',
     minute: '2-digit',
   });
-}
-
-function deskNotificationKindLabel(type: string): string {
-  switch (type) {
-    case 'local_friend':
-      return 'Local Friend';
-    case 'bandit_question':
-      return 'Ask Me';
-    case 'live_alert':
-      return 'Live alert';
-    case 'bandit_reply':
-      return 'Bandit reply';
-    case 'signal_peer_delivery':
-      return 'Signal';
-    default:
-      return type.replace(/_/g, ' ') || 'Notification';
-  }
 }
 
 function normalizeReportRow(raw: Record<string, unknown>): ReportRow {
@@ -117,7 +142,7 @@ export default function OperatorDeskScreen() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [isOperator, setIsOperator] = useState(false);
-  const [notifications, setNotifications] = useState<NotificationRow[]>([]);
+  const [incomingRows, setIncomingRows] = useState<NotificationRow[]>([]);
   const [reports, setReports] = useState<ReportRow[]>([]);
   const [liveTitle, setLiveTitle] = useState('');
   const [liveMessage, setLiveMessage] = useState('');
@@ -132,16 +157,18 @@ export default function OperatorDeskScreen() {
   const [reportSelected, setReportSelected] = useState<Set<string>>(new Set());
 
   const loadAll = useCallback(async () => {
-    const { operatorId, canUsePilotDesk: ok } = await resolvePilotDeskAccess();
-    setIsOperator(ok);
-    setDeskOperatorId(ok ? operatorId : null);
-    if (!ok) {
-      setNotifications([]);
+    const { operatorId, isAppAdmin } = await resolvePilotDeskAccess();
+    /** Pilot Desk entry: admin allowlist email only (not operator UUID — same rule as Menu). */
+    const allowed = isAppAdmin;
+    setIsOperator(allowed);
+    setDeskOperatorId(allowed ? operatorId : null);
+    if (!allowed) {
+      setIncomingRows([]);
       setReports([]);
       return;
     }
     if (!operatorId) {
-      setNotifications([]);
+      setIncomingRows([]);
       return;
     }
 
@@ -151,12 +178,37 @@ export default function OperatorDeskScreen() {
         .from('notifications')
         .select('*')
         .eq('user_id', operatorUserId)
-        .or('reference_type.is.null,reference_type.neq.deleted_thread')
+        .in('type', ['local_friend', 'bandit_question'])
+        .in('reference_type', ['local_friend_request', 'bandit_question_request'])
         .order('created_at', { ascending: false })
         .limit(200),
       supabase.from('scam_alerts').select('*').order('created_at', { ascending: false }).limit(100),
     ]);
-    setNotifications((notifRows as NotificationRow[]) || []);
+    const baseRows = normalizeIncomingRows((notifRows as NotificationRow[]) || []);
+    const askTargetIds = Array.from(
+      new Set(
+        baseRows
+          .map((r) => String(r.ask_target_bandit_id || '').trim())
+          .filter((v) => v.length > 0),
+      ),
+    );
+    let askTargetNameById = new Map<string, string>();
+    if (askTargetIds.length > 0) {
+      const { data: banditRows } = await supabase.from('bandit').select('id,name').in('id', askTargetIds);
+      askTargetNameById = new Map(
+        ((banditRows as Array<{ id: string; name: string }> | null) || []).map((b) => [String(b.id), String(b.name || '').trim()]),
+      );
+    }
+    setIncomingRows(
+      baseRows.map((r) => {
+        const bid = String(r.ask_target_bandit_id || '').trim();
+        const fromTarget = bid ? askTargetNameById.get(bid) || '' : '';
+        return {
+          ...r,
+          ask_target_bandit_name: fromTarget || null,
+        };
+      }),
+    );
     if (reportErr) {
       console.warn('[PilotDesk] scam_alerts load:', reportErr.message);
       setReports([]);
@@ -241,15 +293,7 @@ export default function OperatorDeskScreen() {
     }
   }, [liveTitle, liveMessage, sendingLive]);
 
-  const incoming = useMemo(
-    () => notifications.filter((n) => n.type === 'local_friend' || n.type === 'bandit_question'),
-    [notifications],
-  );
-
-  const otherDeskNotifications = useMemo(
-    () => notifications.filter((n) => n.type !== 'local_friend' && n.type !== 'bandit_question'),
-    [notifications],
-  );
+  const incoming = useMemo(() => normalizeIncomingRows(incomingRows), [incomingRows]);
 
   const onDeleteDeskNotification = useCallback(
     (item: NotificationRow) => {
@@ -259,7 +303,7 @@ export default function OperatorDeskScreen() {
         try {
           await addDismissedNotificationId(item.id);
           await deleteNotificationThread(item.id);
-          setNotifications((prev) => prev.filter((n) => n.id !== item.id));
+          setIncomingRows((prev) => prev.filter((n) => n.id !== item.id));
           requestNotificationsRefresh();
           void refreshNotifications();
           await loadAll();
@@ -363,8 +407,8 @@ export default function OperatorDeskScreen() {
   }, [deskSelected, refreshNotifications, loadAll]);
 
   const clearAllDeskNotifications = useCallback(() => {
-    if (notifications.length === 0) return;
-    const snapshot = [...notifications];
+    if (incomingRows.length === 0) return;
+    const snapshot = [...incomingRows];
     const run = async () => {
       let firstErr: string | null = null;
       for (const row of snapshot) {
@@ -387,14 +431,14 @@ export default function OperatorDeskScreen() {
       }
     };
     if (Platform.OS === 'web' && typeof window !== 'undefined') {
-      if (window.confirm(`Permanently clear all ${snapshot.length} Pilot Desk notification item(s)?`)) void run();
+      if (window.confirm(`Permanently clear all ${snapshot.length} notification item(s)?`)) void run();
       return;
     }
     Alert.alert('Clear all?', `Permanently remove all ${snapshot.length} notification item(s)?`, [
       { text: 'Cancel', style: 'cancel' },
       { text: 'Clear all', style: 'destructive', onPress: () => void run() },
     ]);
-  }, [notifications, refreshNotifications, loadAll]);
+  }, [incomingRows, refreshNotifications, loadAll]);
 
   const clearAllReports = useCallback(() => {
     if (reports.length === 0) return;
@@ -464,7 +508,7 @@ export default function OperatorDeskScreen() {
 
   return (
     <>
-      <Stack.Screen options={{ headerShown: true, title: 'Pilot Desk', headerBackTitle: 'Back' }} />
+      <Stack.Screen options={{ headerShown: true, title: 'Desk', headerBackTitle: 'Back' }} />
       <GHScrollView
         style={styles.container}
         contentContainerStyle={styles.content}
@@ -512,7 +556,7 @@ export default function OperatorDeskScreen() {
             </View>
 
             <Text style={styles.title}>Incoming Questions</Text>
-            {notifications.length > 0 ? (
+            {incomingRows.length > 0 ? (
               <View style={styles.bulkRow}>
                 <Pressable
                   testID="pilot-desk-incoming-select"
@@ -528,7 +572,7 @@ export default function OperatorDeskScreen() {
                   <>
                     <Pressable
                       testID="pilot-desk-incoming-select-all"
-                      onPress={() => setDeskSelected(new Set(notifications.map((n) => n.id)))}
+                      onPress={() => setDeskSelected(new Set(incomingRows.map((n) => n.id)))}
                       style={styles.bulkPill}
                     >
                       <Text style={styles.bulkPillText}>Select all</Text>
@@ -554,8 +598,12 @@ export default function OperatorDeskScreen() {
               <View style={styles.stackGap8}>
                 {incoming.map((item) => {
                   const selected = deskSelectMode && deskSelected.has(item.id);
-                  const aboutBandit =
+                  const aboutFromMessage =
                     item.type === 'bandit_question' ? parseAboutBanditFromAskMessage(item.message || '') : null;
+                  const aboutBandit =
+                    item.type === 'bandit_question'
+                      ? String(item.ask_target_bandit_name || '').trim() || aboutFromMessage || null
+                      : null;
                   const banditNameParam =
                     item.type === 'bandit_question'
                       ? aboutBandit || 'Ask'
@@ -564,7 +612,7 @@ export default function OperatorDeskScreen() {
                         : 'Ask';
                   const rowTitle =
                     item.type === 'bandit_question'
-                      ? `Operator inbox for ${aboutBandit || 'Neo'}`
+                      ? `Operator inbox for ${aboutBandit || 'Ask'}`
                       : item.type === 'local_friend'
                         ? 'Operator inbox for Local Friend'
                         : 'Operator inbox';
@@ -617,103 +665,6 @@ export default function OperatorDeskScreen() {
                         <Text style={styles.rowMsg} numberOfLines={3}>
                           {renderSafeText(item.message)}
                         </Text>
-                        <Text style={styles.rowSendAs}>
-                          Replies in Chat use the bandit persona for this thread (set when you open it).
-                        </Text>
-                        <Text style={styles.rowMeta}>
-                          {fmtTime(item.created_at)} · {deskSelectMode ? 'tap to select' : 'tap to open thread'}
-                        </Text>
-                      </Pressable>
-                      {!deskSelectMode ? (
-                        <Pressable
-                          style={[styles.deleteChip, deletingNotificationId === item.id && styles.deleteChipDisabled]}
-                          onPress={() => onDeleteDeskNotification(item)}
-                          disabled={deletingNotificationId === item.id}
-                        >
-                          <Text style={styles.deleteChipText}>
-                            {deletingNotificationId === item.id ? 'Deleting…' : 'Delete'}
-                          </Text>
-                        </Pressable>
-                      ) : null}
-                    </View>
-                  );
-                  const rowEl =
-                    Platform.OS === 'web' ? (
-                      inner
-                    ) : (
-                      <Swipeable
-                        overshootRight={false}
-                        renderRightActions={() => (
-                          <Pressable
-                            style={styles.incomingSwipeDelete}
-                            onPress={() => onDeleteDeskNotification(item)}
-                            accessibilityLabel="Delete incoming question"
-                          >
-                            <Text style={styles.incomingSwipeDeleteText}>Delete</Text>
-                          </Pressable>
-                        )}
-                      >
-                        {inner}
-                      </Swipeable>
-                    );
-                  return (
-                    <View key={item.id} collapsable={false}>
-                      {rowEl}
-                    </View>
-                  );
-                })}
-              </View>
-            )}
-
-            <Text style={styles.title}>Other notifications</Text>
-            {otherDeskNotifications.length === 0 ? (
-              <Text style={styles.empty}>No other notification rows.</Text>
-            ) : (
-              <View style={styles.stackGap8}>
-                {otherDeskNotifications.map((item) => {
-                  const selected = deskSelectMode && deskSelected.has(item.id);
-                  const inner = (
-                    <View style={[styles.row, selected && styles.rowSelected]}>
-                      <Pressable
-                        testID={`pilot-desk-open-other-${item.id}`}
-                        onPress={() => {
-                          if (deskSelectMode) {
-                            setDeskSelected((prev) => {
-                              const next = new Set(prev);
-                              if (next.has(item.id)) next.delete(item.id);
-                              else next.add(item.id);
-                              return next;
-                            });
-                            return;
-                          }
-                          router.push({
-                            pathname: '/chat',
-                            params: {
-                              banditName: deskNotificationKindLabel(item.type),
-                              notificationId: item.id,
-                              notificationType: item.type,
-                              referenceId: item.reference_id ?? '',
-                              referenceType: item.reference_type ?? '',
-                              notificationTitle: item.title ?? '',
-                              notificationMessage: item.message ?? '',
-                            },
-                          });
-                        }}
-                        onLongPress={() => {
-                          setDeskSelectMode(true);
-                          setDeskSelected((prev) => {
-                            const next = new Set(prev);
-                            next.add(item.id);
-                            return next;
-                          });
-                        }}
-                        delayLongPress={380}
-                      >
-                        <Text style={styles.rowTitle}>{deskNotificationKindLabel(item.type)}</Text>
-                        <Text style={styles.rowMeta}>{renderSafeText(item.title)}</Text>
-                        <Text style={styles.rowMsg} numberOfLines={4}>
-                          {renderSafeText(item.message)}
-                        </Text>
                         <Text style={styles.rowMeta}>
                           {fmtTime(item.created_at)} · {deskSelectMode ? 'tap to select' : 'tap to open'}
                         </Text>
@@ -741,7 +692,7 @@ export default function OperatorDeskScreen() {
                           <Pressable
                             style={styles.incomingSwipeDelete}
                             onPress={() => onDeleteDeskNotification(item)}
-                            accessibilityLabel="Delete notification"
+                            accessibilityLabel="Delete incoming question"
                           >
                             <Text style={styles.incomingSwipeDeleteText}>Delete</Text>
                           </Pressable>
@@ -974,7 +925,6 @@ const styles = StyleSheet.create({
   rowTitle: { fontSize: 15, fontWeight: '800', color: '#111', marginBottom: 4 },
   rowMsg: { fontSize: 13, color: '#333', lineHeight: 18, marginBottom: 4 },
   rowMeta: { fontSize: 12, color: '#666', marginBottom: 2 },
-  rowSendAs: { fontSize: 13, fontWeight: '700', color: '#111', marginBottom: 4 },
   statusLine: { fontSize: 11, fontWeight: '700', color: '#444', marginTop: 4 },
   thumb: { width: '100%', height: 120, marginTop: 8, borderRadius: 8, backgroundColor: '#EEE' },
   actionRow: {

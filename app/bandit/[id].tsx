@@ -1,5 +1,5 @@
 import { Stack, useLocalSearchParams } from 'expo-router';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -87,6 +87,7 @@ export default function BanditScreen() {
   const [askEnabled, setAskEnabled] = useState(false);
   const [askDisabledReason, setAskDisabledReason] = useState<string | null>(null);
   const [likeUserId, setLikeUserId] = useState<string | null>(null);
+  const askTargetBanditIdRef = useRef<string>('');
 
   useEffect(() => {
     if (!id) return;
@@ -178,18 +179,22 @@ export default function BanditScreen() {
   }
 
   const handleAskMePress = () => {
+    const frozenBanditId = String(bandit?.id || '').trim();
+    askTargetBanditIdRef.current = frozenBanditId;
     setAskOpen(true);
     setSubmitError(null);
     setSubmitSuccess(false);
   };
 
   const handleAskSubmit = async () => {
-    if (!askText.trim() || !id) return;
+    const frozenBanditId = String(askTargetBanditIdRef.current || '').trim();
+    if (!askText.trim() || !frozenBanditId) return;
     try {
       setSubmitting(true);
       setSubmitError(null);
       await ensureAnonymousSession();
-      await submitBanditQuestion(id as string, askText.trim());
+      console.log('ASK TARGET', frozenBanditId);
+      await submitBanditQuestion(frozenBanditId, askText.trim());
       setSubmitSuccess(true);
       setAskText('');
     } catch (e) {

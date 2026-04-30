@@ -1,11 +1,9 @@
 import {
-  BANDIT_QUESTION_GUEST_ECHO_REF,
   buildAskMeNotificationMessage,
   travelerNameForAskMeTitle,
 } from '@/lib/askMeMessageFormat';
 import { Database } from '@/lib/database.types';
 import { trackEvent } from '@/lib/analytics';
-import { getPilotApiBaseUrl } from '@/lib/pilotApiBase';
 import { ensureAnonymousSession } from '@/lib/pilotSession';
 import { isAuthOrMissingError } from '@/lib/postgrestAuth';
 import { supabase } from '@/lib/supabase';
@@ -265,7 +263,9 @@ export async function getUserLikedBanditIds(): Promise<Set<string>> {
 }
 
 export async function submitBanditQuestion(banditId: string, question: string): Promise<void> {
+  const targetBanditId = String(banditId || '').trim();
   const text = question.trim();
+  if (!targetBanditId) throw new Error('Bandit target is required.');
   if (!text) throw new Error('Question is required.');
 
   await ensureAnonymousSession();
@@ -278,26 +278,6 @@ export async function submitBanditQuestion(banditId: string, question: string): 
   const user = session?.user;
   if (!user) throw new Error('Could not start a session. Try again in a moment.');
 
-  const apiBase = getPilotApiBaseUrl();
-  if (apiBase && session.access_token) {
-    try {
-      const res = await fetch(`${apiBase}/api/ask-me`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${session.access_token}`,
-        },
-        body: JSON.stringify({ banditId, question: text }),
-      });
-      if (res.ok) {
-        void trackEvent({ eventName: 'ask_me_sent', referenceType: 'bandit', referenceId: banditId });
-        return;
-      }
-    } catch {
-      /* fall through to direct insert */
-    }
-  }
-
   const operatorUserId = getOperatorUserId();
   if (!operatorUserId) {
     throw new Error('Operator routing is not configured. Set EXPO_PUBLIC_OPERATOR_USER_ID.');
@@ -306,8 +286,12 @@ export async function submitBanditQuestion(banditId: string, question: string): 
   const { data: banditRow } = await supabase
     .from('bandit')
     .select('id, name')
-    .eq('id', banditId)
+    .eq('id', targetBanditId)
     .maybeSingle();
+  const fetchedBanditId = String((banditRow as { id?: string } | null)?.id || '').trim();
+  if (!fetchedBanditId || fetchedBanditId !== targetBanditId) {
+    throw new Error('Selected bandit is out of date. Please reopen the profile and try again.');
+  }
   const banditName = String((banditRow as { name?: string } | null)?.name || 'banDit').trim() || 'banDit';
   const { data: prof } = await supabase.from('user_profile').select('name').eq('id', user.id).maybeSingle();
   const fromProfile = String((prof as { name?: string } | null)?.name || '').trim();
@@ -315,62 +299,50 @@ export async function submitBanditQuestion(banditId: string, question: string): 
   const travelerTitle = travelerNameForAskMeTitle(fromProfile, meta);
   const askMessage = buildAskMeNotificationMessage(banditName, text);
 
-  const withAskTarget = {
+  const row = {
     user_id: operatorUserId,
     type: 'bandit_question',
     title: travelerTitle,
     message: askMessage,
     reference_id: user.id,
     reference_type: 'bandit_question_request',
-    ask_target_bandit_id: banditId,
+    ask_target_bandit_id: targetBanditId,
   } as never;
-  const withoutAskTarget = {
-    user_id: operatorUserId,
-    type: 'bandit_question',
-    title: travelerTitle,
-    message: askMessage,
-    reference_id: user.id,
-    reference_type: 'bandit_question_request',
-  } as never;
+  console.log('ASK TARGET', targetBanditId);
 
-  let { data: insertedRow, error } = await supabase
+  const { data: insertedRow, error } = await supabase
     .from('notifications')
-    .insert(withAskTarget)
-    .select('id')
+    .insert(row)
+    .select('id,created_at,ask_target_bandit_id')
     .single();
-  if (error && isAskTargetBanditIdMissingColumnError(error)) {
-    const retry = await supabase.from('notifications').insert(withoutAskTarget).select('id').single();
-    insertedRow = retry.data;
-    error = retry.error;
-  }
 
-  if (error) {
-    if (isNotificationsPolicyError(error)) {
-      throw new Error('Ask is temporarily unavailable until notifications permissions are updated.');
+  if (!error) {
+    const insertedTarget = String(
+      (
+        insertedRow as {
+          ask_target_bandit_id?: string | null;
+          created_at?: string | null;
+        } | null
+      )?.ask_target_bandit_id || '',
+    ).trim();
+    if (!insertedTarget || insertedTarget !== targetBanditId) {
+      throw new Error('Ask target mismatch. Please try again.');
     }
-    throw new Error(error.message || 'Could not send your question.');
+    void trackEvent({
+      eventName: 'ask_me_sent',
+      referenceType: 'bandit',
+      referenceId: targetBanditId,
+    });
+    return;
   }
 
-  const rootId = String((insertedRow as { id?: string } | null)?.id || '').trim();
-  if (rootId) {
-    const { error: echoErr } = await supabase.from('notifications').insert({
-      user_id: user.id,
-      type: 'bandit_question',
-      title: banditName,
-      message: text,
-      reference_id: rootId,
-      reference_type: BANDIT_QUESTION_GUEST_ECHO_REF,
-    } as never);
-    if (echoErr) {
-      console.warn('[submitBanditQuestion] guest echo insert:', echoErr.message);
-    }
+  if (isNotificationsPolicyError(error)) {
+    throw new Error('Ask is temporarily unavailable until notifications permissions are updated.');
   }
-
-  void trackEvent({
-    eventName: 'ask_me_sent',
-    referenceType: 'bandit',
-    referenceId: banditId,
-  });
+  if (isAskTargetBanditIdMissingColumnError(error)) {
+    throw new Error('Ask is temporarily unavailable until DB schema is updated.');
+  }
+  throw new Error(error.message || 'Could not send your question.');
 }
 
 export default function BanditsServiceRoutePlaceholder() {

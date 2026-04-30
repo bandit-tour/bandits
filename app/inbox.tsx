@@ -1,10 +1,9 @@
-import { Stack, useRouter } from 'expo-router';
+import { Stack } from 'expo-router';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
   DeviceEventEmitter,
   SectionList,
-  TextInput,
   Pressable,
   StyleSheet,
   Text,
@@ -25,6 +24,7 @@ import { getNearbyStoredNotifications, type NearbyInboxEntry } from '@/lib/nearb
 import { getNotificationsBackendStatus } from '@/services/localFriend';
 import { getOperatorUserId } from '@/lib/operatorConfig';
 import { trackEvent } from '@/lib/analytics';
+import { getDismissedNotificationIds } from '@/lib/dismissedThreads';
 
 type NotificationRow = {
   id: string;
@@ -150,8 +150,8 @@ function banditNameFromNotification(n: NotificationRow): string {
   if (n.reference_type === 'nearby_route') return 'Around You';
   const t = n.title?.trim() || '';
   if (n.reference_type === BANDIT_QUESTION_GUEST_ECHO_REF) {
-    if (t.length > 0 && t.length < 64) return `Chat · ${t}`;
-    return 'Chat';
+    if (t.length > 0 && t.length < 80) return t;
+    return 'You asked';
   }
   if (n.type === 'demo_banditeam') return 'bandiTEAM';
   if (n.type === 'live_alert') return 'bandiTour LIVE';
@@ -218,10 +218,8 @@ function nearbyToRow(e: NearbyInboxEntry): NotificationRow {
 }
 
 export default function InboxScreen() {
-  const router = useRouter();
   const [loading, setLoading] = useState(true);
   const [serverItems, setServerItems] = useState<InboxListItem[]>([]);
-  const [backendDisabledReason, setBackendDisabledReason] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState(false);
   const [demoExtras, setDemoExtras] = useState<InboxListItem[]>([]);
   const [nearbyExtras, setNearbyExtras] = useState<InboxListItem[]>([]);
@@ -270,11 +268,9 @@ export default function InboxScreen() {
   const loadInbox = useCallback(async (silent?: boolean) => {
     try {
       if (!silent) setLoading(true);
-      setBackendDisabledReason(null);
       await ensureAnonymousSession().catch(() => undefined);
       const status = await getNotificationsBackendStatus();
       if (!status.enabled) {
-        setBackendDisabledReason(status.reason || 'Inbox is unavailable right now.');
         setServerItems([]);
         return;
       }
@@ -298,8 +294,11 @@ export default function InboxScreen() {
       const uid = String(user.id || '').trim();
       const opId = String(getOperatorUserId() || '').trim();
       const rawRows = (data as NotificationRow[]) || [];
+      const dismissed = await getDismissedNotificationIds();
 
-      let filteredRows = rawRows.filter((n) => !isOperatorInboundRequestRowForDualRoleUser(n, uid, opId));
+      let filteredRows = rawRows.filter(
+        (n) => !dismissed.has(String(n.id || '').trim()) && !isOperatorInboundRequestRowForDualRoleUser(n, uid, opId),
+      );
 
       const pilotMirrorHiddenIds = filteredRows
         .filter((n) => shouldHideAskGuestMirrorForPilotOperator(n, uid, opId))
@@ -319,7 +318,6 @@ export default function InboxScreen() {
 
       const rows = filteredRows.map((n) => notificationToInboxItem(n));
       setServerItems(rows);
-      const unreadIds = filteredRows.filter((n) => !n.is_read).map((n) => n.id);
       const unreadReplies = filteredRows.filter(
         (n) => !n.is_read && n.type === 'bandit_reply',
       );
@@ -338,12 +336,7 @@ export default function InboxScreen() {
           });
         }
       });
-      if (unreadIds.length > 0) {
-        await supabase.from('notifications').update({ is_read: true }).in('id', unreadIds);
-      }
-    } catch (e) {
-      const msg = e instanceof Error ? e.message : '';
-      setBackendDisabledReason(msg || 'Inbox is unavailable right now.');
+    } catch {
       setServerItems([]);
     } finally {
       if (!silent) setLoading(false);
@@ -384,7 +377,7 @@ export default function InboxScreen() {
       out.push({ title: 'Around You', data: nearby });
     }
     if (rest.length > 0) {
-      out.push({ title: nearby.length > 0 ? 'Nearby from the City' : null, data: rest });
+      out.push({ title: null, data: rest });
     }
     return out;
   }, [rows]);
@@ -396,67 +389,15 @@ export default function InboxScreen() {
         referenceType: 'notification',
         referenceId: item.notification.id,
       });
-      if (item.notification.type === 'live_alert') {
-        router.push({
-          pathname: '/notification/[id]',
-          params: {
-            id: item.notification.id,
-            title: item.notification.title ?? '',
-            message: item.notification.message ?? '',
-            createdAt: item.notification.created_at ?? '',
-          },
-        });
-        return;
-      }
-      if (item.notification.reference_type === 'nearby_route' && item.notification.reference_id) {
-        try {
-          const route = JSON.parse(item.notification.reference_id) as {
-            pathname: string;
-            params?: Record<string, string>;
-          };
-          if (route?.pathname) {
-            void trackEvent({
-              eventName: 'nearby_inbox_opened',
-              referenceType: 'nearby',
-              referenceId: item.notification.id,
-            });
-            router.push(route as never);
-            return;
-          }
-        } catch {
-          /* ignore */
-        }
-      }
-      if (!item.fromServer) {
-        router.push({
-          pathname: '/chat',
-          params: {
-            banditName: item.banditName,
-            demoMode: '1',
-            demoBody: item.notification.message ?? '',
-            demoTitle: item.notification.title ?? '',
-          },
-        });
-        return;
-      }
-      const chatBanditHeader =
-        item.notification.reference_type === BANDIT_QUESTION_GUEST_ECHO_REF
-          ? item.notification.title?.trim() || item.banditName
-          : item.banditName;
-      router.push({
-        pathname: '/chat',
-        params: {
-          banditName: chatBanditHeader,
-          notificationId: item.notification.id,
-          notificationType: item.notification.type,
-          referenceId: item.notification.reference_id ?? '',
-          referenceType: item.notification.reference_type ?? '',
-          notificationTitle: item.notification.title ?? '',
-          notificationMessage: item.notification.message ?? '',
-        },
-      });
+      if (!item.fromServer) return;
+      setServerItems((prev) =>
+        prev.map((row) =>
+          row.id === item.id ? { ...row, notification: { ...row.notification, is_read: true } } : row,
+        ),
+      );
+      void supabase.from('notifications').update({ is_read: true }).eq('id', item.notification.id);
     },
-    [router],
+    [],
   );
 
   const renderItem = useCallback(
@@ -476,36 +417,15 @@ export default function InboxScreen() {
 
   return (
     <>
-      <Stack.Screen options={{ headerShown: true, title: 'Notifications', headerBackTitle: 'Back' }} />
+      <Stack.Screen options={{ headerShown: true, title: 'Inbox', headerBackTitle: 'Back' }} />
       <View style={styles.container}>
-        <Text style={styles.subtitle}>
-          Alerts and one-off updates. Conversations with local hosts live under Chat — not duplicated here.
-        </Text>
-        <Text style={styles.tagline}>Live alerts open as details only, not a chat thread.</Text>
-        {isDemoMode() ? (
-          <Text style={styles.demoPill}>
-            Pilot demo mode — sample activity is mixed in; nothing here overwrites real user data.
-          </Text>
-        ) : null}
-
         {loading ? (
           <View style={styles.center}>
             <ActivityIndicator size="large" />
           </View>
-        ) : backendDisabledReason && rows.length === 0 && !isDemoMode() ? (
-          <View style={styles.center}>
-            <Text style={styles.emptyHeading}>Notifications unavailable</Text>
-            <Text style={styles.emptyText}>{backendDisabledReason}</Text>
-          </View>
-        ) : backendDisabledReason && isDemoMode() && rows.length === 0 ? (
-          <View style={styles.center}>
-            <Text style={styles.emptyHeading}>Loading demo notifications…</Text>
-            <Text style={styles.emptyText}>{backendDisabledReason}</Text>
-          </View>
         ) : rows.length === 0 ? (
           <View style={styles.center}>
             <Text style={styles.emptyHeading}>No notifications yet</Text>
-            <Text style={styles.emptyText}>Updates and alerts will appear here.</Text>
           </View>
         ) : (
           <SectionList
@@ -534,19 +454,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingTop: 12,
   },
-  subtitle: {
-    fontSize: 13,
-    color: '#555',
-    lineHeight: 18,
-    marginBottom: 8,
-  },
-  tagline: {
-    fontSize: 12,
-    fontStyle: 'italic',
-    color: '#7a7a7a',
-    lineHeight: 17,
-    marginBottom: 14,
-  },
   sectionHeader: {
     fontSize: 12,
     fontWeight: '700',
@@ -556,16 +463,6 @@ const styles = StyleSheet.create({
     marginTop: 4,
     textTransform: 'uppercase',
   },
-  demoPill: {
-    fontSize: 12,
-    color: '#5a4a00',
-    backgroundColor: '#FFF8E6',
-    paddingVertical: 8,
-    paddingHorizontal: 10,
-    borderRadius: 10,
-    marginBottom: 12,
-    lineHeight: 17,
-  },
   center: {
     flex: 1,
     justifyContent: 'center',
@@ -573,7 +470,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
   },
   emptyHeading: { fontSize: 17, fontWeight: '700', color: '#1a1a1a', marginBottom: 8 },
-  emptyText: { fontSize: 13, color: '#666', textAlign: 'center', lineHeight: 18 },
   list: {
     paddingBottom: 96,
   },
