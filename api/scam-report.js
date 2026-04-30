@@ -6,6 +6,13 @@ function toUuidOrNull(value) {
   return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(v) ? v : null;
 }
 
+function sanitizeUUID(value) {
+  if (value == null || value === '') return null;
+  const s = typeof value === 'string' ? value : String(value);
+  const t = s.trim();
+  return t !== '' ? t : null;
+}
+
 const UUID_LIKE_KEYS = new Set([
   'reported_by',
   'bandit_id',
@@ -15,57 +22,34 @@ const UUID_LIKE_KEYS = new Set([
   'image_id',
   'created_by',
   'user_id',
+  'operator_user_id',
+  'reference_id',
+  'place_id',
 ]);
+
+function isUuidLikeKey(key) {
+  const keyLc = String(key || '').toLowerCase();
+  return UUID_LIKE_KEYS.has(keyLc) || keyLc.endsWith('_id');
+}
 
 function sanitizeUuidLikeFields(row) {
   const out = { ...(row || {}) };
-  for (const [key, value] of Object.entries(out)) {
-    const keyLc = String(key || '').toLowerCase();
-    const looksUuidLike = UUID_LIKE_KEYS.has(keyLc) || keyLc.endsWith('_id');
-    if (!looksUuidLike) continue;
-    if (value == null) continue;
-    out[key] = toUuidOrNull(value);
+  for (const key of Object.keys(out)) {
+    if (!isUuidLikeKey(key)) continue;
+    const trimmed = sanitizeUUID(out[key]);
+    out[key] = trimmed == null ? null : toUuidOrNull(trimmed);
   }
   return out;
 }
 
-function keysWithBareEmptyString(record) {
-  return Object.entries(record)
-    .filter(([, v]) => v === '')
-    .map(([k]) => k);
-}
-
-function coerceEmptyUuidLikeToNull(record) {
-  for (const key of Object.keys(record)) {
-    if (record[key] !== '') continue;
-    const keyLc = String(key || '').toLowerCase();
-    if (UUID_LIKE_KEYS.has(keyLc) || keyLc.endsWith('_id')) record[key] = null;
-  }
-}
-
-function finalizeScamAlertInsertPayload(row, logPrefix) {
-  const emptyBefore = keysWithBareEmptyString(row || {});
-  if (emptyBefore.length) {
-    console.warn(`${logPrefix} payload:empty_string_keys`, emptyBefore);
-  }
+function finalizeScamAlertInsertPayload(row) {
+  console.log('SUBMIT PAYLOAD', row);
   const out = sanitizeUuidLikeFields({ ...(row || {}) });
-  coerceEmptyUuidLikeToNull(out);
-  const still = keysWithBareEmptyString(out).filter((k) => {
-    const kl = k.toLowerCase();
-    return UUID_LIKE_KEYS.has(kl) || kl.endsWith('_id');
-  });
-  if (still.length) {
-    console.warn(`${logPrefix} payload:uuid_like_still_empty_after_normalize`, still);
-    for (const k of still) out[k] = null;
+  for (const key of Object.keys(out)) {
+    if (isUuidLikeKey(key) && out[key] === '') out[key] = null;
   }
   if (out.image_url === '') delete out.image_url;
-  const audit = Object.fromEntries(Object.entries(out).filter(([k, v]) => {
-    const kl = k.toLowerCase();
-    const uuidish = UUID_LIKE_KEYS.has(kl) || kl.endsWith('_id');
-    return uuidish || v === '';
-  }));
-  console.log(`${logPrefix} payload:uuid_audit`, JSON.stringify(audit));
-  console.log(`${logPrefix} payload:final`, JSON.stringify(out));
+  console.log('SANITIZED PAYLOAD', out);
   return out;
 }
 
@@ -146,21 +130,18 @@ module.exports = async function handler(req, res) {
     imageUrl = body.imageUrl.trim();
   }
 
-  const rowFull = finalizeScamAlertInsertPayload(
-    {
-      city,
-      location,
-      title,
-      description,
-      reported_by: reportedBy,
-      category,
-      severity,
-      ...(imageUrl ? { image_url: imageUrl } : {}),
-      moderation_status: 'published',
-      admin_verified: false,
-    },
-    '[api/scam-report]',
-  );
+  const rowFull = finalizeScamAlertInsertPayload({
+    city,
+    location,
+    title,
+    description,
+    reported_by: reportedBy,
+    category,
+    severity,
+    ...(imageUrl ? { image_url: imageUrl } : {}),
+    moderation_status: 'published',
+    admin_verified: false,
+  });
   const rowWithImage =
     imageUrl && String(imageUrl).trim() ? { ...rowFull, image_url: imageUrl } : { ...rowFull };
   const { data: insData, error: insErr } = await admin.from('scam_alerts').insert(rowWithImage).select('id').maybeSingle();
@@ -169,17 +150,14 @@ module.exports = async function handler(req, res) {
     const errMsg = (insErr.message || '').toLowerCase();
     const isMissing = errMsg.includes('column') && (errMsg.includes('category') || errMsg.includes('moderation'));
     if (isMissing) {
-      const legacy = finalizeScamAlertInsertPayload(
-        {
-          city: rowFull.city,
-          location: rowFull.location,
-          title: rowFull.title,
-          description: rowFull.description,
-          reported_by: reportedBy,
-          ...(imageUrl ? { image_url: imageUrl } : {}),
-        },
-        '[api/scam-report:legacy]',
-      );
+      const legacy = finalizeScamAlertInsertPayload({
+        city: rowFull.city,
+        location: rowFull.location,
+        title: rowFull.title,
+        description: rowFull.description,
+        reported_by: reportedBy,
+        ...(imageUrl ? { image_url: imageUrl } : {}),
+      });
       const second = await admin.from('scam_alerts').insert(legacy).select('id').maybeSingle();
       if (second.error) {
         return res.status(500).json({ error: 'Could not save report.' });

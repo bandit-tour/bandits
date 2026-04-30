@@ -121,6 +121,14 @@ function toUuidOrNull(value: unknown): string | null {
   return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(v) ? v : null;
 }
 
+/** Empty / whitespace-only UUID-like values → null (never "" on insert). */
+function sanitizeUUID(value: unknown): string | null {
+  if (value == null || value === '') return null;
+  const s = typeof value === 'string' ? value : String(value);
+  const t = s.trim();
+  return t !== '' ? t : null;
+}
+
 const UUID_LIKE_KEYS = new Set([
   'reported_by',
   'bandit_id',
@@ -130,67 +138,36 @@ const UUID_LIKE_KEYS = new Set([
   'image_id',
   'created_by',
   'user_id',
+  'operator_user_id',
+  'reference_id',
+  'place_id',
 ]);
+
+function isUuidLikeKey(key: string): boolean {
+  const keyLc = key.toLowerCase();
+  return UUID_LIKE_KEYS.has(keyLc) || keyLc.endsWith('_id');
+}
 
 function sanitizeUuidLikeFields<T extends Record<string, unknown>>(row: T): T {
   const out: Record<string, unknown> = { ...row };
-  for (const [key, value] of Object.entries(out)) {
-    const keyLc = key.toLowerCase();
-    const looksUuidLike = UUID_LIKE_KEYS.has(keyLc) || keyLc.endsWith('_id');
-    if (!looksUuidLike) continue;
-    if (value == null) continue;
-    const next = toUuidOrNull(value);
-    out[key] = next;
+  for (const key of Object.keys(out)) {
+    if (!isUuidLikeKey(key)) continue;
+    const trimmed = sanitizeUUID(out[key]);
+    out[key] = trimmed == null ? null : toUuidOrNull(trimmed);
   }
   return out as T;
 }
 
-function keysWithBareEmptyString(record: Record<string, unknown>): string[] {
-  return Object.entries(record)
-    .filter(([, v]) => v === '')
-    .map(([k]) => k);
-}
-
-function coerceEmptyUuidLikeToNull(record: Record<string, unknown>): void {
-  for (const key of Object.keys(record)) {
-    if (record[key] !== '') continue;
-    const keyLc = key.toLowerCase();
-    if (UUID_LIKE_KEYS.has(keyLc) || keyLc.endsWith('_id')) {
-      record[key] = null;
-    }
+/** Last-mile insert: log raw payload, sanitize all *_id / known uuid keys, log final object before Supabase insert. */
+function finalizeScamAlertsInsertPayload<T extends Record<string, unknown>>(row: T): T {
+  console.log('SUBMIT PAYLOAD', row);
+  const out = sanitizeUuidLikeFields({ ...(row as Record<string, unknown>) }) as Record<string, unknown>;
+  for (const key of Object.keys(out)) {
+    if (isUuidLikeKey(key) && out[key] === '') out[key] = null;
   }
-}
-
-/** Last-mile insert payload: UUID-like fields → valid uuid or null, never ''. Logs exact fields audited. */
-function finalizeScamAlertsInsertPayload<T extends Record<string, unknown>>(row: T, logPrefix: string): T {
-  const emptyBefore = keysWithBareEmptyString(row as Record<string, unknown>);
-  if (emptyBefore.length) {
-    console.warn(`${logPrefix} payload:empty_string_keys`, emptyBefore);
-  }
-  const out = sanitizeUuidLikeFields({ ...(row as Record<string, unknown>) }) as unknown as T;
-  const rec = out as Record<string, unknown>;
-  coerceEmptyUuidLikeToNull(rec);
-  const stillEmptyUuidish = keysWithBareEmptyString(rec).filter((k) => {
-    const kl = k.toLowerCase();
-    return UUID_LIKE_KEYS.has(kl) || kl.endsWith('_id');
-  });
-  if (stillEmptyUuidish.length) {
-    console.warn(`${logPrefix} payload:uuid_like_still_empty_after_normalize`, stillEmptyUuidish);
-    for (const k of stillEmptyUuidish) rec[k] = null;
-  }
-  if (rec.image_url === '') {
-    delete rec.image_url;
-  }
-  const audit = Object.fromEntries(
-    Object.entries(rec).filter(([k, v]) => {
-      const kl = k.toLowerCase();
-      const uuidish = UUID_LIKE_KEYS.has(kl) || kl.endsWith('_id');
-      return uuidish || v === '';
-    }),
-  );
-  console.log(`${logPrefix} payload:uuid_audit`, JSON.stringify(audit));
-  console.log(`${logPrefix} payload:final`, JSON.stringify(rec));
-  return out;
+  if (out.image_url === '') delete out.image_url;
+  console.log('SANITIZED PAYLOAD', out);
+  return out as T;
 }
 
 function base64ToBlob(base64: string, mime: string): Blob {
@@ -326,36 +303,30 @@ export async function submitScamAlert(input: SubmitScamAlertInput): Promise<void
   if (!Number.isFinite(sev)) sev = 2;
   const severity = Math.min(3, Math.max(1, sev));
 
-  const rowFull = finalizeScamAlertsInsertPayload(
-    {
-      city: input.city.trim(),
-      location: input.location.trim(),
-      title: input.title.trim(),
-      description: input.description.trim(),
-      reported_by: reportedBy,
-      category,
-      severity,
-      image_url: imageUrl ?? undefined,
-      moderation_status: 'published' as const,
-      admin_verified: false,
-    } as Record<string, unknown>,
-    '[submitScamAlert]',
-  );
+  const rowFull = finalizeScamAlertsInsertPayload({
+    city: input.city.trim(),
+    location: input.location.trim(),
+    title: input.title.trim(),
+    description: input.description.trim(),
+    reported_by: reportedBy,
+    category,
+    severity,
+    image_url: imageUrl ?? undefined,
+    moderation_status: 'published' as const,
+    admin_verified: false,
+  } as Record<string, unknown>);
 
   async function insertDirect(): Promise<{ ok: boolean; lastError: { message?: string } | null }> {
     let { error } = await supabase.from('scam_alerts').insert(rowFull as any);
     if (error && isMissingScamColumnError(error.message ?? '')) {
-      const rowLegacy = finalizeScamAlertsInsertPayload(
-        {
-          city: rowFull.city,
-          location: rowFull.location,
-          title: rowFull.title,
-          description: rowFull.description,
-          reported_by: rowFull.reported_by,
-          ...(imageUrl ? { image_url: imageUrl } : {}),
-        } as Record<string, unknown>,
-        '[submitScamAlert:legacy]',
-      );
+      const rowLegacy = finalizeScamAlertsInsertPayload({
+        city: rowFull.city,
+        location: rowFull.location,
+        title: rowFull.title,
+        description: rowFull.description,
+        reported_by: rowFull.reported_by,
+        ...(imageUrl ? { image_url: imageUrl } : {}),
+      } as Record<string, unknown>);
       const second = await supabase.from('scam_alerts').insert(rowLegacy as any);
       error = second.error;
     }
