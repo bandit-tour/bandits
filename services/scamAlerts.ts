@@ -121,7 +121,6 @@ function toUuidOrNull(value: unknown): string | null {
   return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(v) ? v : null;
 }
 
-/** Empty / whitespace-only UUID-like values → null (never "" on insert). */
 function sanitizeUUID(value: unknown): string | null {
   if (value == null || value === '') return null;
   const s = typeof value === 'string' ? value : String(value);
@@ -129,45 +128,47 @@ function sanitizeUUID(value: unknown): string | null {
   return t !== '' ? t : null;
 }
 
-const UUID_LIKE_KEYS = new Set([
-  'reported_by',
-  'bandit_id',
-  'hotel_id',
-  'area_id',
-  'city_id',
-  'image_id',
-  'created_by',
-  'user_id',
-  'operator_user_id',
-  'reference_id',
-  'place_id',
-]);
-
-function isUuidLikeKey(key: string): boolean {
-  const keyLc = key.toLowerCase();
-  return UUID_LIKE_KEYS.has(keyLc) || keyLc.endsWith('_id');
+function isValidUUID(v: string): boolean {
+  return /^[0-9a-fA-F-]{36}$/.test(v);
 }
 
-function sanitizeUuidLikeFields<T extends Record<string, unknown>>(row: T): T {
-  const out: Record<string, unknown> = { ...row };
-  for (const key of Object.keys(out)) {
-    if (!isUuidLikeKey(key)) continue;
-    const trimmed = sanitizeUUID(out[key]);
-    out[key] = trimmed == null ? null : toUuidOrNull(trimmed);
-  }
-  return out as T;
-}
-
-/** Last-mile insert: log raw payload, sanitize all *_id / known uuid keys, log final object before Supabase insert. */
+/** Last-mile insert: sanitize globally so no empty strings reach Supabase. */
 function finalizeScamAlertsInsertPayload<T extends Record<string, unknown>>(row: T): T {
-  console.log('SUBMIT PAYLOAD', row);
-  const out = sanitizeUuidLikeFields({ ...(row as Record<string, unknown>) }) as Record<string, unknown>;
-  for (const key of Object.keys(out)) {
-    if (isUuidLikeKey(key) && out[key] === '') out[key] = null;
+  const payload: Record<string, unknown> = { ...(row as Record<string, unknown>) };
+  console.log('SUBMIT PAYLOAD');
+  console.log(JSON.stringify(payload, null, 2));
+
+  for (const key in payload) {
+    const value = payload[key];
+    if (typeof value === 'string' && value.trim() === '') {
+      payload[key] = null;
+    }
   }
-  if (out.image_url === '') delete out.image_url;
-  console.log('SANITIZED PAYLOAD', out);
-  return out as T;
+
+  for (const key in payload) {
+    const value = payload[key];
+    if (typeof value === 'string' && value !== null) {
+      if (!isValidUUID(value)) {
+        console.log('INVALID UUID FIELD:', key, value);
+      }
+    }
+  }
+
+  for (const key in payload) {
+    const value = payload[key];
+    if (typeof value === 'string') {
+      const trimmed = sanitizeUUID(value);
+      payload[key] = trimmed == null ? null : trimmed;
+    }
+  }
+
+  if (payload.reported_by != null) {
+    payload.reported_by = toUuidOrNull(payload.reported_by);
+  }
+
+  console.log('SANITIZED PAYLOAD');
+  console.log(JSON.stringify(payload, null, 2));
+  return payload as T;
 }
 
 function base64ToBlob(base64: string, mime: string): Blob {

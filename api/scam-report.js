@@ -13,44 +13,46 @@ function sanitizeUUID(value) {
   return t !== '' ? t : null;
 }
 
-const UUID_LIKE_KEYS = new Set([
-  'reported_by',
-  'bandit_id',
-  'hotel_id',
-  'area_id',
-  'city_id',
-  'image_id',
-  'created_by',
-  'user_id',
-  'operator_user_id',
-  'reference_id',
-  'place_id',
-]);
-
-function isUuidLikeKey(key) {
-  const keyLc = String(key || '').toLowerCase();
-  return UUID_LIKE_KEYS.has(keyLc) || keyLc.endsWith('_id');
-}
-
-function sanitizeUuidLikeFields(row) {
-  const out = { ...(row || {}) };
-  for (const key of Object.keys(out)) {
-    if (!isUuidLikeKey(key)) continue;
-    const trimmed = sanitizeUUID(out[key]);
-    out[key] = trimmed == null ? null : toUuidOrNull(trimmed);
-  }
-  return out;
+function isValidUUID(v) {
+  return /^[0-9a-fA-F-]{36}$/.test(v);
 }
 
 function finalizeScamAlertInsertPayload(row) {
-  console.log('SUBMIT PAYLOAD', row);
-  const out = sanitizeUuidLikeFields({ ...(row || {}) });
-  for (const key of Object.keys(out)) {
-    if (isUuidLikeKey(key) && out[key] === '') out[key] = null;
+  const payload = { ...(row || {}) };
+  console.log('SUBMIT PAYLOAD');
+  console.log(JSON.stringify(payload, null, 2));
+
+  for (const key in payload) {
+    const value = payload[key];
+    if (typeof value === 'string' && value.trim() === '') {
+      payload[key] = null;
+    }
   }
-  if (out.image_url === '') delete out.image_url;
-  console.log('SANITIZED PAYLOAD', out);
-  return out;
+
+  for (const key in payload) {
+    const value = payload[key];
+    if (typeof value === 'string' && value !== null) {
+      if (!isValidUUID(value)) {
+        console.log('INVALID UUID FIELD:', key, value);
+      }
+    }
+  }
+
+  for (const key in payload) {
+    const value = payload[key];
+    if (typeof value === 'string') {
+      const trimmed = sanitizeUUID(value);
+      payload[key] = trimmed == null ? null : trimmed;
+    }
+  }
+
+  if (payload.reported_by != null) {
+    payload.reported_by = toUuidOrNull(payload.reported_by);
+  }
+
+  console.log('SANITIZED PAYLOAD');
+  console.log(JSON.stringify(payload, null, 2));
+  return payload;
 }
 
 function setCors(res) {
