@@ -749,13 +749,13 @@ export default function ChatScreen() {
             refreshControl={threadRefreshControl}
             ListEmptyComponent={<Text style={styles.emptyState}>No replies yet.</Text>}
             ListHeaderComponent={
-              <Text style={styles.threadHint}>
-                {operatorMode
-                  ? 'Pilot mode (managed by bandiTour team): replies are delivered to the guest’s Chat. The name above is the bandit persona for this thread.'
-                  : isGuestAskLocalBanDitChat
+              operatorMode ? null : (
+                <Text style={styles.threadHint}>
+                  {isGuestAskLocalBanDitChat
                     ? `Your question to ${displayPersona} is on the right. Replies from ${displayPersona} appear below on the left.`
                     : `Chat with ${displayPersona}. Notifications are one-off updates; this screen is the two-way thread.`}
-              </Text>
+                </Text>
+              )
             }
           />
         )}
