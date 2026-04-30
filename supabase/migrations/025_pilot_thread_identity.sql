@@ -1,0 +1,294 @@
+-- Thread identity lock for Message in a Bottle / pilot replies (persona + opening line + recipient).
+
+alter table public.notifications
+  add column if not exists ask_target_bandit_id uuid references public.bandit (id) on delete set null;
+
+create table if not exists public.pilot_thread_identity (
+  thread_root_notification_id uuid primary key references public.notifications (id) on delete cascade,
+  recipient_user_id uuid not null,
+  sender_persona_bandit_id uuid references public.bandit (id) on delete set null,
+  sender_persona_display_name text not null,
+  sender_persona_avatar_url text not null default '',
+  opening_message text not null,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
+create index if not exists idx_pilot_thread_identity_recipient
+  on public.pilot_thread_identity (recipient_user_id);
+
+alter table public.pilot_thread_identity enable row level security;
+
+drop policy if exists "pilot_thread_identity_select" on public.pilot_thread_identity;
+create policy "pilot_thread_identity_select"
+  on public.pilot_thread_identity
+  for select
+  to authenticated
+  using (
+    recipient_user_id = auth.uid()
+    or exists (
+      select 1
+      from public.notifications n
+      where n.id = pilot_thread_identity.thread_root_notification_id
+        and n.user_id = auth.uid()
+    )
+    or exists (
+      select 1
+      from public.notifications br
+      where br.user_id = auth.uid()
+        and br.type = 'bandit_reply'
+        and br.reference_id = pilot_thread_identity.thread_root_notification_id::text
+    )
+    or exists (
+      select 1
+      from public.app_public_config c
+      where c.key = 'operator_user_id'
+        and trim(c.value) = auth.uid()::text
+    )
+  );
+
+drop policy if exists "pilot_thread_identity_insert" on public.pilot_thread_identity;
+create policy "pilot_thread_identity_insert"
+  on public.pilot_thread_identity
+  for insert
+  to authenticated
+  with check (
+    exists (
+      select 1
+      from public.notifications n
+      where n.id = thread_root_notification_id
+        and n.user_id = auth.uid()
+    )
+    or exists (
+      select 1
+      from public.app_public_config c
+      where c.key = 'operator_user_id'
+        and trim(c.value) = auth.uid()::text
+    )
+  );
+
+drop policy if exists "pilot_thread_identity_update" on public.pilot_thread_identity;
+create policy "pilot_thread_identity_update"
+  on public.pilot_thread_identity
+  for update
+  to authenticated
+  using (
+    recipient_user_id = auth.uid()
+    or exists (
+      select 1
+      from public.app_public_config c
+      where c.key = 'operator_user_id'
+        and trim(c.value) = auth.uid()::text
+    )
+  )
+  with check (
+    recipient_user_id = auth.uid()
+    or exists (
+      select 1
+      from public.app_public_config c
+      where c.key = 'operator_user_id'
+        and trim(c.value) = auth.uid()::text
+    )
+  );
+
+create or replace function public.sync_pilot_thread_identity_from_notification()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_operator uuid;
+  v_recipient uuid;
+  v_bandit_id uuid;
+  v_name text;
+  v_avatar text;
+  v_opening text;
+  v_sender uuid;
+  v_delivery_id uuid;
+begin
+  select (nullif(trim(value), ''))::uuid into v_operator
+  from public.app_public_config
+  where key = 'operator_user_id'
+  limit 1;
+
+  v_opening := coalesce(nullif(trim(NEW.message), ''), '');
+
+  -- Pilot desk anchor rows: local friend / ask question to operator
+  if NEW.type in ('local_friend', 'bandit_question')
+     and v_operator is not null
+     and NEW.user_id = v_operator
+     and NEW.reference_id is not null
+     and btrim(NEW.reference_id) ~ '^[0-9a-f-]{36}$' then
+    v_recipient := NEW.reference_id::uuid;
+
+    if NEW.type = 'bandit_question' and NEW.ask_target_bandit_id is not null then
+      select b.id, b.name, coalesce(nullif(trim(b.face_image_url), ''), nullif(trim(b.image_url), ''), '')
+        into v_bandit_id, v_name, v_avatar
+      from public.bandit b
+      where b.id = NEW.ask_target_bandit_id
+      limit 1;
+    else
+      select b.id, b.name, coalesce(nullif(trim(b.face_image_url), ''), nullif(trim(b.image_url), ''), '')
+        into v_bandit_id, v_name, v_avatar
+      from public.user_bandit ub
+      join public.bandit b on b.id = ub.bandit_id
+      where ub.user_id = v_recipient
+      limit 1;
+    end if;
+
+    if v_bandit_id is null then
+      select b.id, b.name, coalesce(nullif(trim(b.face_image_url), ''), nullif(trim(b.image_url), ''), '')
+        into v_bandit_id, v_name, v_avatar
+      from public.bandit b
+      where b.name ilike 'Neo'
+      limit 1;
+    end if;
+
+    if v_name is null or trim(v_name) = '' then
+      v_name := 'Neo';
+    end if;
+
+    insert into public.pilot_thread_identity (
+      thread_root_notification_id,
+      recipient_user_id,
+      sender_persona_bandit_id,
+      sender_persona_display_name,
+      sender_persona_avatar_url,
+      opening_message
+    ) values (
+      NEW.id,
+      v_recipient,
+      v_bandit_id,
+      v_name,
+      coalesce(v_avatar, ''),
+      v_opening
+    )
+    on conflict (thread_root_notification_id) do update set
+      recipient_user_id = excluded.recipient_user_id,
+      sender_persona_bandit_id = excluded.sender_persona_bandit_id,
+      sender_persona_display_name = excluded.sender_persona_display_name,
+      sender_persona_avatar_url = excluded.sender_persona_avatar_url,
+      opening_message = excluded.opening_message,
+      updated_at = now();
+
+    return NEW;
+  end if;
+
+  -- Guest arrival / bottle inbox row
+  if NEW.type = 'signal_peer_delivery'
+     and NEW.reference_type in ('signal_delivery', 'signal_delivery_peer')
+     and NEW.reference_id is not null
+     and btrim(NEW.reference_id) ~ '^[0-9a-f-]{36}$' then
+    v_delivery_id := NEW.reference_id::uuid;
+    v_recipient := NEW.user_id;
+
+    select sd.sender_user_id into v_sender
+    from public.signal_delivery sd
+    where sd.id = v_delivery_id
+    limit 1;
+
+    if v_sender is not null then
+      select b.id, b.name, coalesce(nullif(trim(b.face_image_url), ''), nullif(trim(b.image_url), ''), '')
+        into v_bandit_id, v_name, v_avatar
+      from public.user_bandit ub
+      join public.bandit b on b.id = ub.bandit_id
+      where ub.user_id = v_sender
+      limit 1;
+      if v_name is null or trim(v_name) = '' then
+        select up.name into v_name from public.user_profile up where up.id = v_sender limit 1;
+        v_avatar := '';
+        v_bandit_id := null;
+      end if;
+    end if;
+
+    if v_name is null or trim(v_name) = '' then
+      select b.id, b.name, coalesce(nullif(trim(b.face_image_url), ''), nullif(trim(b.image_url), ''), '')
+        into v_bandit_id, v_name, v_avatar
+      from public.bandit b
+      where b.name ilike '%smaragda%'
+      limit 1;
+    end if;
+
+    if v_name is null or trim(v_name) = '' then
+      select b.id, b.name, coalesce(nullif(trim(b.face_image_url), ''), nullif(trim(b.image_url), ''), '')
+        into v_bandit_id, v_name, v_avatar
+      from public.bandit b
+      where b.name ilike 'Neo'
+      limit 1;
+    end if;
+
+    if v_name is null or trim(v_name) = '' then
+      v_name := 'Smaragda';
+    end if;
+
+    insert into public.pilot_thread_identity (
+      thread_root_notification_id,
+      recipient_user_id,
+      sender_persona_bandit_id,
+      sender_persona_display_name,
+      sender_persona_avatar_url,
+      opening_message
+    ) values (
+      NEW.id,
+      v_recipient,
+      v_bandit_id,
+      v_name,
+      coalesce(v_avatar, ''),
+      v_opening
+    )
+    on conflict (thread_root_notification_id) do update set
+      recipient_user_id = excluded.recipient_user_id,
+      sender_persona_bandit_id = excluded.sender_persona_bandit_id,
+      sender_persona_display_name = excluded.sender_persona_display_name,
+      sender_persona_avatar_url = excluded.sender_persona_avatar_url,
+      opening_message = excluded.opening_message,
+      updated_at = now();
+  end if;
+
+  return NEW;
+end;
+$$;
+
+drop trigger if exists tr_notifications_sync_pilot_identity on public.notifications;
+create trigger tr_notifications_sync_pilot_identity
+  after insert on public.notifications
+  for each row
+  execute function public.sync_pilot_thread_identity_from_notification();
+
+-- Allow routed bandit_reply rows used by the app (granular reference types).
+drop policy if exists "notifications_insert_routed" on public.notifications;
+create policy "notifications_insert_routed"
+  on public.notifications
+  for insert
+  to authenticated
+  with check (
+    auth.uid() <> user_id
+    and (
+      (
+        type in ('local_friend', 'bandit_question')
+        and reference_type in ('local_friend_request', 'bandit_question_request')
+        and reference_id = auth.uid()::text
+      )
+      or (
+        type = 'bandit_reply'
+        and reference_type in ('operator_reply', 'operator_reply_local_friend', 'operator_reply_bandit_question')
+        and reference_id is not null
+      )
+      or (
+        type = 'live_alert'
+        and reference_type = 'pilot_live_alert'
+      )
+      or (
+        type = 'pilot_thread_echo'
+        and reference_type in ('signal_delivery', 'presence_thread')
+        and reference_id is not null
+        and user_id = (
+          select (nullif(trim(value), ''))::uuid
+          from public.app_public_config
+          where key = 'operator_user_id'
+          limit 1
+        )
+      )
+    )
+  );

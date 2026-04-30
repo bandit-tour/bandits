@@ -115,6 +115,84 @@ export type SubmitScamAlertInput = {
   imageUri?: string | null;
 };
 
+function toUuidOrNull(value: unknown): string | null {
+  const v = String(value ?? '').trim();
+  if (!v) return null;
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(v) ? v : null;
+}
+
+const UUID_LIKE_KEYS = new Set([
+  'reported_by',
+  'bandit_id',
+  'hotel_id',
+  'area_id',
+  'city_id',
+  'image_id',
+  'created_by',
+  'user_id',
+]);
+
+function sanitizeUuidLikeFields<T extends Record<string, unknown>>(row: T): T {
+  const out: Record<string, unknown> = { ...row };
+  for (const [key, value] of Object.entries(out)) {
+    const keyLc = key.toLowerCase();
+    const looksUuidLike = UUID_LIKE_KEYS.has(keyLc) || keyLc.endsWith('_id');
+    if (!looksUuidLike) continue;
+    if (value == null) continue;
+    const next = toUuidOrNull(value);
+    out[key] = next;
+  }
+  return out as T;
+}
+
+function keysWithBareEmptyString(record: Record<string, unknown>): string[] {
+  return Object.entries(record)
+    .filter(([, v]) => v === '')
+    .map(([k]) => k);
+}
+
+function coerceEmptyUuidLikeToNull(record: Record<string, unknown>): void {
+  for (const key of Object.keys(record)) {
+    if (record[key] !== '') continue;
+    const keyLc = key.toLowerCase();
+    if (UUID_LIKE_KEYS.has(keyLc) || keyLc.endsWith('_id')) {
+      record[key] = null;
+    }
+  }
+}
+
+/** Last-mile insert payload: UUID-like fields → valid uuid or null, never ''. Logs exact fields audited. */
+function finalizeScamAlertsInsertPayload<T extends Record<string, unknown>>(row: T, logPrefix: string): T {
+  const emptyBefore = keysWithBareEmptyString(row as Record<string, unknown>);
+  if (emptyBefore.length) {
+    console.warn(`${logPrefix} payload:empty_string_keys`, emptyBefore);
+  }
+  const out = sanitizeUuidLikeFields({ ...(row as Record<string, unknown>) }) as unknown as T;
+  const rec = out as Record<string, unknown>;
+  coerceEmptyUuidLikeToNull(rec);
+  const stillEmptyUuidish = keysWithBareEmptyString(rec).filter((k) => {
+    const kl = k.toLowerCase();
+    return UUID_LIKE_KEYS.has(kl) || kl.endsWith('_id');
+  });
+  if (stillEmptyUuidish.length) {
+    console.warn(`${logPrefix} payload:uuid_like_still_empty_after_normalize`, stillEmptyUuidish);
+    for (const k of stillEmptyUuidish) rec[k] = null;
+  }
+  if (rec.image_url === '') {
+    delete rec.image_url;
+  }
+  const audit = Object.fromEntries(
+    Object.entries(rec).filter(([k, v]) => {
+      const kl = k.toLowerCase();
+      const uuidish = UUID_LIKE_KEYS.has(kl) || kl.endsWith('_id');
+      return uuidish || v === '';
+    }),
+  );
+  console.log(`${logPrefix} payload:uuid_audit`, JSON.stringify(audit));
+  console.log(`${logPrefix} payload:final`, JSON.stringify(rec));
+  return out;
+}
+
 function base64ToBlob(base64: string, mime: string): Blob {
   const clean = base64.includes(',') ? base64.split(',').pop() ?? base64 : base64;
   const binary = globalThis.atob(clean);
@@ -157,6 +235,27 @@ async function uploadReportImage(userId: string, localUri: string): Promise<stri
   }
 }
 
+const SUBMIT_FAIL_USER = 'Something went wrong. Please try again.';
+
+/** Never surface server config strings (Vercel/RLS) to guests. Exported for bandiTEAM report UI. */
+export function userFacingScamSubmitError(raw: unknown): string {
+  const t = (typeof raw === 'string' ? raw : raw instanceof Error ? raw.message : String(raw ?? '')).trim();
+  const l = t.toLowerCase();
+  if (!t) return SUBMIT_FAIL_USER;
+  if (
+    l.includes('report routing') ||
+    l.includes('pilot delete api') ||
+    l.includes('supabase_service') ||
+    (l.includes('not configured') && (l.includes('routing') || l.includes('api') || l.includes('service role')))
+  ) {
+    return SUBMIT_FAIL_USER;
+  }
+  if (l.includes('row-level security') || l.includes('permission denied') || l.includes('rls')) {
+    return SUBMIT_FAIL_USER;
+  }
+  return t.length > 200 ? SUBMIT_FAIL_USER : t;
+}
+
 async function submitScamAlertViaServerApi(
   accessToken: string,
   input: SubmitScamAlertInput,
@@ -165,7 +264,7 @@ async function submitScamAlertViaServerApi(
   severity: number,
 ): Promise<void> {
   const base = getPilotApiBaseUrl();
-  if (!base) throw new Error('Report server route unavailable.');
+  if (!base) throw new Error(SUBMIT_FAIL_USER);
   const res = await fetch(`${base}/api/scam-report`, {
     method: 'POST',
     headers: {
@@ -183,7 +282,7 @@ async function submitScamAlertViaServerApi(
     }),
   });
   const j = (await res.json().catch(() => ({}))) as { error?: string };
-  if (!res.ok) throw new Error((j && j.error) || 'Could not save report.');
+  if (!res.ok) throw new Error(userFacingScamSubmitError((j && j.error) || 'x'));
 }
 
 /**
@@ -208,6 +307,8 @@ export async function submitScamAlert(input: SubmitScamAlertInput): Promise<void
     accessToken = s2.data.session?.access_token ?? accessToken;
   }
   if (!user) throw new Error('Could not start a session. Try again in a moment.');
+  const reportedBy = toUuidOrNull(user.id);
+  if (!reportedBy) throw new Error('Could not verify your session.');
 
   let imageUrl: string | null = null;
   if (input.imageUri?.trim()) {
@@ -225,30 +326,36 @@ export async function submitScamAlert(input: SubmitScamAlertInput): Promise<void
   if (!Number.isFinite(sev)) sev = 2;
   const severity = Math.min(3, Math.max(1, sev));
 
-  const rowFull = {
-    city: input.city.trim(),
-    location: input.location.trim(),
-    title: input.title.trim(),
-    description: input.description.trim(),
-    reported_by: user.id,
-    category,
-    severity,
-    image_url: imageUrl ?? undefined,
-    moderation_status: 'published' as const,
-    admin_verified: false,
-  };
+  const rowFull = finalizeScamAlertsInsertPayload(
+    {
+      city: input.city.trim(),
+      location: input.location.trim(),
+      title: input.title.trim(),
+      description: input.description.trim(),
+      reported_by: reportedBy,
+      category,
+      severity,
+      image_url: imageUrl ?? undefined,
+      moderation_status: 'published' as const,
+      admin_verified: false,
+    } as Record<string, unknown>,
+    '[submitScamAlert]',
+  );
 
   async function insertDirect(): Promise<{ ok: boolean; lastError: { message?: string } | null }> {
     let { error } = await supabase.from('scam_alerts').insert(rowFull as any);
     if (error && isMissingScamColumnError(error.message ?? '')) {
-      const rowLegacy = {
-        city: rowFull.city,
-        location: rowFull.location,
-        title: rowFull.title,
-        description: rowFull.description,
-        reported_by: rowFull.reported_by,
-        ...(imageUrl ? { image_url: imageUrl } : {}),
-      };
+      const rowLegacy = finalizeScamAlertsInsertPayload(
+        {
+          city: rowFull.city,
+          location: rowFull.location,
+          title: rowFull.title,
+          description: rowFull.description,
+          reported_by: rowFull.reported_by,
+          ...(imageUrl ? { image_url: imageUrl } : {}),
+        } as Record<string, unknown>,
+        '[submitScamAlert:legacy]',
+      );
       const second = await supabase.from('scam_alerts').insert(rowLegacy as any);
       error = second.error;
     }
@@ -292,14 +399,13 @@ export async function submitScamAlert(input: SubmitScamAlertInput): Promise<void
       requestNotificationsRefresh();
       return;
     } catch (e) {
-      const apiMsg = e instanceof Error ? e.message : String(e);
       const dbMsg = direct.lastError?.message?.trim();
-      console.warn('[submitScamAlert] direct insert failed; API fallback failed:', apiMsg, dbMsg);
-      throw new Error(dbMsg || apiMsg || 'Could not save report.');
+      console.warn('[submitScamAlert] direct + API failed', dbMsg, e);
+      throw new Error(userFacingScamSubmitError(dbMsg || e));
     }
   }
 
-  throw new Error(direct.lastError?.message || 'Could not save report.');
+  throw new Error(userFacingScamSubmitError(direct.lastError?.message));
 }
 
 async function selectScamAlertRowById(
