@@ -142,11 +142,6 @@ export default function ChatScreen() {
     notificationTitle,
   ]);
 
-  const isGuestAskLocalBanDitChat = useMemo(() => {
-    if (operatorMode) return false;
-    return String(notificationType || '').trim() === 'bandit_question';
-  }, [operatorMode, notificationType]);
-
   const personaBarLock =
     threadIdentity?.sender_persona_display_name?.trim() || deskPersonaLock.trim() || '';
 
@@ -705,7 +700,7 @@ export default function ChatScreen() {
         </View>
       </View>
     );
-  }, [displayPersona, operatorMode]);
+  }, [displayPersona]);
 
   if (!canUseChat) {
     return (
@@ -713,8 +708,7 @@ export default function ChatScreen() {
         <Stack.Screen options={{ headerShown: true, title: 'Chat', headerBackTitle: 'Back' }} />
         <View style={[styles.flex, { justifyContent: 'center', paddingHorizontal: 20, backgroundColor: '#F0F2F5' }]}>
           <Text style={{ fontSize: 15, color: '#333', lineHeight: 22, textAlign: 'center' }}>
-            Chat is available only when you have an active conversation. Open a thread from Notifications, or use Ask Me /
-            Local Friend to start.
+            No conversation open yet.
           </Text>
         </View>
       </>
@@ -747,16 +741,7 @@ export default function ChatScreen() {
               listRef.current?.scrollToEnd({ animated });
             }}
             refreshControl={threadRefreshControl}
-            ListEmptyComponent={<Text style={styles.emptyState}>No replies yet.</Text>}
-            ListHeaderComponent={
-              operatorMode ? null : (
-                <Text style={styles.threadHint}>
-                  {isGuestAskLocalBanDitChat
-                    ? `Your question to ${displayPersona} is on the right. Replies from ${displayPersona} appear below on the left.`
-                    : `Chat with ${displayPersona}. Notifications are one-off updates; this screen is the two-way thread.`}
-                </Text>
-              )
-            }
+            ListEmptyComponent={null}
           />
         )}
         {operatorMode && (
@@ -818,18 +803,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: 14,
     paddingTop: 12,
     paddingBottom: 8,
-  },
-  threadHint: {
-    fontSize: 12,
-    color: '#666',
-    marginBottom: 14,
-    lineHeight: 17,
-  },
-  emptyState: {
-    fontSize: 14,
-    color: '#666',
-    textAlign: 'center',
-    paddingVertical: 20,
   },
   loadingWrap: {
     flex: 1,
