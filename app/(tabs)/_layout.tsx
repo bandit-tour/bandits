@@ -1,21 +1,24 @@
 import { Stack, usePathname, useRouter } from 'expo-router';
-import React, { useEffect, useState } from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import React, { useEffect, useLayoutEffect, useState } from 'react';
+import { Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import MainBottomNav from '@/components/MainBottomNav';
 import NearbyContextRunner from '@/components/NearbyContextRunner';
 import { useColorScheme } from '@/hooks/useColorScheme';
-import { CityProvider } from '@/contexts/CityContext';
-import { ensureAnonymousSession, syncPilotHotelProfileIfNeeded } from '@/lib/pilotSession';
-import { supabase } from '@/lib/supabase';
+import { useAppState } from '@/contexts/AppStateContext';
+import {
+  hasSeenOpeningIntro,
+} from '@/lib/openingIntroStorage';
+import { bootstrapMainAppSession, syncPilotHotelProfileIfNeeded } from '@/lib/pilotSession';
 
-type LowerTabKey = 'home' | 'localFriend' | 'chat' | 'inbox' | 'menu';
+type LowerTabKey = 'home' | 'localFriend' | 'chat' | 'alerts' | 'inbox' | 'menu';
 type UpperTabKey = 'bandits' | 'mySpots' | 'explore';
 
 function getLowerTabFromPath(pathname: string | null): LowerTabKey {
   if (!pathname) return 'home';
   if (pathname.includes('/chat')) return 'chat';
+  if (pathname.includes('/alerts') || pathname.includes('/scam-alerts')) return 'alerts';
   if (pathname.includes('/inbox')) return 'inbox';
   if (pathname.includes('/localFriend')) return 'localFriend';
   if (pathname.includes('/menu')) return 'menu';
@@ -26,6 +29,8 @@ function getUpperTabFromPath(pathname: string | null): UpperTabKey | null {
   if (!pathname) return 'bandits';
   if (
     pathname.includes('/chat') ||
+    pathname.includes('/alerts') ||
+    pathname.includes('/scam-alerts') ||
     pathname.includes('/inbox') ||
     pathname.includes('/menu') ||
     pathname.includes('/localFriend') ||
@@ -45,54 +50,56 @@ export default function TabsLayout() {
   const router = useRouter();
   const colorScheme = useColorScheme();
   const insets = useSafeAreaInsets();
+  const { unreadCount } = useAppState();
 
   const lowerTab = getLowerTabFromPath(pathname) as LowerTabKey;
   const upperTab = getUpperTabFromPath(pathname);
   const showUpperTabs = upperTab !== null;
-  const [inboxBadgeCount, setInboxBadgeCount] = useState(0);
-
   const tabColor = colorScheme === 'dark' ? '#0a7ea4' : '#0a7ea4';
   const inactiveColor = colorScheme === 'dark' ? '#A0A0A0' : '#777';
-  const go = (path: '/bandits' | '/mySpots' | '/explore' | '/localFriend' | '/chat' | '/inbox' | '/menu') => {
-    router.navigate(path);
+  const go = (
+    path:
+      | '/bandits'
+      | '/mySpots'
+      | '/explore'
+      | '/localFriend'
+      | '/chat'
+      | '/alerts'
+      | '/inbox'
+      | '/menu',
+  ) => {
+    router.push(path);
   };
 
   useEffect(() => {
     void (async () => {
-      await ensureAnonymousSession();
+      /** Waits for persisted email sessions to hydrate before anon — avoids wiping operator login on web. */
+      await bootstrapMainAppSession();
       await syncPilotHotelProfileIfNeeded();
     })();
   }, []);
 
+  // Keep tabs routes stable on web; avoid intermediate blank shell during intro redirects.
+  const webNeedIntroBounce = false;
+
+  /**
+   * Native: deep link to a tab on first install can skip `index` — same bounce to opening intro.
+   */
   useEffect(() => {
-    let active = true;
-    const loadUnread = async () => {
-      const {
-        data: { user },
-      } = await supabase.auth.getUser();
-      if (!user || !active) {
-        if (active) setInboxBadgeCount(0);
-        return;
-      }
-      const { count } = await supabase
-        .from('notifications')
-        .select('id', { count: 'exact', head: true })
-        .eq('user_id', user.id)
-        .eq('is_read', false);
-      if (active) setInboxBadgeCount(count || 0);
-    };
-    void loadUnread();
-    const timer = setInterval(() => {
-      void loadUnread();
-    }, 15000);
+    if (Platform.OS === 'web') return;
+    let a = true;
+    void (async () => {
+      const seen = await hasSeenOpeningIntro();
+      if (!a || seen) return;
+      router.replace('/' as Href);
+    })();
     return () => {
-      active = false;
-      clearInterval(timer);
+      a = false;
     };
-  }, []);
+  }, [router]);
 
   return (
-    <CityProvider>
+    <>
       <NearbyContextRunner />
       <View style={styles.container}>
         {showUpperTabs && (
@@ -130,12 +137,13 @@ export default function TabsLayout() {
           onHome={() => go('/bandits')}
           onLocalFriend={() => go('/localFriend')}
           onChat={() => go('/chat')}
+          onAlerts={() => go('/alerts')}
           onInbox={() => go('/inbox')}
           onMenu={() => go('/menu')}
-          inboxBadgeCount={inboxBadgeCount}
+          inboxBadgeCount={unreadCount}
         />
       </View>
-    </CityProvider>
+    </>
   );
 }
 
@@ -163,6 +171,12 @@ function UpperTabButton({
 }
 
 const styles = StyleSheet.create({
+  introRedirectShell: {
+    flex: 1,
+    width: '100%',
+    backgroundColor: '#0a0a0a',
+    ...Platform.select({ web: { minHeight: '100vh' as const }, default: {} }),
+  },
   container: { flex: 1, backgroundColor: '#FFFFFF' },
   content: { flex: 1 },
   upperTabs: {

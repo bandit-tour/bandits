@@ -1,0 +1,14 @@
+{
+  "outDir": "C:\\Users\\blonj\\Documents\\bandits\\artifacts\\runtime-proof\\bottle-video-proof-2026-04-25T10-10-40",
+  "codePathPlayIntro": "app/hotel/PlayTheatrouHotelIntro.tsx -> require('@/assets/images/local-friend-bottle.mov')",
+  "codePathSubmitReport": "app/bandiTeam/report.tsx -> LocalFriendBottleHero -> require('@/assets/images/local-friend-bottle.mov')",
+  "checks": {
+    "playIntroVideoPlaying": true,
+    "submitReportVideoPlaying": true
+  },
+  "screenshots": {
+    "playIntro": "C:\\Users\\blonj\\Documents\\bandits\\artifacts\\runtime-proof\\bottle-video-proof-2026-04-25T10-10-40\\1-play-intro-video.png",
+    "submitReport": "C:\\Users\\blonj\\Documents\\bandits\\artifacts\\runtime-proof\\bottle-video-proof-2026-04-25T10-10-40\\2-submit-report-video.png"
+  },
+  "pass": "PASS"
+}

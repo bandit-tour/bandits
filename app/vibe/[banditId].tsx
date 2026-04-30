@@ -2,7 +2,6 @@ import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
-  Image,
   Linking,
   Pressable,
   ScrollView,
@@ -12,7 +11,8 @@ import {
 } from 'react-native';
 
 import { getEvents } from '@/app/services/events';
-import { fetchGooglePlacePhotoUrl, getCategoryFallbackImage } from '@/lib/placePhoto';
+import { fetchGooglePlacePhotoUrl, getCategoryFallbackImage, picsumPlaceImage } from '@/lib/placePhoto';
+import { Image as ExpoImage } from 'expo-image';
 import { getSpotsByBanditId } from '@/services/spots';
 import { mergeVibeSequence, type VibeStop } from '@/services/vibeRoute';
 import { Database } from '@/lib/database.types';
@@ -27,13 +27,15 @@ function VibeStopImage({ stop }: { stop: VibeStop }) {
   const [remoteDone, setRemoteDone] = useState(false);
 
   const fallbackPicsum = getCategoryFallbackImage(stop.category, stop.key, 800, 600);
+  const backupPicsum = picsumPlaceImage(`${stop.key}-vibe`, 800, 600);
 
   const uris = useMemo(() => {
-    const list = [...stop.imageCandidates];
+    const list = stop.imageCandidates.map((u) => String(u).trim()).filter(Boolean);
     if (remote) list.push(remote);
     list.push(fallbackPicsum);
+    list.push(backupPicsum);
     return list;
-  }, [stop.imageCandidates, stop.key, remote, fallbackPicsum]);
+  }, [stop.imageCandidates, stop.key, remote, fallbackPicsum, backupPicsum]);
 
   useEffect(() => {
     setAttempt(0);
@@ -79,8 +81,8 @@ function VibeStopImage({ stop }: { stop: VibeStop }) {
     };
   }, [stop.key, stop.kind, stop.eventId, stop.name, stop.address, stop.imageCandidates.length]);
 
-  const safeIndex = Math.min(attempt, uris.length - 1);
-  const uri = uris[safeIndex] ?? fallbackPicsum;
+  const safeIndex = Math.min(attempt, Math.max(0, uris.length - 1));
+  const uri = uris[safeIndex] ?? backupPicsum;
   const showLoader = stop.imageCandidates.length === 0 && !remoteDone && !remote;
 
   if (showLoader) {
@@ -92,10 +94,13 @@ function VibeStopImage({ stop }: { stop: VibeStop }) {
   }
 
   return (
-    <Image
+    <ExpoImage
       source={{ uri }}
       style={styles.stopImage}
-      resizeMode="cover"
+      contentFit="cover"
+      cachePolicy="memory-disk"
+      transition={180}
+      recyclingKey={stop.key}
       onError={() => {
         if (attempt < uris.length - 1) setAttempt((a) => a + 1);
       }}
@@ -142,14 +147,14 @@ export default function VibeRouteScreen() {
           tipsByEventId[row.event_id] = row.personal_tip;
         });
 
-        let spotRows: { id: string; name: string; address?: string; city?: string; description?: string; image_url?: string; category?: string }[] = [];
+        let spotRows: Database['public']['Tables']['spots']['Row'][] = [];
         try {
           spotRows = await getSpotsByBanditId(banditId);
         } catch {
           spotRows = [];
         }
 
-        const sequence = mergeVibeSequence(eventList, tipsByEventId, spotRows as any);
+        const sequence = mergeVibeSequence(eventList, tipsByEventId, spotRows);
         setStops(sequence);
       } catch (e) {
         setError(e instanceof Error ? e.message : 'Something went wrong.');
@@ -163,7 +168,7 @@ export default function VibeRouteScreen() {
 
   const title = useMemo(() => {
     if (!bandit) return 'Vibe route';
-    return `${bandit.name}’s thread`;
+    return `${bandit.name}’s vibe`;
   }, [bandit]);
 
   const openStop = useCallback(
@@ -294,7 +299,7 @@ const styles = StyleSheet.create({
     borderRadius: 10,
     overflow: 'hidden',
     marginBottom: 8,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: '#E8E8E8',
   },
   stopImage: { width: '100%', height: '100%' },
   vibeImageLoading: {

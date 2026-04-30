@@ -1,0 +1,21 @@
+{
+  "base": "https://bandits-two.vercel.app",
+  "travelerEmail": "askme.prod.1777542432115@example.com",
+  "seed": "askme-e2e-1777542432115",
+  "checks": {
+    "travelerSignedIn": false,
+    "askSubmitted": false,
+    "notificationsDirectionCorrect": false,
+    "operatorSignedIn": false,
+    "pilotDeskSingleEntry": false,
+    "chatOpenedFromNotification": false,
+    "chatShowsSingleThreadMessage": false
+  },
+  "screenshots": {
+    "bandits": "C:\\Users\\blonj\\Documents\\bandits\\artifacts\\runtime-proof\\askme-production-e2e-2026-04-30T09-47-12\\1-traveler-bandits.png"
+  },
+  "errors": [
+    "locator.click: Timeout 20000ms exceeded.\nCall log:\n  - waiting for getByText('Open profile').first()\n"
+  ],
+  "pass": "FAIL"
+}

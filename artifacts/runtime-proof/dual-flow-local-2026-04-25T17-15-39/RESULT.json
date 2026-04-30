@@ -1,0 +1,25 @@
+{
+  "flow": "local",
+  "base": "http://localhost:8081",
+  "checks": {
+    "introFixed": true,
+    "noWhitePage": true,
+    "heroBannerRestored": true,
+    "profileUpdatedVisible": true,
+    "alertsMenuCorrected": true,
+    "navigationWorking": true
+  },
+  "urls": {
+    "afterIntro": "http://localhost:8081/bandits"
+  },
+  "screenshots": {
+    "introFirstLoad": "C:\\Users\\blonj\\Documents\\bandits\\artifacts\\runtime-proof\\dual-flow-local-2026-04-25T17-15-39\\1-intro-first-load.png",
+    "afterIntroLand": "C:\\Users\\blonj\\Documents\\bandits\\artifacts\\runtime-proof\\dual-flow-local-2026-04-25T17-15-39\\2-after-intro-land.png",
+    "homeBandits": "C:\\Users\\blonj\\Documents\\bandits\\artifacts\\runtime-proof\\dual-flow-local-2026-04-25T17-15-39\\3-home-bandits.png",
+    "menu": "C:\\Users\\blonj\\Documents\\bandits\\artifacts\\runtime-proof\\dual-flow-local-2026-04-25T17-15-39\\4-menu.png",
+    "profile": "C:\\Users\\blonj\\Documents\\bandits\\artifacts\\runtime-proof\\dual-flow-local-2026-04-25T17-15-39\\5-profile.png",
+    "navigation": "C:\\Users\\blonj\\Documents\\bandits\\artifacts\\runtime-proof\\dual-flow-local-2026-04-25T17-15-39\\6-navigation.png"
+  },
+  "pass": "PASS",
+  "error": null
+}

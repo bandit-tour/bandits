@@ -1,0 +1,102 @@
+{
+  "base": "https://bandits-two.vercel.app",
+  "guestUrl": "https://bandits-two.vercel.app/hotel/play-theatrou",
+  "outDir": "C:\\Users\\blonj\\Documents\\bandits\\artifacts\\runtime-proof\\real-link-audit-2026-04-25T14-26-12",
+  "checks": {
+    "firstVisitShowsIntroLikeUi": false,
+    "firstVisitHadClickableCta": false,
+    "secondVisitUrl": "https://bandits-two.vercel.app/hotel/play-theatrou",
+    "alertsRoute": {
+      "url": "https://bandits-two.vercel.app/scam-alerts",
+      "hasNotFoundText": false
+    },
+    "followingRoute": {
+      "url": "https://bandits-two.vercel.app/following",
+      "hasNotFoundText": false
+    },
+    "profileRoute": {
+      "url": "https://bandits-two.vercel.app/profile",
+      "hasNotFoundText": false
+    },
+    "bandiTeam-reportRoute": {
+      "url": "https://bandits-two.vercel.app/banditeam/report",
+      "hasNotFoundText": false
+    },
+    "menuRoute": {
+      "url": "https://bandits-two.vercel.app/menu",
+      "hasNotFoundText": false
+    },
+    "hotelierRoute": {
+      "url": "https://bandits-two.vercel.app/hotelier",
+      "hasNotFoundText": false
+    }
+  },
+  "steps": [
+    {
+      "name": "first_visit_guest_link",
+      "url": "https://bandits-two.vercel.app/hotel/play-theatrou",
+      "bodySample": "You need to enable JavaScript to run this app. if ('serviceWorker' in navigator) { window.addEventListener('load', () => { navigator.serviceWorker .register('/sw.js') .then(registration => { console.log('✅ Service Worker registered with scope:', registration.s"
+    },
+    {
+      "name": "attempt_continue_once",
+      "url": "https://bandits-two.vercel.app/hotel/play-theatrou",
+      "bodySample": "You need to enable JavaScript to run this app. if ('serviceWorker' in navigator) { window.addEventListener('load', () => { navigator.serviceWorker .register('/sw.js') .then(registration => { console.log('✅ Service Worker registered with scope:', registration.s"
+    },
+    {
+      "name": "second_visit_same_guest_link",
+      "url": "https://bandits-two.vercel.app/hotel/play-theatrou",
+      "bodySample": "You need to enable JavaScript to run this app. if ('serviceWorker' in navigator) { window.addEventListener('load', () => { navigator.serviceWorker .register('/sw.js') .then(registration => { console.log('✅ Service Worker registered with scope:', registration.s"
+    },
+    {
+      "name": "open_alerts",
+      "url": "https://bandits-two.vercel.app/scam-alerts",
+      "bodySample": "You need to enable JavaScript to run this app. if ('serviceWorker' in navigator) { window.addEventListener('load', () => { navigator.serviceWorker .register('/sw.js') .then(registration => { console.log('✅ Service Worker registered with scope:', registration.s"
+    },
+    {
+      "name": "open_following",
+      "url": "https://bandits-two.vercel.app/following",
+      "bodySample": "You need to enable JavaScript to run this app. if ('serviceWorker' in navigator) { window.addEventListener('load', () => { navigator.serviceWorker .register('/sw.js') .then(registration => { console.log('✅ Service Worker registered with scope:', registration.s"
+    },
+    {
+      "name": "open_profile",
+      "url": "https://bandits-two.vercel.app/profile",
+      "bodySample": "You need to enable JavaScript to run this app. if ('serviceWorker' in navigator) { window.addEventListener('load', () => { navigator.serviceWorker .register('/sw.js') .then(registration => { console.log('✅ Service Worker registered with scope:', registration.s"
+    },
+    {
+      "name": "open_bandiTeam-report",
+      "url": "https://bandits-two.vercel.app/banditeam/report",
+      "bodySample": "You need to enable JavaScript to run this app. if ('serviceWorker' in navigator) { window.addEventListener('load', () => { navigator.serviceWorker .register('/sw.js') .then(registration => { console.log('✅ Service Worker registered with scope:', registration.s"
+    },
+    {
+      "name": "open_menu",
+      "url": "https://bandits-two.vercel.app/menu",
+      "bodySample": "You need to enable JavaScript to run this app. if ('serviceWorker' in navigator) { window.addEventListener('load', () => { navigator.serviceWorker .register('/sw.js') .then(registration => { console.log('✅ Service Worker registered with scope:', registration.s"
+    },
+    {
+      "name": "open_hotelier",
+      "url": "https://bandits-two.vercel.app/hotelier",
+      "bodySample": "You need to enable JavaScript to run this app. if ('serviceWorker' in navigator) { window.addEventListener('load', () => { navigator.serviceWorker .register('/sw.js') .then(registration => { console.log('✅ Service Worker registered with scope:', registration.s"
+    }
+  ],
+  "screenshots": {
+    "1-first-visit": "C:\\Users\\blonj\\Documents\\bandits\\artifacts\\runtime-proof\\real-link-audit-2026-04-25T14-26-12\\1-first-visit.png",
+    "2-after-first-cta": "C:\\Users\\blonj\\Documents\\bandits\\artifacts\\runtime-proof\\real-link-audit-2026-04-25T14-26-12\\2-after-first-cta.png",
+    "3-second-visit": "C:\\Users\\blonj\\Documents\\bandits\\artifacts\\runtime-proof\\real-link-audit-2026-04-25T14-26-12\\3-second-visit.png",
+    "4-alerts": "C:\\Users\\blonj\\Documents\\bandits\\artifacts\\runtime-proof\\real-link-audit-2026-04-25T14-26-12\\4-alerts.png",
+    "4-following": "C:\\Users\\blonj\\Documents\\bandits\\artifacts\\runtime-proof\\real-link-audit-2026-04-25T14-26-12\\4-following.png",
+    "4-profile": "C:\\Users\\blonj\\Documents\\bandits\\artifacts\\runtime-proof\\real-link-audit-2026-04-25T14-26-12\\4-profile.png",
+    "4-bandiTeam-report": "C:\\Users\\blonj\\Documents\\bandits\\artifacts\\runtime-proof\\real-link-audit-2026-04-25T14-26-12\\4-bandiTeam-report.png",
+    "4-menu": "C:\\Users\\blonj\\Documents\\bandits\\artifacts\\runtime-proof\\real-link-audit-2026-04-25T14-26-12\\4-menu.png",
+    "4-hotelier": "C:\\Users\\blonj\\Documents\\bandits\\artifacts\\runtime-proof\\real-link-audit-2026-04-25T14-26-12\\4-hotelier.png"
+  },
+  "errors": [
+    "pageerror: A navigator cannot contain multiple 'Screen' components with the same name (found duplicate screen named 'bandiTeam')",
+    "pageerror: A navigator cannot contain multiple 'Screen' components with the same name (found duplicate screen named 'bandiTeam')",
+    "pageerror: A navigator cannot contain multiple 'Screen' components with the same name (found duplicate screen named 'bandiTeam')",
+    "pageerror: A navigator cannot contain multiple 'Screen' components with the same name (found duplicate screen named 'bandiTeam')",
+    "pageerror: A navigator cannot contain multiple 'Screen' components with the same name (found duplicate screen named 'bandiTeam')",
+    "pageerror: A navigator cannot contain multiple 'Screen' components with the same name (found duplicate screen named 'bandiTeam')",
+    "pageerror: A navigator cannot contain multiple 'Screen' components with the same name (found duplicate screen named 'bandiTeam')",
+    "pageerror: A navigator cannot contain multiple 'Screen' components with the same name (found duplicate screen named 'bandiTeam')"
+  ]
+}

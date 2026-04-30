@@ -1,0 +1,21 @@
+{
+  "hasNoReplies": true,
+  "hasReq": true,
+  "hasRep": true,
+  "persist": false,
+  "dn": "Proof User",
+  "ci": "Athens",
+  "vb": "Proof vibe",
+  "img": false,
+  "msg": "real-request-1777019082253",
+  "rep": "real-reply-1777019082253",
+  "shots": {
+    "empty": "artifacts/runtime-proof/localfriend-profile-proof-v2/01-chat-empty.png",
+    "sent": "artifacts/runtime-proof/localfriend-profile-proof-v2/02-localfriend-sent.png",
+    "row": "artifacts/runtime-proof/localfriend-profile-proof-v2/03-desk-row.png",
+    "open": "artifacts/runtime-proof/localfriend-profile-proof-v2/04-chat-open-real-request.png",
+    "reply": "artifacts/runtime-proof/localfriend-profile-proof-v2/05-chat-real-reply.png",
+    "profileBefore": "artifacts/runtime-proof/localfriend-profile-proof-v2/06-profile-before-refresh.png",
+    "profileAfter": "artifacts/runtime-proof/localfriend-profile-proof-v2/07-profile-after-refresh.png"
+  }
+}

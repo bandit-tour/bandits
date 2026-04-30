@@ -1,0 +1,47 @@
+{
+  "outDir": "C:\\Users\\blonj\\Documents\\bandits\\artifacts\\runtime-proof\\play-full-regression-2026-04-25T10-08-09",
+  "checks": {
+    "introFlow": true,
+    "home": true,
+    "menu": true,
+    "profilePersistence": false,
+    "photoPersistence": false,
+    "following": false,
+    "alerts": false,
+    "settings": false,
+    "hotelierVisible": true,
+    "pilotDeskVisible": true,
+    "crossPageNavigationStable": false
+  },
+  "screenshots": {
+    "intro": "C:\\Users\\blonj\\Documents\\bandits\\artifacts\\runtime-proof\\play-full-regression-2026-04-25T10-08-09\\1-intro.png",
+    "home": "C:\\Users\\blonj\\Documents\\bandits\\artifacts\\runtime-proof\\play-full-regression-2026-04-25T10-08-09\\2-home.png",
+    "menu": "C:\\Users\\blonj\\Documents\\bandits\\artifacts\\runtime-proof\\play-full-regression-2026-04-25T10-08-09\\3-menu.png",
+    "profileA": "C:\\Users\\blonj\\Documents\\bandits\\artifacts\\runtime-proof\\play-full-regression-2026-04-25T10-08-09\\4-profile-a.png",
+    "profileB": "C:\\Users\\blonj\\Documents\\bandits\\artifacts\\runtime-proof\\play-full-regression-2026-04-25T10-08-09\\5-profile-b.png",
+    "following": "C:\\Users\\blonj\\Documents\\bandits\\artifacts\\runtime-proof\\play-full-regression-2026-04-25T10-08-09\\6-following.png",
+    "alerts": "C:\\Users\\blonj\\Documents\\bandits\\artifacts\\runtime-proof\\play-full-regression-2026-04-25T10-08-09\\7-alerts.png",
+    "settings": "C:\\Users\\blonj\\Documents\\bandits\\artifacts\\runtime-proof\\play-full-regression-2026-04-25T10-08-09\\8-settings.png",
+    "hotelier": "C:\\Users\\blonj\\Documents\\bandits\\artifacts\\runtime-proof\\play-full-regression-2026-04-25T10-08-09\\9-hotelier.png",
+    "pilotDesk": "C:\\Users\\blonj\\Documents\\bandits\\artifacts\\runtime-proof\\play-full-regression-2026-04-25T10-08-09\\10-pilot-desk.png",
+    "navStable": "C:\\Users\\blonj\\Documents\\bandits\\artifacts\\runtime-proof\\play-full-regression-2026-04-25T10-08-09\\11-nav-stable.png"
+  },
+  "consoleErrors": [
+    "Failed to load resource: the server responded with a status of 401 ()",
+    "Failed to load resource: the server responded with a status of 400 ()",
+    "Failed to load resource: the server responded with a status of 400 ()",
+    "Failed to load resource: the server responded with a status of 401 ()",
+    "Failed to load resource: the server responded with a status of 404 ()",
+    "Failed to load resource: the server responded with a status of 404 ()",
+    "Failed to load resource: the server responded with a status of 404 ()",
+    "Failed to load resource: the server responded with a status of 404 ()",
+    "Failed to load resource: the server responded with a status of 404 ()",
+    "Failed to load resource: the server responded with a status of 404 ()",
+    "Failed to load resource: the server responded with a status of 404 ()",
+    "Failed to load resource: the server responded with a status of 404 ()"
+  ],
+  "pageErrors": [
+    "locator.click: Timeout 10000ms exceeded.\nCall log:\n  - waiting for getByText('Profile').first()\n    - locator resolved to <div dir=\"auto\" class=\"css-text-146c3p1 r-color-12qd0a2 r-fontSize-1enofrn r-marginTop-14gqq1x\">Save your profile and preferences</div>\n  - attempting click action\n    2 × waiting for element to be visible, enabled and stable\n      - element is not visible\n    - retrying click action\n    - waiting 20ms\n    2 × waiting for element to be visible, enabled and stable\n      - element is not visible\n    - retrying click action\n      - waiting 100ms\n    19 × waiting for element to be visible, enabled and stable\n       - element is not visible\n     - retrying click action\n       - waiting 500ms\n"
+  ],
+  "pass": "FAIL"
+}

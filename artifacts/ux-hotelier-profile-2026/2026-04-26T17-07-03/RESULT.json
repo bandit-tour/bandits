@@ -1,0 +1,14 @@
+{
+  "outDir": "C:\\Users\\blonj\\Documents\\bandits\\artifacts\\ux-hotelier-profile-2026\\2026-04-26T17-07-03",
+  "checks": {
+    "hasPartnerCopy": true,
+    "hasExpectedRoute": true,
+    "takePhotoOnWeb": false,
+    "hasRotatingSignalStrip": true
+  },
+  "files": {
+    "hotelier": "C:\\Users\\blonj\\Documents\\bandits\\artifacts\\ux-hotelier-profile-2026\\2026-04-26T17-07-03\\hotelier-hero.png",
+    "profile": "C:\\Users\\blonj\\Documents\\bandits\\artifacts\\ux-hotelier-profile-2026\\2026-04-26T17-07-03\\profile-upgraded.png"
+  },
+  "pass": "OK"
+}

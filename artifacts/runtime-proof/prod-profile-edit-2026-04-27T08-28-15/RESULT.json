@@ -1,0 +1,21 @@
+{
+  "url": "https://bandits-two.vercel.app/profile",
+  "screenshots": {
+    "editFields": "C:\\Users\\blonj\\Documents\\bandits\\artifacts\\runtime-proof\\prod-profile-edit-2026-04-27T08-28-15\\1-profile-edit-fields.png",
+    "afterSave": "C:\\Users\\blonj\\Documents\\bandits\\artifacts\\runtime-proof\\prod-profile-edit-2026-04-27T08-28-15\\2-profile-after-save.png",
+    "afterRefresh": "C:\\Users\\blonj\\Documents\\bandits\\artifacts\\runtime-proof\\prod-profile-edit-2026-04-27T08-28-15\\3-profile-after-refresh.png",
+    "menuRegularUser": "C:\\Users\\blonj\\Documents\\bandits\\artifacts\\runtime-proof\\prod-profile-edit-2026-04-27T08-28-15\\4-menu-regular-user.png"
+  },
+  "checks": {
+    "savePersistsAfterRefresh": true,
+    "regularUserCannotSeePilotDesk": true,
+    "headerUpdatedAfterSave": true
+  },
+  "values": {
+    "name": "Proof User 495977",
+    "email": "proof.user.1777278495977@example.com",
+    "vibe": "Night walker. Local story collector."
+  },
+  "pass": "PASS",
+  "errors": []
+}

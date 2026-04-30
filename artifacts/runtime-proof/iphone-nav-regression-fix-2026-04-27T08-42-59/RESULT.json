@@ -1,0 +1,18 @@
+{
+  "productionUrl": "https://bandits-two.vercel.app",
+  "screenshots": {
+    "menu": "C:\\Users\\blonj\\Documents\\bandits\\artifacts\\runtime-proof\\iphone-nav-regression-fix-2026-04-27T08-42-59\\1-menu-restored.png",
+    "profile": "C:\\Users\\blonj\\Documents\\bandits\\artifacts\\runtime-proof\\iphone-nav-regression-fix-2026-04-27T08-42-59\\2-profile-open-normal.png",
+    "home": "C:\\Users\\blonj\\Documents\\bandits\\artifacts\\runtime-proof\\iphone-nav-regression-fix-2026-04-27T08-42-59\\3-home.png",
+    "inbox": "C:\\Users\\blonj\\Documents\\bandits\\artifacts\\runtime-proof\\iphone-nav-regression-fix-2026-04-27T08-42-59\\4-inbox.png"
+  },
+  "checks": {
+    "homeNormal": true,
+    "menuNormal": true,
+    "profileNormal": true,
+    "inboxNormal": true,
+    "noInterruptionScreenInStandardFlow": true
+  },
+  "pass": "PASS",
+  "errors": []
+}

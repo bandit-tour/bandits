@@ -1,0 +1,21 @@
+{
+  "base": "https://bandits-two.vercel.app",
+  "seed": "askme-e2e-1777542858065",
+  "checks": {
+    "travelerReady": true,
+    "askSubmitted": false,
+    "notificationsDirectionCorrect": false,
+    "operatorSignedIn": false,
+    "pilotDeskSingleEntry": false,
+    "chatOpenedFromNotification": false,
+    "chatShowsSingleThreadMessage": false
+  },
+  "screenshots": {
+    "banditsSearch": "C:\\Users\\blonj\\Documents\\bandits\\artifacts\\runtime-proof\\askme-production-e2e-2026-04-30T09-54-18\\1a-bandits-open-profile-search.png"
+  },
+  "errors": [
+    "Bandits body snippet: You need to enable JavaScript to run this app. Local banDitsMy SpotsExplorePLAY × bandiTourTrusted traveler alerts for PLAY guests. Report scams, fake taxis, tourist traps and unsafe situations. Stay safe. Protect the holiday together.ENTER →Loading Local banDits…HomeLocal FriendChatAlertsNotificationsMenu /* Unregister any existing workers so the network serves",
+    "Could not open any bandit profile from production /bandits"
+  ],
+  "pass": "FAIL"
+}

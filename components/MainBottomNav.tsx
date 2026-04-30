@@ -5,13 +5,14 @@ import { IconSymbol } from '@/components/ui/IconSymbol';
 import { Colors } from '@/constants/Colors';
 import { useColorScheme } from '@/hooks/useColorScheme';
 
-type BottomTabKey = 'home' | 'localFriend' | 'chat' | 'inbox' | 'menu';
+type BottomTabKey = 'home' | 'localFriend' | 'chat' | 'alerts' | 'inbox' | 'menu';
 
 interface MainBottomNavProps {
   activeTab: BottomTabKey;
   onHome: () => void;
   onLocalFriend: () => void;
   onChat: () => void;
+  onAlerts: () => void;
   onInbox: () => void;
   onMenu: () => void;
   inboxBadgeCount?: number;
@@ -23,6 +24,7 @@ export default function MainBottomNav({
   onHome,
   onLocalFriend,
   onChat,
+  onAlerts,
   onInbox,
   onMenu,
   inboxBadgeCount = 0,
@@ -67,8 +69,15 @@ export default function MainBottomNav({
       />
 
       <NavButton
-        label="Notifications"
-        iconName="tray.full.fill"
+        label="Alerts"
+        iconName="exclamationmark.triangle.fill"
+        color={getColor('alerts')}
+        onPress={onAlerts}
+      />
+
+      <NavButton
+        label="Inbox"
+        iconName="bell.badge.fill"
         color={getColor('inbox')}
         onPress={onInbox}
         badgeCount={inboxBadgeCount}
@@ -113,10 +122,10 @@ function NavButton({ label, iconName, color, onPress, badgeCount = 0 }: NavButto
 const styles = StyleSheet.create({
   container: {
     flexDirection: 'row',
-    justifyContent: 'space-around',
+    justifyContent: 'space-between',
     alignItems: 'center',
-    paddingVertical: 10,
-    paddingHorizontal: 8,
+    paddingVertical: 8,
+    paddingHorizontal: 4,
     borderTopWidth: 1,
     minHeight: 64,
   },
@@ -124,15 +133,17 @@ const styles = StyleSheet.create({
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
-    paddingVertical: 4,
+    paddingVertical: 2,
+    minWidth: 0,
   },
   iconWrapper: {
     position: 'relative',
   },
   buttonText: {
-    fontSize: 10,
+    fontSize: 9,
     fontWeight: '500',
     marginTop: 2,
+    textAlign: 'center',
   },
   badge: {
     position: 'absolute',

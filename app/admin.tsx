@@ -15,6 +15,7 @@ import * as ImagePicker from 'expo-image-picker';
 
 import { getBandits, updateBandit } from '@/app/services/bandits';
 import { getEvents, updateEvent } from '@/app/services/events';
+import { RequireAppAdminGate } from '@/components/RequireAppAdminGate';
 import { Database } from '@/lib/database.types';
 import { supabase } from '@/lib/supabase';
 
@@ -26,7 +27,7 @@ interface SearchResult {
   item: Bandit | Event;
 }
 
-const AdminPage = () => {
+const AdminPageContent = () => {
   const [searchQuery, setSearchQuery] = useState('');
   const [activeTab, setActiveTab] = useState<'bandits' | 'events'>('bandits');
   const [bandits, setBandits] = useState<Bandit[]>([]);
@@ -340,7 +341,7 @@ const EditModal: React.FC<EditModalProps> = ({ visible, onClose, item, onSave })
     }
 
     const { data, error } = await supabase.storage
-      .from('banditsassets4')
+      .from('profile_avatars')
       .upload(filename, fileToUpload, {
         contentType: 'image/jpeg',
         upsert: true
@@ -349,7 +350,7 @@ const EditModal: React.FC<EditModalProps> = ({ visible, onClose, item, onSave })
     if (error) throw error;
 
     const { data: { publicUrl } } = supabase.storage
-      .from('banditsassets4')
+      .from('profile_avatars')
       .getPublicUrl(data.path);
 
     return publicUrl;
@@ -382,7 +383,7 @@ const EditModal: React.FC<EditModalProps> = ({ visible, onClose, item, onSave })
     }
 
     const { data, error } = await supabase.storage
-      .from('banditsassets4')
+      .from('profile_avatars')
       .upload(filename, fileToUpload, {
         contentType: 'image/jpeg',
         upsert: true
@@ -391,7 +392,7 @@ const EditModal: React.FC<EditModalProps> = ({ visible, onClose, item, onSave })
     if (error) throw error;
 
     const { data: { publicUrl } } = supabase.storage
-      .from('banditsassets4')
+      .from('profile_avatars')
       .getPublicUrl(data.path);
 
     return publicUrl;
@@ -457,7 +458,8 @@ const EditModal: React.FC<EditModalProps> = ({ visible, onClose, item, onSave })
       Alert.alert('Success', `${item.type} updated successfully`);
       onSave();
     } catch (error) {
-      Alert.alert('Error', `Failed to update ${item.type}: ${error.message}`);
+      const msg = error instanceof Error ? error.message : String(error);
+      Alert.alert('Error', `Failed to update ${item.type}: ${msg}`);
       console.error('Error updating item:', error);
     } finally {
       setUploading(false);
@@ -907,4 +909,10 @@ const styles = StyleSheet.create({
   },
 });
 
-export default AdminPage;
+export default function AdminScreen() {
+  return (
+    <RequireAppAdminGate>
+      <AdminPageContent />
+    </RequireAppAdminGate>
+  );
+}

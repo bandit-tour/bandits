@@ -1,6 +1,8 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import Constants from 'expo-constants';
 
+import { buildPilotDemoReplyBody, pickNextSender } from '@/lib/pilotConversation';
+
 const STORAGE_INBOX = '@bandits_demo_inbox_v1';
 
 /** Enable with EXPO_PUBLIC_DEMO_MODE=true — client-only simulated inbox/replies; no writes to real user rows beyond normal flows. */
@@ -13,14 +15,6 @@ export function isDemoMode(): boolean {
 }
 
 export const DEMO_LOCAL_FRIEND_NAMES = ['Niko', 'Yanni', 'Sofia', 'Alex'] as const;
-
-const REPLY_LINES = [
-  'You should try a small wine bar in Psyrri tonight.',
-  'Start in Exarchia for coffee, then drift toward the square — something usually pops up after dark.',
-  'There’s a basement jazz spot near the market; ask for the late set.',
-  'Walk Psyrri slowly tonight — a pop-up gallery sometimes opens unmarked doors.',
-  'If you want quiet: a back-street kafeneio in Koukaki, no name on the sign.',
-] as const;
 
 const AMBIENT_ROTATING: Omit<DemoNotificationStorage, 'created_at'>[] = [
   {
@@ -57,10 +51,6 @@ export type DemoNotificationStorage = {
   created_at: string;
 };
 
-function pick<T>(arr: readonly T[]): T {
-  return arr[Math.floor(Math.random() * arr.length)]!;
-}
-
 export async function getStoredDemoNotifications(): Promise<DemoNotificationStorage[]> {
   if (!isDemoMode()) return [];
   try {
@@ -71,6 +61,20 @@ export async function getStoredDemoNotifications(): Promise<DemoNotificationStor
   } catch {
     return [];
   }
+}
+
+export async function removeStoredDemoNotification(id: string): Promise<void> {
+  if (!isDemoMode()) return;
+  const t = String(id || '').trim();
+  if (!t) return;
+  const cur = await getStoredDemoNotifications();
+  const next = cur.filter((x) => x.id !== t);
+  await AsyncStorage.setItem(STORAGE_INBOX, JSON.stringify(next));
+}
+
+export async function clearStoredDemoNotifications(): Promise<void> {
+  if (!isDemoMode()) return;
+  await AsyncStorage.setItem(STORAGE_INBOX, JSON.stringify([]));
 }
 
 export async function appendDemoNotification(
@@ -87,24 +91,39 @@ export async function appendDemoNotification(
   await AsyncStorage.setItem(STORAGE_INBOX, JSON.stringify(next));
 }
 
+let demoLastSender: string | null = null;
+
 /**
- * After a real Local Friend send succeeds, schedules a fake reply (30–90s). Stored locally only.
+ * After a real Local Friend send succeeds, schedules 1–2 short replies with human-like spacing.
+ * Avoids same name twice in a row and avoids instant double-bubbles.
  */
 export function scheduleDemoLocalFriendReply(): void {
   if (!isDemoMode()) return;
-  const delayMs = 30_000 + Math.random() * 60_000;
-  setTimeout(() => {
-    void (async () => {
-      const name = pick(DEMO_LOCAL_FRIEND_NAMES);
-      const message = pick(REPLY_LINES);
-      await appendDemoNotification({
-        id: `demo-lf-${Date.now()}`,
-        type: 'bandit_reply',
-        title: `Reply from ${name}`,
-        message,
-      });
-    })();
-  }, delayMs);
+
+  const scheduleOne = (delayMs: number, idSuffix: string) => {
+    setTimeout(() => {
+      void (async () => {
+        const names = [...DEMO_LOCAL_FRIEND_NAMES];
+        const name = pickNextSender(names, demoLastSender);
+        demoLastSender = name;
+        const message = buildPilotDemoReplyBody();
+        await appendDemoNotification({
+          id: `demo-lf-${Date.now()}-${idSuffix}`,
+          type: 'bandit_reply',
+          title: `Reply from ${name}`,
+          message,
+        });
+      })();
+    }, delayMs);
+  };
+
+  const firstAt = 28_000 + Math.random() * 52_000;
+  scheduleOne(firstAt, 'a');
+
+  if (Math.random() < 0.42) {
+    const secondAt = firstAt + 22_000 + Math.random() * 48_000;
+    scheduleOne(secondAt, 'b');
+  }
 }
 
 /** Example inbox lines (rotate headline emphasis every few minutes). */

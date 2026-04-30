@@ -128,7 +128,7 @@ export default function ChatScreen() {
       }
     }
     if (nType === 'local_friend') {
-      return 'Pilot';
+      return 'Local Friend';
     }
     const t = typeof notificationTitle === 'string' ? notificationTitle.trim() : '';
     if (t) return t;
@@ -587,21 +587,29 @@ export default function ChatScreen() {
                 .maybeSingle();
               travelerLabel = String((requesterProfile as { name?: string } | null)?.name || '').trim();
             }
+            const openAt = (requestNotif as { created_at?: string })?.created_at;
+            const openTime = openAt
+              ? new Date(String(openAt)).toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' })
+              : '';
             thread.push({
               id: `open-${nid}`,
               role: 'traveler',
               senderLabel: travelerLabel || 'Traveler',
               body: opening.trim(),
-              sentAt: 'Thread',
+              sentAt: openTime,
             });
           }
         }
         (replies || []).forEach((row: any, idx: number) => {
+          const rAt = row?.created_at;
+          const rTime = rAt
+            ? new Date(String(rAt)).toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' })
+            : '';
           thread.push({
             id: `r-${row.id || idx}`,
             role: 'bandit',
             body: String(row.message || ''),
-            sentAt: 'Sent',
+            sentAt: rTime,
           });
         });
         setMessages(thread.length > 0 ? thread : []);

@@ -1,10 +1,12 @@
 import { picsumPlaceImage } from '@/lib/placePhoto';
+import { useFocusEffect } from '@react-navigation/native';
 import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
-import React, { useEffect, useMemo, useState } from 'react';
-import { ActivityIndicator, Image, Pressable, RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import { ActivityIndicator, Image, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { usePremiumRefreshControl } from '@/lib/mobilePullToRefresh';
 
 import { getSpotsByBanditId } from '@/services/spots';
-import { getEvents } from '@/app/services/events';
+import { getEvents, getUserLikedEventIds, toggleEventLike } from '@/app/services/events';
 import { getTrailsByBanditId, TrailWithStops } from '@/services/trails';
 import type { GeneratedTrail } from '@/services/aiTrails';
 import EventCategories from '@/components/EventCategories';
@@ -50,6 +52,22 @@ export default function CityGuideScreen() {
   const [aiLoading] = useState(false);
   const [avatarLoadFailed, setAvatarLoadFailed] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
+  const [likedEventIds, setLikedEventIds] = useState<Set<string>>(new Set());
+
+  const refreshLikedIds = useCallback(async () => {
+    try {
+      const ids = await getUserLikedEventIds();
+      setLikedEventIds(ids);
+    } catch {
+      setLikedEventIds(new Set());
+    }
+  }, []);
+
+  useFocusEffect(
+    useCallback(() => {
+      void refreshLikedIds();
+    }, [refreshLikedIds]),
+  );
 
   useEffect(() => {
     if (banditIdParam) {
@@ -123,7 +141,30 @@ export default function CityGuideScreen() {
     fetchData();
   }, [effectiveBanditId]);
 
-  const refreshNow = async () => {
+  const onToggleEventLike = useCallback(
+    async (eventId: string) => {
+      const wasLiked = likedEventIds.has(eventId);
+      setLikedEventIds((prev) => {
+        const next = new Set(prev);
+        if (wasLiked) next.delete(eventId);
+        else next.add(eventId);
+        return next;
+      });
+      try {
+        await toggleEventLike(eventId, wasLiked);
+      } catch {
+        setLikedEventIds((prev) => {
+          const next = new Set(prev);
+          if (wasLiked) next.add(eventId);
+          else next.delete(eventId);
+          return next;
+        });
+      }
+    },
+    [likedEventIds],
+  );
+
+  const refreshNow = useCallback(async () => {
     if (!effectiveBanditId) return;
     setRefreshing(true);
     try {
@@ -144,7 +185,12 @@ export default function CityGuideScreen() {
     } finally {
       setRefreshing(false);
     }
-  };
+  }, [effectiveBanditId]);
+
+  const onCityGuideRefresh = useCallback(() => {
+    void refreshNow();
+  }, [refreshNow]);
+  const cityGuideRefresh = usePremiumRefreshControl(refreshing, onCityGuideRefresh);
 
   useEffect(() => {
     setAvatarLoadFailed(false);
@@ -198,7 +244,7 @@ export default function CityGuideScreen() {
       <ScrollView
         style={styles.container}
         contentContainerStyle={styles.scrollContent}
-        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => void refreshNow()} />}
+        refreshControl={cityGuideRefresh}
       >
         {/* Header */}
         <Text style={styles.headerText}>City Guide</Text>
@@ -216,9 +262,7 @@ export default function CityGuideScreen() {
           <View style={styles.descriptionContent}>
 
             <Text style={styles.descriptionText}>
-              Yo, traveler. Your adventure just got upgraded.{'\n'}
-              Welcome to the side of the city locals don't usually share.{'\n'}
-              You've officially entered the bandiVerse. Let's go rogue.
+              {`Yo, traveler. Your adventure just got upgraded.\nWelcome to the side of the city locals don't usually share.\nYou've officially entered the bandiVerse. Let's go rogue.`}
             </Text>
 
             <View style={styles.profileImageContainer}>
@@ -317,11 +361,12 @@ export default function CityGuideScreen() {
         <EventList
           events={filteredEvents}
           variant="horizontal"
-          showButton={false}
+          showButton
           imageHeight={120}
           banditId={effectiveBanditId as string}
           showRecommendations={false}
-          likedEventIds={new Set()}
+          likedEventIds={likedEventIds}
+          onEventLike={onToggleEventLike}
           onEventPress={(e) => router.push(`/spot/${e.id}` as any)}
           contentContainerStyle={styles.eventsContainer}
         />
@@ -339,7 +384,7 @@ const styles = StyleSheet.create({
   scrollContent: {
     paddingHorizontal: 16,
     paddingTop: 16,
-    paddingBottom: 20,
+    paddingBottom: 36,
   },
   loadingContainer: {
     flex: 1,

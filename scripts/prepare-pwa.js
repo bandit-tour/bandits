@@ -17,7 +17,7 @@ if (fs.existsSync(manifestSrc)) {
 }
 
 // Copy and resize app icon as PWA icons
-const iconSrc = path.join(assetsDir, 'bandiTourMAinLogo.png');
+const iconSrc = path.join(assetsDir, 'banditour-main-logo.png');
 
 if (fs.existsSync(iconSrc)) {
   const icon192 = path.join(distDir, 'icon-192.png');
@@ -46,7 +46,10 @@ if (fs.existsSync(iconSrc)) {
 // Inject manifest link into HTML files
 const manifestLink = '<link rel="manifest" href="/manifest.json" />';
 const appleIconLink = '<link rel="apple-touch-icon" href="/icon-192.png" />';
-const themeColor = '<meta name="theme-color" content="#ffffff" />';
+const themeColor = '<meta name="theme-color" content="#0a0a0a" />';
+
+/** Baked into dist HTML — static export may omit `app/+html` shell styles. Prevents white flash before JS. */
+const shellStyleBlock = `<style id="bandits-shell">html,body{background-color:#0a0a0a;}#root{min-height:100vh;min-height:100dvh;background-color:#0a0a0a;}</style>`;
 
 function injectManifestLinks(htmlPath) {
   if (!fs.existsSync(htmlPath)) {
@@ -54,20 +57,31 @@ function injectManifestLinks(htmlPath) {
   }
 
   let html = fs.readFileSync(htmlPath, 'utf8');
+  let changed = false;
 
-  // Check if already injected
+  if (!html.includes('id="bandits-shell"') && html.includes('</head>')) {
+    html = html.replace('</head>', `${shellStyleBlock}</head>`);
+    changed = true;
+    console.log(`✅ Injected shell style into ${path.basename(htmlPath)}`);
+  }
+
   if (html.includes('rel="manifest"')) {
-    console.log(`⏭️  Skipping ${path.basename(htmlPath)} (already has manifest link)`);
+    if (changed) {
+      fs.writeFileSync(htmlPath, html);
+    }
+    console.log(`⏭️  Skipping manifest: ${path.basename(htmlPath)} (already has link)`);
     return;
   }
 
-  // Inject before </head> tag (works with minified HTML too)
   if (html.includes('</head>')) {
     const injection = `${manifestLink}${appleIconLink}${themeColor}</head>`;
     html = html.replace('</head>', injection);
     fs.writeFileSync(htmlPath, html);
     console.log(`✅ Injected manifest link into ${path.basename(htmlPath)}`);
   } else {
+    if (changed) {
+      fs.writeFileSync(htmlPath, html);
+    }
     console.warn(`⚠️  No </head> tag found in ${path.basename(htmlPath)}`);
   }
 }

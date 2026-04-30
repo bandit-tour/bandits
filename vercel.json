@@ -6,8 +6,8 @@
   "framework": null,
   "redirects": [
     {
-      "source": "/",
-      "destination": "/hotel/play-theatrou",
+      "source": "/alerts",
+      "destination": "/scam-alerts",
       "permanent": false
     }
   ],
@@ -17,8 +17,22 @@
       "destination": "/index.html"
     },
     {
-      "source": "/(.*)",
+      "source": "/((?!api\\/).*)",
       "destination": "/index.html"
+    }
+  ],
+  "headers": [
+    {
+      "source": "/index.html",
+      "headers": [
+        { "key": "Cache-Control", "value": "no-store" }
+      ]
+    },
+    {
+      "source": "/sw.js",
+      "headers": [
+        { "key": "Cache-Control", "value": "no-cache" }
+      ]
     }
   ]
 }

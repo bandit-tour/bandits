@@ -1,0 +1,25 @@
+{
+  "outDir": "C:\\Users\\blonj\\Documents\\bandits\\artifacts\\runtime-proof\\play-intro-now-2026-04-25T08-40-19",
+  "routeUsed": "http://localhost:8081/hotel/play-theatrou",
+  "screenshots": {
+    "firstTimeIntro": "C:\\Users\\blonj\\Documents\\bandits\\artifacts\\runtime-proof\\play-intro-now-2026-04-25T08-40-19\\1-first-time-intro.png",
+    "afterButtonHome": "C:\\Users\\blonj\\Documents\\bandits\\artifacts\\runtime-proof\\play-intro-now-2026-04-25T08-40-19\\2-after-button-home.png",
+    "refreshReturningHome": "C:\\Users\\blonj\\Documents\\bandits\\artifacts\\runtime-proof\\play-intro-now-2026-04-25T08-40-19\\3-refresh-returning-home.png"
+  },
+  "checks": {
+    "firstTimeIntroVisible": true,
+    "bottleVideoPlaying": true,
+    "firstTimeButtonToHome": true,
+    "returningSkipToHome": true
+  },
+  "consoleErrors": [
+    "Failed to load resource: the server responded with a status of 401 ()",
+    "Failed to load resource: the server responded with a status of 400 ()",
+    "Failed to load resource: the server responded with a status of 400 ()",
+    "The play() request was interrupted because the media was removed from the document. https://goo.gl/LdLk22",
+    "Failed to load resource: the server responded with a status of 401 ()",
+    "Failed to load resource: the server responded with a status of 400 ()",
+    "Failed to load resource: the server responded with a status of 400 ()"
+  ],
+  "pass": "FAIL"
+}

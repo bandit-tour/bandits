@@ -46,8 +46,28 @@ function resolveSupabaseAnon(value) {
 const resolvedUrl = resolveSupabaseUrl(process.env.EXPO_PUBLIC_SUPABASE_URL);
 const resolvedAnon = resolveSupabaseAnon(process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY);
 
+/** Pilot hotel PWA link (QR, Hotelier, emails). Must match the Vercel project you deploy `npm run build` to. */
+/** bandit-tours host is a different Next.js project (404 on /hotel/*). Expo PWA is deployed on bandits-two. */
+const DEFAULT_PLAY_GUEST_ENTRY_URL = 'https://bandits-two.vercel.app/hotel/play-theatrou';
+function resolvePlayGuestEntryUrl(value) {
+  const raw = typeof value === 'string' ? value.trim() : '';
+  if (!raw || !/^https:\/\//i.test(raw)) return DEFAULT_PLAY_GUEST_ENTRY_URL;
+  try {
+    return new URL(raw).toString().replace(/\/$/, '');
+  } catch {
+    return DEFAULT_PLAY_GUEST_ENTRY_URL;
+  }
+}
+
+const resolvedPlayGuestEntryUrl = resolvePlayGuestEntryUrl(process.env.EXPO_PUBLIC_PLAY_GUEST_ENTRY_URL);
+const DEFAULT_APP_ADMIN_EMAILS = 'blonje@gmail.com';
+const resolvedAppAdminEmails =
+  String(process.env.EXPO_PUBLIC_APP_ADMIN_EMAILS ?? '').trim() || DEFAULT_APP_ADMIN_EMAILS;
+
 process.env.EXPO_PUBLIC_SUPABASE_URL = resolvedUrl;
 process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY = resolvedAnon;
+process.env.EXPO_PUBLIC_PLAY_GUEST_ENTRY_URL = resolvedPlayGuestEntryUrl;
+process.env.EXPO_PUBLIC_APP_ADMIN_EMAILS = resolvedAppAdminEmails;
 
 module.exports = {
   expo: {
@@ -56,8 +76,13 @@ module.exports = {
       ...(appJson.expo.extra || {}),
       EXPO_PUBLIC_SUPABASE_URL: resolvedUrl,
       EXPO_PUBLIC_SUPABASE_ANON_KEY: resolvedAnon,
+      EXPO_PUBLIC_PLAY_GUEST_ENTRY_URL: resolvedPlayGuestEntryUrl,
       /** Pilot: client-only simulated inbox / Local Friend replies — set EXPO_PUBLIC_DEMO_MODE=true */
       EXPO_PUBLIC_DEMO_MODE: String(process.env.EXPO_PUBLIC_DEMO_MODE ?? '').trim() || 'false',
+      /** Operator inbox routing — must match Supabase Auth user UID (also set in EAS env for release APKs). */
+      EXPO_PUBLIC_OPERATOR_USER_ID: String(process.env.EXPO_PUBLIC_OPERATOR_USER_ID ?? '').trim(),
+      /** Comma-separated admin emails: Admin, Pilot Desk operator allowlist (with operator UUID). Not used for Hotelier. */
+      EXPO_PUBLIC_APP_ADMIN_EMAILS: resolvedAppAdminEmails,
     },
   },
 };

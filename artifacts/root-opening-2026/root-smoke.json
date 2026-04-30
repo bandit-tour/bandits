@@ -1,0 +1,9 @@
+{
+  "status": 200,
+  "shellBlockInHead": 1,
+  "bodyBg": "rgb(10, 10, 10)",
+  "firstLoadPath": "/",
+  "afterEnter": "https://bandits-two.vercel.app/bandits",
+  "secondRootLoad": "https://bandits-two.vercel.app/",
+  "introVisibleAfterReturn": true
+}

@@ -1,0 +1,22 @@
+{
+  "flow": "external",
+  "base": "https://bandits-two.vercel.app",
+  "checks": {
+    "introFixed": true,
+    "noWhitePage": true,
+    "heroBannerRestored": false,
+    "profileUpdatedVisible": false,
+    "alertsMenuCorrected": false,
+    "navigationWorking": false
+  },
+  "urls": {
+    "afterIntro": "https://bandits-two.vercel.app/bandits"
+  },
+  "screenshots": {
+    "introFirstLoad": "C:\\Users\\blonj\\Documents\\bandits\\artifacts\\runtime-proof\\dual-flow-external-2026-04-25T17-14-14\\1-intro-first-load.png",
+    "afterIntroLand": "C:\\Users\\blonj\\Documents\\bandits\\artifacts\\runtime-proof\\dual-flow-external-2026-04-25T17-14-14\\2-after-intro-land.png",
+    "homeBandits": "C:\\Users\\blonj\\Documents\\bandits\\artifacts\\runtime-proof\\dual-flow-external-2026-04-25T17-14-14\\3-home-bandits.png"
+  },
+  "pass": "FAIL",
+  "error": "locator.fill: Timeout 30000ms exceeded.\nCall log:\n  - waiting for getByPlaceholder('Enter your email', { exact: true })\n"
+}

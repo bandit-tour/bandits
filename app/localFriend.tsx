@@ -1,21 +1,125 @@
 import { Stack, useRouter } from 'expo-router';
-import React, { useEffect, useState } from 'react';
+import { useVideoPlayer, VideoView } from 'expo-video';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
   KeyboardAvoidingView,
   Platform,
   ActivityIndicator,
   Image,
+  Modal,
+  Pressable,
   StyleSheet,
   Text,
   TextInput,
   TouchableOpacity,
   ScrollView,
-  RefreshControl,
   View,
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { isDemoMode, scheduleDemoLocalFriendReply } from '@/lib/demoMode';
+import { usePremiumRefreshControl } from '@/lib/mobilePullToRefresh';
 import { getNotificationsBackendStatus, sendLocalFriendMessage } from '@/services/localFriend';
+
+/** Full-screen send overlay — must match hero asset (no play-intro). */
+const BOTTLE_SEND_SOURCE = require('@/assets/images/local-friend-bottle.mov');
+
+type BottleLaunchVideoProps = {
+  visible: boolean;
+  onFinished: () => void;
+};
+
+function LocalFriendBottleVideo({ visible, onFinished }: BottleLaunchVideoProps) {
+  const insets = useSafeAreaInsets();
+  const doneRef = useRef(false);
+  const player = useVideoPlayer(BOTTLE_SEND_SOURCE);
+
+  const finish = useCallback(() => {
+    if (doneRef.current) return;
+    doneRef.current = true;
+    onFinished();
+  }, [onFinished]);
+
+  useEffect(() => {
+    if (!visible) {
+      try {
+        player.pause();
+      } catch {
+        /* ignore */
+      }
+      return;
+    }
+    doneRef.current = false;
+    try {
+      player.muted = true;
+      player.loop = false;
+      if ('currentTime' in player && typeof (player as { currentTime?: number }).currentTime === 'number') {
+        (player as { currentTime: number }).currentTime = 0;
+      }
+      player.play();
+    } catch {
+      finish();
+    }
+  }, [visible, player, finish]);
+
+  useEffect(() => {
+    if (!visible) return;
+    const sub = player.addListener('playToEnd', finish);
+    const t = setTimeout(finish, 9_000);
+    return () => {
+      sub.remove();
+      clearTimeout(t);
+    };
+  }, [visible, player, finish]);
+
+  if (!visible) return null;
+
+  return (
+    <Modal visible animationType="fade" transparent onRequestClose={finish}>
+      <View style={launchStyles.backdrop} accessibilityViewIsModal>
+        <VideoView
+          player={player}
+          style={launchStyles.video}
+          nativeControls={false}
+          contentFit="contain"
+          allowsFullscreen={false}
+        />
+        <Pressable
+          onPress={finish}
+          style={[launchStyles.skip, { top: insets.top + 8 }]}
+          hitSlop={12}
+          accessibilityRole="button"
+          accessibilityLabel="Skip video"
+        >
+          <Text style={launchStyles.skipText}>Skip</Text>
+        </Pressable>
+      </View>
+    </Modal>
+  );
+}
+
+const launchStyles = StyleSheet.create({
+  backdrop: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.92)',
+    justifyContent: 'center',
+  },
+  video: {
+    width: '100%',
+    height: '88%',
+    backgroundColor: 'transparent',
+  },
+  skip: {
+    position: 'absolute',
+    right: 18,
+    zIndex: 2,
+    paddingVertical: 10,
+    paddingHorizontal: 14,
+    borderRadius: 999,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+  },
+  skipText: { color: '#fff', fontSize: 14, fontWeight: '700' },
+});
 
 export default function LocalFriendScreen() {
   const router = useRouter();
@@ -24,18 +128,17 @@ export default function LocalFriendScreen() {
   const [success, setSuccess] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [backendReady, setBackendReady] = useState(false);
-  const [backendReason, setBackendReason] = useState<string | null>(null);
   const [statusStep, setStatusStep] = useState<'idle' | 'released' | 'matching' | 'waiting'>('idle');
   const [refreshing, setRefreshing] = useState(false);
+  const [bottleOpen, setBottleOpen] = useState(false);
+  const sendPromiseRef = useRef<Promise<void> | null>(null);
 
   const refreshBackendStatus = React.useCallback(async () => {
     try {
       const status = await getNotificationsBackendStatus();
       setBackendReady(status.enabled);
-      setBackendReason(status.enabled ? null : status.reason || 'Messaging is unavailable right now.');
     } catch {
       setBackendReady(false);
-      setBackendReason('Messaging is unavailable right now.');
     }
   }, []);
 
@@ -52,24 +155,20 @@ export default function LocalFriendScreen() {
     }
   }, [refreshBackendStatus]);
 
-  const handleSend = async () => {
-    if (!message.trim() || !backendReady) return;
+  const listRefreshControl = usePremiumRefreshControl(refreshing, onRefresh);
 
-    const payload = message.trim();
+  const onBottleVideoFinished = useCallback(async () => {
+    setBottleOpen(false);
     setSending(true);
-    setSuccess(null);
+    setStatusStep('matching');
     setError(null);
-
     try {
-      setStatusStep('released');
-      await sendLocalFriendMessage(payload);
+      const p = sendPromiseRef.current;
+      sendPromiseRef.current = null;
+      if (p) await p;
       setMessage('');
       setStatusStep('waiting');
-      setSuccess(
-        isDemoMode()
-          ? 'Bottle released. In pilot demo mode, a sample reply will appear in Inbox shortly (30–90s).'
-          : 'Bottle released. A like-minded local friend may answer soon.',
-      );
+      setSuccess('Sent to nearby travelers.');
       if (isDemoMode()) {
         scheduleDemoLocalFriendReply();
       }
@@ -85,21 +184,30 @@ export default function LocalFriendScreen() {
     } finally {
       setSending(false);
     }
-  };
+  }, []);
 
-  useEffect(() => {
-    if (!sending) return;
-    setStatusStep('matching');
-  }, [sending]);
+  const handleSend = () => {
+    if (!message.trim() || !backendReady || sending || bottleOpen) return;
+    const payload = message.trim();
+    setError(null);
+    setSuccess(null);
+    setStatusStep('released');
+    setBottleOpen(true);
+    sendPromiseRef.current = sendLocalFriendMessage(payload);
+  };
 
   return (
     <>
       <Stack.Screen options={{ headerShown: true, title: 'Local Friend', headerBackTitle: 'Back' }} />
-      <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+      <LocalFriendBottleVideo visible={bottleOpen} onFinished={onBottleVideoFinished} />
+      <KeyboardAvoidingView
+        style={{ flex: 1 }}
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+      >
         <ScrollView
           contentContainerStyle={styles.scrollContent}
           keyboardShouldPersistTaps="handled"
-          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => void onRefresh()} />}
+          refreshControl={listRefreshControl}
         >
           <View style={styles.logoBar}>
             <Image
@@ -131,39 +239,27 @@ export default function LocalFriendScreen() {
             <TouchableOpacity
               style={[
                 styles.sendButton,
-                (sending || !message.trim() || !backendReady) && styles.sendButtonDisabled,
+                (sending || !message.trim() || !backendReady || bottleOpen) && styles.sendButtonDisabled,
               ]}
-              disabled={sending || !message.trim() || !backendReady}
+              disabled={sending || !message.trim() || !backendReady || bottleOpen}
               onPress={handleSend}
             >
-              {sending ? (
+              {sending && !bottleOpen ? (
                 <ActivityIndicator color="#FFF" size="small" />
               ) : (
-                <Text style={styles.sendText}>Release</Text>
+                <Text style={styles.sendText}>Send</Text>
               )}
             </TouchableOpacity>
 
             <View style={styles.statusRow}>
-              <StatusPill label="Bottle released" active={statusStep === 'released'} />
-              <StatusPill label="Matching vibe" active={statusStep === 'matching'} />
-              <StatusPill label="Waiting reply" active={statusStep === 'waiting'} />
+              <StatusPill label="Bottle out" active={statusStep === 'released'} />
+              <StatusPill label="Reaching people" active={statusStep === 'matching'} />
+              <StatusPill label="Waiting" active={statusStep === 'waiting'} />
             </View>
 
             {!!error && <Text style={styles.errorText}>{error}</Text>}
             {!!success && <Text style={styles.successText}>{success}</Text>}
-            {!!success && (
-              <Text style={styles.waitingText}>
-                During pilot, replies are curated by the bandiTour team and appear in Notifications.
-              </Text>
-            )}
-            {!backendReady && !!backendReason && <Text style={styles.errorText}>{backendReason}</Text>}
-          </View>
-
-          <View style={styles.howItWorks}>
-            <Text style={styles.howTitle}>How Local Friend works</Text>
-            <Text style={styles.howBullet}>- you drop one message into the city</Text>
-            <Text style={styles.howBullet}>- we route it to a like-minded local vibe</Text>
-            <Text style={styles.howBullet}>- you get the reply in Notifications</Text>
+            {!backendReady && <Text style={styles.errorText}>Can’t send right now.</Text>}
           </View>
 
           <TouchableOpacity
@@ -293,31 +389,6 @@ const styles = StyleSheet.create({
     color: '#0A7D32',
     fontWeight: '600',
   },
-  waitingText: {
-    marginTop: 4,
-    fontSize: 12,
-    color: '#666',
-    lineHeight: 17,
-  },
-  howItWorks: {
-    marginTop: 16,
-    borderWidth: 1,
-    borderColor: '#E8E8E8',
-    borderRadius: 12,
-    padding: 12,
-    backgroundColor: '#FAFAFA',
-  },
-  howTitle: {
-    fontSize: 13,
-    fontWeight: '700',
-    color: '#1F1F1F',
-    marginBottom: 6,
-  },
-  howBullet: {
-    fontSize: 12,
-    color: '#444',
-    lineHeight: 18,
-  },
   exitButton: {
     marginTop: 24,
     alignSelf: 'center',
@@ -330,4 +401,3 @@ const styles = StyleSheet.create({
     textDecorationLine: 'underline',
   },
 });
-

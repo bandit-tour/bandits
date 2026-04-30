@@ -1,0 +1,15 @@
+{
+  "outDir": "C:\\Users\\blonj\\Documents\\bandits\\artifacts\\runtime-proof\\play-menu-pilot-now-2026-04-25T10-04-35",
+  "checks": {
+    "playContextAfterLogin": true,
+    "playMenuClean": true,
+    "pilotDeskVisible": true,
+    "pilotDeskOpened": true
+  },
+  "screenshots": {
+    "menuWithPilotDesk": "C:\\Users\\blonj\\Documents\\bandits\\artifacts\\runtime-proof\\play-menu-pilot-now-2026-04-25T10-04-35\\1-menu-with-pilot-desk.png",
+    "pilotDeskOpened": "C:\\Users\\blonj\\Documents\\bandits\\artifacts\\runtime-proof\\play-menu-pilot-now-2026-04-25T10-04-35\\2-pilot-desk-opened.png"
+  },
+  "pass": "PASS",
+  "errors": []
+}

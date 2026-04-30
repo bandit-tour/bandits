@@ -14,6 +14,7 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
+import { normalizeDisplayName, validateDisplayName } from '@/lib/displayName';
 import { isSupabaseConfigured, supabase } from '@/lib/supabase';
 import {
   QUICK_PROFILE_INTERESTS,
@@ -123,8 +124,14 @@ export default function QuickProfileScreen() {
     }
     setSaving(true);
     try {
+      const display = normalizeDisplayName(name);
+      const nameErr = validateDisplayName(display);
+      if (nameErr) {
+        setError(nameErr);
+        return;
+      }
       await upsertQuickProfile({
-        name: name.trim() || 'Guest',
+        name: display,
         interests: Array.from(selected),
         city: city.trim() || 'Athens',
         locationPermission,
@@ -139,9 +146,6 @@ export default function QuickProfileScreen() {
     }
   }, [saving, name, city, selected, locationPermission, hotelId, entrySource, router]);
 
-  const onSignIn = useCallback(() => {
-    router.push('/login');
-  }, [router]);
 
   if (!authReady) {
     return (
@@ -157,8 +161,8 @@ export default function QuickProfileScreen() {
       <Stack.Screen options={{ headerShown: true, title: 'Quick setup', headerBackTitle: 'Back' }} />
       <KeyboardAvoidingView
         style={styles.flex}
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-        keyboardVerticalOffset={insets.top + 48}
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        keyboardVerticalOffset={Platform.OS === 'ios' ? insets.top + 48 : 0}
       >
         <ScrollView
           contentContainerStyle={[
@@ -249,9 +253,6 @@ export default function QuickProfileScreen() {
             )}
           </Pressable>
 
-          <Pressable style={styles.signInLink} onPress={onSignIn} hitSlop={12}>
-            <Text style={styles.signInLinkText}>Already have an account? Sign in</Text>
-          </Pressable>
         </ScrollView>
       </KeyboardAvoidingView>
     </>
@@ -396,16 +397,5 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '800',
     letterSpacing: 0.3,
-  },
-  signInLink: {
-    marginTop: 22,
-    alignSelf: 'center',
-    paddingVertical: 8,
-  },
-  signInLinkText: {
-    fontSize: 14,
-    color: '#555',
-    fontWeight: '600',
-    textDecorationLine: 'underline',
   },
 });

@@ -13,6 +13,7 @@ import {
   normalizeEventImageUri,
 } from '@/lib/placePhoto';
 import { getCuratedEventImageCandidates } from '@/lib/eventImageCuration';
+import { repairDisplayText } from '@/lib/repairTextEncoding';
 
 type Event = Database['public']['Tables']['event']['Row'];
 type BanditRecommendation = Pick<Database['public']['Tables']['bandit']['Row'], 'id' | 'image_url'>;
@@ -223,7 +224,7 @@ export default function EventCard({
         <ExpoImage
           source={
             useLocalFallback
-              ? require('@/assets/images/play-theatrou.png')
+              ? require('@/assets/images/play_athens_bg.png')
               : { uri: resolvedImageUri }
           }
           style={isHorizontal ? styles.eventImageHorizontal : styles.eventImage}
@@ -307,18 +308,22 @@ export default function EventCard({
             {event.genre}
           </Text>
         )}
-        <Text style={styles.eventDescription} numberOfLines={3} ellipsizeMode="tail">{event.description || ''}</Text>
+        <Text style={[styles.eventDescription, isHorizontal && styles.eventDescriptionHorizontal]}>
+          {repairDisplayText(event.description || '')}
+        </Text>
         {personalTip && (
-          <Text style={styles.personalTip}>
-            {`banDit tip: ${personalTip}`}
+          <Text style={[styles.personalTip, isHorizontal && styles.personalTipHorizontal]}>
+            {`banDit tip: ${repairDisplayText(personalTip)}`}
           </Text>
         )}
-        <View style={styles.bottomInfo}>
-          <Text style={styles.eventAddress}>{event.address || ''}</Text>
+        <View style={[styles.bottomInfo, isHorizontal && styles.bottomInfoHorizontal]}>
+          <Text style={[styles.eventAddress, isHorizontal && styles.eventAddressHorizontal]}>
+            {repairDisplayText(event.address || '')}
+          </Text>
           {event.timing_info && typeof event.timing_info === 'string' && event.timing_info.trim() && (
             <View style={styles.timeContainer}>
               <Text style={styles.eventTime}>
-                {event.timing_info || ''}
+                {repairDisplayText(event.timing_info || '')}
               </Text>
             </View>
           )}
@@ -357,9 +362,8 @@ const styles = StyleSheet.create({
   },
   eventCardHorizontal: {
     width: 192,
-    height: 320,
     marginRight: 8,
-    marginBottom: 0,
+    marginBottom: 8,
     backgroundColor: '#FFFFFF',
     borderRadius: 7,
     shadowColor: '#000',
@@ -367,6 +371,8 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.25,
     shadowRadius: 4,
     elevation: 3,
+    overflow: 'visible',
+    paddingBottom: 14,
   },
   eventHeader: {
     flexDirection: 'row',
@@ -405,24 +411,37 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   eventAddress: {
-    fontSize: 14,
+    fontSize: 13,
+    lineHeight: 18,
     color: '#666',
     marginBottom: 4,
     flexWrap: 'wrap',
-    flexShrink: 0,
+  },
+  eventAddressHorizontal: {
+    flexShrink: 1,
+    marginTop: 4,
   },
 
   eventDescription: {
     fontSize: 14,
     color: '#333',
-    marginBottom: 2,
+    marginBottom: 4,
     marginTop: 2,
-    flex: 1,
-    minHeight: 0,
-    maxHeight: 100, // Prevent description from taking too much space
+    lineHeight: 20,
+  },
+  eventDescriptionHorizontal: {
+    marginBottom: 8,
+  },
+  personalTipHorizontal: {
+    marginBottom: 8,
+    marginTop: 2,
   },
   bottomInfo: {
     flexShrink: 0,
+  },
+  bottomInfoHorizontal: {
+    paddingTop: 6,
+    width: '100%',
   },
   eventTime: {
     fontSize: 16,
@@ -451,8 +470,11 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
   },
   eventContentHorizontal: {
-    flex: 1,
-    padding: 3,
+    flex: 0,
+    flexGrow: 0,
+    padding: 6,
+    paddingBottom: 12,
+    justifyContent: 'flex-start',
   },
   imageContainer: {
     position: 'relative',
@@ -533,7 +555,7 @@ const styles = StyleSheet.create({
   personalTip: {
     fontSize: 12,
     color: '#555',
-    marginTop: 4,
+    marginTop: 2,
     marginBottom: 8,
     lineHeight: 18,
   },

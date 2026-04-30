@@ -1,7 +1,8 @@
-import { getEvents } from '@/app/services/events';
+import { getEvents, type EventFilters } from '@/app/services/events';
+import { useCity } from '@/contexts/CityContext';
 import { Database } from '@/lib/database.types';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 
 type Event = Database['public']['Tables']['event']['Row'];
 
@@ -17,31 +18,44 @@ export interface MapBounds {
 }
 
 export function useMapEvents(onEventPress?: (event: Event) => void) {
-  const { banditId } = useLocalSearchParams();
+  const { banditId: rawBanditId } = useLocalSearchParams<{ banditId?: string }>();
+  const banditId = Array.isArray(rawBanditId) ? rawBanditId[0] : rawBanditId;
+  const { selectedCity } = useCity();
   const router = useRouter();
   const [events, setEvents] = useState<Event[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  useEffect(() => {
-    fetchEvents();
-  }, [banditId]);
-
-  const fetchEvents = async () => {
+  const fetchEvents = useCallback(async () => {
     try {
       setLoading(true);
       setError(null);
-      
-      const allEventsData = await getEvents({ banditId: banditId as string });
-      
-      // Filter out any events that still have null coordinates
-      const validEvents = allEventsData.filter(event => 
-        event.location_lat != null && 
-        event.location_lng != null &&
-        typeof event.location_lat === 'number' &&
-        typeof event.location_lng === 'number'
-      );
-      
+
+      const filters: EventFilters = {};
+      if (banditId && banditId !== 'undefined') {
+        filters.banditId = banditId;
+      } else if (selectedCity?.trim()) {
+        filters.city = selectedCity.trim();
+      }
+
+      const load = getEvents(filters);
+      const timeoutMs = 28000;
+      const allEventsData = await Promise.race([
+        load,
+        new Promise<never>((_, reject) =>
+          setTimeout(
+            () => reject(new Error('Could not load places in time. Check your connection and try again.')),
+            timeoutMs,
+          ),
+        ),
+      ]);
+
+      // Supabase / JSON may return numerics as strings — coerce before map markers.
+      const validEvents = allEventsData.filter((event) => {
+        const lat = Number(event.location_lat);
+        const lng = Number(event.location_lng);
+        return Number.isFinite(lat) && Number.isFinite(lng);
+      });
       setEvents(validEvents);
     } catch (err) {
       console.error('Error fetching events:', err);
@@ -49,7 +63,11 @@ export function useMapEvents(onEventPress?: (event: Event) => void) {
     } finally {
       setLoading(false);
     }
-  };
+  }, [banditId, selectedCity]);
+
+  useEffect(() => {
+    void fetchEvents();
+  }, [fetchEvents]);
 
   const calculateOptimalMapBounds = (initialRegion: {
     latitude: number;

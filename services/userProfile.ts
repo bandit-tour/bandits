@@ -2,8 +2,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import type { Database } from '@/lib/database.types';
 import { normalizeDisplayName, validateDisplayName } from '@/lib/displayName';
 import { assignInitialSignalIfNeeded } from '@/lib/signalRotation';
-import { canAccessPilotDesk } from '@/lib/appAdminAccess';
-import { ensureOperatorUserId } from '@/lib/operatorConfig';
+import { resolveMenuAuthSnapshot } from '@/lib/pilotDeskGate';
 import { isSupabaseConfigured, supabase } from '@/lib/supabase';
 
 const USER_ID_RE =
@@ -520,7 +519,7 @@ export function normalizePostAuthRedirect(input: string | undefined | null): str
 }
 
 /**
- * After email/OAuth sign-in: optional `redirectPath` wins (e.g. `/hotelier`); else operators → Pilot Desk; else Home (bandits).
+ * After email/OAuth sign-in: optional `redirectPath` wins (e.g. `/hotelier`); else app admins → Pilot Desk; else Home.
  */
 export async function navigateAfterAuth(router: unknown, redirectPath?: string | null): Promise<void> {
   const r = router as { replace: (href: string) => void };
@@ -529,8 +528,7 @@ export async function navigateAfterAuth(router: unknown, redirectPath?: string |
     r.replace('/bandits');
     return;
   }
-  const user = data?.session?.user;
-  if (!user) {
+  if (!data?.session?.user) {
     r.replace('/bandits');
     return;
   }
@@ -539,8 +537,8 @@ export async function navigateAfterAuth(router: unknown, redirectPath?: string |
     r.replace(safe);
     return;
   }
-  const operatorId = await ensureOperatorUserId();
-  if (canAccessPilotDesk(user, operatorId)) {
+  const { isAppAdmin } = await resolveMenuAuthSnapshot();
+  if (isAppAdmin) {
     r.replace('/operatorDesk');
     return;
   }

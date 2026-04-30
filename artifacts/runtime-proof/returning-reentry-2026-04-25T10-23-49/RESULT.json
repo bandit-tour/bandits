@@ -1,0 +1,21 @@
+{
+  "outDir": "C:\\Users\\blonj\\Documents\\bandits\\artifacts\\runtime-proof\\returning-reentry-2026-04-25T10-23-49",
+  "browser": {
+    "firstEntryIntroShown": true,
+    "reopenSkipsIntroToHome": true,
+    "contextPreserved": true
+  },
+  "mobile": {
+    "firstEntryIntroShown": true,
+    "reopenSkipsIntroToHome": true,
+    "contextPreserved": true
+  },
+  "screenshots": {
+    "browserFirstIntro": "C:\\Users\\blonj\\Documents\\bandits\\artifacts\\runtime-proof\\returning-reentry-2026-04-25T10-23-49\\1-browser-first-intro.png",
+    "browserReopenHome": "C:\\Users\\blonj\\Documents\\bandits\\artifacts\\runtime-proof\\returning-reentry-2026-04-25T10-23-49\\2-browser-reopen-home.png",
+    "mobileFirstIntro": "C:\\Users\\blonj\\Documents\\bandits\\artifacts\\runtime-proof\\returning-reentry-2026-04-25T10-23-49\\3-mobile-first-intro.png",
+    "mobileReopenHome": "C:\\Users\\blonj\\Documents\\bandits\\artifacts\\runtime-proof\\returning-reentry-2026-04-25T10-23-49\\4-mobile-reopen-home.png"
+  },
+  "pass": "PASS",
+  "errors": []
+}

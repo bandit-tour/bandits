@@ -1,0 +1,19 @@
+{
+  "pass": "PASS",
+  "outDir": "C:\\Users\\blonj\\Documents\\bandits\\artifacts\\runtime-proof\\onboarding-repeat-2026-04-25T14-13-13",
+  "firstVisitShowsOnboarding": true,
+  "secondVisitSkipsOnboarding": true,
+  "screenshots": {
+    "firstVisit": "C:\\Users\\blonj\\Documents\\bandits\\artifacts\\runtime-proof\\onboarding-repeat-2026-04-25T14-13-13\\1-first-visit-onboarding.png",
+    "secondVisit": "C:\\Users\\blonj\\Documents\\bandits\\artifacts\\runtime-proof\\onboarding-repeat-2026-04-25T14-13-13\\2-second-visit-home.png"
+  },
+  "details": {
+    "firstUrl": "https://bandits-two.vercel.app/hotel/play-theatrou",
+    "secondUrl": "https://bandits-two.vercel.app/hotel/play-theatrou",
+    "doneStorage": {
+      "sessionStage": null,
+      "localDone": null
+    }
+  },
+  "errors": []
+}

@@ -1,7 +1,7 @@
 {
-  "name": "Banditour",
-  "short_name": "Banditour",
-  "description": "Discover and join local events",
+  "name": "bandiTour",
+  "short_name": "bandiTour",
+  "description": "Local experiences by local banDits",
   "start_url": "/hotel/play-theatrou",
   "scope": "/",
   "display": "standalone",

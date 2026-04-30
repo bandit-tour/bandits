@@ -56,7 +56,6 @@ let MapContainer: any = null;
 let TileLayer: any = null;
 let Marker: any = null;
 let Popup: any = null;
-let useMapEvents: any = null;
 let L: any = null;
 
 interface MapViewProps {
@@ -163,7 +162,6 @@ export default function LeafletMapView({
         TileLayer = reactLeaflet.TileLayer;
         Marker = reactLeaflet.Marker;
         Popup = reactLeaflet.Popup;
-        useMapEvents = reactLeaflet.useMapEvents;
         L = leaflet.default;
 
         // Fix for default marker icons in webpack
@@ -229,37 +227,23 @@ export default function LeafletMapView({
     '#4CAF50', '#009688', '#00BCD4', '#03A9F4', '#2196F3', '#3F51B5', '#673AB7', '#9C27B0'
   ];
 
-  // Track used colors to ensure uniqueness
-  const [usedColors, setUsedColors] = useState<Set<string>>(new Set());
-
-  // Color assignment cache to maintain consistency
-  const [colorAssignments] = useState<Map<string, string>>(new Map());
-  let colorIndex = 0;
-
-  // Create custom marker icon with unique color
-  const createCustomIcon = (eventId: string) => {
-    if (!L) return null;
-
-    // Get or assign a unique color for this event
-    let color = colorAssignments.get(eventId);
-    if (!color) {
-      // Find the next available color
-      while (colorIndex < markerColors.length && usedColors.has(markerColors[colorIndex])) {
-        colorIndex++;
-      }
-
-      if (colorIndex < markerColors.length) {
-        color = markerColors[colorIndex];
-        colorAssignments.set(eventId, color);
-        setUsedColors(prev => new Set([...prev, color!]));
-        colorIndex++;
-      } else {
-        // Fallback to a default color if we somehow run out
-        color = '#C0392B';
+  /** Stable marker colors — never setState during render (fixes hook / render crashes on web). */
+  const eventColorById = useMemo(() => {
+    const m = new Map<string, string>();
+    let idx = 0;
+    for (const e of events) {
+      if (!e.location_lat || !e.location_lng) continue;
+      if (!m.has(e.id)) {
+        m.set(e.id, markerColors[idx % markerColors.length]);
+        idx += 1;
       }
     }
+    return m;
+  }, [events]);
 
-    // Smaller markers for mini mode
+  const createCustomIcon = (eventId: string) => {
+    if (!L) return null;
+    const color = eventColorById.get(eventId) ?? '#C0392B';
     const size = miniMode ? 10 : 20;
     const borderWidth = miniMode ? 1 : 2;
 
@@ -285,30 +269,23 @@ export default function LeafletMapView({
     [events, initialRegion.latitude, initialRegion.longitude],
   );
 
-  // Handle map events
-  const MapEventHandler = () => {
-    const map = useMapEvents ? useMapEvents({
-      moveend: () => {
-        const center = map.getCenter();
-        const zoom = map.getZoom();
-        const region = {
-          latitude: center.lat,
-          longitude: center.lng,
-          latitudeDelta: 0.01 / Math.pow(2, zoom - 10),
-          longitudeDelta: 0.01 / Math.pow(2, zoom - 10),
-        };
-        onRegionChange(region);
-      },
-    }) : null;
-
-    useEffect(() => {
-      if (map) {
-        setMapInstance(map);
-      }
-    }, [map]);
-
-    return null;
-  };
+  useEffect(() => {
+    if (!mapInstance || miniMode) return;
+    const handler = () => {
+      const center = mapInstance.getCenter();
+      const zoom = mapInstance.getZoom();
+      onRegionChange({
+        latitude: center.lat,
+        longitude: center.lng,
+        latitudeDelta: 0.01 / Math.pow(2, zoom - 10),
+        longitudeDelta: 0.01 / Math.pow(2, zoom - 10),
+      });
+    };
+    mapInstance.on('moveend', handler);
+    return () => {
+      mapInstance.off('moveend', handler);
+    };
+  }, [mapInstance, miniMode, onRegionChange]);
 
   if (!leafletLoaded) {
     if (miniMode) {
@@ -364,7 +341,6 @@ export default function LeafletMapView({
           boxZoom={!miniMode}
           attributionControl={!miniMode}
         >
-          {!miniMode && <MapEventHandler />}
           <TileLayer
             attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
             url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"

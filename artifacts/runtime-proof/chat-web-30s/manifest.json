@@ -1,0 +1,26 @@
+{
+  "web": {
+    "incomingVisible": true,
+    "threadOpened": true,
+    "firstReplySent": true,
+    "firstReplyAfter30s": true,
+    "firstReplyAfterRefresh": true,
+    "firstReplyAfterNavBack": true,
+    "secondReplySent": true,
+    "backAndForthWorks": false
+  },
+  "messages": {
+    "msg1": "runtime-30s-1-1776947734705",
+    "msg2": "runtime-30s-2-1776947734705"
+  },
+  "shots": {
+    "incomingShot": "artifacts/runtime-proof/chat-web-30s/01-incoming-visible.png",
+    "openShot": "artifacts/runtime-proof/chat-web-30s/02-thread-opened.png",
+    "send1Shot": "artifacts/runtime-proof/chat-web-30s/03-send-1.png",
+    "wait30Shot": "artifacts/runtime-proof/chat-web-30s/04-after-30s.png",
+    "refreshShot": "artifacts/runtime-proof/chat-web-30s/05-after-refresh.png",
+    "reopenShot": "artifacts/runtime-proof/chat-web-30s/06-after-nav-out-back.png",
+    "send2Shot": "artifacts/runtime-proof/chat-web-30s/07-send-2.png",
+    "backForthShot": "artifacts/runtime-proof/chat-web-30s/08-back-and-forth-check.png"
+  }
+}

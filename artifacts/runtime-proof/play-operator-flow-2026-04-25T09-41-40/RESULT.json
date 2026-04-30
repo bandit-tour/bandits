@@ -1,0 +1,16 @@
+{
+  "outDir": "C:\\Users\\blonj\\Documents\\bandits\\artifacts\\runtime-proof\\play-operator-flow-2026-04-25T09-41-40",
+  "rootCause": "Operator sign-in credentials not available in runtime env for proof",
+  "screenshots": {
+    "intro": "C:\\Users\\blonj\\Documents\\bandits\\artifacts\\runtime-proof\\play-operator-flow-2026-04-25T09-41-40\\1-intro.png",
+    "home": "C:\\Users\\blonj\\Documents\\bandits\\artifacts\\runtime-proof\\play-operator-flow-2026-04-25T09-41-40\\2-home.png",
+    "profile": "C:\\Users\\blonj\\Documents\\bandits\\artifacts\\runtime-proof\\play-operator-flow-2026-04-25T09-41-40\\3-profile.png",
+    "menu": "C:\\Users\\blonj\\Documents\\bandits\\artifacts\\runtime-proof\\play-operator-flow-2026-04-25T09-41-40\\4-menu.png",
+    "bottomTabs": "C:\\Users\\blonj\\Documents\\bandits\\artifacts\\runtime-proof\\play-operator-flow-2026-04-25T09-41-40\\5-bottom-tabs.png",
+    "pilotDesk": "C:\\Users\\blonj\\Documents\\bandits\\artifacts\\runtime-proof\\play-operator-flow-2026-04-25T09-41-40\\6-pilot-desk.png"
+  },
+  "pass": "FAIL",
+  "errors": [
+    "E2E_ADMIN_EMAIL/E2E_ADMIN_PASSWORD missing"
+  ]
+}

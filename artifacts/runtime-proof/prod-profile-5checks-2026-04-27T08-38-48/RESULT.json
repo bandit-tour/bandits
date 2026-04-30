@@ -1,0 +1,19 @@
+{
+  "productionUrl": "https://bandits-two.vercel.app/profile",
+  "screenshots": {
+    "editableFields": "C:\\Users\\blonj\\Documents\\bandits\\artifacts\\runtime-proof\\prod-profile-5checks-2026-04-27T08-38-48\\1-editable-fields.png",
+    "saveVisible": "C:\\Users\\blonj\\Documents\\bandits\\artifacts\\runtime-proof\\prod-profile-5checks-2026-04-27T08-38-48\\2-save-profile-visible.png",
+    "afterSave": "C:\\Users\\blonj\\Documents\\bandits\\artifacts\\runtime-proof\\prod-profile-5checks-2026-04-27T08-38-48\\3-after-save.png",
+    "afterLeaveReturn": "C:\\Users\\blonj\\Documents\\bandits\\artifacts\\runtime-proof\\prod-profile-5checks-2026-04-27T08-38-48\\4-after-leave-return.png",
+    "afterFullRefresh": "C:\\Users\\blonj\\Documents\\bandits\\artifacts\\runtime-proof\\prod-profile-5checks-2026-04-27T08-38-48\\5-after-full-refresh.png"
+  },
+  "checks": {
+    "editableFieldsVisible": true,
+    "saveProfileVisible": true,
+    "savePersistsAfterLeavingAndReturning": true,
+    "savePersistsAfterFullRefresh": true,
+    "guestCanCreateProfileIdentity": true
+  },
+  "pass": "PASS",
+  "errors": []
+}

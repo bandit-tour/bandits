@@ -1,0 +1,39 @@
+{
+  "outDir": "C:\\Users\\blonj\\Documents\\bandits\\artifacts\\runtime-proof\\play-full-regression-2026-04-25T14-06-33",
+  "checks": {
+    "introFlow": false,
+    "home": false,
+    "menu": false,
+    "profilePersistence": false,
+    "photoPersistence": false,
+    "following": false,
+    "alerts": false,
+    "settings": false,
+    "hotelierVisible": false,
+    "pilotDeskVisible": false,
+    "crossPageNavigationStable": false
+  },
+  "screenshots": {
+    "intro": "C:\\Users\\blonj\\Documents\\bandits\\artifacts\\runtime-proof\\play-full-regression-2026-04-25T14-06-33\\1-intro.png",
+    "home": "C:\\Users\\blonj\\Documents\\bandits\\artifacts\\runtime-proof\\play-full-regression-2026-04-25T14-06-33\\2-home.png",
+    "menu": "C:\\Users\\blonj\\Documents\\bandits\\artifacts\\runtime-proof\\play-full-regression-2026-04-25T14-06-33\\3-menu.png",
+    "profileA": "C:\\Users\\blonj\\Documents\\bandits\\artifacts\\runtime-proof\\play-full-regression-2026-04-25T14-06-33\\4-profile-a.png",
+    "profileB": "C:\\Users\\blonj\\Documents\\bandits\\artifacts\\runtime-proof\\play-full-regression-2026-04-25T14-06-33\\5-profile-b.png",
+    "following": "C:\\Users\\blonj\\Documents\\bandits\\artifacts\\runtime-proof\\play-full-regression-2026-04-25T14-06-33\\6-following.png",
+    "alerts": "C:\\Users\\blonj\\Documents\\bandits\\artifacts\\runtime-proof\\play-full-regression-2026-04-25T14-06-33\\7-alerts.png",
+    "settings": "C:\\Users\\blonj\\Documents\\bandits\\artifacts\\runtime-proof\\play-full-regression-2026-04-25T14-06-33\\8-settings.png",
+    "hotelier": "C:\\Users\\blonj\\Documents\\bandits\\artifacts\\runtime-proof\\play-full-regression-2026-04-25T14-06-33\\9-hotelier.png",
+    "pilotDesk": "C:\\Users\\blonj\\Documents\\bandits\\artifacts\\runtime-proof\\play-full-regression-2026-04-25T14-06-33\\10-pilot-desk.png",
+    "navStable": "C:\\Users\\blonj\\Documents\\bandits\\artifacts\\runtime-proof\\play-full-regression-2026-04-25T14-06-33\\11-nav-stable.png"
+  },
+  "consoleErrors": [
+    "Failed to load resource: the server responded with a status of 500 (Internal Server Error)",
+    "Refused to execute script from 'http://localhost:8081/node_modules/expo-router/entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.engine=hermes&transform.routerRoot=app&unstable_transformProfile=hermes-stable' because its MIME type ('application/json') is not executable, and strict MIME type checking is enabled.",
+    "Failed to load resource: the server responded with a status of 500 (Internal Server Error)",
+    "Refused to execute script from 'http://localhost:8081/node_modules/expo-router/entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.engine=hermes&transform.routerRoot=app&unstable_transformProfile=hermes-stable' because its MIME type ('application/json') is not executable, and strict MIME type checking is enabled."
+  ],
+  "pageErrors": [
+    "page.waitForURL: Timeout 30000ms exceeded.\n=========================== logs ===========================\nwaiting for navigation to \"**/bandits\" until \"load\"\n============================================================"
+  ],
+  "pass": "FAIL"
+}

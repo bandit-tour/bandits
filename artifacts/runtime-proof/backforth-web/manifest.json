@@ -1,0 +1,58 @@
+{
+  "localFriend": {
+    "pass": false,
+    "key": "local-friend",
+    "reason": "No verified new incoming reply in same thread",
+    "shots": {
+      "open": "artifacts/runtime-proof/backforth-web/local-friend-01-open-thread.png",
+      "send1": "artifacts/runtime-proof/backforth-web/local-friend-02-send1.png",
+      "wait36": "artifacts/runtime-proof/backforth-web/local-friend-03-wait36.png",
+      "refresh": "artifacts/runtime-proof/backforth-web/local-friend-04-refresh.png",
+      "send2": "artifacts/runtime-proof/backforth-web/local-friend-05-send2.png"
+    },
+    "messages": {
+      "m1": "local-friend-m1-1776948869833",
+      "m2": "local-friend-m2-1776948869833",
+      "senderName": ""
+    },
+    "flags": {
+      "hasM1": true,
+      "hasM2": true,
+      "incomingLikely": false
+    }
+  },
+  "askMe": {
+    "pass": false,
+    "key": "ask-me",
+    "reason": "No verified new incoming reply in same thread",
+    "shots": {
+      "open": "artifacts/runtime-proof/backforth-web/ask-me-01-open-thread.png",
+      "send1": "artifacts/runtime-proof/backforth-web/ask-me-02-send1.png",
+      "wait36": "artifacts/runtime-proof/backforth-web/ask-me-03-wait36.png",
+      "refresh": "artifacts/runtime-proof/backforth-web/ask-me-04-refresh.png",
+      "send2": "artifacts/runtime-proof/backforth-web/ask-me-05-send2.png"
+    },
+    "messages": {
+      "m1": "ask-me-m1-1776948947289",
+      "m2": "ask-me-m2-1776948947289",
+      "senderName": ""
+    },
+    "flags": {
+      "hasM1": true,
+      "hasM2": true,
+      "incomingLikely": false
+    }
+  },
+  "bandiTEAM": {
+    "pass": false,
+    "key": "banditeam",
+    "reason": "No source row available",
+    "shots": {}
+  },
+  "randomSocial": {
+    "pass": false,
+    "key": "random-social",
+    "reason": "No source row available",
+    "shots": {}
+  }
+}

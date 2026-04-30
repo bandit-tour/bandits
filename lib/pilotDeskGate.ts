@@ -37,7 +37,11 @@ function mergePilotDeskAuthUser(validated: User | null, fromSession: User | null
   return merged;
 }
 
-async function resolveSessionUserForPilotDesk(): Promise<{
+/**
+ * Merged session + `getUser()` — same identity as PostgREST/JWT. Prefer this for menu and any UI
+ * that must not flicker on `getUser()`/`getSession()` disagreeing.
+ */
+export async function resolveSessionUserForPilotDesk(): Promise<{
   user: User | null;
   authError: Error | null;
 }> {
@@ -78,6 +82,19 @@ export async function resolvePilotDeskAccess(): Promise<{
   const isAppAdmin = isAppAdminUser(user);
   const canUsePilotDesk = canAccessPilotDesk(user, operatorId);
   return { operatorId, user, canUsePilotDesk, isAppAdmin, authError };
+}
+
+/**
+ * Menu / light UI: merged user + admin email check only. Does **not** call `ensureOperatorUserId()`
+ * (avoids extra async + config churn on every menu open).
+ */
+export async function resolveMenuAuthSnapshot(): Promise<{
+  user: User | null;
+  isAppAdmin: boolean;
+  authError: Error | null;
+}> {
+  const { user, authError } = await resolveSessionUserForPilotDesk();
+  return { user, isAppAdmin: isAppAdminUser(user), authError };
 }
 
 function pilotDeskAccessExplanation(

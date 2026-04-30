@@ -1,0 +1,40 @@
+{
+  "baseUrl": "http://127.0.0.1:8084",
+  "areas": {
+    "1_profile": {
+      "result": "FAIL",
+      "err": null,
+      "debug": {
+        "dn": "Avishay Ben Eli",
+        "ci": "Athens",
+        "vb": "",
+        "expectName": "QAUser17394",
+        "expectCity": "Teston7394",
+        "expectVibe": "Good vibe 7394",
+        "saveErr": 0
+      }
+    },
+    "2_daily_inspiration": {
+      "result": "PASS"
+    },
+    "3_welcome_bottle": {
+      "result": "PASS",
+      "err": null
+    },
+    "4_local_friend": {
+      "result": "PASS",
+      "err": null
+    },
+    "5_pilot_delete": {
+      "result": "FAIL",
+      "err": "row count did not drop after delete"
+    },
+    "6_notifications": {
+      "result": "FAIL",
+      "nInboxBefore": 64,
+      "nInboxAfterOneDelete": 64,
+      "bulkTried": true,
+      "err": null
+    }
+  }
+}

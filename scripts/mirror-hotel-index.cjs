@@ -18,3 +18,9 @@ if (!fs.existsSync(src)) {
 fs.mkdirSync(destDir, { recursive: true });
 fs.copyFileSync(src, dest);
 console.log('✅ mirror-hotel-index: copied index.html → hotel/play-theatrou/index.html');
+
+const experienceDir = path.join(destDir, 'experience');
+const experienceDest = path.join(experienceDir, 'index.html');
+fs.mkdirSync(experienceDir, { recursive: true });
+fs.copyFileSync(src, experienceDest);
+console.log('✅ mirror-hotel-index: copied index.html → hotel/play-theatrou/experience/index.html');

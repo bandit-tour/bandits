@@ -1,0 +1,56 @@
+{
+  "productionUrl": "https://bandits-two.vercel.app",
+  "checklist": {
+    "entryFullIntroFirst": true,
+    "entryRoutesToHomeAfterContinue": true,
+    "homeHasBanditsBanner": true,
+    "homeHasHero": true,
+    "alertsBottomTabVisible": true,
+    "alertsBottomTabNavigates": true,
+    "bottomTabsNavigateCore": true,
+    "noRuntimePageError": true
+  },
+  "urls": {
+    "afterIntroContinue": "https://bandits-two.vercel.app/bandits",
+    "bandits": "https://bandits-two.vercel.app/bandits",
+    "alerts": "https://bandits-two.vercel.app/alerts"
+  },
+  "screenshots": {
+    "introFirstLoad": "C:\\Users\\blonj\\Documents\\bandits\\artifacts\\runtime-proof\\prod-manual-checklist-2026-04-26T05-36-38\\1-intro-first-load.png",
+    "afterIntroContinue": "C:\\Users\\blonj\\Documents\\bandits\\artifacts\\runtime-proof\\prod-manual-checklist-2026-04-26T05-36-38\\2-after-intro-continue.png",
+    "banditsHome": "C:\\Users\\blonj\\Documents\\bandits\\artifacts\\runtime-proof\\prod-manual-checklist-2026-04-26T05-36-38\\3-bandits-home.png",
+    "alertsTab": "C:\\Users\\blonj\\Documents\\bandits\\artifacts\\runtime-proof\\prod-manual-checklist-2026-04-26T05-36-38\\4-alerts-tab.png",
+    "chatTab": "C:\\Users\\blonj\\Documents\\bandits\\artifacts\\runtime-proof\\prod-manual-checklist-2026-04-26T05-36-38\\5-chat-tab.png",
+    "menuTab": "C:\\Users\\blonj\\Documents\\bandits\\artifacts\\runtime-proof\\prod-manual-checklist-2026-04-26T05-36-38\\6-menu-tab.png",
+    "homeReturn": "C:\\Users\\blonj\\Documents\\bandits\\artifacts\\runtime-proof\\prod-manual-checklist-2026-04-26T05-36-38\\7-home-return.png"
+  },
+  "pageErrors": [],
+  "consoleErrorsSample": [
+    "Failed to load resource: the server responded with a status of 401 ()",
+    "Failed to load resource: the server responded with a status of 404 ()",
+    "Failed to load resource: the server responded with a status of 404 ()",
+    "Failed to load resource: the server responded with a status of 404 ()",
+    "Failed to load resource: the server responded with a status of 404 ()",
+    "Failed to load resource: the server responded with a status of 404 ()",
+    "Failed to load resource: the server responded with a status of 404 ()",
+    "Failed to load resource: the server responded with a status of 404 ()",
+    "Failed to load resource: the server responded with a status of 404 ()",
+    "Failed to load resource: the server responded with a status of 404 ()",
+    "Failed to load resource: the server responded with a status of 404 ()",
+    "Failed to load resource: the server responded with a status of 404 ()",
+    "Failed to load resource: the server responded with a status of 404 ()",
+    "Failed to load resource: the server responded with a status of 404 ()",
+    "Failed to load resource: the server responded with a status of 404 ()",
+    "Failed to load resource: the server responded with a status of 404 ()",
+    "Failed to load resource: the server responded with a status of 404 ()",
+    "Failed to load resource: the server responded with a status of 404 ()",
+    "Failed to load resource: the server responded with a status of 404 ()",
+    "Failed to load resource: the server responded with a status of 404 ()",
+    "Failed to load resource: the server responded with a status of 404 ()",
+    "Failed to load resource: the server responded with a status of 404 ()",
+    "Failed to load resource: the server responded with a status of 404 ()",
+    "Failed to load resource: the server responded with a status of 404 ()",
+    "Failed to load resource: the server responded with a status of 404 ()"
+  ],
+  "notes": []
+}

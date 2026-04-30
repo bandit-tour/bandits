@@ -1,0 +1,18 @@
+{
+  "base": "https://bandits-two.vercel.app",
+  "seed": "askme-e2e-1777542781806",
+  "checks": {
+    "travelerReady": true,
+    "askSubmitted": false,
+    "notificationsDirectionCorrect": false,
+    "operatorSignedIn": false,
+    "pilotDeskSingleEntry": false,
+    "chatOpenedFromNotification": false,
+    "chatShowsSingleThreadMessage": false
+  },
+  "screenshots": {},
+  "errors": [
+    "Could not open any bandit profile from production /bandits"
+  ],
+  "pass": "FAIL"
+}

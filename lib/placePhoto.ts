@@ -13,7 +13,9 @@ export function isLikelyLogoOrBadPlaceImage(uri: string | null | undefined): boo
     t.includes('logobanditourapp') ||
     t.includes('banditour-logo') ||
     t.includes('banditourmainlogo') ||
+    t.includes('banditour-main-logo') ||
     t.includes('play-theatrou') ||
+    t.includes('play_athens_bg') ||
     t.includes('play-psyri') ||
     t.includes('/logo') ||
     t.includes('icon.png') ||
@@ -24,6 +26,17 @@ export function isLikelyLogoOrBadPlaceImage(uri: string | null | undefined): boo
     return true;
   }
   return false;
+}
+
+/** Stable index 0..mod-1 from a string (djb2) — avoids duplicate picks from weak char-sum hashing. */
+export function hashPickIndex(seed: string, modulo: number): number {
+  if (modulo <= 1) return 0;
+  let h = 5381;
+  const s = String(seed);
+  for (let i = 0; i < s.length; i++) {
+    h = ((h << 5) + h + s.charCodeAt(i)) | 0;
+  }
+  return Math.abs(h) % modulo;
 }
 
 export function getCategoryFallbackImage(
@@ -49,6 +62,10 @@ export function getCategoryFallbackImage(
     `https://images.pexels.com/photos/941864/pexels-photo-941864.jpeg?auto=compress&cs=tinysrgb&w=${w}&h=${h}&fit=crop`,
     `https://images.pexels.com/photos/696218/pexels-photo-696218.jpeg?auto=compress&cs=tinysrgb&w=${w}&h=${h}&fit=crop`,
     `https://images.pexels.com/photos/1540406/pexels-photo-1540406.jpeg?auto=compress&cs=tinysrgb&w=${w}&h=${h}&fit=crop`,
+    `https://images.pexels.com/photos/1763075/pexels-photo-1763075.jpeg?auto=compress&cs=tinysrgb&w=${w}&h=${h}&fit=crop`,
+    `https://images.pexels.com/photos/2251247/pexels-photo-2251247.jpeg?auto=compress&cs=tinysrgb&w=${w}&h=${h}&fit=crop`,
+    `https://images.pexels.com/photos/2089698/pexels-photo-2089698.jpeg?auto=compress&cs=tinysrgb&w=${w}&h=${h}&fit=crop`,
+    `https://images.pexels.com/photos/69903/pexels-photo-69903.jpeg?auto=compress&cs=tinysrgb&w=${w}&h=${h}&fit=crop`,
   ];
   const SHOPPING_IMAGES = [
     `https://images.pexels.com/photos/264547/pexels-photo-264547.jpeg?auto=compress&cs=tinysrgb&w=${w}&h=${h}&fit=crop`,
@@ -87,10 +104,8 @@ export function getCategoryFallbackImage(
             ? COFFEE_IMAGES
             : null;
 
-  const idx = Math.abs(
-    `${seed}-${key}`.split('').reduce((acc, ch) => acc + ch.charCodeAt(0), 0),
-  ) % (all?.length || 1);
-  if (all && all.length > 0) return all[idx];
+  const pickKey = `${seed}|${key}`;
+  if (all && all.length > 0) return all[hashPickIndex(pickKey, all.length)];
   return picsumPlaceImage(seed, w, h);
 }
 

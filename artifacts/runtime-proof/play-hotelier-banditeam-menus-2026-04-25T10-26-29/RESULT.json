@@ -1,0 +1,23 @@
+{
+  "outDir": "C:\\Users\\blonj\\Documents\\bandits\\artifacts\\runtime-proof\\play-hotelier-banditeam-menus-2026-04-25T10-26-29",
+  "browser": {
+    "playMenu": true,
+    "hotelier": true,
+    "bandiTeam": true
+  },
+  "mobile": {
+    "playMenu": true,
+    "hotelier": true,
+    "bandiTeam": true
+  },
+  "screenshots": {
+    "browserPlayMenu": "C:\\Users\\blonj\\Documents\\bandits\\artifacts\\runtime-proof\\play-hotelier-banditeam-menus-2026-04-25T10-26-29\\1-browser-play-menu.png",
+    "browserHotelier": "C:\\Users\\blonj\\Documents\\bandits\\artifacts\\runtime-proof\\play-hotelier-banditeam-menus-2026-04-25T10-26-29\\2-browser-hotelier.png",
+    "browserBandiTeam": "C:\\Users\\blonj\\Documents\\bandits\\artifacts\\runtime-proof\\play-hotelier-banditeam-menus-2026-04-25T10-26-29\\3-browser-banditeam.png",
+    "mobilePlayMenu": "C:\\Users\\blonj\\Documents\\bandits\\artifacts\\runtime-proof\\play-hotelier-banditeam-menus-2026-04-25T10-26-29\\4-mobile-play-menu.png",
+    "mobileHotelier": "C:\\Users\\blonj\\Documents\\bandits\\artifacts\\runtime-proof\\play-hotelier-banditeam-menus-2026-04-25T10-26-29\\5-mobile-hotelier.png",
+    "mobileBandiTeam": "C:\\Users\\blonj\\Documents\\bandits\\artifacts\\runtime-proof\\play-hotelier-banditeam-menus-2026-04-25T10-26-29\\6-mobile-banditeam.png"
+  },
+  "pass": "PASS",
+  "errors": []
+}

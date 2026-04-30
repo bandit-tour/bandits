@@ -78,3 +78,15 @@ export async function appendNearbyNotification(entry: NearbyInboxEntry): Promise
   const next = [entry, ...cur.filter((e) => e.id !== entry.id)].slice(0, 80);
   await AsyncStorage.setItem(STORAGE_INBOX, JSON.stringify(next));
 }
+
+export async function removeNearbyStoredNotification(id: string): Promise<void> {
+  const t = String(id || '').trim();
+  if (!t) return;
+  const cur = await getNearbyStoredNotifications();
+  const next = cur.filter((e) => e.id !== t);
+  await AsyncStorage.setItem(STORAGE_INBOX, JSON.stringify(next));
+}
+
+export async function clearNearbyStoredNotifications(): Promise<void> {
+  await AsyncStorage.setItem(STORAGE_INBOX, JSON.stringify([]));
+}

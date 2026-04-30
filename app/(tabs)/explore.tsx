@@ -2,10 +2,11 @@ import { getEvents, toggleEventLike } from '@/app/services/events';
 import EventCard from '@/components/EventCard';
 import { useCity } from '@/contexts/CityContext';
 import { Database } from '@/lib/database.types';
+import { usePremiumRefreshControl } from '@/lib/mobilePullToRefresh';
 import { useFocusEffect } from '@react-navigation/native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import React, { useCallback, useMemo, useState } from 'react';
-import { ActivityIndicator, FlatList, Pressable, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, FlatList, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 
 type Event = Database['public']['Tables']['event']['Row'];
 
@@ -20,12 +21,14 @@ export default function Explore() {
   const [events, setEvents] = useState<Event[]>([]);
   const [likedEventIds, setLikedEventIds] = useState<Set<string>>(new Set());
   const [loading, setLoading] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
   const [loadedOnce, setLoadedOnce] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const loadEvents = useCallback(async () => {
+  const loadEvents = useCallback(async (opts?: { silent?: boolean }) => {
+    const silent = opts?.silent === true;
     try {
-      setLoading(true);
+      if (!silent) setLoading(true);
       setError(null);
       const rows = await getEvents({
         ...(selectedCity ? { city: selectedCity } : {}),
@@ -36,7 +39,7 @@ export default function Explore() {
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Could not load Explore.');
     } finally {
-      setLoading(false);
+      if (!silent) setLoading(false);
       setLoadedOnce(true);
     }
   }, [selectedCity, banditId, selectedGenre]);
@@ -73,10 +76,26 @@ export default function Explore() {
     }
   }, [likedEventIds]);
 
+  const onPullRefresh = useCallback(async () => {
+    setRefreshing(true);
+    try {
+      await loadEvents({ silent: true });
+    } finally {
+      setRefreshing(false);
+    }
+  }, [loadEvents]);
+
+  const exploreRefreshControl = usePremiumRefreshControl(refreshing, onPullRefresh);
+
   const title = useMemo(() => {
     if (selectedGenre) return `Explore · ${selectedGenre}`;
     return selectedCity ? `Explore in ${selectedCity}` : 'Explore';
   }, [selectedCity, selectedGenre]);
+
+  const goBackToBanditHome = useCallback(() => {
+    if (!banditId) return;
+    router.push(`/bandits?focusBanditId=${encodeURIComponent(banditId)}` as any);
+  }, [banditId, router]);
 
   if (loading && !loadedOnce) {
     return (
@@ -86,18 +105,18 @@ export default function Explore() {
     );
   }
 
-  if (error) {
+  if (error && events.length === 0) {
     return (
-      <View style={styles.loadingWrap}>
+      <ScrollView
+        style={{ flex: 1, backgroundColor: '#FFFFFF' }}
+        contentContainerStyle={styles.loadingWrap}
+        refreshControl={exploreRefreshControl}
+      >
         <Text style={styles.errorText}>{error}</Text>
-      </View>
+        <Text style={styles.errorHint}>Pull down to retry.</Text>
+      </ScrollView>
     );
   }
-
-  const goBackToBanditHome = useCallback(() => {
-    if (!banditId) return;
-    router.push(`/bandits?focusBanditId=${encodeURIComponent(banditId)}` as any);
-  }, [banditId, router]);
 
   return (
     <View style={styles.container}>
@@ -125,8 +144,7 @@ export default function Explore() {
         data={events}
         keyExtractor={(item) => item.id}
         numColumns={2}
-        refreshing={loading}
-        onRefresh={() => void loadEvents()}
+        refreshControl={exploreRefreshControl}
         columnWrapperStyle={styles.row}
         contentContainerStyle={styles.gridContent}
         ListEmptyComponent={<Text style={styles.emptyText}>No places found in Explore yet.</Text>}
@@ -227,6 +245,12 @@ const styles = StyleSheet.create({
     color: '#CC2A2A',
     fontSize: 14,
     paddingHorizontal: 16,
+    textAlign: 'center',
+  },
+  errorHint: {
+    marginTop: 12,
+    fontSize: 13,
+    color: '#777',
     textAlign: 'center',
   },
 });

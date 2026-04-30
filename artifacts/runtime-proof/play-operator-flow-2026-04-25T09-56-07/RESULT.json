@@ -1,0 +1,21 @@
+{
+  "outDir": "C:\\Users\\blonj\\Documents\\bandits\\artifacts\\runtime-proof\\play-operator-flow-2026-04-25T09-56-07",
+  "checks": {
+    "playContextAfterLogin": true,
+    "playMenuClean": false,
+    "pilotDeskVisible": false,
+    "pilotDeskOpened": false
+  },
+  "screenshots": {
+    "intro": "C:\\Users\\blonj\\Documents\\bandits\\artifacts\\runtime-proof\\play-operator-flow-2026-04-25T09-56-07\\1-intro.png",
+    "home": "C:\\Users\\blonj\\Documents\\bandits\\artifacts\\runtime-proof\\play-operator-flow-2026-04-25T09-56-07\\2-home.png",
+    "profile": "C:\\Users\\blonj\\Documents\\bandits\\artifacts\\runtime-proof\\play-operator-flow-2026-04-25T09-56-07\\3-profile.png",
+    "menu": "C:\\Users\\blonj\\Documents\\bandits\\artifacts\\runtime-proof\\play-operator-flow-2026-04-25T09-56-07\\4-menu.png",
+    "bottomTabs": "C:\\Users\\blonj\\Documents\\bandits\\artifacts\\runtime-proof\\play-operator-flow-2026-04-25T09-56-07\\5-bottom-tabs.png",
+    "pilotDesk": "C:\\Users\\blonj\\Documents\\bandits\\artifacts\\runtime-proof\\play-operator-flow-2026-04-25T09-56-07\\6-pilot-desk.png"
+  },
+  "pass": "FAIL",
+  "errors": [
+    "locator.click: Timeout 10000ms exceeded.\nCall log:\n  - waiting for getByText('Profile').first()\n    - locator resolved to <div dir=\"auto\" class=\"css-text-146c3p1 r-color-12qd0a2 r-fontSize-1enofrn r-marginTop-14gqq1x\">Save your profile and preferences</div>\n  - attempting click action\n    2 × waiting for element to be visible, enabled and stable\n      - element is not visible\n    - retrying click action\n    - waiting 20ms\n    2 × waiting for element to be visible, enabled and stable\n      - element is not visible\n    - retrying click action\n      - waiting 100ms\n    19 × waiting for element to be visible, enabled and stable\n       - element is not visible\n     - retrying click action\n       - waiting 500ms\n"
+  ]
+}

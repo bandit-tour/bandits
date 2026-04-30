@@ -1,0 +1,19 @@
+{
+  "base": "http://localhost:8081",
+  "timestamp": "2026-04-22T14:55:28.964Z",
+  "hasLocalFriend": false,
+  "errors": [
+    "console:Invalid style property of \"direction\". Did you mean \"writingDirection\"?",
+    "console:Invalid style property of \"direction\". Did you mean \"writingDirection\"?",
+    "console:Invalid style property of \"direction\". Did you mean \"writingDirection\"?",
+    "console:Failed to load resource: the server responded with a status of 401 ()",
+    "console:Invalid style property of \"direction\". Did you mean \"writingDirection\"?",
+    "console:Failed to load resource: the server responded with a status of 401 ()",
+    "console:Invalid style property of \"direction\". Did you mean \"writingDirection\"?",
+    "console:Failed to load resource: the server responded with a status of 401 ()",
+    "console:Invalid style property of \"direction\". Did you mean \"writingDirection\"?",
+    "console:Failed to load resource: the server responded with a status of 401 ()",
+    "console:Invalid style property of \"direction\". Did you mean \"writingDirection\"?",
+    "console:Failed to load resource: the server responded with a status of 401 ()"
+  ]
+}

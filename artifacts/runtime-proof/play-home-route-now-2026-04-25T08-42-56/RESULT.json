@@ -1,0 +1,9 @@
+{
+  "routeAfterIntroButton": "http://localhost:8081/bandits",
+  "routeAfterRefresh": "http://localhost:8081/bandits",
+  "screenshots": {
+    "afterIntroButtonHome": "C:\\Users\\blonj\\Documents\\bandits\\artifacts\\runtime-proof\\play-home-route-now-2026-04-25T08-42-56\\after-intro-button-home.png",
+    "refreshReturningHome": "C:\\Users\\blonj\\Documents\\bandits\\artifacts\\runtime-proof\\play-home-route-now-2026-04-25T08-42-56\\refresh-returning-home.png"
+  },
+  "pass": "PASS"
+}

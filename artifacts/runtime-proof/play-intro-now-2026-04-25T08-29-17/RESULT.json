@@ -1,0 +1,31 @@
+{
+  "outDir": "C:\\Users\\blonj\\Documents\\bandits\\artifacts\\runtime-proof\\play-intro-now-2026-04-25T08-29-17",
+  "routeUsed": "http://localhost:8081/hotel/play-theatrou",
+  "screenshots": {
+    "firstTimeIntro": "C:\\Users\\blonj\\Documents\\bandits\\artifacts\\runtime-proof\\play-intro-now-2026-04-25T08-29-17\\1-first-time-intro.png",
+    "afterButtonHome": "C:\\Users\\blonj\\Documents\\bandits\\artifacts\\runtime-proof\\play-intro-now-2026-04-25T08-29-17\\2-after-button-home.png",
+    "refreshReturningHome": "C:\\Users\\blonj\\Documents\\bandits\\artifacts\\runtime-proof\\play-intro-now-2026-04-25T08-29-17\\3-refresh-returning-home.png"
+  },
+  "checks": {
+    "firstTimeIntroVisible": true,
+    "bottleVideoPlaying": true,
+    "firstTimeButtonToHome": true,
+    "returningSkipToHome": true
+  },
+  "consoleErrors": [
+    "Invalid style property of \"direction\". Did you mean \"writingDirection\"?",
+    "Invalid style property of \"direction\". Did you mean \"writingDirection\"?",
+    "Failed to load resource: the server responded with a status of 401 ()",
+    "Failed to load resource: the server responded with a status of 400 ()",
+    "Failed to load resource: the server responded with a status of 400 ()",
+    "TypeError: Failed to fetch\n    at http://localhost:8081/node_modules/expo-router/entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.engine=hermes&transform.routerRoot=app&unstable_transformProfile=hermes-stable:105488:25\n    at _handleRequest (http://localhost:8081/node_modules/expo-router/entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.engine=hermes&transform.routerRoot=app&unstable_transformProfile=hermes-stable:105108:22)\n    at _request (http://localhost:8081/node_modules/expo-router/entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.engine=hermes&transform.routerRoot=app&unstable_transformProfile=hermes-stable:105095:24)\n    at SupabaseAuthClient.signInAnonymously (http://localhost:8081/node_modules/expo-router/entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.engine=hermes&transform.routerRoot=app&unstable_transformProfile=hermes-stable:106832:50)\n    at http://localhost:8081/node_modules/expo-router/entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.engine=hermes&transform.routerRoot=app&unstable_transformProfile=hermes-stable:121513:46\n    at async ensureAnonymousSession (http://localhost:8081/node_modules/expo-router/entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.engine=hermes&transform.routerRoot=app&unstable_transformProfile=hermes-stable:121519:7)\n    at async bootstrapMainAppSession (http://localhost:8081/node_modules/expo-router/entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.engine=hermes&transform.routerRoot=app&unstable_transformProfile=hermes-stable:121551:5)",
+    "Invalid style property of \"direction\". Did you mean \"writingDirection\"?",
+    "The play() request was interrupted because the media was removed from the document. https://goo.gl/LdLk22",
+    "Failed to load resource: the server responded with a status of 401 ()",
+    "Failed to load resource: the server responded with a status of 400 ()",
+    "Failed to load resource: the server responded with a status of 400 ()",
+    "Failed to load resource: the server responded with a status of 404 ()",
+    "Failed to load resource: the server responded with a status of 404 ()"
+  ],
+  "pass": "FAIL"
+}

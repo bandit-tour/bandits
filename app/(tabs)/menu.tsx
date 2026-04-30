@@ -8,7 +8,7 @@ import { canAccessHotelier, isAnonymousSupabaseSession } from '@/lib/appAdminAcc
 import { usePremiumRefreshControl } from '@/lib/mobilePullToRefresh';
 import { getHotelWhiteLabelOrDefault } from '@/lib/hotelWhiteLabel';
 import { getHotelEntry } from '@/lib/pilotSession';
-import { resolvePilotDeskAccess } from '@/lib/pilotDeskGate';
+import { resolveMenuAuthSnapshot } from '@/lib/pilotDeskGate';
 import { supabase } from '@/lib/supabase';
 
 type MenuItem = {
@@ -25,9 +25,8 @@ const MENU_ITEMS: MenuItem[] = [
 
 export default function MenuScreen() {
   const router = useRouter();
-  const [isAppAdmin, setIsAppAdmin] = React.useState(false);
-  const [hotelierAllowed, setHotelierAllowed] = React.useState(false);
   const [pilotDeskAllowed, setPilotDeskAllowed] = React.useState(false);
+  const [authHydrated, setAuthHydrated] = React.useState(false);
   const [canStaffSignOut, setCanStaffSignOut] = React.useState(false);
   const [refreshing, setRefreshing] = React.useState(false);
   const [menuLocationLine, setMenuLocationLine] = React.useState(
@@ -36,18 +35,13 @@ export default function MenuScreen() {
   const [menuSessionUser, setMenuSessionUser] = React.useState<User | null>(null);
 
   const refreshMenuAccess = React.useCallback(async () => {
-    /** Same snapshot as Pilot Desk: merged session + `getUser()` (see `resolvePilotDeskAccess`). */
-    const { user, canUsePilotDesk, operatorId, isAppAdmin } = await resolvePilotDeskAccess();
+    const { user, isAppAdmin } = await resolveMenuAuthSnapshot();
     setMenuSessionUser(user);
-    setIsAppAdmin(isAppAdmin);
-    setHotelierAllowed(canAccessHotelier(user));
-    setPilotDeskAllowed(canUsePilotDesk);
-    setCanStaffSignOut(
-      isAppAdmin ||
-        (!!user &&
-          !!operatorId &&
-          String(user.id).toLowerCase() === String(operatorId).toLowerCase()),
-    );
+    /** Pilot Desk: admin allowlist email only — not tied to Hotelier or operator UUID. */
+    setPilotDeskAllowed(isAppAdmin);
+    /** Anyone with a real email session (not anonymous) can sign out. */
+    setCanStaffSignOut(canAccessHotelier(user));
+    setAuthHydrated(true);
   }, []);
 
   React.useEffect(() => {
@@ -87,22 +81,18 @@ export default function MenuScreen() {
   const menuRefreshControl = usePremiumRefreshControl(refreshing, onRefresh);
 
   const items: MenuItem[] = React.useMemo(() => {
-    const out: MenuItem[] = [...MENU_ITEMS];
-    if (hotelierAllowed) out.push({ title: 'Hotelier', route: '/hotelier' });
-    if (pilotDeskAllowed) out.push({ title: 'Pilot Desk', route: '/operatorDesk' });
+    const out: MenuItem[] = [...MENU_ITEMS, { title: 'Hotelier', route: '/hotelier' }];
+    if (authHydrated && pilotDeskAllowed) out.push({ title: 'Pilot Desk', route: '/operatorDesk' });
     return out;
-  }, [hotelierAllowed, pilotDeskAllowed]);
+  }, [authHydrated, pilotDeskAllowed]);
 
-  const showGuestMenuTitle =
-    !hotelierAllowed && !pilotDeskAllowed && !canStaffSignOut;
+  const signedInEmailUser = canStaffSignOut;
+  const showGuestMenuTitle = !signedInEmailUser;
   const headerTitle = showGuestMenuTitle ? 'Guest Menu' : 'Menu';
-  /** “Staff” line only for Pilot Desk / operator — not for general Hotelier users. */
-  const showPilotStaffChrome = pilotDeskAllowed || canStaffSignOut;
-  /** Guests need email login for Hotelier; signed-in users never see this banner. */
+  const showPilotStaffChrome = authHydrated && pilotDeskAllowed;
+  /** Anonymous / no email session: offer email login (Hotelier flows still gated on screen). */
   const showStaffSignIn =
-    !hotelierAllowed &&
-    !pilotDeskAllowed &&
-    !canStaffSignOut &&
+    !signedInEmailUser &&
     (Platform.OS === 'web' || isAnonymousSupabaseSession(menuSessionUser));
 
   return (
@@ -141,9 +131,7 @@ export default function MenuScreen() {
           }
         >
           <Text style={styles.staffSignInTitle}>Sign in with email</Text>
-          <Text style={styles.staffSignInSub}>
-            Unlocks Hotelier access for your account.
-          </Text>
+          <Text style={styles.staffSignInSub}>For hotel partners and verified accounts.</Text>
         </Pressable>
       ) : null}
 

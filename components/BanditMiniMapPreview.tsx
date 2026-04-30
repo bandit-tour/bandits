@@ -23,7 +23,7 @@ export default function BanditMiniMapPreview({ banditId }: { banditId: string })
     return (
       <Pressable onPress={openFullMap} style={styles.iconBtn} hitSlop={8}>
         <Image
-          source={require('@/assets/icons/Alecive-Flatwoken-Apps-Google-Maps.512.png')}
+          source={require('@/assets/icons/google-maps-512.png')}
           style={styles.mapIcon}
         />
       </Pressable>

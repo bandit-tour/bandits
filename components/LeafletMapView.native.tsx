@@ -40,26 +40,41 @@ export default function LeafletMapView({
     }
   }, [error, onError]);
 
+  /** RN WebView does not deliver ref.postMessage() to the page — use injectJavaScript. */
   useEffect(() => {
-    if (mapReady && webViewRef.current && events.length > 0) {
-      const markersData = events
-        .filter((event) => event.location_lat && event.location_lng)
-        .map((event) => ({
-          id: event.id,
-          lat: event.location_lat,
-          lng: event.location_lng,
-          name: event.name,
-          address: event.address,
-          genre: event.genre,
-        }));
+    if (!mapReady || !webViewRef.current || events.length === 0) return;
 
-      webViewRef.current.postMessage(
-        JSON.stringify({
-          type: 'updateMarkers',
-          markers: markersData,
-        }),
-      );
-    }
+    const markersData = events
+      .filter(
+        (event) =>
+          event.location_lat != null &&
+          event.location_lng != null &&
+          Number.isFinite(Number(event.location_lat)) &&
+          Number.isFinite(Number(event.location_lng)),
+      )
+      .map((event) => ({
+        id: event.id,
+        lat: Number(event.location_lat),
+        lng: Number(event.location_lng),
+        name: event.name ?? '',
+        address: event.address ?? '',
+        genre: event.genre ?? '',
+      }));
+
+    if (markersData.length === 0) return;
+
+    const payload = JSON.stringify(markersData);
+    const script = `
+      (function(){
+        try {
+          if (typeof window.__applyMapMarkers === 'function') {
+            window.__applyMapMarkers(${payload});
+          }
+        } catch (e) {}
+        true;
+      })();
+    `;
+    webViewRef.current.injectJavaScript(script);
   }, [events, mapReady]);
 
   const handleWebViewMessage = (event: any) => {
@@ -173,19 +188,18 @@ export default function LeafletMapView({
             markers.push(marker);
           });
           if (markersData.length > 1) {
-            var group = new L.featureGroup(markers);
-            map.fitBounds(group.getBounds().pad(0.1));
+            try {
+              var group = new L.featureGroup(markers);
+              map.fitBounds(group.getBounds().pad(0.1));
+            } catch (e) {}
+          } else if (markersData.length === 1) {
+            map.setView([markersData[0].lat, markersData[0].lng], 15);
           }
         }
 
-        function handleIncomingMessage(event) {
-          try {
-            var data = JSON.parse(event.data);
-            if (data.type === 'updateMarkers') updateMarkers(data.markers);
-          } catch (e) {}
-        }
-        document.addEventListener('message', handleIncomingMessage);
-        window.addEventListener('message', handleIncomingMessage);
+        window.__applyMapMarkers = function(markersData) {
+          updateMarkers(markersData);
+        };
 
         map.on('moveend', function() {
           var center = map.getCenter();

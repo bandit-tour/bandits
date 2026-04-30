@@ -1,17 +1,20 @@
 {
   "expo": {
-    "name": "PLAY Theatrou Athens",
+    "name": "bandiTour",
     "slug": "bandits",
     "version": "1.0.1",
     "orientation": "portrait",
-    "icon": "./assets/images/play-theatrou.png",
+    "icon": "./assets/images/play_athens_bg.png",
     "scheme": "bandits",
     "userInterfaceStyle": "automatic",
     "newArchEnabled": false,
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.yuvaldafni.bandits",
-      "associatedDomains": ["applinks:bandit-tours.vercel.app"],
+      "associatedDomains": [
+        "applinks:bandits-two.vercel.app",
+        "applinks:bandit-tours.vercel.app"
+      ],
       "infoPlist": {
         "ITSAppUsesNonExemptEncryption": false,
         "NSLocationWhenInUseUsageDescription": "bandiTour uses your location while the app is open to suggest nearby places, events, and safety alerts—only when you are close."
@@ -22,7 +25,7 @@
     },
     "android": {
       "adaptiveIcon": {
-        "foregroundImage": "./assets/images/play-theatrou.png",
+        "foregroundImage": "./assets/images/play_athens_bg.png",
         "backgroundColor": "#ffffff"
       },
       "edgeToEdgeEnabled": true,
@@ -38,6 +41,11 @@
           "action": "VIEW",
           "autoVerify": true,
           "data": [
+            {
+              "scheme": "https",
+              "host": "bandits-two.vercel.app",
+              "pathPrefix": "/hotel"
+            },
             {
               "scheme": "https",
               "host": "bandit-tours.vercel.app",
@@ -60,15 +68,15 @@
     "web": {
       "bundler": "metro",
       "output": "single",
-      "favicon": "./assets/images/play-theatrou.png",
-      "name": "PLAY Theatrou Athens",
-      "shortName": "PLAY",
-      "description": "Discover and join local events",
+      "favicon": "./assets/images/play_athens_bg.png",
+      "name": "bandiTour",
+      "shortName": "bandiTour",
+      "description": "Local experiences by local banDits",
       "lang": "en",
       "scope": "/",
-      "startUrl": "/hotel/play-theatrou",
-      "backgroundColor": "#ffffff",
-      "themeColor": "#ffffff",
+      "startUrl": "/",
+      "backgroundColor": "#0a0a0a",
+      "themeColor": "#0a0a0a",
       "display": "standalone",
       "orientation": "portrait"
     },
@@ -93,11 +101,12 @@
           }
         }
       ],
+      "expo-screen-orientation",
       "expo-router",
       [
         "expo-splash-screen",
         {
-          "image": "./assets/images/play-theatrou.png",
+          "image": "./assets/images/play_athens_bg.png",
           "imageWidth": 200,
           "resizeMode": "contain",
           "backgroundColor": "#ffffff"

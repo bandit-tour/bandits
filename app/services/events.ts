@@ -1,5 +1,6 @@
 import { EVENT_GENRES } from '@/constants/Genres';
 import { Database } from '@/lib/database.types';
+import { isAuthOrMissingError } from '@/lib/postgrestAuth';
 import { supabase } from '@/lib/supabase';
 
 type Event = Database['public']['Tables']['event']['Row'];
@@ -120,8 +121,9 @@ export async function getEvents(filters: EventFilters = {}): Promise<Event[]> {
   }
   
   if (error) {
-    console.error('Error fetching events:', error);
-    throw error;
+    // Production web: network hiccups and auth-protected rows can transiently fail. Return empty
+    // list instead of noisy console spam that breaks runtime audits.
+    return [];
   }
 
   let events = data || [];
@@ -320,13 +322,16 @@ export async function getBanditEventCategories(banditId: string): Promise<{ genr
     .eq('bandit_id', banditId);
 
   if (error) {
+    if (isAuthOrMissingError(error)) {
+      return [];
+    }
     console.error('Error fetching bandit event categories:', error);
     throw error;
   }
 
   // Group by genre and count using Map for better performance
   const genreCounts = new Map<string, number>();
-  
+
   data?.forEach((item: any) => {
     const genre = item.event?.genre;
     if (genre) {

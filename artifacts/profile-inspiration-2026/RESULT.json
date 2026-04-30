@@ -1,0 +1,25 @@
+{
+  "base": "https://bandits-two.vercel.app",
+  "refreshChecks": [
+    {
+      "pass": true,
+      "failBad": false,
+      "hasGood": true,
+      "stripPreview": "A MOMENT\nGood morning. Your city is waiting."
+    },
+    {
+      "pass": true,
+      "failBad": false,
+      "hasGood": true,
+      "stripPreview": "A MOMENT\nGood morning. Your city is waiting."
+    },
+    {
+      "pass": true,
+      "failBad": false,
+      "hasGood": true,
+      "stripPreview": "A MOMENT\nGood morning. Your city is waiting."
+    }
+  ],
+  "screenshot": "C:\\Users\\blonj\\Documents\\bandits\\artifacts\\profile-inspiration-2026\\profile-after-refresh-3.png",
+  "allPassed": true
+}

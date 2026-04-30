@@ -1,0 +1,10 @@
+{
+  "out": "C:\\Users\\blonj\\Documents\\bandits\\artifacts\\report-success-bottle-2026",
+  "files": {
+    "afterVideo": "C:\\Users\\blonj\\Documents\\bandits\\artifacts\\report-success-bottle-2026\\after-submit-video.png",
+    "withCta": "C:\\Users\\blonj\\Documents\\bandits\\artifacts\\report-success-bottle-2026\\after-submit-with-cta.png"
+  },
+  "check": {
+    "hasVideo": true
+  }
+}

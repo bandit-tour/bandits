@@ -1,0 +1,22 @@
+{
+  "flow": "local",
+  "base": "http://localhost:8081",
+  "checks": {
+    "introFixed": true,
+    "noWhitePage": true,
+    "heroBannerRestored": true,
+    "profileUpdatedVisible": false,
+    "alertsMenuCorrected": false,
+    "navigationWorking": false
+  },
+  "urls": {
+    "afterIntro": "http://localhost:8081/bandits"
+  },
+  "screenshots": {
+    "introFirstLoad": "C:\\Users\\blonj\\Documents\\bandits\\artifacts\\runtime-proof\\dual-flow-local-2026-04-25T17-14-15\\1-intro-first-load.png",
+    "afterIntroLand": "C:\\Users\\blonj\\Documents\\bandits\\artifacts\\runtime-proof\\dual-flow-local-2026-04-25T17-14-15\\2-after-intro-land.png",
+    "homeBandits": "C:\\Users\\blonj\\Documents\\bandits\\artifacts\\runtime-proof\\dual-flow-local-2026-04-25T17-14-15\\3-home-bandits.png"
+  },
+  "pass": "FAIL",
+  "error": "locator.fill: Timeout 30000ms exceeded.\nCall log:\n  - waiting for getByPlaceholder('Enter your email', { exact: true })\n"
+}

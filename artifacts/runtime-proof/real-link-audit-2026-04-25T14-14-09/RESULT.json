@@ -1,0 +1,104 @@
+{
+  "base": "https://bandits-two.vercel.app",
+  "guestUrl": "https://bandits-two.vercel.app/hotel/play-theatrou",
+  "outDir": "C:\\Users\\blonj\\Documents\\bandits\\artifacts\\runtime-proof\\real-link-audit-2026-04-25T14-14-09",
+  "checks": {
+    "firstVisitShowsIntroLikeUi": true,
+    "firstVisitHadClickableCta": true,
+    "secondVisitUrl": "https://bandits-two.vercel.app/hotel/play-theatrou",
+    "alertsRoute": {
+      "url": "https://bandits-two.vercel.app/alerts",
+      "hasNotFoundText": false
+    },
+    "followingRoute": {
+      "url": "https://bandits-two.vercel.app/following",
+      "hasNotFoundText": false
+    },
+    "profileRoute": {
+      "url": "https://bandits-two.vercel.app/profile",
+      "hasNotFoundText": false
+    },
+    "bandiTeam-reportRoute": {
+      "url": "https://bandits-two.vercel.app/bandiTeam/report",
+      "hasNotFoundText": false
+    },
+    "menuRoute": {
+      "url": "https://bandits-two.vercel.app/menu",
+      "hasNotFoundText": false
+    },
+    "hotelierRoute": {
+      "url": "https://bandits-two.vercel.app/hotelier",
+      "hasNotFoundText": false
+    }
+  },
+  "steps": [
+    {
+      "name": "first_visit_guest_link",
+      "url": "https://bandits-two.vercel.app/hotel/play-theatrou",
+      "bodySample": "You need to enable JavaScript to run this app. PLAY Theatrou AthensTap to continue if ('serviceWorker' in navigator) { window.addEventListener('load', () => { navigator.serviceWorker .register('/sw.js') .then(registration => { console.log('✅ Service Worker reg"
+    },
+    {
+      "name": "attempt_continue_once",
+      "url": "https://bandits-two.vercel.app/hotel/play-theatrou/flip",
+      "bodySample": "You need to enable JavaScript to run this app. A little surpriseSomeone left you a messageSome cities whisper. Athens waits—then offers you a corner, a late light, a reason to stay one more hour. Whoever sent you here thought you might listen.Flip the messageY"
+    },
+    {
+      "name": "second_visit_same_guest_link",
+      "url": "https://bandits-two.vercel.app/hotel/play-theatrou",
+      "bodySample": "You need to enable JavaScript to run this app. PLAY Theatrou AthensTap to continue if ('serviceWorker' in navigator) { window.addEventListener('load', () => { navigator.serviceWorker .register('/sw.js') .then(registration => { console.log('✅ Service Worker reg"
+    },
+    {
+      "name": "open_alerts",
+      "url": "https://bandits-two.vercel.app/alerts",
+      "bodySample": "You need to enable JavaScript to run this app. This screen does not exist.Go to home screen! if ('serviceWorker' in navigator) { window.addEventListener('load', () => { navigator.serviceWorker .register('/sw.js') .then(registration => { console.log('✅ Service "
+    },
+    {
+      "name": "open_following",
+      "url": "https://bandits-two.vercel.app/following",
+      "bodySample": "You need to enable JavaScript to run this app. FollowingNo banDits yetOpen the Local banDits tab, tap Follow on profiles you like, and they will all show up here — same idea as My Spots for saved events.HomeLocal FriendChatNotificationsMenu if ('serviceWo"
+    },
+    {
+      "name": "open_profile",
+      "url": "https://bandits-two.vercel.app/profile",
+      "bodySample": "You need to enable JavaScript to run this app. Profile?Take photoUpload from libraryTravelerSign in to sync your accountProfileThis is your guest identity for PLAY city access.Account SnapshotJoined Apr 2026 Inbox, follow list, and requests are tied to this pr"
+    },
+    {
+      "name": "open_bandiTeam-report",
+      "url": "https://bandits-two.vercel.app/bandiTeam/report",
+      "bodySample": "You need to enable JavaScript to run this app. This screen does not exist.Go to home screen! if ('serviceWorker' in navigator) { window.addEventListener('load', () => { navigator.serviceWorker .register('/sw.js') .then(registration => { console.log('✅ Service "
+    },
+    {
+      "name": "open_menu",
+      "url": "https://bandits-two.vercel.app/menu",
+      "bodySample": "You need to enable JavaScript to run this app. MenuGuest MenuPLAY Theatrou AthensGuest sessionSign in with emailSave your profile and preferencesProfileFollowingSettingsbandiTEAMNEWScam alerts & city safety — a first-of-its-kind pilotHotelierSign outHomeLoca"
+    },
+    {
+      "name": "open_hotelier",
+      "url": "https://bandits-two.vercel.app/hotelier",
+      "bodySample": "You need to enable JavaScript to run this app. HotelierPilot Partner ShowcasePLAY Theatrou Athens - Curated Guest City LayerTurn each stay into a signature local experience.This page showcases the active pilot partner inside bandiTour. PLAY Theatrou Athens is "
+    }
+  ],
+  "screenshots": {
+    "1-first-visit": "C:\\Users\\blonj\\Documents\\bandits\\artifacts\\runtime-proof\\real-link-audit-2026-04-25T14-14-09\\1-first-visit.png",
+    "2-after-first-cta": "C:\\Users\\blonj\\Documents\\bandits\\artifacts\\runtime-proof\\real-link-audit-2026-04-25T14-14-09\\2-after-first-cta.png",
+    "3-second-visit": "C:\\Users\\blonj\\Documents\\bandits\\artifacts\\runtime-proof\\real-link-audit-2026-04-25T14-14-09\\3-second-visit.png",
+    "4-alerts": "C:\\Users\\blonj\\Documents\\bandits\\artifacts\\runtime-proof\\real-link-audit-2026-04-25T14-14-09\\4-alerts.png",
+    "4-following": "C:\\Users\\blonj\\Documents\\bandits\\artifacts\\runtime-proof\\real-link-audit-2026-04-25T14-14-09\\4-following.png",
+    "4-profile": "C:\\Users\\blonj\\Documents\\bandits\\artifacts\\runtime-proof\\real-link-audit-2026-04-25T14-14-09\\4-profile.png",
+    "4-bandiTeam-report": "C:\\Users\\blonj\\Documents\\bandits\\artifacts\\runtime-proof\\real-link-audit-2026-04-25T14-14-09\\4-bandiTeam-report.png",
+    "4-menu": "C:\\Users\\blonj\\Documents\\bandits\\artifacts\\runtime-proof\\real-link-audit-2026-04-25T14-14-09\\4-menu.png",
+    "4-hotelier": "C:\\Users\\blonj\\Documents\\bandits\\artifacts\\runtime-proof\\real-link-audit-2026-04-25T14-14-09\\4-hotelier.png"
+  },
+  "errors": [
+    "console: Failed to load resource: the server responded with a status of 401 ()",
+    "console: Failed to load resource: the server responded with a status of 401 ()",
+    "console: Failed to load resource: the server responded with a status of 401 ()",
+    "console: Error getting current user for bandit liked IDs: AuthSessionMissingError: Auth session missing!\n    at https://bandits-two.vercel.app/_expo/static/js/web/entry-84b763f8824f7f13790d29424ef90cc3.js:858:27892\n    at j._useSession (https://bandits-two.vercel.app/_expo/static/js/web/entry-84b763f8824f7f13790d29424ef90cc3.js:858:25794)\n    at async j._getUser (https://bandits-two.vercel.app/_expo/static/js/web/entry-84b763f8824f7f13790d29424ef90cc3.js:858:27497)\n    at async https://bandits-two.vercel.app/_expo/static/js/web/entry-84b763f8824f7f13790d29424ef90cc3.js:858:27277",
+    "pageerror: Auth session missing!",
+    "console: Error getting current user for bandit liked IDs: AuthSessionMissingError: Auth session missing!\n    at https://bandits-two.vercel.app/_expo/static/js/web/entry-84b763f8824f7f13790d29424ef90cc3.js:858:27892\n    at j._useSession (https://bandits-two.vercel.app/_expo/static/js/web/entry-84b763f8824f7f13790d29424ef90cc3.js:858:25794)\n    at async j._getUser (https://bandits-two.vercel.app/_expo/static/js/web/entry-84b763f8824f7f13790d29424ef90cc3.js:858:27497)\n    at async https://bandits-two.vercel.app/_expo/static/js/web/entry-84b763f8824f7f13790d29424ef90cc3.js:858:27277",
+    "console: Failed to load resource: the server responded with a status of 401 ()",
+    "console: Failed to load resource: the server responded with a status of 404 ()",
+    "console: Failed to load resource: the server responded with a status of 404 ()",
+    "console: Failed to load resource: the server responded with a status of 404 ()"
+  ]
+}

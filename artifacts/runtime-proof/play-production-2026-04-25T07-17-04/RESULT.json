@@ -1,0 +1,33 @@
+{
+  "pass": "FAIL",
+  "outDir": "C:\\Users\\blonj\\Documents\\bandits\\artifacts\\runtime-proof\\play-production-2026-04-25T07-17-04",
+  "mismatches": [
+    "PLAY refresh does not skip onboarding to Home"
+  ],
+  "screenshots": {
+    "home": "C:\\Users\\blonj\\Documents\\bandits\\artifacts\\runtime-proof\\play-production-2026-04-25T07-17-04\\1-home.png",
+    "alerts": "C:\\Users\\blonj\\Documents\\bandits\\artifacts\\runtime-proof\\play-production-2026-04-25T07-17-04\\2-alerts.png",
+    "localFriend": "C:\\Users\\blonj\\Documents\\bandits\\artifacts\\runtime-proof\\play-production-2026-04-25T07-17-04\\3-local-friend.png",
+    "profile": "C:\\Users\\blonj\\Documents\\bandits\\artifacts\\runtime-proof\\play-production-2026-04-25T07-17-04\\4-profile.png",
+    "menu": "C:\\Users\\blonj\\Documents\\bandits\\artifacts\\runtime-proof\\play-production-2026-04-25T07-17-04\\5-menu.png",
+    "refreshHome": "C:\\Users\\blonj\\Documents\\bandits\\artifacts\\runtime-proof\\play-production-2026-04-25T07-17-04\\6-refresh-home.png",
+    "backTest": "C:\\Users\\blonj\\Documents\\bandits\\artifacts\\runtime-proof\\play-production-2026-04-25T07-17-04\\7-back-test.png"
+  },
+  "checks": {
+    "onboardingSkippedAfterRefresh": false,
+    "noTabHistoryLoop": true
+  },
+  "debug": {
+    "urlAfterOnboarding": "http://localhost:8081/bandits",
+    "stageAfterOnboarding": {
+      "session": "flip",
+      "local": null
+    },
+    "urlAfterRefresh": "http://localhost:8081/hotel/play-theatrou",
+    "stageAfterRefresh": {
+      "session": "flip",
+      "local": null
+    }
+  },
+  "errors": []
+}

@@ -1,0 +1,15 @@
+{
+  "productionUrl": "https://bandits-two.vercel.app",
+  "screenshots": {
+    "desktopMenu": "C:\\Users\\blonj\\Documents\\bandits\\artifacts\\runtime-proof\\pilotdesk-real-account-2026-04-30T09-56-28\\1-desktop-menu-pilotdesk.png",
+    "iphoneMenu": "C:\\Users\\blonj\\Documents\\bandits\\artifacts\\runtime-proof\\pilotdesk-real-account-2026-04-30T09-56-28\\2-iphone-menu-pilotdesk.png"
+  },
+  "checks": {
+    "desktopPilotDeskVisible": false,
+    "iphonePilotDeskVisible": false
+  },
+  "pass": "FAIL",
+  "errors": [
+    "page.fill: Timeout 30000ms exceeded.\nCall log:\n  - waiting for locator('input[placeholder=\"Enter your email\"]')\n"
+  ]
+}

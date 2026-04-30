@@ -1,0 +1,28 @@
+---
+description: Main screens must keep pull-to-refresh; do not remove it during unrelated work
+alwaysApply: true
+---
+
+# Pull-to-refresh (permanent)
+
+**Do not remove, disable, or bypass pull-to-refresh** when changing auth, routing, reports, hotel links, notifications, or other unrelated features.
+
+## Required behavior
+
+Every primary scroll surface on these routes must support pull-to-refresh using `usePremiumRefreshControl` from `@/lib/mobilePullToRefresh` (or `RefreshControl` wired the same way on `FlatList`):
+
+- Home: `(tabs)/bandits` — `FlatList` + `refreshControl`
+- Local Friend: `localFriend`
+- Chat: `chat` — thread `FlatList` + `refreshControl`
+- Alerts: `scam-alerts` (tab `alerts` re-exports it)
+- Notifications / Inbox: `inbox`
+- Menu: `(tabs)/menu` — `ScrollView` + `refreshControl`
+- Profile: `profile` — main `ScrollView` + `refreshControl`
+- Pilot Desk: `operatorDesk` — `ScrollView` + `refreshControl`
+
+Upper tabs (e.g. Explore, My Spots) must also keep refresh: Explore uses the same hook; My Spots passes `onRefresh` / `refreshing` into `EventList`, which attaches `usePremiumRefreshControl`.
+
+## When editing these files
+
+- Preserve `refreshControl={...}` / `usePremiumRefreshControl(refreshing, onRefresh)` and the `refreshing` + `onRefresh` handlers.
+- If you add a new loading or error branch, keep a scroll view that still exposes pull-to-refresh where the user would expect it (match existing patterns on that screen).

@@ -1,0 +1,25 @@
+{
+  "outDir": "C:\\Users\\blonj\\Documents\\bandits\\artifacts\\runtime-proof\\nav-back-once-2026-04-25T10-16-50",
+  "browserBack": {
+    "sequence": [
+      "http://localhost:8081/bandits",
+      "http://localhost:8081/menu",
+      "http://localhost:8081/following",
+      "http://localhost:8081/settings",
+      "http://localhost:8081/alerts",
+      "http://localhost:8081/menu"
+    ],
+    "beforeBack": "http://localhost:8081/menu",
+    "afterBack": "http://localhost:8081/bandits",
+    "pass": true
+  },
+  "mobileBack": {
+    "pass": false,
+    "note": "Not executed in this run (web runtime proof only)."
+  },
+  "screenshots": {
+    "beforeBack": "C:\\Users\\blonj\\Documents\\bandits\\artifacts\\runtime-proof\\nav-back-once-2026-04-25T10-16-50\\1-before-back.png",
+    "afterBack": "C:\\Users\\blonj\\Documents\\bandits\\artifacts\\runtime-proof\\nav-back-once-2026-04-25T10-16-50\\2-after-back.png"
+  },
+  "pass": "PASS"
+}

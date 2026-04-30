@@ -1,0 +1,14 @@
+{
+  "productionUrl": "https://bandits-two.vercel.app/profile",
+  "screenshots": {
+    "beforeSave": "C:\\Users\\blonj\\Documents\\bandits\\artifacts\\runtime-proof\\iphone-profile-final-2026-04-27T08-43-54\\1-before-save.png",
+    "afterSave": "C:\\Users\\blonj\\Documents\\bandits\\artifacts\\runtime-proof\\iphone-profile-final-2026-04-27T08-43-54\\2-after-save.png",
+    "afterRefresh": "C:\\Users\\blonj\\Documents\\bandits\\artifacts\\runtime-proof\\iphone-profile-final-2026-04-27T08-43-54\\3-after-refresh.png"
+  },
+  "checks": {
+    "persistedAfterRefresh": true,
+    "noLayoutBreakWithKeyboardOpen": true
+  },
+  "pass": "PASS",
+  "errors": []
+}

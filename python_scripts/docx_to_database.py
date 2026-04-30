@@ -42,7 +42,7 @@ load_dotenv()
 # Configuration
 SUPABASE_URL = os.getenv('SUPABASE_URL')
 SUPABASE_KEY = os.getenv('SUPABASE_ANON_KEY')
-BUCKET_NAME = os.getenv('BUCKET_NAME', 'banditsassets4')
+BUCKET_NAME = os.getenv('BUCKET_NAME', 'profile_avatars')
 ANTHROPIC_API_KEY = os.getenv('ANTHROPIC_API_KEY')
 DEEPSEEK_API_KEY = os.getenv('DEEPSEEK_API_KEY')  # For DeepSeek API
 GOOGLE_MAPS_API_KEY = os.getenv('GOOGLE_MAPS_API_KEY')  # For geocoding

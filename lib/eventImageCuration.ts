@@ -17,6 +17,9 @@ const CURATED_BY_NAME: Record<string, string[]> = {
   'soil restaurant': [
     'https://images.pexels.com/photos/262978/pexels-photo-262978.jpeg?auto=compress&cs=tinysrgb&w=1200&h=900&fit=crop',
   ],
+  'sylvia kouveli art gallery': [
+    'https://images.pexels.com/photos/161154/stained-glass-museum-art-glass-161154.jpeg?auto=compress&cs=tinysrgb&w=1200&h=900&fit=crop',
+  ],
   'impact hub athens': [
     'https://images.pexels.com/photos/3183197/pexels-photo-3183197.jpeg?auto=compress&cs=tinysrgb&w=1200&h=900&fit=crop',
   ],
@@ -40,6 +43,13 @@ const CURATED_BY_NAME: Record<string, string[]> = {
   ],
   'tragos modern kafeneio': [
     'https://images.pexels.com/photos/1581384/pexels-photo-1581384.jpeg?auto=compress&cs=tinysrgb&w=1200&h=900&fit=crop',
+  ],
+  /** Athens EMST — avoid wrong generic “museum” stock (e.g. Paris) from DB */
+  'national museum of contemporary art emst': [
+    'https://images.pexels.com/photos/2251247/pexels-photo-2251247.jpeg?auto=compress&cs=tinysrgb&w=1200&h=900&fit=crop',
+  ],
+  'national museum of contemporary art': [
+    'https://images.pexels.com/photos/2251247/pexels-photo-2251247.jpeg?auto=compress&cs=tinysrgb&w=1200&h=900&fit=crop',
   ],
 };
 

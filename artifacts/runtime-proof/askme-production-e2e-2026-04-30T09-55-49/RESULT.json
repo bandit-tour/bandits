@@ -1,0 +1,21 @@
+{
+  "base": "https://bandits-two.vercel.app",
+  "seed": "askme-e2e-1777542949722",
+  "checks": {
+    "travelerReady": true,
+    "askSubmitted": false,
+    "notificationsDirectionCorrect": false,
+    "operatorSignedIn": false,
+    "pilotDeskSingleEntry": false,
+    "chatOpenedFromNotification": false,
+    "chatShowsSingleThreadMessage": false
+  },
+  "screenshots": {
+    "banditsSearch": "C:\\Users\\blonj\\Documents\\bandits\\artifacts\\runtime-proof\\askme-production-e2e-2026-04-30T09-55-49\\1a-bandits-open-profile-search.png"
+  },
+  "errors": [
+    "Bandits body snippet: You need to enable JavaScript to run this app. /* Unregister any existing workers so the network serves fresh app shells. No re-registration. */ if (typeof window !== 'undefined' && 'serviceWorker' in navigator) { window.addEventListener('load', function onLoad() { window.removeEventListener('load', onLoad); void navigator.serviceWorker .getRegist",
+    "Could not open any bandit profile from production /bandits"
+  ],
+  "pass": "FAIL"
+}

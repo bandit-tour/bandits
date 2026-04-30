@@ -1,0 +1,10 @@
+{
+  "base": "https://bandits-two.vercel.app",
+  "out": "C:\\Users\\blonj\\Documents\\bandits\\artifacts\\opening-intro-2026",
+  "screenshots": {
+    "intro": "C:\\Users\\blonj\\Documents\\bandits\\artifacts\\opening-intro-2026\\1-root-intro.png",
+    "home": "C:\\Users\\blonj\\Documents\\bandits\\artifacts\\opening-intro-2026\\2-home-after-enter.png"
+  },
+  "introVisible": true,
+  "banditsUrl": "https://bandits-two.vercel.app/bandits"
+}

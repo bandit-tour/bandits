@@ -1,14 +1,24 @@
 module.exports = {
   globDirectory: 'dist/',
   globPatterns: [
-    '**/*.{html,js,css,png,jpg,jpeg,gif,svg,ico,json,woff,woff2,ttf,eot}'
+    '**/*.{html,js,css,png,jpg,jpeg,gif,svg,ico,json,woff,woff2,ttf,eot}',
   ],
+  /**
+   * Do not precache HTML shells. The app entry `entry-*.js` is not precached (over size cap).
+   * A cached old `index.html` still points at a removed `entry-*.js` → 404 → white screen / broken
+   * boot until a hard refresh.
+   */
+  globIgnores: ['**/*.html'],
   swDest: 'dist/sw.js',
   clientsClaim: true,
   skipWaiting: true,
   /** Drop old precache entries after each new build (helps QR guests get new UI). */
   cleanupOutdatedCaches: true,
   runtimeCaching: [
+    {
+      urlPattern: ({ request }) => request.mode === 'navigate',
+      handler: 'NetworkOnly',
+    },
     {
       urlPattern: /^https:\/\/fonts\.googleapis\.com/,
       handler: 'StaleWhileRevalidate',

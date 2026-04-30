@@ -1,0 +1,15 @@
+{
+  "outDir": "C:\\Users\\blonj\\Documents\\bandits\\artifacts\\report-alert-ux-2026\\2026-04-26T16-59-55",
+  "base": "https://bandits-two.vercel.app",
+  "screenshots": {
+    "cleanForm": "C:\\Users\\blonj\\Documents\\bandits\\artifacts\\report-alert-ux-2026\\2026-04-26T16-59-55\\1-report-form-clean.png",
+    "successOverlay": "C:\\Users\\blonj\\Documents\\bandits\\artifacts\\report-alert-ux-2026\\2026-04-26T16-59-55\\2-report-success-bottle.png"
+  },
+  "pass": "PASS",
+  "errors": [],
+  "checks": {
+    "preSubmitPageHasNoVideo": true,
+    "formSectionReasonable": true,
+    "postSubmitShowsReportReceived": true
+  }
+}

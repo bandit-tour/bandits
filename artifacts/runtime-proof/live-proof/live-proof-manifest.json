@@ -1,0 +1,30 @@
+{
+  "pilotDeskDelete": {
+    "pass": false,
+    "createdInbound": "artifacts/runtime-proof/live-proof/10-created-localfriend-message.png",
+    "before": "artifacts/runtime-proof/live-proof/11-pilot-desk-before-delete.png",
+    "after": null,
+    "message": "lf-delete-1776932074658"
+  },
+  "profileImagePersist": {
+    "pass": false,
+    "upload": "artifacts/runtime-proof/live-proof/13-profile-after-upload.png",
+    "relogin": "artifacts/runtime-proof/live-proof/14-profile-after-relogin.png",
+    "beforeSrc": null,
+    "afterSrc": null
+  },
+  "trueChatLoop": {
+    "pass": false,
+    "messages": {
+      "a1": "A->B 1776932192461",
+      "b1": "B->A 1776932192461",
+      "a2": "A->B-2 1776932192461"
+    },
+    "mid": null,
+    "final": null,
+    "hasA1": false,
+    "hasB1": false,
+    "hasA2": false,
+    "authReason": "Sign-up did not complete session."
+  }
+}

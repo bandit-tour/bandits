@@ -3,7 +3,6 @@ import {
   ActivityIndicator,
   Alert,
   FlatList,
-  RefreshControl,
   StyleSheet,
   Text,
   View,
@@ -13,7 +12,10 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import { getBanditsWithTags, toggleBanditLike } from '@/app/services/bandits';
 import { getBanditEventCategories } from '@/app/services/events';
 import BanditHeader from '@/components/BanditHeader';
+import BanditsHomeHeader from '@/components/BanditsHomeHeader';
 import { Database } from '@/lib/database.types';
+import { getHotelEntry } from '@/lib/pilotSession';
+import { usePremiumRefreshControl } from '@/lib/mobilePullToRefresh';
 
 type BanditRow = Database['public']['Tables']['bandit']['Row'];
 
@@ -38,21 +40,36 @@ export default function BanditsScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [rows, setRows] = useState<Row[]>([]);
   const [updatingLikeId, setUpdatingLikeId] = useState<string | null>(null);
+  const [hotelSlug, setHotelSlug] = useState<string | null>(null);
 
   const fetchRows = useCallback(async () => {
-    const data = await getBanditsWithTags();
-    const list = (data || []) as BanditWithTags[];
-    const withCats = await Promise.all(
-      list.map(async (b): Promise<Row> => {
-        try {
-          const categories = await getBanditEventCategories(b.id);
-          return { bandit: b, categories };
-        } catch {
-          return { bandit: b, categories: [] };
-        }
-      }),
-    );
-    setRows(withCats);
+    try {
+      const data = await getBanditsWithTags();
+      const list = (data || []) as BanditWithTags[];
+      const withCats = await Promise.all(
+        list.map(async (b): Promise<Row> => {
+          try {
+            const categories = await getBanditEventCategories(b.id);
+            return { bandit: b, categories };
+          } catch {
+            return { bandit: b, categories: [] };
+          }
+        }),
+      );
+      setRows(withCats);
+    } catch (e) {
+      if (__DEV__) {
+        // eslint-disable-next-line no-console
+        console.error('[bandits] fetchRows failed', e);
+      }
+      // Keep list usable if a secondary query failed after partial load; do not clear on unknown errors.
+    }
+  }, []);
+
+  useEffect(() => {
+    void getHotelEntry().then((entry) => {
+      setHotelSlug(entry?.slug ?? null);
+    });
   }, []);
 
   useEffect(() => {
@@ -85,6 +102,8 @@ export default function BanditsScreen() {
     }
   }, [fetchRows]);
 
+  const listRefreshControl = usePremiumRefreshControl(refreshing, onRefresh);
+
   useEffect(() => {
     if (!focusBanditId || rows.length === 0) return;
     const index = rows.findIndex((r) => r.bandit.id === focusBanditId);
@@ -108,28 +127,38 @@ export default function BanditsScreen() {
     [],
   );
 
-  if (loading) {
-    return (
+  const emptyOrLoading =
+    loading && rows.length === 0 ? (
       <View style={styles.loadingContainer}>
         <ActivityIndicator size="large" />
+        <Text style={styles.loadingHint}>Loading Local banDits…</Text>
       </View>
+    ) : (
+      empty
     );
-  }
+
+  const listHeader = useMemo(
+    () => <BanditsHomeHeader hotelSlug={hotelSlug} loadingContext={false} />,
+    [hotelSlug],
+  );
 
   return (
-    <FlatList
-      ref={listRef}
-      data={rows}
-      keyExtractor={(item) => item.bandit.id}
-      contentContainerStyle={styles.listContent}
-      ListEmptyComponent={empty}
-      refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => void onRefresh()} />}
-      onScrollToIndexFailed={({ index }) => {
-        setTimeout(() => {
-          listRef.current?.scrollToIndex({ index, animated: true, viewPosition: 0.15 });
-        }, 200);
-      }}
-      renderItem={({ item }) => (
+    <View style={styles.screen}>
+      {listHeader}
+      <FlatList
+        ref={listRef}
+        style={styles.listFlex}
+        data={rows}
+        keyExtractor={(item) => item.bandit.id}
+        contentContainerStyle={styles.listContent}
+        ListEmptyComponent={emptyOrLoading}
+        refreshControl={listRefreshControl}
+        onScrollToIndexFailed={({ index }) => {
+          setTimeout(() => {
+            listRef.current?.scrollToIndex({ index, animated: true, viewPosition: 0.15 });
+          }, 200);
+        }}
+        renderItem={({ item }) => (
         <BanditHeader
           bandit={item.bandit as any}
           categories={item.categories}
@@ -163,12 +192,20 @@ export default function BanditsScreen() {
             router.push(`/explore?banditId=${item.bandit.id}&genre=${encodeURIComponent(genre)}` as any)
           }
         />
-      )}
-    />
+        )}
+      />
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
+  screen: {
+    flex: 1,
+    backgroundColor: '#f6f6f6',
+  },
+  listFlex: {
+    flex: 1,
+  },
   loadingContainer: {
     flex: 1,
     alignItems: 'center',
@@ -187,5 +224,11 @@ const styles = StyleSheet.create({
   emptyText: {
     fontSize: 16,
     color: '#666',
+  },
+  loadingHint: {
+    marginTop: 12,
+    fontSize: 14,
+    color: '#666',
+    fontWeight: '600',
   },
 });

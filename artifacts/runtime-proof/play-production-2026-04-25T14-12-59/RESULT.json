@@ -1,0 +1,31 @@
+{
+  "pass": "PASS",
+  "outDir": "C:\\Users\\blonj\\Documents\\bandits\\artifacts\\runtime-proof\\play-production-2026-04-25T14-12-59",
+  "mismatches": [],
+  "screenshots": {
+    "home": "C:\\Users\\blonj\\Documents\\bandits\\artifacts\\runtime-proof\\play-production-2026-04-25T14-12-59\\1-home.png",
+    "alerts": "C:\\Users\\blonj\\Documents\\bandits\\artifacts\\runtime-proof\\play-production-2026-04-25T14-12-59\\2-alerts.png",
+    "localFriend": "C:\\Users\\blonj\\Documents\\bandits\\artifacts\\runtime-proof\\play-production-2026-04-25T14-12-59\\3-local-friend.png",
+    "profile": "C:\\Users\\blonj\\Documents\\bandits\\artifacts\\runtime-proof\\play-production-2026-04-25T14-12-59\\4-profile.png",
+    "menu": "C:\\Users\\blonj\\Documents\\bandits\\artifacts\\runtime-proof\\play-production-2026-04-25T14-12-59\\5-menu.png",
+    "refreshHome": "C:\\Users\\blonj\\Documents\\bandits\\artifacts\\runtime-proof\\play-production-2026-04-25T14-12-59\\6-refresh-home.png",
+    "backTest": "C:\\Users\\blonj\\Documents\\bandits\\artifacts\\runtime-proof\\play-production-2026-04-25T14-12-59\\7-back-test.png"
+  },
+  "checks": {
+    "onboardingSkippedAfterRefresh": true,
+    "noTabHistoryLoop": true
+  },
+  "debug": {
+    "urlAfterOnboarding": "https://bandits-two.vercel.app/hotel/play-theatrou",
+    "stageAfterOnboarding": {
+      "session": null,
+      "local": null
+    },
+    "urlAfterRefresh": "https://bandits-two.vercel.app/hotel/play-theatrou",
+    "stageAfterRefresh": {
+      "session": null,
+      "local": null
+    }
+  },
+  "errors": []
+}

@@ -1,0 +1,19 @@
+{
+  "pass": "PASS",
+  "outDir": "C:\\Users\\blonj\\Documents\\bandits\\artifacts\\runtime-proof\\onboarding-repeat-2026-04-25T07-54-13",
+  "firstVisitShowsOnboarding": true,
+  "secondVisitSkipsOnboarding": true,
+  "screenshots": {
+    "firstVisit": "C:\\Users\\blonj\\Documents\\bandits\\artifacts\\runtime-proof\\onboarding-repeat-2026-04-25T07-54-13\\1-first-visit-onboarding.png",
+    "secondVisit": "C:\\Users\\blonj\\Documents\\bandits\\artifacts\\runtime-proof\\onboarding-repeat-2026-04-25T07-54-13\\2-second-visit-home.png"
+  },
+  "details": {
+    "firstUrl": "http://localhost:8081/hotel/play-theatrou",
+    "secondUrl": "http://localhost:8081/bandits",
+    "doneStorage": {
+      "sessionStage": "done",
+      "localDone": "1"
+    }
+  },
+  "errors": []
+}

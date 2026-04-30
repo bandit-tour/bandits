@@ -1,0 +1,27 @@
+{
+  "base": "https://bandits-two.vercel.app",
+  "checks": {
+    "introFixedGuestEntry": true,
+    "homepageHeroAfterLoad": true,
+    "submitTransitionVideoShown": true,
+    "noWhitePageAfterSubmit": true,
+    "returnsToHomeFeed": true,
+    "noBrokenNavigation": true
+  },
+  "urls": {
+    "afterIntro": "https://bandits-two.vercel.app/bandits",
+    "afterSubmit": "https://bandits-two.vercel.app/bandiTeam",
+    "finalHome": "https://bandits-two.vercel.app/bandits"
+  },
+  "screenshots": {
+    "guestIntro": "C:\\Users\\blonj\\Documents\\bandits\\artifacts\\runtime-proof\\prod-report-submit-2026-04-25T17-23-44\\1-guest-intro.png",
+    "homeAfterLoad": "C:\\Users\\blonj\\Documents\\bandits\\artifacts\\runtime-proof\\prod-report-submit-2026-04-25T17-23-44\\2-home-after-load.png",
+    "reportForm": "C:\\Users\\blonj\\Documents\\bandits\\artifacts\\runtime-proof\\prod-report-submit-2026-04-25T17-23-44\\3-report-form.png",
+    "afterSubmitTransition": "C:\\Users\\blonj\\Documents\\bandits\\artifacts\\runtime-proof\\prod-report-submit-2026-04-25T17-23-44\\4-after-submit-transition.png",
+    "afterSubmitLanding": "C:\\Users\\blonj\\Documents\\bandits\\artifacts\\runtime-proof\\prod-report-submit-2026-04-25T17-23-44\\5-after-submit-landing.png",
+    "finalHomeFeed": "C:\\Users\\blonj\\Documents\\bandits\\artifacts\\runtime-proof\\prod-report-submit-2026-04-25T17-23-44\\6-final-home-feed.png",
+    "navAfterSubmit": "C:\\Users\\blonj\\Documents\\bandits\\artifacts\\runtime-proof\\prod-report-submit-2026-04-25T17-23-44\\7-nav-after-submit.png"
+  },
+  "pass": "PASS",
+  "error": null
+}

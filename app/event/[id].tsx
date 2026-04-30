@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import { getBanditEventPersonalTip, isEventLiked, toggleEventLike } from '@/app/services/events';
 import { ThemedView } from '@/components/ThemedView';
 import { Database } from '@/lib/database.types';
@@ -7,6 +7,9 @@ import { getCuratedEventImageCandidates } from '@/lib/eventImageCuration';
 import { supabase } from '@/lib/supabase';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import LocalBanditOctopusIcon from '@/components/LocalBanditOctopusIcon';
+import { VenueScamWarningsSection } from '@/components/VenueScamWarningsSection';
+import { usePremiumRefreshControl } from '@/lib/mobilePullToRefresh';
+import { repairDisplayText } from '@/lib/repairTextEncoding';
 import {
   Dimensions,
   Image,
@@ -15,7 +18,7 @@ import {
   StyleSheet,
   Text,
   TouchableOpacity,
-  View
+  View,
 } from 'react-native';
 
 type Event = Database['public']['Tables']['event']['Row'];
@@ -31,58 +34,69 @@ export default function EventDetailScreen() {
   const [bandit, setBandit] = useState<Bandit | null>(null);
   const [personalTip, setPersonalTip] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
   const [isLiked, setIsLiked] = useState(false);
   const [imageFailed, setImageFailed] = useState(false);
 
-  useEffect(() => {
-    const fetchEventData = async () => {
+  const loadEventData = useCallback(
+    async (opts?: { silent?: boolean }) => {
+      const silent = opts?.silent === true;
+      const eventIdStr = typeof id === 'string' ? id : Array.isArray(id) ? id[0] : '';
+      if (!eventIdStr) return;
       try {
-        setLoading(true);
-        
-        // Fetch event data
+        if (silent) setRefreshing(true);
+        else setLoading(true);
+
         const { data: eventData, error: eventError } = await supabase
           .from('event')
           .select('*')
-          .eq('id', id as string)
+          .eq('id', eventIdStr)
           .single();
 
         if (eventError) throw eventError;
         setEvent(eventData);
 
-        // Fetch bandit data if banditId is provided
         if (banditId) {
+          const bid = Array.isArray(banditId) ? banditId[0] : banditId;
           const { data: banditData, error: banditError } = await supabase
             .from('bandit')
             .select('*')
-            .eq('id', banditId)
+            .eq('id', bid as string)
             .single();
 
           if (!banditError && banditData) {
             setBandit(banditData);
-
-            // Fetch personal tip
-            const tip = await getBanditEventPersonalTip(
-              Array.isArray(banditId) ? banditId[0] : banditId,
-              typeof id === 'string' ? id : id[0]
-            );
+            const tip = await getBanditEventPersonalTip(bid as string, eventIdStr);
             setPersonalTip(tip);
+          } else {
+            setBandit(null);
+            setPersonalTip(null);
           }
+        } else {
+          setBandit(null);
+          setPersonalTip(null);
         }
 
-        // Check if event is liked by current user
-        const eventIdString = typeof id === 'string' ? id : id[0];
-        const liked = await isEventLiked(eventIdString);
+        const liked = await isEventLiked(eventIdStr);
         setIsLiked(liked);
-
       } catch (err) {
         console.error('Error fetching event data:', err);
       } finally {
-        setLoading(false);
+        if (silent) setRefreshing(false);
+        else setLoading(false);
       }
-    };
+    },
+    [id, banditId],
+  );
 
-    fetchEventData();
-  }, [id, banditId]);
+  useEffect(() => {
+    void loadEventData();
+  }, [loadEventData]);
+
+  const onRefreshEvent = useCallback(() => {
+    void loadEventData({ silent: true });
+  }, [loadEventData]);
+  const eventDetailRefresh = usePremiumRefreshControl(refreshing, onRefreshEvent);
 
   useEffect(() => {
     setImageFailed(false);
@@ -142,7 +156,11 @@ export default function EventDetailScreen() {
         </TouchableOpacity>
       </View>
 
-      <ScrollView style={styles.scrollView} showsVerticalScrollIndicator={false}>
+      <ScrollView
+        style={styles.scrollView}
+        showsVerticalScrollIndicator={false}
+        refreshControl={eventDetailRefresh}
+      >
         {/* Main Event Image */}
         <View style={styles.mainImageContainer}>
           <Image
@@ -175,14 +193,18 @@ export default function EventDetailScreen() {
 
         {/* Event Description */}
         <View style={styles.descriptionContainer}>
-          <Text style={styles.descriptionText}>{event.description || ''}</Text>
+          <Text style={styles.descriptionText}>{repairDisplayText(event.description || '')}</Text>
+        </View>
+
+        <View style={{ paddingHorizontal: 16 }}>
+          <VenueScamWarningsSection city={String(event.city || '')} areaLabel={String(event.neighborhood || event.address || '')} />
         </View>
 
         {/* Timing Information */}
         {event.timing_info && event.timing_info.trim() && (
           <View style={styles.timingContainer}>
             <Text style={styles.timingTitle}>Hours</Text>
-            <Text style={styles.timingText}>{event.timing_info || ''}</Text>
+            <Text style={styles.timingText}>{repairDisplayText(event.timing_info || '')}</Text>
           </View>
         )}
 

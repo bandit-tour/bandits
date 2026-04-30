@@ -1,16 +1,16 @@
+import { getHotelWhiteLabelOrDefault, normalizeHotelSlug } from '@/lib/hotelWhiteLabel';
 import {
   HOTEL_BY_SLUG,
-  ensureAnonymousSession,
+  bootstrapMainAppSession,
   persistHotelEntry,
   syncPilotHotelProfileIfNeeded,
 } from '@/lib/pilotSession';
 import * as Haptics from 'expo-haptics';
-import { Stack, useRouter } from 'expo-router';
+import { Stack, useRouter, type Href } from 'expo-router';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   Animated,
   Dimensions,
-  Image,
   Platform,
   Pressable,
   ScrollView,
@@ -22,14 +22,13 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 const { height: WINDOW_H } = Dimensions.get('window');
 
-const BANDITOUR_LOGO = require('@/assets/icons/logobanditourapp.png');
-
 export type HotelEntryScreenProps = {
   slug: string;
 };
 
 /**
- * QR / web landing — flip flow, then Continue → /playWelcome → /playIntro (video) → /bandits.
+ * QR / web flip-card landing (legacy /hotel/[slug] paths). PWA-first: no app-store CTAs.
+ * Continue opens in-app guest home (`/bandits`) on this origin — same tab / PWA; no external redirect.
  */
 export function HotelEntryScreen({ slug: rawSlug }: HotelEntryScreenProps) {
   const router = useRouter();
@@ -41,7 +40,9 @@ export function HotelEntryScreen({ slug: rawSlug }: HotelEntryScreenProps) {
   const frontOpacity = useRef(new Animated.Value(1)).current;
   const backOpacity = useRef(new Animated.Value(0)).current;
 
-  const slugNorm = useMemo(() => String(rawSlug ?? '').trim().toLowerCase(), [rawSlug]);
+  /** Canonical slug + public URL aliases (`nyx-theatrou` → `nyx-athens`, etc.). */
+  const slugNorm = useMemo(() => normalizeHotelSlug(rawSlug), [rawSlug]);
+  const hotelBranding = useMemo(() => getHotelWhiteLabelOrDefault(slugNorm), [slugNorm]);
 
   const isKnownHotel = Boolean(slugNorm && HOTEL_BY_SLUG[slugNorm]);
 
@@ -87,9 +88,9 @@ export function HotelEntryScreen({ slug: rawSlug }: HotelEntryScreenProps) {
     if (busyContinue) return;
     setBusyContinue(true);
     try {
-      await ensureAnonymousSession();
+      await bootstrapMainAppSession();
       await syncPilotHotelProfileIfNeeded();
-      router.replace('/playWelcome');
+      router.replace('/bandits');
     } finally {
       setBusyContinue(false);
     }
@@ -143,31 +144,35 @@ export function HotelEntryScreen({ slug: rawSlug }: HotelEntryScreenProps) {
               style={[styles.face, styles.faceBack, { opacity: backOpacity }]}
               pointerEvents={showBack ? 'auto' : 'none'}
             >
-              <Text style={styles.sideBTitle}>A gift is waiting for you</Text>
+              <Text style={styles.sideBTitle}>Your welcome is ready</Text>
               <Text style={styles.sideBBody}>
-                Go to reception, show that you opened this guide, and receive your gift.
+                Continue in bandiTour — no install needed. Guest home opens here with bandiTS and Local banDits
+                {isKnownHotel ? ` (${hotelBranding.displayName}).` : '.'}
               </Text>
 
-              <Text style={styles.keyLine}>Your key to the city starts here</Text>
-
               <Pressable
-                style={({ pressed }) => [styles.continueBandi, pressed && styles.continueBandiPressed]}
+                style={({ pressed }) => [styles.continueLink, pressed && styles.continueLinkPressed]}
                 onPress={onContinueInGuide}
                 disabled={busyContinue}
                 accessibilityRole="button"
-                accessibilityLabel="Continue to bandiTour"
+                accessibilityLabel={
+                  isKnownHotel
+                    ? `Continue to guest home for ${hotelBranding.displayName} in this app`
+                    : 'Continue to guest home in this app'
+                }
               >
-                <Image
-                  source={BANDITOUR_LOGO}
-                  style={styles.bandiLogo}
-                  resizeMode="contain"
-                  accessibilityIgnoresInvertColors
-                />
-                <Text style={styles.continueBandiText}>
-                  {busyContinue ? 'Opening…' : 'Continue to bandiTour'}
+                <Text style={styles.continueLinkText}>
+                  {busyContinue ? 'Opening…' : isKnownHotel ? `Continue — ${hotelBranding.displayName}` : 'Continue to guest home'}
                 </Text>
               </Pressable>
-              <Text style={styles.continueHint}>No install required — opens in your browser.</Text>
+              <Pressable
+                style={({ pressed }) => [styles.staffSignInLinkWrap, pressed && styles.staffSignInLinkPressed]}
+                onPress={() => router.push('/login?forceAuth=1&redirect=/menu' as Href)}
+                accessibilityRole="link"
+                accessibilityLabel="Staff sign in"
+              >
+                <Text style={styles.staffSignInLinkText}>Staff sign-in</Text>
+              </Pressable>
             </Animated.View>
           </View>
         </ScrollView>
@@ -260,44 +265,32 @@ const styles = StyleSheet.create({
     color: 'rgba(250,250,250,0.85)',
     marginBottom: 32,
   },
-  keyLine: {
-    fontSize: 13,
-    color: 'rgba(250,250,250,0.45)',
-    letterSpacing: 0.4,
-    marginBottom: 24,
-    textAlign: 'center',
-  },
-  continueBandi: {
-    flexDirection: 'row',
+  continueLink: {
+    paddingVertical: 12,
     alignItems: 'center',
-    justifyContent: 'center',
-    alignSelf: 'center',
-    gap: 12,
-    paddingVertical: 14,
-    paddingHorizontal: 20,
-    borderRadius: 999,
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.35)',
-    backgroundColor: 'rgba(255,255,255,0.06)',
-    maxWidth: '100%',
   },
-  continueBandiPressed: {
-    opacity: 0.82,
+  continueLinkPressed: {
+    opacity: 0.7,
   },
-  bandiLogo: {
-    width: 36,
-    height: 36,
-  },
-  continueBandiText: {
-    color: '#FAFAFA',
-    fontSize: 16,
+  continueLinkText: {
+    color: 'rgba(250,250,250,0.75)',
+    fontSize: 15,
     fontWeight: '600',
-    letterSpacing: 0.2,
+    textDecorationLine: 'underline',
   },
-  continueHint: {
+  staffSignInLinkWrap: {
+    marginTop: 28,
+    alignSelf: 'center',
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+  },
+  staffSignInLinkPressed: {
+    opacity: 0.75,
+  },
+  staffSignInLinkText: {
     fontSize: 12,
-    color: 'rgba(250,250,250,0.38)',
-    textAlign: 'center',
-    marginTop: 8,
+    color: 'rgba(250,250,250,0.42)',
+    fontWeight: '600',
+    textDecorationLine: 'underline',
   },
 });

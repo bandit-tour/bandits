@@ -1,6 +1,7 @@
 import { Database } from '@/lib/database.types';
+import { usePremiumRefreshControl } from '@/lib/mobilePullToRefresh';
 import React, { forwardRef, useImperativeHandle, useRef } from 'react';
-import { RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { ScrollView, StyleSheet, Text, View } from 'react-native';
 import EventCard from './EventCard';
 
 type Event = Database['public']['Tables']['event']['Row'];
@@ -56,6 +57,13 @@ const EventList = forwardRef<EventListRef, EventListProps>(({
   const isHorizontal = variant === 'horizontal';
   const scrollViewRef = useRef<ScrollView>(null);
   const eventRefs = useRef<{ [key: string]: View | null }>({});
+  const refreshControl = usePremiumRefreshControl(
+    refreshing,
+    () => {
+      onRefresh?.();
+    },
+    { active: onRefresh != null },
+  );
 
   useImperativeHandle(ref, () => ({
     scrollToEvent: (eventId: string) => {
@@ -99,12 +107,16 @@ const EventList = forwardRef<EventListRef, EventListProps>(({
     );
   }
 
-  // Handle empty state
+  // Handle empty state (still allow pull-to-refresh when parent wires onRefresh — e.g. My Spots)
   if (events.length === 0) {
     return (
-      <View style={styles.emptyContainer}>
+      <ScrollView
+        style={styles.emptyScroll}
+        contentContainerStyle={styles.emptyScrollContent}
+        refreshControl={refreshControl}
+      >
         <Text style={styles.emptyText}>{emptyMessage}</Text>
-      </View>
+      </ScrollView>
     );
   }
 
@@ -118,11 +130,6 @@ const EventList = forwardRef<EventListRef, EventListProps>(({
         style: [styles.verticalScrollView, scrollViewStyle],
         contentContainerStyle: [styles.verticalContentContainer, contentContainerStyle]
       };
-
-  const refreshControl =
-    onRefresh != null ? (
-      <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
-    ) : undefined;
 
   const content = (
     <ScrollView {...scrollViewProps} ref={scrollViewRef} refreshControl={refreshControl}>
@@ -156,6 +163,8 @@ const EventList = forwardRef<EventListRef, EventListProps>(({
   return content;
 });
 
+EventList.displayName = 'EventList';
+
 export default EventList;
 
 const styles = StyleSheet.create({
@@ -176,6 +185,16 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: '#ff0000',
     textAlign: 'center',
+  },
+  emptyScroll: {
+    flex: 1,
+  },
+  emptyScrollContent: {
+    flexGrow: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingTop: 40,
+    paddingHorizontal: 16,
   },
   emptyContainer: {
     flex: 1,
@@ -206,6 +225,7 @@ const styles = StyleSheet.create({
   },
   horizontalContainer: {
     flexDirection: 'row',
+    alignItems: 'flex-start',
     gap: 2,
   },
 });

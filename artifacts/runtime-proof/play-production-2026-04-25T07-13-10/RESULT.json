@@ -1,0 +1,21 @@
+{
+  "pass": "FAIL",
+  "outDir": "C:\\Users\\blonj\\Documents\\bandits\\artifacts\\runtime-proof\\play-production-2026-04-25T07-13-10",
+  "mismatches": [
+    "PLAY refresh does not skip onboarding to Home"
+  ],
+  "screenshots": {
+    "home": "C:\\Users\\blonj\\Documents\\bandits\\artifacts\\runtime-proof\\play-production-2026-04-25T07-13-10\\1-home.png",
+    "alerts": "C:\\Users\\blonj\\Documents\\bandits\\artifacts\\runtime-proof\\play-production-2026-04-25T07-13-10\\2-alerts.png",
+    "localFriend": "C:\\Users\\blonj\\Documents\\bandits\\artifacts\\runtime-proof\\play-production-2026-04-25T07-13-10\\3-local-friend.png",
+    "profile": "C:\\Users\\blonj\\Documents\\bandits\\artifacts\\runtime-proof\\play-production-2026-04-25T07-13-10\\4-profile.png",
+    "menu": "C:\\Users\\blonj\\Documents\\bandits\\artifacts\\runtime-proof\\play-production-2026-04-25T07-13-10\\5-menu.png",
+    "refreshHome": "C:\\Users\\blonj\\Documents\\bandits\\artifacts\\runtime-proof\\play-production-2026-04-25T07-13-10\\6-refresh-home.png",
+    "backTest": "C:\\Users\\blonj\\Documents\\bandits\\artifacts\\runtime-proof\\play-production-2026-04-25T07-13-10\\7-back-test.png"
+  },
+  "checks": {
+    "onboardingSkippedAfterRefresh": false,
+    "noTabHistoryLoop": true
+  },
+  "errors": []
+}

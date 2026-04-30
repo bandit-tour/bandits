@@ -1,0 +1,31 @@
+{
+  "outDir": "C:\\Users\\blonj\\Documents\\bandits\\artifacts\\runtime-proof\\play-hotelier-banditeam-3platforms-2026-04-25T10-29-45",
+  "browser": {
+    "playMenu": true,
+    "hotelier": true,
+    "bandiTeam": true
+  },
+  "iPhone": {
+    "playMenu": true,
+    "hotelier": true,
+    "bandiTeam": true
+  },
+  "android": {
+    "playMenu": true,
+    "hotelier": true,
+    "bandiTeam": true
+  },
+  "screenshots": {
+    "browserPlayMenu": "C:\\Users\\blonj\\Documents\\bandits\\artifacts\\runtime-proof\\play-hotelier-banditeam-3platforms-2026-04-25T10-29-45\\1-browser-play-menu.png",
+    "browserHotelier": "C:\\Users\\blonj\\Documents\\bandits\\artifacts\\runtime-proof\\play-hotelier-banditeam-3platforms-2026-04-25T10-29-45\\2-browser-hotelier.png",
+    "browserBandiTeam": "C:\\Users\\blonj\\Documents\\bandits\\artifacts\\runtime-proof\\play-hotelier-banditeam-3platforms-2026-04-25T10-29-45\\3-browser-banditeam.png",
+    "iPhonePlayMenu": "C:\\Users\\blonj\\Documents\\bandits\\artifacts\\runtime-proof\\play-hotelier-banditeam-3platforms-2026-04-25T10-29-45\\4-iphone-play-menu.png",
+    "iPhoneHotelier": "C:\\Users\\blonj\\Documents\\bandits\\artifacts\\runtime-proof\\play-hotelier-banditeam-3platforms-2026-04-25T10-29-45\\5-iphone-hotelier.png",
+    "iPhoneBandiTeam": "C:\\Users\\blonj\\Documents\\bandits\\artifacts\\runtime-proof\\play-hotelier-banditeam-3platforms-2026-04-25T10-29-45\\6-iphone-banditeam.png",
+    "androidPlayMenu": "C:\\Users\\blonj\\Documents\\bandits\\artifacts\\runtime-proof\\play-hotelier-banditeam-3platforms-2026-04-25T10-29-45\\7-android-play-menu.png",
+    "androidHotelier": "C:\\Users\\blonj\\Documents\\bandits\\artifacts\\runtime-proof\\play-hotelier-banditeam-3platforms-2026-04-25T10-29-45\\8-android-hotelier.png",
+    "androidBandiTeam": "C:\\Users\\blonj\\Documents\\bandits\\artifacts\\runtime-proof\\play-hotelier-banditeam-3platforms-2026-04-25T10-29-45\\9-android-banditeam.png"
+  },
+  "pass": "PASS",
+  "errors": []
+}

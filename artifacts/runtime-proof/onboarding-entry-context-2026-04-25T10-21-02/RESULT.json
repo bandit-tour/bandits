@@ -1,0 +1,24 @@
+{
+  "outDir": "C:\\Users\\blonj\\Documents\\bandits\\artifacts\\runtime-proof\\onboarding-entry-context-2026-04-25T10-21-02",
+  "checks": {
+    "freshGuestFlow": true,
+    "returningGuestFlow": true,
+    "signedInOperatorFlow": true,
+    "qrLinkDirectEntryFlow": true,
+    "mobileBrowserBehavior": true,
+    "browserRefreshKeepsContext": true
+  },
+  "screenshots": {
+    "freshIntro": "C:\\Users\\blonj\\Documents\\bandits\\artifacts\\runtime-proof\\onboarding-entry-context-2026-04-25T10-21-02\\1-fresh-intro.png",
+    "freshHome": "C:\\Users\\blonj\\Documents\\bandits\\artifacts\\runtime-proof\\onboarding-entry-context-2026-04-25T10-21-02\\2-fresh-home.png",
+    "returningHome": "C:\\Users\\blonj\\Documents\\bandits\\artifacts\\runtime-proof\\onboarding-entry-context-2026-04-25T10-21-02\\3-returning-home.png",
+    "operatorHome": "C:\\Users\\blonj\\Documents\\bandits\\artifacts\\runtime-proof\\onboarding-entry-context-2026-04-25T10-21-02\\4-operator-home.png",
+    "operatorMenu": "C:\\Users\\blonj\\Documents\\bandits\\artifacts\\runtime-proof\\onboarding-entry-context-2026-04-25T10-21-02\\5-operator-menu.png",
+    "directEntryMenu": "C:\\Users\\blonj\\Documents\\bandits\\artifacts\\runtime-proof\\onboarding-entry-context-2026-04-25T10-21-02\\6-direct-entry-menu.png",
+    "refreshContext": "C:\\Users\\blonj\\Documents\\bandits\\artifacts\\runtime-proof\\onboarding-entry-context-2026-04-25T10-21-02\\7-refresh-context.png",
+    "mobileIntro": "C:\\Users\\blonj\\Documents\\bandits\\artifacts\\runtime-proof\\onboarding-entry-context-2026-04-25T10-21-02\\8-mobile-intro.png",
+    "mobileReturningHome": "C:\\Users\\blonj\\Documents\\bandits\\artifacts\\runtime-proof\\onboarding-entry-context-2026-04-25T10-21-02\\9-mobile-returning-home.png"
+  },
+  "errors": [],
+  "pass": "PASS"
+}

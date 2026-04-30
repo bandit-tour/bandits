@@ -13,7 +13,17 @@ export type AnalyticsEventName =
   | 'chat_opened'
   | 'notification_opened'
   | 'nearby_inbox_opened'
-  | 'bandiTEAM_report_created';
+  | 'bandiTEAM_report_created'
+  /** bandiTEAM product funnel */
+  | 'banditeam_alert_opened'
+  | 'banditeam_alert_shared'
+  | 'banditeam_alert_saved_toggle'
+  | 'banditeam_feed_viewed'
+  | 'banditeam_feed_map_opened'
+  | 'banditeam_home_card_cta'
+  | 'banditeam_report_submit_success'
+  | 'banditeam_notification_opened'
+  | 'banditeam_session_day_active';
 
 const sessionOnceKeys = new Set<string>();
 
@@ -29,8 +39,9 @@ export async function trackEvent(args: {
 
   try {
     const {
-      data: { user },
-    } = await supabase.auth.getUser();
+      data: { session },
+    } = await supabase.auth.getSession();
+    const user = session?.user;
 
     const payload = {
       user_id: user?.id ?? null,

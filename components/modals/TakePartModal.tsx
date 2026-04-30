@@ -25,7 +25,7 @@ export default function TakePartModal({ visible, onClose }: TakePartModalProps) 
             color={Colors[colorScheme ?? 'light'].tabIconDefault}
           />
           <ThemedText type="title" style={styles.title}>Take Part</ThemedText>
-          <ThemedText style={styles.subtitle}>Coming soon...</ThemedText>
+          <ThemedText style={styles.subtitle}>Community & events</ThemedText>
         </View>
 
         <ThemedView style={[
@@ -33,8 +33,8 @@ export default function TakePartModal({ visible, onClose }: TakePartModalProps) 
           { backgroundColor: Colors[colorScheme ?? 'light'].background }
         ]}>
           <ThemedText style={styles.placeholder}>
-            This feature is under development. Soon you'll be able to participate in community events,
-            challenges, and connect with other local explorers.
+            Participate in local events, challenges, and connect with other explorers — check back as we
+            add more ways to join in.
           </ThemedText>
         </ThemedView>
       </View>

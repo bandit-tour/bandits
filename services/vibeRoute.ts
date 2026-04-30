@@ -1,4 +1,7 @@
+import { getCuratedEventImageCandidates } from '@/lib/eventImageCuration';
 import { Database } from '@/lib/database.types';
+import { isLikelyLogoOrBadPlaceImage, normalizeEventImageUri } from '@/lib/placePhoto';
+import { repairDisplayText } from '@/lib/repairTextEncoding';
 
 type Event = Database['public']['Tables']['event']['Row'];
 
@@ -27,8 +30,10 @@ export function eventImageCandidates(event: Event): string[] {
   const out: string[] = [];
   const add = (raw: string | null | undefined) => {
     const c = cleanUrl(raw);
-    if (c && !out.includes(c)) out.push(c);
+    const n = normalizeEventImageUri(c);
+    if (n && !isLikelyLogoOrBadPlaceImage(n) && !out.includes(n)) out.push(n);
   };
+  getCuratedEventImageCandidates(event as any).forEach((u) => add(u));
   if (event.image_gallery) {
     try {
       const parsed = JSON.parse(event.image_gallery);
@@ -44,7 +49,7 @@ export function eventImageCandidates(event: Event): string[] {
 }
 
 function truncateVibe(text: string, max = 140): string {
-  const t = text.replace(/\s+/g, ' ').trim();
+  const t = repairDisplayText(text).replace(/\s+/g, ' ').trim();
   if (t.length <= max) return t;
   return `${t.slice(0, max - 1)}…`;
 }
@@ -101,15 +106,7 @@ export function buildVibeStopsFromEvents(
   }));
 }
 
-type SpotRow = {
-  id: string;
-  name: string;
-  address?: string | null;
-  city?: string | null;
-  description?: string | null;
-  image_url?: string | null;
-  category?: string | null;
-};
+type SpotRow = Database['public']['Tables']['spots']['Row'];
 
 export function buildVibeStopsFromSpots(spots: SpotRow[], startOrder: number, max: number): VibeStop[] {
   const out: VibeStop[] = [];

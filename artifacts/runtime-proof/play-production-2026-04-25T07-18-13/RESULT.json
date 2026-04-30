@@ -1,0 +1,31 @@
+{
+  "pass": "PASS",
+  "outDir": "C:\\Users\\blonj\\Documents\\bandits\\artifacts\\runtime-proof\\play-production-2026-04-25T07-18-13",
+  "mismatches": [],
+  "screenshots": {
+    "home": "C:\\Users\\blonj\\Documents\\bandits\\artifacts\\runtime-proof\\play-production-2026-04-25T07-18-13\\1-home.png",
+    "alerts": "C:\\Users\\blonj\\Documents\\bandits\\artifacts\\runtime-proof\\play-production-2026-04-25T07-18-13\\2-alerts.png",
+    "localFriend": "C:\\Users\\blonj\\Documents\\bandits\\artifacts\\runtime-proof\\play-production-2026-04-25T07-18-13\\3-local-friend.png",
+    "profile": "C:\\Users\\blonj\\Documents\\bandits\\artifacts\\runtime-proof\\play-production-2026-04-25T07-18-13\\4-profile.png",
+    "menu": "C:\\Users\\blonj\\Documents\\bandits\\artifacts\\runtime-proof\\play-production-2026-04-25T07-18-13\\5-menu.png",
+    "refreshHome": "C:\\Users\\blonj\\Documents\\bandits\\artifacts\\runtime-proof\\play-production-2026-04-25T07-18-13\\6-refresh-home.png",
+    "backTest": "C:\\Users\\blonj\\Documents\\bandits\\artifacts\\runtime-proof\\play-production-2026-04-25T07-18-13\\7-back-test.png"
+  },
+  "checks": {
+    "onboardingSkippedAfterRefresh": true,
+    "noTabHistoryLoop": true
+  },
+  "debug": {
+    "urlAfterOnboarding": "http://localhost:8081/bandits",
+    "stageAfterOnboarding": {
+      "session": "done",
+      "local": "1"
+    },
+    "urlAfterRefresh": "http://localhost:8081/bandits",
+    "stageAfterRefresh": {
+      "session": "done",
+      "local": "1"
+    }
+  },
+  "errors": []
+}

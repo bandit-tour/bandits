@@ -1,0 +1,13 @@
+{
+  "productionUrl": "https://bandits-two.vercel.app",
+  "screenshots": {
+    "desktopMenu": "C:\\Users\\blonj\\Documents\\bandits\\artifacts\\runtime-proof\\pilotdesk-real-account-2026-04-27T09-07-07\\1-desktop-menu-pilotdesk.png",
+    "iphoneMenu": "C:\\Users\\blonj\\Documents\\bandits\\artifacts\\runtime-proof\\pilotdesk-real-account-2026-04-27T09-07-07\\2-iphone-menu-pilotdesk.png"
+  },
+  "checks": {
+    "desktopPilotDeskVisible": true,
+    "iphonePilotDeskVisible": true
+  },
+  "pass": "PASS",
+  "errors": []
+}

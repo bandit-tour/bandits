@@ -1,11 +1,12 @@
 // Fallback for using MaterialIcons on Android and web.
 
+import React from 'react';
 import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 import { SymbolViewProps, SymbolWeight } from 'expo-symbols';
 import { ComponentProps } from 'react';
 import { OpaqueColorValue, type StyleProp, type TextStyle } from 'react-native';
 
-type IconMapping = Record<SymbolViewProps['name'], ComponentProps<typeof MaterialIcons>['name']>;
+type MaterialName = ComponentProps<typeof MaterialIcons>['name'];
 type IconSymbolName = keyof typeof MAPPING;
 
 /**
@@ -19,10 +20,20 @@ const MAPPING = {
   'chevron.left.forwardslash.chevron.right': 'code',
   'chevron.right': 'chevron-right',
   'star.fill': 'star',
-  'star': 'star-outline',
+  star: 'star-outline',
   'heart.fill': 'favorite',
-  'heart': 'favorite-outline',
-} as IconMapping;
+  heart: 'favorite-outline',
+  /** Main bottom nav + modals */
+  'person.2.fill': 'people',
+  'bubble.left.and.bubble.right.fill': 'chat',
+  'tray.full.fill': 'inbox',
+  'exclamationmark.triangle.fill': 'warning',
+  'line.3.horizontal': 'menu',
+  'gearshape.fill': 'settings',
+  'person.circle': 'account-circle',
+  'person.2.circle': 'groups',
+  'person.2.circle.fill': 'groups',
+} as const satisfies Record<string, MaterialName>;
 
 /**
  * An icon component that uses native SF Symbols on iOS, and Material Icons on Android and web.
@@ -41,5 +52,6 @@ export function IconSymbol({
   style?: StyleProp<TextStyle>;
   weight?: SymbolWeight;
 }) {
-  return <MaterialIcons color={color} size={size} name={MAPPING[name]} style={style} />;
+  const resolved = MAPPING[name];
+  return <MaterialIcons color={color} size={size} name={resolved ?? 'help-outline'} style={style} />;
 }

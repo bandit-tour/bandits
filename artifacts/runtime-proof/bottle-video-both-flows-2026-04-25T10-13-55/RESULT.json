@@ -1,0 +1,14 @@
+{
+  "outDir": "C:\\Users\\blonj\\Documents\\bandits\\artifacts\\runtime-proof\\bottle-video-both-flows-2026-04-25T10-13-55",
+  "filePathConfirmed": "@/assets/images/local-friend-bottle.mov",
+  "checks": {
+    "playIntroShowsVideo": true,
+    "submitReportSuccessShowsVideo": true
+  },
+  "screenshots": {
+    "playIntro": "C:\\Users\\blonj\\Documents\\bandits\\artifacts\\runtime-proof\\bottle-video-both-flows-2026-04-25T10-13-55\\1-play-intro-video.png",
+    "submitReportSuccess": "C:\\Users\\blonj\\Documents\\bandits\\artifacts\\runtime-proof\\bottle-video-both-flows-2026-04-25T10-13-55\\2-submit-report-success-video.png"
+  },
+  "pass": "PASS",
+  "errors": []
+}

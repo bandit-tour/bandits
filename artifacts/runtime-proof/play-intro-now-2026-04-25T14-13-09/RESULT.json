@@ -1,0 +1,20 @@
+{
+  "outDir": "C:\\Users\\blonj\\Documents\\bandits\\artifacts\\runtime-proof\\play-intro-now-2026-04-25T14-13-09",
+  "routeUsed": "https://bandits-two.vercel.app/hotel/play-theatrou",
+  "screenshots": {
+    "firstTimeIntro": "C:\\Users\\blonj\\Documents\\bandits\\artifacts\\runtime-proof\\play-intro-now-2026-04-25T14-13-09\\1-first-time-intro.png",
+    "afterButtonHome": "C:\\Users\\blonj\\Documents\\bandits\\artifacts\\runtime-proof\\play-intro-now-2026-04-25T14-13-09\\2-after-button-home.png",
+    "refreshReturningHome": "C:\\Users\\blonj\\Documents\\bandits\\artifacts\\runtime-proof\\play-intro-now-2026-04-25T14-13-09\\3-refresh-returning-home.png"
+  },
+  "checks": {
+    "firstTimeIntroVisible": false,
+    "bottleVideoPlaying": false,
+    "firstTimeButtonToHome": false,
+    "returningSkipToHome": false
+  },
+  "consoleErrors": [
+    "Failed to load resource: the server responded with a status of 401 ()",
+    "locator.click: Timeout 10000ms exceeded.\nCall log:\n  - waiting for getByRole('button', { name: /Open your message/i })\n"
+  ],
+  "pass": "FAIL"
+}

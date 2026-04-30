@@ -1,0 +1,42 @@
+[
+  {
+    "method": "DELETE",
+    "status": 204,
+    "url": "https://zubcakeamyfqatdmleqx.supabase.co/rest/v1/notifications?id=eq.bb9e0721-5a04-40e4-8aaa-a933a8459c29"
+  },
+  {
+    "method": "DELETE",
+    "status": 204,
+    "url": "https://zubcakeamyfqatdmleqx.supabase.co/rest/v1/notifications?id=eq.89b9b1a0-3b8e-4300-806f-c3397303bb25"
+  },
+  {
+    "method": "DELETE",
+    "status": 204,
+    "url": "https://zubcakeamyfqatdmleqx.supabase.co/rest/v1/notifications?id=eq.5817a808-2852-4599-944e-db5e6a31e030"
+  },
+  {
+    "method": "DELETE",
+    "status": 204,
+    "url": "https://zubcakeamyfqatdmleqx.supabase.co/rest/v1/notifications?id=eq.8a8d1f4e-0039-4b74-b6f4-6b5abc84592a"
+  },
+  {
+    "method": "DELETE",
+    "status": 204,
+    "url": "https://zubcakeamyfqatdmleqx.supabase.co/rest/v1/notifications?id=eq.9ef9c555-821a-48f0-9c9f-0bab89c7e90b"
+  },
+  {
+    "method": "DELETE",
+    "status": 204,
+    "url": "https://zubcakeamyfqatdmleqx.supabase.co/rest/v1/notifications?id=eq.638c1ff6-c144-43d9-ab16-989a13af151a"
+  },
+  {
+    "method": "DELETE",
+    "status": 204,
+    "url": "https://zubcakeamyfqatdmleqx.supabase.co/rest/v1/notifications?id=eq.ba978c71-6cd1-492a-8531-1f9c637c6cb8"
+  },
+  {
+    "method": "DELETE",
+    "status": 204,
+    "url": "https://zubcakeamyfqatdmleqx.supabase.co/rest/v1/scam_alerts?id=eq.cf9dc453-b6bd-4b63-8bf3-f057de5d5998"
+  }
+]

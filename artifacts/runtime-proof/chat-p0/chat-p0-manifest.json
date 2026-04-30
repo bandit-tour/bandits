@@ -1,0 +1,6 @@
+{
+  "pass": false,
+  "reason": "Incoming row never appeared on operator desk",
+  "createdShot": "artifacts/runtime-proof/chat-p0/01-created-incoming-seed.png",
+  "deskShot": "artifacts/runtime-proof/chat-p0/02-operator-desk-row-visible.png"
+}

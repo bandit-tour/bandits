@@ -1,8 +1,9 @@
 import { Stack, useLocalSearchParams } from 'expo-router';
 import Constants from 'expo-constants';
-import { useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import {
   ActivityIndicator,
+  Alert,
   Image,
   Linking,
   ScrollView,
@@ -12,6 +13,7 @@ import {
   View,
 } from 'react-native';
 
+import { isEventLiked, toggleEventLike } from '@/app/services/events';
 import { Database } from '@/lib/database.types';
 import {
   fetchGooglePlacePhotoUrl as resolveGooglePlacePhotoUrl,
@@ -22,7 +24,10 @@ import {
 import { getCuratedEventImageCandidates } from '@/lib/eventImageCuration';
 import { supabase } from '@/lib/supabase';
 import ReviewCard from '@/components/ReviewCard';
+import { VenueScamWarningsSection } from '@/components/VenueScamWarningsSection';
 import { trackEvent } from '@/lib/analytics';
+import { usePremiumRefreshControl } from '@/lib/mobilePullToRefresh';
+import { repairDisplayText } from '@/lib/repairTextEncoding';
 
 // For City Guide, the ID passed into /spot/[id] comes from the event card,
 // so this screen should load from the event table, not spots.
@@ -77,12 +82,16 @@ export default function SpotDetailScreen() {
   const [reviews, setReviews] = useState<SpotReview[]>([]);
   const [visibleGallery, setVisibleGallery] = useState<string[]>([]);
   const [galleryLoading, setGalleryLoading] = useState(false);
+  const [liked, setLiked] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
 
-  useEffect(() => {
-    const fetchSpot = async () => {
+  const loadSpot = useCallback(
+    async (opts?: { silent?: boolean }) => {
+      const silent = opts?.silent === true;
       if (!id) return;
       try {
-        setLoading(true);
+        if (silent) setRefreshing(true);
+        else setLoading(true);
         console.log('[SpotDetail] spotId from route:', id);
         const { data, error: err } = await supabase
           .from('event')
@@ -105,7 +114,6 @@ export default function SpotDetailScreen() {
         const parsedGallery = parseGalleryImages(data.image_gallery, data.image_url, curated);
         setVisibleGallery(parsedGallery);
 
-        // If stored images are missing/invalid, optionally resolve via Google Places (spinner only during this fetch).
         if (parsedGallery.length === 0) {
           setGalleryLoading(true);
           try {
@@ -118,25 +126,67 @@ export default function SpotDetailScreen() {
             });
             if (photoUrl) {
               setVisibleGallery([normalizeEventImageUri(photoUrl) ?? photoUrl]);
+            } else {
+              setVisibleGallery([
+                getCategoryFallbackImage(String(data.genre ?? ''), `spot-detail-${data.id}`, 900, 600),
+              ]);
             }
           } catch (e) {
             console.warn('[SpotDetail] google photo fetch failed', { spotId: id, e });
+            setVisibleGallery([
+              getCategoryFallbackImage(String(data.genre ?? ''), `spot-detail-${data.id}`, 900, 600),
+            ]);
           } finally {
             setGalleryLoading(false);
           }
         }
-        // Reviews for spots are not implemented yet; keep empty state (no fake data).
         setReviews([]);
+        setError(null);
       } catch (err) {
         console.error('[SpotDetail] failed to load event for spot screen:', err);
         setError(err instanceof Error ? err.message : 'Failed to load spot');
       } finally {
-        setLoading(false);
+        if (silent) setRefreshing(false);
+        else setLoading(false);
       }
-    };
+    },
+    [id],
+  );
 
-    fetchSpot();
+  useEffect(() => {
+    void loadSpot();
+  }, [loadSpot]);
+
+  useEffect(() => {
+    if (!id) return;
+    let cancelled = false;
+    void (async () => {
+      try {
+        const v = await isEventLiked(String(id));
+        if (!cancelled) setLiked(v);
+      } catch {
+        if (!cancelled) setLiked(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
   }, [id]);
+
+  const onRefreshSpot = useCallback(() => {
+    void loadSpot({ silent: true });
+  }, [loadSpot]);
+  const spotDetailRefresh = usePremiumRefreshControl(refreshing, onRefreshSpot);
+
+  const onToggleLike = useCallback(async () => {
+    if (!spot) return;
+    try {
+      await toggleEventLike(spot.id, liked);
+      setLiked((prev) => !prev);
+    } catch {
+      Alert.alert('Unable to save', 'Finish setup in Profile, then try saving this spot again.');
+    }
+  }, [spot, liked]);
 
   if (loading) {
     return (
@@ -157,7 +207,11 @@ export default function SpotDetailScreen() {
   return (
     <>
       <Stack.Screen options={{ headerShown: true, title: '' }} />
-      <ScrollView style={styles.container} contentContainerStyle={styles.content}>
+      <ScrollView
+        style={styles.container}
+        contentContainerStyle={styles.content}
+        refreshControl={spotDetailRefresh}
+      >
         <ScrollView
           horizontal
           showsHorizontalScrollIndicator={false}
@@ -194,7 +248,13 @@ export default function SpotDetailScreen() {
             />
           )}
         </ScrollView>
-        <Text style={styles.name}>{spot.name}</Text>
+        <View style={styles.titleRow}>
+          <Text style={styles.name}>{spot.name}</Text>
+          <TouchableOpacity onPress={() => void onToggleLike()} style={styles.likeBtn} hitSlop={12}>
+            <Text style={styles.likeEmoji}>{liked ? '❤️' : '🤍'}</Text>
+            <Text style={styles.likeLabel}>{liked ? 'Saved' : 'Save'}</Text>
+          </TouchableOpacity>
+        </View>
         <Text style={styles.category}>{spot.genre}</Text>
         {spot.city && <Text style={styles.city}>{spot.city}</Text>}
         {!!spot.address && (
@@ -207,9 +267,11 @@ export default function SpotDetailScreen() {
         )}
         {spot.description && (
           <>
-            <Text style={styles.description}>{spot.description}</Text>
+            <Text style={styles.description}>{repairDisplayText(spot.description)}</Text>
           </>
         )}
+
+        <VenueScamWarningsSection city={String(spot.city || '')} areaLabel={String(spot.neighborhood || spot.address || '')} />
 
         {/* Reviews */}
         {reviews.length > 0 && (
@@ -256,7 +318,17 @@ const styles = StyleSheet.create({
     backgroundColor: '#E8E8E8',
   },
   galleryRow: { paddingBottom: 16 },
-  name: { fontSize: 22, fontWeight: '700', color: '#222', marginBottom: 8 },
+  titleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 12,
+    marginBottom: 8,
+  },
+  name: { fontSize: 22, fontWeight: '700', color: '#222', flex: 1 },
+  likeBtn: { alignItems: 'center' },
+  likeEmoji: { fontSize: 22 },
+  likeLabel: { fontSize: 11, color: '#666', marginTop: 2 },
   category: { fontSize: 14, color: '#666', marginBottom: 4 },
   city: { fontSize: 14, color: '#555', marginBottom: 12 },
   addressLabel: { fontSize: 13, fontWeight: '700', color: '#222', marginBottom: 2 },

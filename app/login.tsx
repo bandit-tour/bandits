@@ -1,9 +1,10 @@
+import { isBenignAuthStateMessage, safeSignOut } from '@/lib/authSafe';
 import { isSupabaseConfigured, supabase } from '@/lib/supabase';
-import { navigateAfterAuth } from '@/services/userProfile';
+import { navigateAfterAuth, normalizePostAuthRedirect } from '@/services/userProfile';
 import * as Linking from 'expo-linking';
-import { Redirect, useLocalSearchParams, useRouter } from 'expo-router';
+import { Redirect, useLocalSearchParams, useRouter, type Href } from 'expo-router';
 import * as WebBrowser from 'expo-web-browser';
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Animated,
@@ -19,8 +20,16 @@ import {
 } from 'react-native';
 
 export default function Login() {
-  const { forceAuth: rawForceAuth } = useLocalSearchParams<{ forceAuth?: string }>();
+  const { forceAuth: rawForceAuth, redirect: rawRedirect } = useLocalSearchParams<{
+    forceAuth?: string;
+    redirect?: string;
+  }>();
   const forceAuth = (Array.isArray(rawForceAuth) ? rawForceAuth[0] : rawForceAuth) === '1';
+  const redirectParam = Array.isArray(rawRedirect) ? rawRedirect[0] : rawRedirect;
+  const redirectRef = useRef<string | null>(null);
+  useEffect(() => {
+    redirectRef.current = normalizePostAuthRedirect(redirectParam ?? null);
+  }, [redirectParam]);
   
   /** Session restore finished (success or failure). Avoid infinite spinner when user is null. */
   const [sessionReady, setSessionReady] = useState(false);
@@ -103,17 +112,30 @@ export default function Login() {
         if (cancelled) return;
         if (sessionError) {
           console.error('[Login] getSession error:', sessionError);
-          setAuthInitError(sessionError.message);
+          if (!isBenignAuthStateMessage(sessionError.message)) {
+            setAuthInitError(sessionError.message);
+          }
           setUser(null);
         } else if (session?.user) {
-          setUser(session.user);
+          const u = session.user;
+          const isAnon =
+            u.app_metadata?.provider === 'anonymous' ||
+            (u as { is_anonymous?: boolean }).is_anonymous === true;
+          if (isAnon && !forceAuth) {
+            router.replace('/bandits' as Href);
+            return;
+          }
+          setUser(u);
         } else {
           setUser(null);
         }
       } catch (err) {
         if (!cancelled) {
           console.error('[Login] getSession threw:', err);
-          setAuthInitError(err instanceof Error ? err.message : 'Could not restore session');
+          const msg = err instanceof Error ? err.message : 'Could not restore session';
+          if (!isBenignAuthStateMessage(msg)) {
+            setAuthInitError(msg);
+          }
           setUser(null);
         }
       } finally {
@@ -128,7 +150,7 @@ export default function Login() {
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
       setUser(session?.user ?? null);
       if (event === 'SIGNED_IN' && session?.user) {
-        void navigateAfterAuth(router);
+        void navigateAfterAuth(router, redirectRef.current);
       }
     });
 
@@ -136,7 +158,7 @@ export default function Login() {
       cancelled = true;
       subscription.unsubscribe();
     };
-  }, [router]);
+  }, [router, forceAuth]);
 
   const handleEmailLogin = async () => {
     setLoading(false);
@@ -172,7 +194,7 @@ export default function Login() {
         setError('Sign in failed: no session returned.');
         return;
       }
-      await navigateAfterAuth(router);
+      await navigateAfterAuth(router, redirectRef.current);
     } catch (err: any) {
       setError(err?.message ?? 'Sign in failed. Please try again.');
     } finally {
@@ -219,7 +241,7 @@ export default function Login() {
         setError(null);
       } else if (data.user && data.session) {
         setError('Account created but email verification is required. Please check your email.');
-        void supabase.auth.signOut();
+        void safeSignOut();
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Sign up failed. Please try again.');
@@ -313,7 +335,7 @@ export default function Login() {
       }
 
       if (oauthSession) {
-        await navigateAfterAuth(router);
+        await navigateAfterAuth(router, redirectRef.current);
         return;
       }
 
@@ -349,7 +371,7 @@ export default function Login() {
             if (sessionError) {
               throw sessionError;
             }
-            await navigateAfterAuth(router);
+            await navigateAfterAuth(router, redirectRef.current);
           } else {
             throw new Error('OAuth callback did not include tokens.');
           }
@@ -363,7 +385,7 @@ export default function Login() {
       const { data: sessionProbe } = await supabase.auth.getSession();
       if (sessionProbe?.session) {
         setError(null);
-        await navigateAfterAuth(router);
+        await navigateAfterAuth(router, redirectRef.current);
         return;
       }
       if (err?.message) {
@@ -384,7 +406,16 @@ export default function Login() {
   }
 
   if (user && !forceAuth) {
-    return <Redirect href="/bandits" />;
+    const safe = normalizePostAuthRedirect(redirectParam ?? null);
+    return <Redirect href={(safe ?? '/bandits') as Href} />;
+  }
+
+  /**
+   * Pilot guests never see email/Google auth — they use an anonymous session and the profile screen.
+   * Staff (operator / admin) open `/login?forceAuth=1` to sign in with password or Google.
+   */
+  if (sessionReady && !authInitError && !user && !forceAuth && !emailSent) {
+    return <Redirect href={('/bandits' as Href)} />;
   }
 
   return (
@@ -403,7 +434,7 @@ export default function Login() {
           <View style={styles.formContainer}>
             <Text style={styles.confirmationTitle}>Check your email</Text>
             <Text style={styles.confirmationText}>
-              We've sent a confirmation link to {email}
+              {`We've sent a confirmation link to ${email}`}
             </Text>
             <Text style={styles.confirmationSubtext}>
               Click the link in your email to complete your registration
@@ -507,7 +538,8 @@ export default function Login() {
               </View>
 
               {/* Sign In Button */}
-              <TouchableOpacity 
+              <TouchableOpacity
+                testID="email-auth-submit"
                 style={styles.signInButton}
                 onPress={isSignIn ? handleEmailLogin : handleEmailSignup}
                 disabled={loading}

@@ -1,0 +1,24 @@
+{
+  "generatedAt": "2026-03-28T15:12:07.920Z",
+  "sourceRows": {
+    "docx": 34,
+    "xlsx": 34
+  },
+  "duplicateRowsMerged": 26,
+  "mergedUniquePlaces": 42,
+  "sqlStatements": 42,
+  "banditsEnriched": 4,
+  "banditNames": [
+    "Joanna",
+    "Sonia",
+    "Elia",
+    "Neo"
+  ],
+  "placesPerBandit": {
+    "Joanna": 11,
+    "Sonia": 11,
+    "Elia": 10,
+    "Neo": 10
+  },
+  "note": "Apply with supabase db push / SQL editor. Inserts skip when lower(trim(name)) already exists on public.event."
+}

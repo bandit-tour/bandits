@@ -38,9 +38,8 @@ export default function SettingsScreen() {
         keyboardShouldPersistTaps="handled"
       >
         <Text style={styles.title}>Settings</Text>
-        <Text style={styles.subtitle}>Notifications and guest preferences</Text>
 
-        <Text style={styles.blockLabel}>Notifications</Text>
+        <Text style={styles.blockLabel}>Alerts</Text>
         <View style={styles.optionRow}>
           <Text style={styles.optionLabel}>Push notifications</Text>
           <Switch value={pushEnabled} onValueChange={setPushEnabled} />
@@ -51,7 +50,6 @@ export default function SettingsScreen() {
         </View>
 
         <Text style={[styles.blockLabel, styles.blockSpaced]}>Preferences</Text>
-        <Text style={styles.fieldHint}>Choose how you want app updates delivered.</Text>
         <Pressable style={styles.primaryBtn} onPress={savePreferences}>
           <Text style={styles.primaryBtnText}>{savingPrefs ? 'Saving...' : 'Save preferences'}</Text>
         </Pressable>
@@ -72,11 +70,6 @@ const styles = StyleSheet.create({
     fontSize: 22,
     fontWeight: '700',
     color: '#111',
-    marginBottom: 4,
-  },
-  subtitle: {
-    fontSize: 14,
-    color: '#666',
     marginBottom: 20,
   },
   blockLabel: {
@@ -101,11 +94,6 @@ const styles = StyleSheet.create({
   optionLabel: {
     fontSize: 14,
     color: '#333',
-  },
-  fieldHint: {
-    fontSize: 13,
-    color: '#555',
-    marginBottom: 8,
   },
   primaryBtn: {
     alignSelf: 'flex-start',

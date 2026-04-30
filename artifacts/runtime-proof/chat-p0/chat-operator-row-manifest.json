@@ -1,0 +1,17 @@
+{
+  "pass": true,
+  "firstRowText": "02:21 PM · tap to reply",
+  "m1": "web-proof-1-1776947151949",
+  "m2": "web-proof-2-1776947151949",
+  "hasM1": true,
+  "hasM2": true,
+  "shots": {
+    "deskBefore": "artifacts/runtime-proof/chat-p0/20-operator-desk-existing-incoming.png",
+    "opened": "artifacts/runtime-proof/chat-p0/21-chat-opened-from-desk.png",
+    "afterSend1": "artifacts/runtime-proof/chat-p0/22-chat-after-send-1.png",
+    "after10s": "artifacts/runtime-proof/chat-p0/23-chat-after-10s.png",
+    "afterRefresh": "artifacts/runtime-proof/chat-p0/24-chat-after-refresh.png",
+    "afterSend2": "artifacts/runtime-proof/chat-p0/25-chat-after-send-2.png",
+    "reopen": "artifacts/runtime-proof/chat-p0/26-chat-reopened.png"
+  }
+}

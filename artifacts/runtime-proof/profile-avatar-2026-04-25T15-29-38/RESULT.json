@@ -1,0 +1,50 @@
+{
+  "pass": "PASS",
+  "line": null,
+  "err": null,
+  "supabaseStorageOk": true,
+  "publicUrl": "https://zubcakeamyfqatdmleqx.supabase.co/storage/v1/object/profile_avatars/e6d8cb02-6f1a-40c0-96c4-b96961878407/1777130993854.jpg [auth]",
+  "profileRowOk": "avatar persisted across upload, tab switch, and refresh",
+  "avatarChecks": [
+    {
+      "stage": "t+0",
+      "avatarImageCount": 1,
+      "avatarFallbackCount": 0
+    },
+    {
+      "stage": "t+15s",
+      "avatarImageCount": 1,
+      "avatarFallbackCount": 0
+    },
+    {
+      "stage": "after-tab-switch-return",
+      "avatarImageCount": 1,
+      "avatarFallbackCount": 0
+    },
+    {
+      "stage": "after-refresh",
+      "avatarImageCount": 1,
+      "avatarFallbackCount": 0
+    }
+  ],
+  "dialogs": [],
+  "storageResponses": [
+    {
+      "status": 400,
+      "url": "https://zubcakeamyfqatdmleqx.supabase.co/storage/v1/object/banditsassets4/profile_avatars/e6d8cb02-6f1a-40c0-96c4-b96961878407/1777130993538.jpg",
+      "body": "{\"statusCode\":\"403\",\"error\":\"Unauthorized\",\"message\":\"new row violates row-level security policy\"}"
+    },
+    {
+      "status": 400,
+      "url": "https://zubcakeamyfqatdmleqx.supabase.co/storage/v1/object/profile_avatars/e6d8cb02-6f1a-40c0-96c4-b96961878407/1777130993854.jpg",
+      "body": "{\"statusCode\":\"404\",\"error\":\"Bucket not found\",\"message\":\"Bucket not found\"}"
+    }
+  ],
+  "outDir": "C:\\Users\\blonj\\Documents\\bandits\\artifacts\\runtime-proof\\profile-avatar-2026-04-25T15-29-38",
+  "screenshots": {
+    "beforePath": "C:\\Users\\blonj\\Documents\\bandits\\artifacts\\runtime-proof\\profile-avatar-2026-04-25T15-29-38\\1-before.png",
+    "afterPath": "C:\\Users\\blonj\\Documents\\bandits\\artifacts\\runtime-proof\\profile-avatar-2026-04-25T15-29-38\\2-immediately-after-upload.png",
+    "t10Path": "C:\\Users\\blonj\\Documents\\bandits\\artifacts\\runtime-proof\\profile-avatar-2026-04-25T15-29-38\\3-after-10s.png",
+    "afterRefreshPath": "C:\\Users\\blonj\\Documents\\bandits\\artifacts\\runtime-proof\\profile-avatar-2026-04-25T15-29-38\\4-after-full-refresh.png"
+  }
+}

@@ -90,7 +90,7 @@ export default function BanditHeader({
       <Image
         source={
           useLocalFallback
-            ? require('@/assets/images/play-theatrou.png')
+            ? require('@/assets/images/play_athens_bg.png')
             : { uri: heroUri }
         }
         style={[
@@ -138,7 +138,7 @@ export default function BanditHeader({
               onPress={() => router.push(`/cityMap?banditId=${id}`)}
             >
               <Image
-                source={require('@/assets/icons/Alecive-Flatwoken-Apps-Google-Maps.512.png')}
+                source={require('@/assets/icons/google-maps-512.png')}
                 style={styles.mapIcon}
               />
             </Pressable>

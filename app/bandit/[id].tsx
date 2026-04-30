@@ -18,8 +18,8 @@ import {
 
 import { getBanditById, getBanditTags, submitBanditQuestion, toggleBanditLike } from '@/app/services/bandits';
 import { formatAskMeModalSubtitle } from '@/lib/askMeMessageFormat';
-import { useAppState } from '@/contexts/AppStateContext';
 import { getBanditReviews } from '@/app/services/reviews';
+import { supabase } from '@/lib/supabase';
 import { ensureAnonymousSession } from '@/lib/pilotSession';
 import { resolveWhyFollowText } from '@/services/whyFollowCopy';
 import { getNotificationsBackendStatus } from '@/services/localFriend';
@@ -71,7 +71,6 @@ function buildFallbackReviews(banditId: string, banditName: string): DisplayRevi
 
 export default function BanditScreen() {
   const { id } = useLocalSearchParams();
-  const { getCurrentUser } = useAppState();
 
   const [bandit, setBandit] = useState<Bandit | null>(null);
   const [tags, setTags] = useState<string[]>([]);
@@ -96,7 +95,7 @@ export default function BanditScreen() {
       try {
         setLoading(true);
 
-        const user = await getCurrentUser();
+        const { data: { user } } = await supabase.auth.getUser();
         const uid = user?.id ?? null;
         setLikeUserId(uid);
 
@@ -146,7 +145,7 @@ export default function BanditScreen() {
     };
 
     fetchBanditData();
-  }, [id, getCurrentUser]);
+  }, [id]);
 
   useEffect(() => {
     let active = true;

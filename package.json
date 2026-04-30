@@ -3,18 +3,29 @@
   "main": "expo-router/entry",
   "version": "1.0.0",
   "scripts": {
-    "postinstall": "node scripts/patch-expo-win-externals.cjs",
+    "postinstall": "node scripts/patch-expo-win-externals.cjs && node scripts/patch-react-navigation-weakref.cjs",
     "start": "node scripts/start-expo-lan.cjs",
     "reset-project": "node ./scripts/reset-project.js",
     "upload-event-images": "node ./scripts/upload-event-images.js",
+    "enrich-athens-guide": "node ./scripts/build-athens-enrichment.cjs",
     "android": "expo run:android",
     "ios": "expo run:ios",
     "web": "expo start --web",
     "lint": "expo lint",
+    "verify:signals": "node scripts/verify-network-signals.cjs",
+    "verify:pilot-flows": "node scripts/pilot-flows-runtime.mjs",
+    "verify:pilot-e2e-345": "node scripts/pilot-flows-runtime.mjs --e2e-345",
+    "verify:pilot-rows-9-10": "node scripts/pilot-flows-runtime.mjs --rows-9-10",
+    "verify:pilot-row-8": "node scripts/pilot-flows-runtime.mjs --row-8-only",
+    "capture:aluma": "node scripts/capture-aluma-screens.mjs",
     "eas:sync-env": "node scripts/sync-eas-env.cjs",
     "deploy": "npm run build && npx netlify-cli deploy  --dir=dist",
     "deploy-prod": "npm run build && npx netlify-cli deploy  --prod --dir=dist",
-    "build": "npx expo export --platform web && node scripts/prepare-pwa.js && npx workbox-cli generateSW workbox-config.js && node scripts/inject-sw.js && node scripts/mirror-hotel-index.cjs"
+    "build": "npx expo export --platform web && node scripts/prepare-pwa.js && npx workbox-cli generateSW workbox-config.js && node scripts/inject-sw.js && node scripts/mirror-hotel-index.cjs",
+    "db:apply-avatar-rls": "node scripts/apply-avatar-rls-production.mjs",
+    "db:apply-scam-report-rls": "node scripts/apply-scam-report-rls-production.mjs",
+    "verify:scam-anon-rls": "node scripts/verify-scam-anon-insert-production.mjs",
+    "verify:storage-avatar": "node scripts/test-storage-upload-prod.mjs"
   },
   "dependencies": {
     "@expo/vector-icons": "^15.0.3",
@@ -43,6 +54,7 @@
     "expo-linking": "~8.0.11",
     "expo-location": "~19.0.8",
     "expo-router": "~6.0.23",
+    "expo-screen-orientation": "~9.0.8",
     "expo-splash-screen": "~31.0.13",
     "expo-status-bar": "~3.0.9",
     "expo-symbols": "~1.0.8",
@@ -65,13 +77,9 @@
     "react-native-webview": "13.15.0"
   },
   "devDependencies": {
-    "@babel/core": "^7.25.2",
-    "@react-native-community/cli": "^20.0.1",
     "@types/react": "~19.1.10",
-    "eslint": "^9.25.0",
-    "eslint-config-expo": "~10.0.0",
-    "typescript": "~5.9.2",
-    "workbox-cli": "^7.3.0"
+    "playwright": "^1.49.1",
+    "typescript": "~5.9.2"
   },
   "overrides": {
     "@react-leaflet/core": {

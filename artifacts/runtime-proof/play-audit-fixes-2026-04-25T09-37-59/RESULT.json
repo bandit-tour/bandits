@@ -1,0 +1,26 @@
+{
+  "outDir": "C:\\Users\\blonj\\Documents\\bandits\\artifacts\\runtime-proof\\play-audit-fixes-2026-04-25T09-37-59",
+  "routes": {
+    "defaultEntry": "http://localhost:8081/hotel/play-athens",
+    "afterIntroButton": "http://localhost:8081/bandits",
+    "menu": "http://localhost:8081/menu",
+    "profile": "http://localhost:8081/login",
+    "afterBackFromProfile": "http://localhost:8081/menu",
+    "returning": "http://localhost:8081/bandits"
+  },
+  "screenshots": {
+    "defaultEntryPlay": "C:\\Users\\blonj\\Documents\\bandits\\artifacts\\runtime-proof\\play-audit-fixes-2026-04-25T09-37-59\\1-default-entry-play.png",
+    "introToHome": "C:\\Users\\blonj\\Documents\\bandits\\artifacts\\runtime-proof\\play-audit-fixes-2026-04-25T09-37-59\\2-intro-to-home.png",
+    "playMenuClean": "C:\\Users\\blonj\\Documents\\bandits\\artifacts\\runtime-proof\\play-audit-fixes-2026-04-25T09-37-59\\3-play-menu-clean.png",
+    "internalBackFlow": "C:\\Users\\blonj\\Documents\\bandits\\artifacts\\runtime-proof\\play-audit-fixes-2026-04-25T09-37-59\\4-internal-back-flow.png",
+    "returningSkipHome": "C:\\Users\\blonj\\Documents\\bandits\\artifacts\\runtime-proof\\play-audit-fixes-2026-04-25T09-37-59\\5-returning-skip-home.png"
+  },
+  "checks": {
+    "defaultEntryIsPlay": true,
+    "introToHome": true,
+    "playMenuClean": true,
+    "internalBackFlow": false,
+    "returningSkipHome": true
+  },
+  "pass": "FAIL"
+}

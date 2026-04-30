@@ -1,0 +1,25 @@
+{
+  "flow": "external",
+  "base": "https://bandits-two.vercel.app",
+  "checks": {
+    "introFixed": true,
+    "noWhitePage": true,
+    "heroBannerRestored": false,
+    "profileUpdatedVisible": true,
+    "alertsMenuCorrected": true,
+    "navigationWorking": true
+  },
+  "urls": {
+    "afterIntro": "https://bandits-two.vercel.app/bandits"
+  },
+  "screenshots": {
+    "introFirstLoad": "C:\\Users\\blonj\\Documents\\bandits\\artifacts\\runtime-proof\\dual-flow-external-2026-04-25T17-15-38\\1-intro-first-load.png",
+    "afterIntroLand": "C:\\Users\\blonj\\Documents\\bandits\\artifacts\\runtime-proof\\dual-flow-external-2026-04-25T17-15-38\\2-after-intro-land.png",
+    "homeBandits": "C:\\Users\\blonj\\Documents\\bandits\\artifacts\\runtime-proof\\dual-flow-external-2026-04-25T17-15-38\\3-home-bandits.png",
+    "menu": "C:\\Users\\blonj\\Documents\\bandits\\artifacts\\runtime-proof\\dual-flow-external-2026-04-25T17-15-38\\4-menu.png",
+    "profile": "C:\\Users\\blonj\\Documents\\bandits\\artifacts\\runtime-proof\\dual-flow-external-2026-04-25T17-15-38\\5-profile.png",
+    "navigation": "C:\\Users\\blonj\\Documents\\bandits\\artifacts\\runtime-proof\\dual-flow-external-2026-04-25T17-15-38\\6-navigation.png"
+  },
+  "pass": "FAIL",
+  "error": null
+}

@@ -1,7 +1,11 @@
-import { useRef } from 'react';
+import { useMemo, useRef } from 'react';
 import { Animated, Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { EventGenre, getGenreIcon } from '@/constants/Genres';
+
+/** First line: Food, Culture, Nightlife — second line: Shopping, Coffee (max two rows on all profiles). */
+const CATEGORY_ROW_1: EventGenre[] = ['Food', 'Culture', 'Nightlife'];
+const CATEGORY_ROW_2: EventGenre[] = ['Shopping', 'Coffee'];
 
 interface EventCategory {
   genre: EventGenre;
@@ -64,17 +68,19 @@ const AnimatedCategoryItem = ({ category, isSelected, onPress }: {
       <Pressable
         style={[
           styles.categoryBadge,
-          isSelected && styles.categoryBadgeSelected
+          isSelected && styles.categoryBadgeSelected,
         ]}
         onPress={onPress}
         onPressIn={handlePressIn}
         onPressOut={handlePressOut}
       >
         <Text style={styles.categoryIcon}>{getGenreIcon(category.genre)}</Text>
-        <Text style={[
-          styles.categoryText,
-          isSelected && styles.categoryTextSelected
-        ]}>
+        <Text
+          style={[styles.categoryText, isSelected && styles.categoryTextSelected]}
+          numberOfLines={1}
+          adjustsFontSizeToFit
+          minimumFontScale={0.72}
+        >
           {category.count} {category.genre.toUpperCase()}
         </Text>
       </Pressable>
@@ -83,17 +89,24 @@ const AnimatedCategoryItem = ({ category, isSelected, onPress }: {
 };
 
 export default function EventCategories({ categories, selectedGenre, onCategoryPress }: EventCategoriesProps) {
+  const byGenre = useMemo(() => {
+    const m = new Map<EventGenre, EventCategory>();
+    for (const c of categories || []) {
+      m.set(c.genre, c);
+    }
+    return m;
+  }, [categories]);
+
   if (!categories || categories.length === 0) {
     return null;
   }
 
-  // Allow categories to wrap naturally without forcing specific rows
-  const totalItems = categories.length;
-
-  return (
-    <View style={styles.container}>
-      <View style={styles.categoriesContainer}>
-        {categories.map((category) => (
+  const renderRow = (genres: EventGenre[]) => {
+    const items = genres.map((g) => byGenre.get(g)).filter((c): c is EventCategory => !!c);
+    if (items.length === 0) return null;
+    return (
+      <View style={styles.categoriesRow}>
+        {items.map((category) => (
           <View key={category.genre} style={styles.categoryItem}>
             <AnimatedCategoryItem
               category={category}
@@ -103,6 +116,13 @@ export default function EventCategories({ categories, selectedGenre, onCategoryP
           </View>
         ))}
       </View>
+    );
+  };
+
+  return (
+    <View style={styles.container}>
+      {renderRow(CATEGORY_ROW_1)}
+      {renderRow(CATEGORY_ROW_2)}
     </View>
   );
 }
@@ -112,26 +132,25 @@ const styles = StyleSheet.create({
     marginVertical: 16,
     paddingHorizontal: 4,
   },
-  categoriesContainer: {
+  categoriesRow: {
     flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 8,
-    rowGap: 8,
-    justifyContent: 'flex-start',
+    alignItems: 'stretch',
+    gap: 6,
+    marginBottom: 6,
   },
   categoryItem: {
-    marginBottom: 8,
-    flexShrink: 0,
+    flex: 1,
+    minWidth: 0,
   },
   categoryBadge: {
     backgroundColor: '#ECECEC',
     borderRadius: 6,
-    paddingHorizontal: 12,
+    paddingHorizontal: 6,
     paddingVertical: 8,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 8,
+    gap: 4,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 0 },
     shadowOpacity: 0.2,
@@ -140,20 +159,24 @@ const styles = StyleSheet.create({
     minHeight: 25,
     borderWidth: 1,
     borderColor: 'transparent',
+    flex: 1,
+    alignSelf: 'stretch',
   },
   categoryBadgeSelected: {
     backgroundColor: '#FFE5E5',
     borderColor: '#FF0000',
   },
   categoryIcon: {
-    fontSize: 14,
+    fontSize: 12,
+    flexShrink: 0,
   },
   categoryText: {
-    fontSize: 10,
+    fontSize: 9,
     fontWeight: '700',
     color: '#3C3C3C',
     textTransform: 'uppercase',
-    letterSpacing: 0.5,
+    letterSpacing: 0.3,
+    flexShrink: 1,
   },
   categoryTextSelected: {
     color: '#FF0000',

@@ -1,0 +1,17 @@
+{
+  "productionUrl": "https://bandits-two.vercel.app",
+  "screenshots": {
+    "activeTravelerDetected": "C:\\Users\\blonj\\Documents\\bandits\\artifacts\\runtime-proof\\live-alert-active-traveler-2026-04-27T13-11-54\\1-active-traveler-detected.png",
+    "afterSendingLiveAlert": "C:\\Users\\blonj\\Documents\\bandits\\artifacts\\runtime-proof\\live-alert-active-traveler-2026-04-27T13-11-54\\2-after-send-live-alert.png",
+    "receivedInTravelerApp": "C:\\Users\\blonj\\Documents\\bandits\\artifacts\\runtime-proof\\live-alert-active-traveler-2026-04-27T13-11-54\\3-traveler-received-alert.png",
+    "regularNoPilotDesk": "C:\\Users\\blonj\\Documents\\bandits\\artifacts\\runtime-proof\\live-alert-active-traveler-2026-04-27T13-11-54\\4-regular-user-no-pilot-desk.png"
+  },
+  "checks": {
+    "activeTravelerDetected": false,
+    "sentLiveAlert": false,
+    "travelerReceivedAlert": false,
+    "regularUsersCannotSeePilotDesk": true
+  },
+  "pass": "FAIL",
+  "errors": []
+}

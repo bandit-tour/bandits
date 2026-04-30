@@ -1,0 +1,16 @@
+console:info:%cDownload the React DevTools for a better development experience: https://react.dev/link/react-devtools font-weight:bold
+console:log:Running application "main" with appParams:
+ {rootTag: #root, hydrate: undefined} 
+Development-level warnings: ON.
+Performance optimizations: OFF.
+console:log:[supabase] configured: true {urlHost: zubcakeamyfqatdmleqx.supabase.co, hasAnonKey: true}
+console:error:Invalid style property of "direction". Did you mean "writingDirection"?
+console:warning:"shadow*" style props are deprecated. Use "boxShadow".
+console:warning:Route "./error.tsx" is missing the required default export. Ensure a React component is exported as default.
+console:warning:Route "./hotel/HotelEntryScreen.tsx" is missing the required default export. Ensure a React component is exported as default.
+console:warning:"textShadow*" style props are deprecated. Use "textShadow".
+console:warning:Route "./hotel/play-theatrou/page.tsx" is missing the required default export. Ensure a React component is exported as default.
+console:warning:props.pointerEvents is deprecated. Use style.pointerEvents
+console:error:Failed to load resource: the server responded with a status of 401 ()
+console:error:Failed to load resource: the server responded with a status of 422 ()
+body_contains_signin_failed:false

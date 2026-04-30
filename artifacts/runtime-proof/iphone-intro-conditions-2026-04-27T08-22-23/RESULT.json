@@ -1,0 +1,46 @@
+{
+  "item": 1,
+  "productionUrl": "https://bandits-two.vercel.app/hotel/play-theatrou",
+  "device": "iPhone 14 Pro",
+  "screenshots": {
+    "screen1": "C:\\Users\\blonj\\Documents\\bandits\\artifacts\\runtime-proof\\iphone-intro-conditions-2026-04-27T08-22-23\\1-screen1.png",
+    "inlineVisualCta": "C:\\Users\\blonj\\Documents\\bandits\\artifacts\\runtime-proof\\iphone-intro-conditions-2026-04-27T08-22-23\\2-inline-visual-cta.png",
+    "autoProgressNoClose": "C:\\Users\\blonj\\Documents\\bandits\\artifacts\\runtime-proof\\iphone-intro-conditions-2026-04-27T08-22-23\\3-auto-progress-no-close.png"
+  },
+  "checks": {
+    "noFullscreenNativeVideoPlayer": true,
+    "noSeparateBottleOnlyScreen": false,
+    "smoothTransitionScreen1InlineVisualCta": false,
+    "autoAdvanceWithoutManualClose": false,
+    "playBandiTourBrandingVisible": false
+  },
+  "evidence": {
+    "screen1": {
+      "url": "https://bandits-two.vercel.app/hotel/play-theatrou",
+      "hasFlipButton": true,
+      "hasPlay": false,
+      "hasBandiTour": false,
+      "fullscreen": false
+    },
+    "inline": {
+      "url": "https://bandits-two.vercel.app/hotel/play-theatrou",
+      "hasOpenButton": false,
+      "hasCloseButton": true,
+      "hasVideo": false,
+      "videoTime": null,
+      "videoPaused": null,
+      "fullscreen": false,
+      "hasMessageCopy": false
+    },
+    "progressed": {
+      "url": "https://bandits-two.vercel.app/hotel/play-theatrou",
+      "hasOpenButton": false,
+      "hasVideo": false,
+      "videoTime": null,
+      "videoPaused": null,
+      "fullscreen": false
+    }
+  },
+  "pass": "FAIL",
+  "errors": []
+}

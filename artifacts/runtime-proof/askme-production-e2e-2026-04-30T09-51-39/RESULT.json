@@ -1,0 +1,18 @@
+{
+  "base": "https://bandits-two.vercel.app",
+  "seed": "askme-e2e-1777542699154",
+  "checks": {
+    "travelerReady": true,
+    "askSubmitted": false,
+    "notificationsDirectionCorrect": false,
+    "operatorSignedIn": false,
+    "pilotDeskSingleEntry": false,
+    "chatOpenedFromNotification": false,
+    "chatShowsSingleThreadMessage": false
+  },
+  "screenshots": {},
+  "errors": [
+    "No bandit id found for Ask Me test"
+  ],
+  "pass": "FAIL"
+}

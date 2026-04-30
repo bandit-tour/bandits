@@ -1,0 +1,17 @@
+{
+  "hasNoReplies": true,
+  "hasReq": true,
+  "hasReply": true,
+  "profilePersist": false,
+  "msg": "real-request-1777017157938",
+  "reply": "real-reply-1777017157938",
+  "shots": {
+    "empty": "artifacts/runtime-proof/localfriend-profile-proof/01-chat-empty-no-replies.png",
+    "localFriendSent": "artifacts/runtime-proof/localfriend-profile-proof/02-local-friend-sent.png",
+    "deskRow": "artifacts/runtime-proof/localfriend-profile-proof/03-operator-desk-row.png",
+    "chatOpened": "artifacts/runtime-proof/localfriend-profile-proof/04-chat-open-real-request.png",
+    "replySent": "artifacts/runtime-proof/localfriend-profile-proof/05-chat-after-real-reply.png",
+    "profileSaved": "artifacts/runtime-proof/localfriend-profile-proof/06-profile-after-save.png",
+    "profileRefresh": "artifacts/runtime-proof/localfriend-profile-proof/07-profile-after-refresh.png"
+  }
+}

@@ -1,0 +1,25 @@
+{
+  "outDir": "C:\\Users\\blonj\\Documents\\bandits\\artifacts\\runtime-proof\\nav-back-once-2026-04-25T14-37-57",
+  "browserBack": {
+    "sequence": [
+      "https://bandits-two.vercel.app/bandits",
+      "https://bandits-two.vercel.app/menu",
+      "https://bandits-two.vercel.app/following",
+      "https://bandits-two.vercel.app/settings",
+      "https://bandits-two.vercel.app/scam-alerts",
+      "https://bandits-two.vercel.app/menu"
+    ],
+    "beforeBack": "https://bandits-two.vercel.app/menu",
+    "afterBack": "https://bandits-two.vercel.app/scam-alerts",
+    "pass": true
+  },
+  "mobileBack": {
+    "pass": false,
+    "note": "Not executed in this run (web runtime proof only)."
+  },
+  "screenshots": {
+    "beforeBack": "C:\\Users\\blonj\\Documents\\bandits\\artifacts\\runtime-proof\\nav-back-once-2026-04-25T14-37-57\\1-before-back.png",
+    "afterBack": "C:\\Users\\blonj\\Documents\\bandits\\artifacts\\runtime-proof\\nav-back-once-2026-04-25T14-37-57\\2-after-back.png"
+  },
+  "pass": "PASS"
+}
