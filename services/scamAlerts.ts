@@ -173,6 +173,21 @@ function finalizeScamAlertsInsertPayload<T extends Record<string, unknown>>(row:
   return payload as T;
 }
 
+/** Temporary production diagnostics: call immediately before each scam_alerts insert. */
+function logFinalScamAlertPayloadBeforeInsert(payload: Record<string, unknown>): void {
+  console.log('FINAL SCAM ALERT PAYLOAD', JSON.stringify(payload, null, 2));
+  Object.entries(payload).forEach(([key, value]) => {
+    if (value === '') {
+      console.error('EMPTY STRING FIELD BEFORE INSERT:', key);
+    }
+  });
+  Object.entries(payload).forEach(([key, value]) => {
+    if (key.endsWith('_id') || key.includes('uuid') || key === 'reported_by') {
+      console.log('UUID FIELD CHECK:', key, value, typeof value);
+    }
+  });
+}
+
 function base64ToBlob(base64: string, mime: string): Blob {
   const clean = base64.includes(',') ? base64.split(',').pop() ?? base64 : base64;
   const binary = globalThis.atob(clean);
@@ -320,6 +335,7 @@ export async function submitScamAlert(input: SubmitScamAlertInput): Promise<void
   } as Record<string, unknown>);
 
   async function insertDirect(): Promise<{ ok: boolean; lastError: { message?: string } | null }> {
+    logFinalScamAlertPayloadBeforeInsert(rowFull as Record<string, unknown>);
     let { error } = await supabase.from('scam_alerts').insert(rowFull as any);
     if (error && isMissingScamColumnError(error.message ?? '')) {
       const rowLegacy = finalizeScamAlertsInsertPayload({
@@ -330,6 +346,7 @@ export async function submitScamAlert(input: SubmitScamAlertInput): Promise<void
         reported_by: rowFull.reported_by,
         ...(imageUrl ? { image_url: imageUrl } : {}),
       } as Record<string, unknown>);
+      logFinalScamAlertPayloadBeforeInsert(rowLegacy as Record<string, unknown>);
       const second = await supabase.from('scam_alerts').insert(rowLegacy as any);
       error = second.error;
     }

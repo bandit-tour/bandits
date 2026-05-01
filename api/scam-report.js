@@ -57,6 +57,21 @@ function finalizeScamAlertInsertPayload(row) {
   return payload;
 }
 
+/** Temporary production diagnostics: immediately before each scam_alerts insert. */
+function logFinalScamAlertPayloadBeforeInsert(payload) {
+  console.log('FINAL SCAM ALERT PAYLOAD', JSON.stringify(payload, null, 2));
+  Object.entries(payload).forEach(([key, value]) => {
+    if (value === '') {
+      console.error('EMPTY STRING FIELD BEFORE INSERT:', key);
+    }
+  });
+  Object.entries(payload).forEach(([key, value]) => {
+    if (key.endsWith('_id') || key.includes('uuid') || key === 'reported_by') {
+      console.log('UUID FIELD CHECK:', key, value, typeof value);
+    }
+  });
+}
+
 function setCors(res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
@@ -162,6 +177,7 @@ module.exports = async function handler(req, res) {
         reported_by: reportedBy,
         ...(imageUrl ? { image_url: imageUrl } : {}),
       });
+      logFinalScamAlertPayloadBeforeInsert(legacy);
       const second = await admin.from('scam_alerts').insert(legacy).select('id').maybeSingle();
       if (second.error) {
         return res.status(500).json({ error: 'Could not save report.' });
