@@ -34,6 +34,8 @@ export type HotelWhiteLabelConfig = {
 
 const BANDITOUR_LOGO = require('@/assets/icons/logobanditourapp.png');
 const PLAY_ATHENS_BG = require('@/assets/images/play_athens_bg.png');
+/** PLAY Theatrou property / intro backdrop — keep filename aligned with `assets/images/play-theatrou.png`. */
+const PLAY_THEATROU_HERO = require('@/assets/images/play-theatrou.png');
 const PLAY_PSYRI_MARK = require('@/assets/images/play-psyri.png');
 const BOTTLE_SKY = require('@/assets/images/brand/banditour-bottle-sky.png');
 const BOTTLE_ALPINE = require('@/assets/images/brand/banditour-bottle-alpine.png');
@@ -146,7 +148,7 @@ export const HOTEL_WHITE_LABELS: Record<HotelSlug, HotelWhiteLabelConfig> = {
     welcomeBodySecondary: 'Local hosts · living city energy · just for you.',
     logoSource: BANDITOUR_LOGO,
     brandMarkSource: PLAY_PSYRI_MARK,
-    introHeroSource: PLAY_ATHENS_BG,
+    introHeroSource: PLAY_THEATROU_HERO,
     welcomeHeroSource: BOTTLE_ALPINE,
     /** Athens boutique mood — calmer than bottle art for message/gift screens */
     messageBackgroundSource: PLAY_ATHENS_BG,
