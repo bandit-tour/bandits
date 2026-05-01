@@ -6,70 +6,57 @@ function toUuidOrNull(value) {
   return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(v) ? v : null;
 }
 
-function sanitizeUUID(value) {
-  if (value == null || value === '') return null;
-  const s = typeof value === 'string' ? value : String(value);
-  const t = s.trim();
-  return t !== '' ? t : null;
-}
-
-function isValidUUID(v) {
-  return /^[0-9a-fA-F-]{36}$/.test(v);
+function isIdLikeKey(key) {
+  return (
+    key === 'reported_by' ||
+    key === 'reporter_id' ||
+    key === 'created_by' ||
+    key === 'place_id' ||
+    key.endsWith('_id')
+  );
 }
 
 function finalizeScamAlertInsertPayload(row) {
   const payload = { ...(row || {}) };
-  console.log('SUBMIT PAYLOAD');
-  console.log(JSON.stringify(payload, null, 2));
 
-  for (const key in payload) {
-    const value = payload[key];
-    if (typeof value === 'string' && value.trim() === '') {
-      payload[key] = null;
+  for (const key of Object.keys(payload)) {
+    if (payload[key] === undefined) {
+      delete payload[key];
     }
   }
 
-  for (const key in payload) {
+  for (const key of Object.keys(payload)) {
     const value = payload[key];
-    if (key.includes('_id') && value !== null) {
-      const raw = typeof value === 'string' ? value : String(value ?? '');
-      if (!isValidUUID(raw)) {
-        console.log('INVALID UUID FIELD:', key, raw);
-        payload[key] = null;
+    if (typeof value === 'string') {
+      const t = value.trim();
+      if (t === '') {
+        delete payload[key];
+      } else {
+        payload[key] = t;
       }
     }
   }
 
-  for (const key in payload) {
+  for (const key of Object.keys(payload)) {
+    if (!isIdLikeKey(key)) continue;
     const value = payload[key];
-    if (typeof value === 'string') {
-      const trimmed = sanitizeUUID(value);
-      payload[key] = trimmed == null ? null : trimmed;
+    if (typeof value !== 'string') continue;
+    const canon = toUuidOrNull(value);
+    if (canon == null) {
+      delete payload[key];
+    } else {
+      payload[key] = canon;
     }
   }
 
-  if (payload.reported_by != null) {
-    payload.reported_by = toUuidOrNull(payload.reported_by);
+  for (const key of Object.keys(payload)) {
+    if (payload[key] === '') {
+      delete payload[key];
+    }
   }
 
-  console.log('SANITIZED PAYLOAD');
-  console.log(JSON.stringify(payload, null, 2));
+  console.log('FINAL SCAM REPORT PAYLOAD', JSON.stringify(payload, null, 2));
   return payload;
-}
-
-/** Temporary production diagnostics: immediately before each scam_alerts insert. */
-function logFinalScamAlertPayloadBeforeInsert(payload) {
-  console.log('FINAL SCAM ALERT PAYLOAD', JSON.stringify(payload, null, 2));
-  Object.entries(payload).forEach(([key, value]) => {
-    if (value === '') {
-      console.error('EMPTY STRING FIELD BEFORE INSERT:', key);
-    }
-  });
-  Object.entries(payload).forEach(([key, value]) => {
-    if (key.endsWith('_id') || key.includes('uuid') || key === 'reported_by') {
-      console.log('UUID FIELD CHECK:', key, value, typeof value);
-    }
-  });
 }
 
 function setCors(res) {
@@ -177,7 +164,6 @@ module.exports = async function handler(req, res) {
         reported_by: reportedBy,
         ...(imageUrl ? { image_url: imageUrl } : {}),
       });
-      logFinalScamAlertPayloadBeforeInsert(legacy);
       const second = await admin.from('scam_alerts').insert(legacy).select('id').maybeSingle();
       if (second.error) {
         return res.status(500).json({ error: 'Could not save report.' });

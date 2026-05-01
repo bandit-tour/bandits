@@ -1,5 +1,5 @@
 /**
- * Apply scam_alerts RLS + notify + uuid-cast fixes to production Postgres (034–035, 037).
+ * Apply scam_alerts RLS + notify + uuid-cast fixes to production Postgres (034–035, 037, 038).
  * Requires .env: SUPABASE_DB_PASSWORD (Supabase → Settings → Database).
  */
 import { readFileSync, existsSync } from 'node:fs';
@@ -25,6 +25,8 @@ const sqlFiles = [
   join(root, 'supabase', 'migrations', '034_scam_alerts_insert_authenticated_and_anon.sql'),
   join(root, 'supabase', 'migrations', '035_scam_alerts_notify_operator_fix_uuid_cast.sql'),
   join(root, 'supabase', 'migrations', '037_uuid_cast_nullif_precedence.sql'),
+  join(root, 'supabase', 'migrations', '038_safe_uuid_text_cast.sql'),
+  join(root, 'supabase', 'migrations', '039_scam_report_notify_safe_uuid.sql'),
 ];
 
 if (!pass) {
