@@ -27,6 +27,16 @@ export type AnalyticsEventName =
 
 const sessionOnceKeys = new Set<string>();
 
+/** `analytics_events.user_id` is uuid — never send "" (nullish coalescing preserves empty string). */
+function authUserIdForAnalytics(id: unknown): string | null {
+  if (id == null) return null;
+  const s = typeof id === 'string' ? id.trim() : String(id).trim();
+  if (!s) return null;
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(s)
+    ? s
+    : null;
+}
+
 export async function trackEvent(args: {
   eventName: AnalyticsEventName;
   referenceType?: string | null;
@@ -44,7 +54,7 @@ export async function trackEvent(args: {
     const user = session?.user;
 
     const payload = {
-      user_id: user?.id ?? null,
+      user_id: authUserIdForAnalytics(user?.id),
       event_name: args.eventName,
       reference_type: args.referenceType ?? null,
       reference_id: args.referenceId ?? null,

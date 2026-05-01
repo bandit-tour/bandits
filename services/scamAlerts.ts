@@ -321,6 +321,10 @@ export async function submitScamAlert(input: SubmitScamAlertInput): Promise<void
     admin_verified: false,
   } as Record<string, unknown>);
 
+  if (typeof rowFull.reported_by !== 'string' || !toUuidOrNull(rowFull.reported_by)) {
+    throw new Error('Could not verify your session.');
+  }
+
   async function insertDirect(): Promise<{ ok: boolean; lastError: { message?: string } | null }> {
     let { error } = await supabase.from('scam_alerts').insert(rowFull as any);
     if (error && isMissingScamColumnError(error.message ?? '')) {
