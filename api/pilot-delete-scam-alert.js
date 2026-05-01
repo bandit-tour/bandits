@@ -95,15 +95,13 @@ module.exports = async function handler(req, res) {
   const id = String(body?.id ?? '').trim();
   if (!id) return res.status(400).json({ error: 'Missing report id' });
 
+  const refIds = [...new Set([id, id.toLowerCase(), id.toUpperCase()])];
+
   const { error: delErr } = await admin.from('scam_alerts').delete().eq('id', id);
   if (delErr) {
     return res.status(500).json({ error: delErr.message || 'Delete failed' });
   }
-  // Orphan cleanup: DB trigger may not remove inbox rows under some RLS/ownership setups.
-  await admin
-    .from('notifications')
-    .delete()
-    .eq('type', 'bandiTEAM_report')
-    .eq('reference_id', id);
+  // Service role: remove inbox row(s) for this report id (any reference_type / id text casing).
+  await admin.from('notifications').delete().eq('type', 'bandiTEAM_report').in('reference_id', refIds);
   return res.status(200).json({ ok: true });
 };

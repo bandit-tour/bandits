@@ -31,6 +31,7 @@ const sqlFiles = [
   join(root, 'supabase', 'migrations', '042_scam_notify_operator_user_profile_optional.sql'),
   join(root, 'supabase', 'migrations', '043_scam_alert_delete_cleanup_notification.sql'),
   join(root, 'supabase', 'migrations', '044_scam_alert_delete_notify_rls_safe.sql'),
+  join(root, 'supabase', 'migrations', '045_scam_alert_delete_notify_owner_and_refs.sql'),
 ];
 
 if (!pass) {
