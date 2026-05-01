@@ -99,5 +99,11 @@ module.exports = async function handler(req, res) {
   if (delErr) {
     return res.status(500).json({ error: delErr.message || 'Delete failed' });
   }
+  // Orphan cleanup: DB trigger may not remove inbox rows under some RLS/ownership setups.
+  await admin
+    .from('notifications')
+    .delete()
+    .eq('type', 'bandiTEAM_report')
+    .eq('reference_id', id);
   return res.status(200).json({ ok: true });
 };
