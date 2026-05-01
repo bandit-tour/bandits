@@ -1,42 +1,4 @@
--- Report Alert only: ensure operator notify path never casts blank text to uuid (production insert → trigger).
-
--- Parameter must stay named `t` if an older DB created safe_uuid_from_text(t text); Postgres forbids renaming params on REPLACE.
-create or replace function public.safe_uuid_from_text(t text)
-returns uuid
-language sql
-immutable
-set search_path = public
-as $$
-  select case
-    when t is null then null
-    when trim(t) = '' then null
-    when trim(t) ~ '^[0-9a-fA-F-]{36}$' then trim(t)::uuid
-    else null
-  end;
-$$;
-
-grant execute on function public.safe_uuid_from_text(text) to anon, authenticated, service_role;
-
-create or replace function public.is_pilot_operator()
-returns boolean
-language sql
-stable
-security definer
-set search_path = public
-as $$
-  select coalesce(
-    auth.uid() is not null
-    and auth.uid() = (
-      select public.safe_uuid_from_text(value)
-      from public.app_public_config
-      where key = 'operator_user_id'
-      limit 1
-    ),
-    false
-  );
-$$;
-
-grant execute on function public.is_pilot_operator() to authenticated;
+-- Replaces scam_alerts_notify_operator only: reported_by → text via rb_txt; never call safe_uuid_from_text(NEW.reported_by::text).
 
 create or replace function public.scam_alerts_notify_operator()
 returns trigger

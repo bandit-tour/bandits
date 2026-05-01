@@ -27,6 +27,8 @@ const sqlFiles = [
   join(root, 'supabase', 'migrations', '037_uuid_cast_nullif_precedence.sql'),
   join(root, 'supabase', 'migrations', '038_safe_uuid_text_cast.sql'),
   join(root, 'supabase', 'migrations', '039_scam_report_notify_safe_uuid.sql'),
+  join(root, 'supabase', 'migrations', '041_scam_alerts_notify_reported_by_text_guard.sql'),
+  join(root, 'supabase', 'migrations', '042_scam_notify_operator_user_profile_optional.sql'),
 ];
 
 if (!pass) {
