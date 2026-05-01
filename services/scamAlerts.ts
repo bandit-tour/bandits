@@ -121,19 +121,26 @@ function toUuidOrNull(value: unknown): string | null {
   return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(v) ? v : null;
 }
 
-function isIdLikeKey(key: string): boolean {
+/** Columns that must be a valid RFC-style UUID string or be omitted entirely (never "", never cast). */
+const SCAM_ALERT_INSERT_UUID_KEYS = new Set([
+  'id',
+  'reported_by',
+  'reporter_id',
+  'created_by',
+  'user_id',
+]);
+
+function isValidUuidString(s: string): boolean {
+  const t = s.trim();
   return (
-    key === 'reported_by' ||
-    key === 'reporter_id' ||
-    key === 'created_by' ||
-    key === 'place_id' ||
-    key.endsWith('_id')
+    t !== '' &&
+    /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(t)
   );
 }
 
-/** Last-mile insert: drop empty strings and invalid UUID text so PostgREST/triggers never see ''→uuid. */
-function finalizeScamAlertsInsertPayload<T extends Record<string, unknown>>(row: T): T {
-  const payload: Record<string, unknown> = { ...(row as Record<string, unknown>) };
+/** Remove undefined, "", whitespace-only strings, and invalid UUID values on UUID columns (omit key; no null coercion). */
+function stripScamAlertsInsertPayload(row: Record<string, unknown>): Record<string, unknown> {
+  const payload: Record<string, unknown> = { ...row };
 
   for (const key of Object.keys(payload)) {
     if (payload[key] === undefined) {
@@ -143,25 +150,29 @@ function finalizeScamAlertsInsertPayload<T extends Record<string, unknown>>(row:
 
   for (const key of Object.keys(payload)) {
     const value = payload[key];
+    if (value === '') {
+      delete payload[key];
+      continue;
+    }
     if (typeof value === 'string') {
       const t = value.trim();
       if (t === '') {
         delete payload[key];
+        continue;
+      }
+      if (SCAM_ALERT_INSERT_UUID_KEYS.has(key)) {
+        if (!isValidUuidString(t)) {
+          delete payload[key];
+        } else {
+          payload[key] = t;
+        }
       } else {
         payload[key] = t;
       }
+      continue;
     }
-  }
-
-  for (const key of Object.keys(payload)) {
-    if (!isIdLikeKey(key)) continue;
-    const value = payload[key];
-    if (typeof value !== 'string') continue;
-    const canon = toUuidOrNull(value);
-    if (canon == null) {
+    if (SCAM_ALERT_INSERT_UUID_KEYS.has(key)) {
       delete payload[key];
-    } else {
-      payload[key] = canon;
     }
   }
 
@@ -171,8 +182,11 @@ function finalizeScamAlertsInsertPayload<T extends Record<string, unknown>>(row:
     }
   }
 
-  console.log('FINAL SCAM REPORT PAYLOAD', JSON.stringify(payload, null, 2));
-  return payload as T;
+  return payload;
+}
+
+function finalizeScamAlertsInsertPayload<T extends Record<string, unknown>>(row: T): T {
+  return stripScamAlertsInsertPayload(row as Record<string, unknown>) as T;
 }
 
 function base64ToBlob(base64: string, mime: string): Blob {
@@ -326,7 +340,9 @@ export async function submitScamAlert(input: SubmitScamAlertInput): Promise<void
   }
 
   async function insertDirect(): Promise<{ ok: boolean; lastError: { message?: string } | null }> {
-    let { error } = await supabase.from('scam_alerts').insert(rowFull as any);
+    const rowInsert = stripScamAlertsInsertPayload({ ...(rowFull as Record<string, unknown>) });
+    console.log('FINAL PAYLOAD', JSON.stringify(rowInsert, null, 2));
+    let { error } = await supabase.from('scam_alerts').insert(rowInsert as any);
     if (error && isMissingScamColumnError(error.message ?? '')) {
       const rowLegacy = finalizeScamAlertsInsertPayload({
         city: rowFull.city,
@@ -336,7 +352,9 @@ export async function submitScamAlert(input: SubmitScamAlertInput): Promise<void
         reported_by: reportedBy,
         ...(imageUrl ? { image_url: imageUrl } : {}),
       } as Record<string, unknown>);
-      const second = await supabase.from('scam_alerts').insert(rowLegacy as any);
+      const rowLegacyInsert = stripScamAlertsInsertPayload({ ...(rowLegacy as Record<string, unknown>) });
+      console.log('FINAL PAYLOAD', JSON.stringify(rowLegacyInsert, null, 2));
+      const second = await supabase.from('scam_alerts').insert(rowLegacyInsert as any);
       error = second.error;
     }
     return { ok: !error, lastError: error };

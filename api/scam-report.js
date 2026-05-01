@@ -6,17 +6,24 @@ function toUuidOrNull(value) {
   return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(v) ? v : null;
 }
 
-function isIdLikeKey(key) {
+const SCAM_ALERT_INSERT_UUID_KEYS = new Set([
+  'id',
+  'reported_by',
+  'reporter_id',
+  'created_by',
+  'user_id',
+]);
+
+function isValidUuidString(s) {
+  const t = String(s || '').trim();
   return (
-    key === 'reported_by' ||
-    key === 'reporter_id' ||
-    key === 'created_by' ||
-    key === 'place_id' ||
-    key.endsWith('_id')
+    t !== '' &&
+    /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(t)
   );
 }
 
-function finalizeScamAlertInsertPayload(row) {
+/** Omit "", invalid UUID columns entirely (no cast / no null fill). */
+function stripScamAlertInsertPayload(row) {
   const payload = { ...(row || {}) };
 
   for (const key of Object.keys(payload)) {
@@ -27,25 +34,29 @@ function finalizeScamAlertInsertPayload(row) {
 
   for (const key of Object.keys(payload)) {
     const value = payload[key];
+    if (value === '') {
+      delete payload[key];
+      continue;
+    }
     if (typeof value === 'string') {
       const t = value.trim();
       if (t === '') {
         delete payload[key];
+        continue;
+      }
+      if (SCAM_ALERT_INSERT_UUID_KEYS.has(key)) {
+        if (!isValidUuidString(t)) {
+          delete payload[key];
+        } else {
+          payload[key] = t;
+        }
       } else {
         payload[key] = t;
       }
+      continue;
     }
-  }
-
-  for (const key of Object.keys(payload)) {
-    if (!isIdLikeKey(key)) continue;
-    const value = payload[key];
-    if (typeof value !== 'string') continue;
-    const canon = toUuidOrNull(value);
-    if (canon == null) {
+    if (SCAM_ALERT_INSERT_UUID_KEYS.has(key)) {
       delete payload[key];
-    } else {
-      payload[key] = canon;
     }
   }
 
@@ -55,7 +66,6 @@ function finalizeScamAlertInsertPayload(row) {
     }
   }
 
-  console.log('FINAL SCAM REPORT PAYLOAD', JSON.stringify(payload, null, 2));
   return payload;
 }
 
@@ -136,7 +146,7 @@ module.exports = async function handler(req, res) {
     imageUrl = body.imageUrl.trim();
   }
 
-  const rowFull = finalizeScamAlertInsertPayload({
+  const rowFull = stripScamAlertInsertPayload({
     city,
     location,
     title,
@@ -148,15 +158,18 @@ module.exports = async function handler(req, res) {
     moderation_status: 'published',
     admin_verified: false,
   });
-  const rowWithImage =
-    imageUrl && String(imageUrl).trim() ? { ...rowFull, image_url: imageUrl } : { ...rowFull };
-  const { data: insData, error: insErr } = await admin.from('scam_alerts').insert(rowWithImage).select('id').maybeSingle();
+  const rowToInsert = stripScamAlertInsertPayload({
+    ...rowFull,
+    ...(imageUrl && String(imageUrl).trim() ? { image_url: String(imageUrl).trim() } : {}),
+  });
+  console.log('FINAL PAYLOAD', JSON.stringify(rowToInsert, null, 2));
+  const { data: insData, error: insErr } = await admin.from('scam_alerts').insert(rowToInsert).select('id').maybeSingle();
   let newId = insData?.id || null;
   if (insErr) {
     const errMsg = (insErr.message || '').toLowerCase();
     const isMissing = errMsg.includes('column') && (errMsg.includes('category') || errMsg.includes('moderation'));
     if (isMissing) {
-      const legacy = finalizeScamAlertInsertPayload({
+      const legacy = stripScamAlertInsertPayload({
         city: rowFull.city,
         location: rowFull.location,
         title: rowFull.title,
@@ -164,7 +177,9 @@ module.exports = async function handler(req, res) {
         reported_by: reportedBy,
         ...(imageUrl ? { image_url: imageUrl } : {}),
       });
-      const second = await admin.from('scam_alerts').insert(legacy).select('id').maybeSingle();
+      const legacyInsert = stripScamAlertInsertPayload({ ...legacy });
+      console.log('FINAL PAYLOAD', JSON.stringify(legacyInsert, null, 2));
+      const second = await admin.from('scam_alerts').insert(legacyInsert).select('id').maybeSingle();
       if (second.error) {
         return res.status(500).json({ error: 'Could not save report.' });
       }
