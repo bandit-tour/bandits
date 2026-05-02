@@ -82,6 +82,38 @@ export async function getBanditsWithTags(opts?: { userId?: string | null }) {
   }));
 }
 
+/** Bandits the current user follows (same rows as `bandit_user_likes` + `toggleBanditLike`), with tags. */
+export async function getFollowedBanditsWithTags(opts?: { userId?: string | null }) {
+  const uid = opts?.userId != null ? String(opts.userId).trim() : '';
+  const likedIds = uid ? await getUserLikedBanditIdsForUser(uid) : await getUserLikedBanditIds();
+  if (likedIds.size === 0) return [];
+
+  const ids = Array.from(likedIds);
+  const { data, error } = await supabase
+    .from('bandit')
+    .select(`
+      *,
+      bandit_tags (
+        tags (
+          id,
+          name
+        )
+      )
+    `)
+    .in('id', ids)
+    .order('created_at', { ascending: false });
+
+  if (error) {
+    console.error('Error fetching followed bandits:', error);
+    throw error;
+  }
+
+  return ((data || []) as any[]).map((row) => ({
+    ...row,
+    is_liked: true,
+  }));
+}
+
 export async function toggleBanditLike(
   id: string,
   currentLikeStatus: boolean,
