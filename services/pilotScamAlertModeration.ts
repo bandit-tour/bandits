@@ -69,8 +69,13 @@ export async function pilotDeleteScamAlert(id: string): Promise<void> {
 
   const { data, error } = await supabase.from('scam_alerts').delete().eq('id', rid).select('id');
   if (!error && data?.length) {
-    const refs = [...new Set([rid, rid.toLowerCase(), rid.toUpperCase()])];
-    await supabase.from('notifications').delete().eq('type', 'bandiTEAM_report').in('reference_id', refs);
+    const { error: purgeErr } = await supabase.rpc('purge_banditeam_report_notifications_if_operator', {
+      p_scam_id: rid,
+    } as never);
+    if (purgeErr) {
+      const refs = [...new Set([rid, rid.toLowerCase(), rid.toUpperCase()])];
+      await supabase.from('notifications').delete().eq('type', 'bandiTEAM_report').in('reference_id', refs);
+    }
     return;
   }
 

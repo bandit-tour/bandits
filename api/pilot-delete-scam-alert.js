@@ -101,7 +101,12 @@ module.exports = async function handler(req, res) {
   if (delErr) {
     return res.status(500).json({ error: delErr.message || 'Delete failed' });
   }
-  // Service role: remove inbox row(s) for this report id (any reference_type / id text casing).
-  await admin.from('notifications').delete().eq('type', 'bandiTEAM_report').in('reference_id', refIds);
+  // AFTER DELETE trigger purges too; this RPC matches reference_id robustly (legacy rows, casing).
+  const { error: purgeErr } = await admin.rpc('purge_banditeam_report_notifications_for_scam', {
+    p_scam_id: id,
+  });
+  if (purgeErr) {
+    await admin.from('notifications').delete().eq('type', 'bandiTEAM_report').in('reference_id', refIds);
+  }
   return res.status(200).json({ ok: true });
 };
