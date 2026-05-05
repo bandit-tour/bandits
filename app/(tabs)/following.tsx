@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -52,32 +52,22 @@ export default function FollowingScreen() {
     setRows(withCats);
   }, []);
 
-  useEffect(() => {
-    let mounted = true;
-    (async () => {
-      setLoading(true);
-      try {
-        await fetchRows();
-      } catch {
-        if (mounted) setRows([]);
-      } finally {
-        if (mounted) setLoading(false);
-      }
-    })();
-    return () => {
-      mounted = false;
-    };
-  }, [fetchRows]);
-
   useFocusEffect(
     useCallback(() => {
+      let cancelled = false;
       void (async () => {
+        setLoading(true);
         try {
           await fetchRows();
         } catch {
-          /* ignore */
+          if (!cancelled) setRows([]);
+        } finally {
+          if (!cancelled) setLoading(false);
         }
       })();
+      return () => {
+        cancelled = true;
+      };
     }, [fetchRows]),
   );
 

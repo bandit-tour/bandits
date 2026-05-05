@@ -1,5 +1,5 @@
 import { useFocusEffect } from '@react-navigation/native';
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useState } from 'react';
 import { Alert, Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { getUserLikedEvents, toggleEventLike } from '@/app/services/events';
@@ -37,10 +37,6 @@ export default function MySpotsScreen() {
     },
     [selectedCity],
   );
-
-  useEffect(() => {
-    void loadLikedEvents(false);
-  }, [loadLikedEvents]);
 
   useFocusEffect(
     React.useCallback(() => {

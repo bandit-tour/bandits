@@ -239,7 +239,7 @@ export default function InboxScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [demoExtras, setDemoExtras] = useState<InboxListItem[]>([]);
   const [nearbyExtras, setNearbyExtras] = useState<InboxListItem[]>([]);
-  const inboxHasFocusedOnceRef = useRef(false);
+  const hasInboxMergedRowsRef = useRef(false);
 
   const refreshNearbyExtras = useCallback(async () => {
     const stored = await getNearbyStoredNotifications();
@@ -376,14 +376,6 @@ export default function InboxScreen() {
     }
   }, []);
 
-  useFocusEffect(
-    useCallback(() => {
-      const silent = inboxHasFocusedOnceRef.current;
-      inboxHasFocusedOnceRef.current = true;
-      void loadInbox(silent);
-    }, [loadInbox]),
-  );
-
   const onRefreshInbox = useCallback(async () => {
     setRefreshing(true);
     try {
@@ -405,6 +397,27 @@ export default function InboxScreen() {
     });
     return [...byId.values()].sort((a, b) => b.sortKey - a.sortKey);
   }, [serverItems, demoExtras, nearbyExtras]);
+
+  useEffect(() => {
+    hasInboxMergedRowsRef.current = rows.length > 0;
+  }, [rows.length]);
+
+  useFocusEffect(
+    useCallback(() => {
+      void (async () => {
+        if (hasInboxMergedRowsRef.current) {
+          setRefreshing(true);
+          try {
+            await loadInbox(true);
+          } finally {
+            setRefreshing(false);
+          }
+          return;
+        }
+        await loadInbox(false);
+      })();
+    }, [loadInbox]),
+  );
 
   const sections = useMemo(() => {
     const nearby = rows.filter((r) => r.notification.reference_type === 'nearby_route');

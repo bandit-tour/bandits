@@ -41,6 +41,7 @@ export default function BanditsScreen() {
   const rawFocus = params.focusBanditId;
   const focusBanditId = Array.isArray(rawFocus) ? rawFocus[0] : rawFocus;
   const listRef = useRef<FlatList<Row>>(null);
+  const hasBanditsDataRef = useRef(false);
   const [loading, setLoading] = useState(true);
   const [loadedOnce, setLoadedOnce] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -86,6 +87,10 @@ export default function BanditsScreen() {
   }, []);
 
   useEffect(() => {
+    hasBanditsDataRef.current = rows.length > 0;
+  }, [rows.length]);
+
+  useEffect(() => {
     void getHotelEntry().then((entry) => {
       setHotelSlug(entry?.slug ?? null);
     });
@@ -93,7 +98,18 @@ export default function BanditsScreen() {
 
   useFocusEffect(
     useCallback(() => {
-      void fetchRows();
+      void (async () => {
+        if (hasBanditsDataRef.current) {
+          setRefreshing(true);
+          try {
+            await fetchRows({ silent: true });
+          } finally {
+            setRefreshing(false);
+          }
+          return;
+        }
+        await fetchRows();
+      })();
     }, [fetchRows]),
   );
 

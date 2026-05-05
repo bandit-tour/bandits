@@ -5,7 +5,7 @@ import { Database } from '@/lib/database.types';
 import { usePremiumRefreshControl } from '@/lib/mobilePullToRefresh';
 import { useFocusEffect } from '@react-navigation/native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import React, { useCallback, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ActivityIndicator, FlatList, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 
 type Event = Database['public']['Tables']['event']['Row'];
@@ -18,9 +18,10 @@ export default function Explore() {
   const banditId = Array.isArray(rawBanditId) ? rawBanditId[0] : rawBanditId;
   const rawGenre = params.genre;
   const selectedGenre = Array.isArray(rawGenre) ? rawGenre[0] : rawGenre;
+  const hasExploreDataRef = useRef(false);
   const [events, setEvents] = useState<Event[]>([]);
   const [likedEventIds, setLikedEventIds] = useState<Set<string>>(new Set());
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [loadedOnce, setLoadedOnce] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -44,9 +45,24 @@ export default function Explore() {
     }
   }, [selectedCity, banditId, selectedGenre]);
 
+  useEffect(() => {
+    hasExploreDataRef.current = events.length > 0;
+  }, [events.length]);
+
   useFocusEffect(
     useCallback(() => {
-      void loadEvents();
+      void (async () => {
+        if (hasExploreDataRef.current) {
+          setRefreshing(true);
+          try {
+            await loadEvents({ silent: true });
+          } finally {
+            setRefreshing(false);
+          }
+          return;
+        }
+        await loadEvents();
+      })();
     }, [loadEvents]),
   );
 
