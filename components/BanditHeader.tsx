@@ -21,6 +21,7 @@ interface EventCategory {
 interface BanditHeaderProps {
   bandit: Bandit;
   categories: EventCategory[];
+  selectedGenre?: string | null;
   onLike?: (id: string, currentLikeStatus: boolean) => void;
   variant?: 'list' | 'detail';
   showActionButtons?: boolean;
@@ -30,6 +31,7 @@ interface BanditHeaderProps {
 export default function BanditHeader({
   bandit,
   categories,
+  selectedGenre,
   onLike,
   variant = 'detail',
   showActionButtons = true,
@@ -195,6 +197,7 @@ export default function BanditHeader({
       <View style={isListVariant ? styles.listCategoriesWrapper : undefined}>
         <EventCategories
           categories={categories}
+          selectedGenre={selectedGenre ?? undefined}
           onCategoryPress={onCategoryPress}
         />
 

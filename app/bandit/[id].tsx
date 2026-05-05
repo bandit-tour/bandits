@@ -1,5 +1,5 @@
 import { Stack, useLocalSearchParams } from 'expo-router';
-import { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -17,6 +17,7 @@ import {
 } from 'react-native';
 
 import { getBanditById, getBanditTags, submitBanditQuestion, toggleBanditLike } from '@/app/services/bandits';
+import { getBanditEventCategories, getEvents } from '@/app/services/events';
 import { formatAskMeModalSubtitle } from '@/lib/askMeMessageFormat';
 import { getBanditReviews } from '@/app/services/reviews';
 import { supabase } from '@/lib/supabase';
@@ -41,6 +42,13 @@ type DisplayReview = {
   created_at?: string;
   user_name: string;
 };
+
+type EventCategory = {
+  genre: 'Food' | 'Culture' | 'Nightlife' | 'Shopping' | 'Coffee';
+  count: number;
+};
+
+type EventItem = Database['public']['Tables']['event']['Row'];
 
 const FALLBACK_HANDLES = [
   'athens.nights',
@@ -75,6 +83,10 @@ export default function BanditScreen() {
   const [bandit, setBandit] = useState<Bandit | null>(null);
   const [tags, setTags] = useState<string[]>([]);
   const [reviews, setReviews] = useState<DisplayReview[]>([]);
+  const [categories, setCategories] = useState<EventCategory[]>([]);
+  const [selectedGenre, setSelectedGenre] = useState<string | null>(null);
+  const [genreEvents, setGenreEvents] = useState<EventItem[]>([]);
+  const [loadingGenreEvents, setLoadingGenreEvents] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -116,6 +128,14 @@ export default function BanditScreen() {
           setTags(tagData);
         } catch {
           setTags([]);
+        }
+
+        // Category chips / counts for inline expansion.
+        try {
+          const catData = await getBanditEventCategories(id as string);
+          setCategories(catData);
+        } catch {
+          setCategories([]);
         }
 
         // Reviews (limit to 3–5, fallback to underground-style samples)
@@ -204,6 +224,26 @@ export default function BanditScreen() {
     }
   };
 
+  const handleCategoryPress = async (genre: string) => {
+    if (!bandit) return;
+    // Tap same chip to collapse and keep user on profile.
+    if (selectedGenre === genre) {
+      setSelectedGenre(null);
+      setGenreEvents([]);
+      return;
+    }
+    setSelectedGenre(genre);
+    setLoadingGenreEvents(true);
+    try {
+      const events = await getEvents({ banditId: bandit.id, genre });
+      setGenreEvents(events);
+    } catch {
+      setGenreEvents([]);
+    } finally {
+      setLoadingGenreEvents(false);
+    }
+  };
+
   return (
     <>
       <Stack.Screen options={{ headerShown: true, title: '', headerBackTitle: 'Back' }} />
@@ -215,9 +255,13 @@ export default function BanditScreen() {
         {/* HEADER + CATEGORIES */}
         <BanditHeader
           bandit={bandit}
-          categories={[]}
+          categories={categories}
+          selectedGenre={selectedGenre}
           variant="detail"
           showActionButtons
+          onCategoryPress={(genre) => {
+            void handleCategoryPress(genre);
+          }}
           onLike={async (banditId, currentLikeStatus) => {
             setBandit((prev) => (prev ? { ...prev, is_liked: !currentLikeStatus } : prev));
             try {
@@ -229,6 +273,37 @@ export default function BanditScreen() {
             }
           }}
         />
+
+        {selectedGenre ? (
+          <View style={styles.inlineCategorySection}>
+            <View style={styles.inlineCategoryHeader}>
+              <Text style={styles.inlineCategoryTitle}>{selectedGenre} picks</Text>
+              <Pressable
+                onPress={() => {
+                  setSelectedGenre(null);
+                  setGenreEvents([]);
+                }}
+                hitSlop={6}
+              >
+                <Text style={styles.inlineCategoryCollapse}>Hide</Text>
+              </Pressable>
+            </View>
+            {loadingGenreEvents ? (
+              <ActivityIndicator size="small" />
+            ) : genreEvents.length === 0 ? (
+              <Text style={styles.inlineCategoryEmpty}>No spots in this category yet.</Text>
+            ) : (
+              genreEvents.map((event) => (
+                <View key={event.id} style={styles.inlineEventRow}>
+                  <Text style={styles.inlineEventName}>{event.name}</Text>
+                  <Text style={styles.inlineEventMeta}>
+                    {[event.neighborhood, event.city].filter(Boolean).join(' · ')}
+                  </Text>
+                </View>
+              ))
+            )}
+          </View>
+        ) : null}
 
         {/* VIBES (directly under Categories) */}
         {tags.length > 0 && (
@@ -446,6 +521,50 @@ const styles = StyleSheet.create({
   
   vibesContainer: {
     paddingVertical: 4,
+  },
+  inlineCategorySection: {
+    marginTop: 4,
+    marginBottom: 16,
+    padding: 12,
+    borderRadius: 12,
+    backgroundColor: '#F7F7F7',
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: '#E2E2E2',
+  },
+  inlineCategoryHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 8,
+  },
+  inlineCategoryTitle: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#202020',
+  },
+  inlineCategoryCollapse: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#0a7ea4',
+  },
+  inlineCategoryEmpty: {
+    fontSize: 13,
+    color: '#666',
+  },
+  inlineEventRow: {
+    paddingVertical: 8,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: '#E6E6E6',
+  },
+  inlineEventName: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#222',
+    marginBottom: 2,
+  },
+  inlineEventMeta: {
+    fontSize: 12,
+    color: '#666',
   },
   
   askMeButton: {
