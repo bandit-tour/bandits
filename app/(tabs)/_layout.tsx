@@ -22,6 +22,10 @@ function getLowerTabFromPath(pathname: string | null): LowerTabKey {
   if (pathname.includes('/inbox')) return 'inbox';
   if (pathname.includes('/localFriend')) return 'localFriend';
   if (pathname.includes('/menu')) return 'menu';
+  /** Menu stack: avoid showing Home active while on Profile / Following / Settings (cross-flow confusion). */
+  if (pathname.includes('/profile') || pathname.includes('/settings') || pathname.includes('/following')) {
+    return 'menu';
+  }
   return 'home';
 }
 
@@ -35,7 +39,8 @@ function getUpperTabFromPath(pathname: string | null): UpperTabKey | null {
     pathname.includes('/menu') ||
     pathname.includes('/localFriend') ||
     pathname.includes('/profile') ||
-    pathname.includes('/settings')
+    pathname.includes('/settings') ||
+    pathname.includes('/following')
   ) {
     return null;
   }

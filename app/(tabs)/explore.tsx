@@ -49,6 +49,34 @@ export default function Explore() {
     hasExploreDataRef.current = events.length > 0;
   }, [events.length]);
 
+  const exploreFilterKey = useMemo(
+    () => `${selectedCity ?? ''}|${banditId ?? ''}|${selectedGenre ?? ''}`,
+    [selectedCity, banditId, selectedGenre],
+  );
+  const prevExploreFilterKeyRef = useRef<string | null>(null);
+
+  /** City / bandit / genre can change while Explore stays focused — refetch without waiting for tab blur. */
+  useEffect(() => {
+    if (prevExploreFilterKeyRef.current === null) {
+      prevExploreFilterKeyRef.current = exploreFilterKey;
+      return;
+    }
+    if (prevExploreFilterKeyRef.current === exploreFilterKey) return;
+    prevExploreFilterKeyRef.current = exploreFilterKey;
+    let cancelled = false;
+    void (async () => {
+      setRefreshing(true);
+      try {
+        await loadEvents({ silent: true });
+      } finally {
+        if (!cancelled) setRefreshing(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [exploreFilterKey, loadEvents]);
+
   useFocusEffect(
     useCallback(() => {
       void (async () => {
