@@ -1,5 +1,6 @@
 import { Stack } from 'expo-router';
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import { useFocusEffect } from '@react-navigation/native';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   DeviceEventEmitter,
@@ -22,6 +23,7 @@ import {
   isDemoMode,
 } from '@/lib/demoMode';
 import { usePremiumRefreshControl } from '@/lib/mobilePullToRefresh';
+import { requestNotificationsRefresh } from '@/lib/notificationEvents';
 import { getNearbyStoredNotifications, type NearbyInboxEntry } from '@/lib/nearbyAlertsStorage';
 import { getNotificationsBackendStatus } from '@/services/localFriend';
 import { getOperatorUserId } from '@/lib/operatorConfig';
@@ -219,6 +221,16 @@ function nearbyToRow(e: NearbyInboxEntry): NotificationRow {
   };
 }
 
+async function markNotificationsReadByIds(ids: string[]): Promise<void> {
+  const unique = [...new Set(ids.map((id) => String(id || '').trim()).filter(Boolean))];
+  const chunkSize = 200;
+  for (let i = 0; i < unique.length; i += chunkSize) {
+    const slice = unique.slice(i, i + chunkSize);
+    const { error } = await supabase.from('notifications').update({ is_read: true }).in('id', slice);
+    if (error) throw new Error(error.message || 'Could not update notifications.');
+  }
+}
+
 export default function InboxScreen() {
   const { width } = useWindowDimensions();
   const isDesktopWeb = Platform.OS === 'web' && width >= 1024;
@@ -227,6 +239,7 @@ export default function InboxScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [demoExtras, setDemoExtras] = useState<InboxListItem[]>([]);
   const [nearbyExtras, setNearbyExtras] = useState<InboxListItem[]>([]);
+  const inboxHasFocusedOnceRef = useRef(false);
 
   const refreshNearbyExtras = useCallback(async () => {
     const stored = await getNearbyStoredNotifications();
@@ -276,6 +289,7 @@ export default function InboxScreen() {
       const status = await getNotificationsBackendStatus();
       if (!status.enabled) {
         setServerItems([]);
+        requestNotificationsRefresh();
         return;
       }
 
@@ -284,6 +298,7 @@ export default function InboxScreen() {
       } = await supabase.auth.getUser();
       if (!user) {
         setServerItems([]);
+        requestNotificationsRefresh();
         return;
       }
       const { data, error: qError } = await supabase
@@ -315,17 +330,30 @@ export default function InboxScreen() {
         (a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime(),
       );
 
-      const idsToMarkRead = [...new Set([...supersededIds, ...pilotMirrorHiddenIds])].filter(Boolean);
-      if (idsToMarkRead.length > 0) {
-        await supabase.from('notifications').update({ is_read: true }).in('id', idsToMarkRead);
-      }
-
-      const rows = filteredRows.map((n) => notificationToInboxItem(n));
-      setServerItems(rows);
-      const unreadReplies = filteredRows.filter(
+      const unreadRepliesBeforeRead = filteredRows.filter(
         (n) => !n.is_read && n.type === 'bandit_reply',
       );
-      unreadReplies.forEach((n) => {
+      const unreadVisibleIds = filteredRows.filter((n) => !n.is_read).map((n) => n.id);
+      const idsToMarkRead = [
+        ...new Set([...supersededIds, ...pilotMirrorHiddenIds, ...unreadVisibleIds]),
+      ].filter(Boolean);
+      let displayRows = filteredRows;
+      if (idsToMarkRead.length > 0) {
+        try {
+          await markNotificationsReadByIds(idsToMarkRead);
+          displayRows = filteredRows.map((n) => ({ ...n, is_read: true }));
+        } catch (e) {
+          if (__DEV__) {
+            // eslint-disable-next-line no-console
+            console.warn('[inbox] mark read failed', e);
+          }
+        }
+      }
+
+      const rows = displayRows.map((n) => notificationToInboxItem(n));
+      setServerItems(rows);
+      requestNotificationsRefresh();
+      unreadRepliesBeforeRead.forEach((n) => {
         if (n.reference_type === 'operator_reply_local_friend') {
           void trackEvent({
             eventName: 'local_friend_reply_received',
@@ -342,14 +370,19 @@ export default function InboxScreen() {
       });
     } catch {
       setServerItems([]);
+      requestNotificationsRefresh();
     } finally {
       if (!silent) setLoading(false);
     }
   }, []);
 
-  useEffect(() => {
-    void loadInbox(false);
-  }, [loadInbox]);
+  useFocusEffect(
+    useCallback(() => {
+      const silent = inboxHasFocusedOnceRef.current;
+      inboxHasFocusedOnceRef.current = true;
+      void loadInbox(silent);
+    }, [loadInbox]),
+  );
 
   const onRefreshInbox = useCallback(async () => {
     setRefreshing(true);
