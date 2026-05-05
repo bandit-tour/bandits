@@ -4,11 +4,13 @@ import {
   Alert,
   FlatList,
   Platform,
+  Pressable,
   StyleSheet,
   Text,
   useWindowDimensions,
   View,
 } from 'react-native';
+import { useFocusEffect } from '@react-navigation/native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 
 import { getBanditsWithTags, toggleBanditLike } from '@/app/services/bandits';
@@ -16,7 +18,8 @@ import { getBanditEventCategories } from '@/app/services/events';
 import BanditHeader from '@/components/BanditHeader';
 import BanditsHomeHeader from '@/components/BanditsHomeHeader';
 import { Database } from '@/lib/database.types';
-import { getHotelEntry } from '@/lib/pilotSession';
+import { bootstrapMainAppSession, getHotelEntry } from '@/lib/pilotSession';
+import { isSupabaseConfigured } from '@/lib/supabase';
 import { usePremiumRefreshControl } from '@/lib/mobilePullToRefresh';
 
 type BanditRow = Database['public']['Tables']['bandit']['Row'];
@@ -39,6 +42,8 @@ export default function BanditsScreen() {
   const focusBanditId = Array.isArray(rawFocus) ? rawFocus[0] : rawFocus;
   const listRef = useRef<FlatList<Row>>(null);
   const [loading, setLoading] = useState(true);
+  const [loadedOnce, setLoadedOnce] = useState(false);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState(false);
   const [rows, setRows] = useState<Row[]>([]);
   const [updatingLikeId, setUpdatingLikeId] = useState<string | null>(null);
@@ -46,8 +51,14 @@ export default function BanditsScreen() {
   const { width } = useWindowDimensions();
   const isDesktopWeb = Platform.OS === 'web' && width >= 1100;
 
-  const fetchRows = useCallback(async () => {
+  const fetchRows = useCallback(async (opts?: { silent?: boolean }) => {
+    const silent = opts?.silent === true;
     try {
+      if (!silent) setLoading(true);
+      setLoadError(null);
+      if (isSupabaseConfigured()) {
+        await bootstrapMainAppSession();
+      }
       const data = await getBanditsWithTags();
       const list = (data || []) as BanditWithTags[];
       const withCats = await Promise.all(
@@ -66,7 +77,11 @@ export default function BanditsScreen() {
         // eslint-disable-next-line no-console
         console.error('[bandits] fetchRows failed', e);
       }
-      // Keep list usable if a secondary query failed after partial load; do not clear on unknown errors.
+      const msg = e instanceof Error ? e.message : 'Could not load banDits.';
+      setLoadError(msg);
+    } finally {
+      if (!silent) setLoading(false);
+      setLoadedOnce(true);
     }
   }, []);
 
@@ -76,31 +91,16 @@ export default function BanditsScreen() {
     });
   }, []);
 
-  useEffect(() => {
-    let isMounted = true;
-
-    const load = async () => {
-      setLoading(true);
-      try {
-        await fetchRows();
-      } finally {
-        if (isMounted) {
-          setLoading(false);
-        }
-      }
-    };
-
-    void load();
-
-    return () => {
-      isMounted = false;
-    };
-  }, [fetchRows]);
+  useFocusEffect(
+    useCallback(() => {
+      void fetchRows();
+    }, [fetchRows]),
+  );
 
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
     try {
-      await fetchRows();
+      await fetchRows({ silent: true });
     } finally {
       setRefreshing(false);
     }
@@ -122,24 +122,37 @@ export default function BanditsScreen() {
     return () => clearTimeout(t);
   }, [focusBanditId, rows]);
 
-  const empty = useMemo(
-    () => (
+  const listEmpty = useMemo(() => {
+    const showSkeleton = !loadedOnce || (loading && rows.length === 0);
+    if (showSkeleton) {
+      return (
+        <View style={styles.loadingContainer}>
+          <ActivityIndicator size="large" />
+          <Text style={styles.loadingHint}>Loading Local banDits…</Text>
+        </View>
+      );
+    }
+    if (loadedOnce && loadError && rows.length === 0) {
+      return (
+        <View style={styles.emptyContainer}>
+          <Text style={styles.errorText}>{loadError}</Text>
+          <Pressable
+            onPress={() => void fetchRows()}
+            style={styles.retryBtn}
+            accessibilityRole="button"
+            accessibilityLabel="Retry loading banDits"
+          >
+            <Text style={styles.retryBtnText}>Try again</Text>
+          </Pressable>
+        </View>
+      );
+    }
+    return (
       <View style={styles.emptyContainer}>
         <Text style={styles.emptyText}>No bandits found</Text>
       </View>
-    ),
-    [],
-  );
-
-  const emptyOrLoading =
-    loading && rows.length === 0 ? (
-      <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" />
-        <Text style={styles.loadingHint}>Loading Local banDits…</Text>
-      </View>
-    ) : (
-      empty
     );
+  }, [loadedOnce, loading, rows.length, loadError, fetchRows]);
 
   const listHeader = useMemo(
     () => <BanditsHomeHeader hotelSlug={hotelSlug} loadingContext={false} />,
@@ -161,7 +174,7 @@ export default function BanditsScreen() {
           styles.listContent,
           isDesktopWeb && styles.listContentDesktop,
         ]}
-        ListEmptyComponent={emptyOrLoading}
+        ListEmptyComponent={listEmpty}
         refreshControl={listRefreshControl}
         onScrollToIndexFailed={({ index }) => {
           setTimeout(() => {
@@ -254,5 +267,23 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: '#666',
     fontWeight: '600',
+  },
+  errorText: {
+    fontSize: 15,
+    color: '#b00020',
+    textAlign: 'center',
+    paddingHorizontal: 24,
+    marginBottom: 16,
+  },
+  retryBtn: {
+    paddingVertical: 12,
+    paddingHorizontal: 20,
+    backgroundColor: '#0a7ea4',
+    borderRadius: 8,
+  },
+  retryBtnText: {
+    color: '#fff',
+    fontWeight: '600',
+    fontSize: 15,
   },
 });
