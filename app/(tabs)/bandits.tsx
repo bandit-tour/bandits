@@ -3,8 +3,10 @@ import {
   ActivityIndicator,
   Alert,
   FlatList,
+  Platform,
   StyleSheet,
   Text,
+  useWindowDimensions,
   View,
 } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
@@ -41,6 +43,8 @@ export default function BanditsScreen() {
   const [rows, setRows] = useState<Row[]>([]);
   const [updatingLikeId, setUpdatingLikeId] = useState<string | null>(null);
   const [hotelSlug, setHotelSlug] = useState<string | null>(null);
+  const { width } = useWindowDimensions();
+  const isDesktopWeb = Platform.OS === 'web' && width >= 1100;
 
   const fetchRows = useCallback(async () => {
     try {
@@ -148,9 +152,15 @@ export default function BanditsScreen() {
       <FlatList
         ref={listRef}
         style={styles.listFlex}
+        key={isDesktopWeb ? 'desktop-grid' : 'mobile-list'}
         data={rows}
+        numColumns={isDesktopWeb ? 2 : 1}
         keyExtractor={(item) => item.bandit.id}
-        contentContainerStyle={styles.listContent}
+        columnWrapperStyle={isDesktopWeb ? styles.desktopColumns : undefined}
+        contentContainerStyle={[
+          styles.listContent,
+          isDesktopWeb && styles.listContentDesktop,
+        ]}
         ListEmptyComponent={emptyOrLoading}
         refreshControl={listRefreshControl}
         onScrollToIndexFailed={({ index }) => {
@@ -159,39 +169,41 @@ export default function BanditsScreen() {
           }, 200);
         }}
         renderItem={({ item }) => (
-        <BanditHeader
-          bandit={item.bandit as any}
-          categories={item.categories}
-          variant="list"
-          showActionButtons
-          onLike={async (id, currentLikeStatus) => {
-            if (updatingLikeId) return;
-            setUpdatingLikeId(id);
-            setRows((prev) =>
-              prev.map((r) =>
-                r.bandit.id === id ? { ...r, bandit: { ...r.bandit, is_liked: !currentLikeStatus } } : r,
-              ),
-            );
-            try {
-              await toggleBanditLike(id, currentLikeStatus);
-            } catch (e) {
-              setRows((prev) =>
-                prev.map((r) =>
-                  r.bandit.id === id
-                    ? { ...r, bandit: { ...r.bandit, is_liked: currentLikeStatus } }
-                    : r,
-                ),
-              );
-              const msg = e instanceof Error ? e.message : '';
-              Alert.alert('Follow unavailable', msg || 'Could not update follow state.');
-            } finally {
-              setUpdatingLikeId(null);
-            }
-          }}
-          onCategoryPress={(genre) =>
-            router.push(`/explore?banditId=${item.bandit.id}&genre=${encodeURIComponent(genre)}` as any)
-          }
-        />
+          <View style={isDesktopWeb ? styles.desktopCardCell : undefined}>
+            <BanditHeader
+              bandit={item.bandit as any}
+              categories={item.categories}
+              variant="list"
+              showActionButtons
+              onLike={async (id, currentLikeStatus) => {
+                if (updatingLikeId) return;
+                setUpdatingLikeId(id);
+                setRows((prev) =>
+                  prev.map((r) =>
+                    r.bandit.id === id ? { ...r, bandit: { ...r.bandit, is_liked: !currentLikeStatus } } : r,
+                  ),
+                );
+                try {
+                  await toggleBanditLike(id, currentLikeStatus);
+                } catch (e) {
+                  setRows((prev) =>
+                    prev.map((r) =>
+                      r.bandit.id === id
+                        ? { ...r, bandit: { ...r.bandit, is_liked: currentLikeStatus } }
+                        : r,
+                    ),
+                  );
+                  const msg = e instanceof Error ? e.message : '';
+                  Alert.alert('Follow unavailable', msg || 'Could not update follow state.');
+                } finally {
+                  setUpdatingLikeId(null);
+                }
+              }}
+              onCategoryPress={(genre) =>
+                router.push(`/explore?banditId=${item.bandit.id}&genre=${encodeURIComponent(genre)}` as any)
+              }
+            />
+          </View>
         )}
       />
     </View>
@@ -216,6 +228,18 @@ const styles = StyleSheet.create({
     padding: 16,
     paddingBottom: 28,
     backgroundColor: '#f6f6f6',
+  },
+  listContentDesktop: {
+    maxWidth: 1320,
+    width: '100%',
+    alignSelf: 'center',
+    paddingHorizontal: 24,
+  },
+  desktopColumns: {
+    gap: 14,
+  },
+  desktopCardCell: {
+    flex: 1,
   },
   emptyContainer: {
     paddingVertical: 40,

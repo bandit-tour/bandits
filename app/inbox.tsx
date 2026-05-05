@@ -3,10 +3,12 @@ import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
   DeviceEventEmitter,
+  Platform,
   SectionList,
   Pressable,
   StyleSheet,
   Text,
+  useWindowDimensions,
   View,
 } from 'react-native';
 
@@ -218,6 +220,8 @@ function nearbyToRow(e: NearbyInboxEntry): NotificationRow {
 }
 
 export default function InboxScreen() {
+  const { width } = useWindowDimensions();
+  const isDesktopWeb = Platform.OS === 'web' && width >= 1024;
   const [loading, setLoading] = useState(true);
   const [serverItems, setServerItems] = useState<InboxListItem[]>([]);
   const [refreshing, setRefreshing] = useState(false);
@@ -418,7 +422,7 @@ export default function InboxScreen() {
   return (
     <>
       <Stack.Screen options={{ headerShown: true, title: 'Inbox', headerBackTitle: 'Back' }} />
-      <View style={styles.container}>
+      <View style={[styles.container, isDesktopWeb && styles.containerDesktop]}>
         {loading ? (
           <View style={styles.center}>
             <ActivityIndicator size="large" />
@@ -453,6 +457,12 @@ const styles = StyleSheet.create({
     backgroundColor: '#FFFFFF',
     paddingHorizontal: 16,
     paddingTop: 12,
+  },
+  containerDesktop: {
+    maxWidth: 1120,
+    width: '100%',
+    alignSelf: 'center',
+    paddingHorizontal: 24,
   },
   sectionHeader: {
     fontSize: 12,

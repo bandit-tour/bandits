@@ -2,7 +2,7 @@ import type { User } from '@supabase/supabase-js';
 import { useFocusEffect } from '@react-navigation/native';
 import { Stack, useRouter } from 'expo-router';
 import React from 'react';
-import { Alert, Image, Platform, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Alert, Image, Platform, Pressable, ScrollView, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
 
 import { canAccessHotelier, isAnonymousSupabaseSession } from '@/lib/appAdminAccess';
 import { usePremiumRefreshControl } from '@/lib/mobilePullToRefresh';
@@ -25,6 +25,8 @@ const MENU_ITEMS: MenuItem[] = [
 
 export default function MenuScreen() {
   const router = useRouter();
+  const { width } = useWindowDimensions();
+  const isDesktopWeb = Platform.OS === 'web' && width >= 1000;
   const [pilotDeskAllowed, setPilotDeskAllowed] = React.useState(false);
   const [authHydrated, setAuthHydrated] = React.useState(false);
   const [canStaffSignOut, setCanStaffSignOut] = React.useState(false);
@@ -111,11 +113,11 @@ export default function MenuScreen() {
         </Text>
       </View>
 
-      <View style={styles.section}>
+      <View style={[styles.section, isDesktopWeb && styles.sectionDesktop]}>
         {items.map((item) => (
           <Pressable
             key={item.title}
-            style={styles.row}
+            style={[styles.row, isDesktopWeb && styles.rowDesktop]}
             onPress={() => router.push(item.route as never)}
           >
             <Text style={styles.rowText}>{item.title}</Text>
@@ -157,6 +159,9 @@ const styles = StyleSheet.create({
     paddingTop: 16,
     paddingBottom: 32,
     backgroundColor: '#FFFFFF',
+    width: '100%',
+    maxWidth: 1120,
+    alignSelf: 'center',
   },
   header: {
     alignItems: 'center',
@@ -185,12 +190,22 @@ const styles = StyleSheet.create({
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: '#E6E6E6',
   },
+  sectionDesktop: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    alignItems: 'stretch',
+  },
   row: {
     paddingVertical: 16,
     paddingHorizontal: 14,
     backgroundColor: '#fff',
     borderBottomWidth: StyleSheet.hairlineWidth,
     borderBottomColor: '#E6E6E6',
+  },
+  rowDesktop: {
+    width: '50%',
+    borderRightWidth: StyleSheet.hairlineWidth,
+    borderRightColor: '#E6E6E6',
   },
   rowText: {
     fontSize: 16,

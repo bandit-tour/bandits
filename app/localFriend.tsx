@@ -13,6 +13,7 @@ import {
   TextInput,
   TouchableOpacity,
   ScrollView,
+  useWindowDimensions,
   View,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -123,6 +124,8 @@ const launchStyles = StyleSheet.create({
 
 export default function LocalFriendScreen() {
   const router = useRouter();
+  const { width } = useWindowDimensions();
+  const isDesktopWeb = Platform.OS === 'web' && width >= 1024;
   const [message, setMessage] = useState('');
   const [sending, setSending] = useState(false);
   const [success, setSuccess] = useState<string | null>(null);
@@ -205,61 +208,68 @@ export default function LocalFriendScreen() {
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
       >
         <ScrollView
-          contentContainerStyle={styles.scrollContent}
+          contentContainerStyle={[
+            styles.scrollContent,
+            isDesktopWeb && styles.scrollContentDesktop,
+          ]}
           keyboardShouldPersistTaps="handled"
           refreshControl={listRefreshControl}
         >
-          <View style={styles.logoBar}>
-            <Image
-              source={require('@/assets/icons/banditLocalpng.png')}
-              style={styles.logo}
-              resizeMode="contain"
-            />
-          </View>
+          <View style={[styles.mainGrid, isDesktopWeb && styles.mainGridDesktop]}>
+            <View style={styles.copyCol}>
+              <View style={styles.logoBar}>
+                <Image
+                  source={require('@/assets/icons/banditLocalpng.png')}
+                  style={styles.logo}
+                  resizeMode="contain"
+                />
+              </View>
 
-          <View style={styles.copyBlock}>
-            <Text style={styles.title}>Send something into the city</Text>
-            <Text style={styles.subtitle}>
-              This isn’t regular chat. It’s a note in a bottle.
-              {'\n'}
-              Random on the surface. Matched by vibe underneath.
-            </Text>
-          </View>
-
-          <View style={styles.inputCard}>
-            <Text style={styles.inputLabel}>What do you want to throw out there?</Text>
-            <TextInput
-              style={styles.input}
-              multiline
-              placeholder="Ask for a vibe, a corner, a kind of night..."
-              value={message}
-              onChangeText={setMessage}
-            />
-
-            <TouchableOpacity
-              style={[
-                styles.sendButton,
-                (sending || !message.trim() || !backendReady || bottleOpen) && styles.sendButtonDisabled,
-              ]}
-              disabled={sending || !message.trim() || !backendReady || bottleOpen}
-              onPress={handleSend}
-            >
-              {sending && !bottleOpen ? (
-                <ActivityIndicator color="#FFF" size="small" />
-              ) : (
-                <Text style={styles.sendText}>Send</Text>
-              )}
-            </TouchableOpacity>
-
-            <View style={styles.statusRow}>
-              <StatusPill label="Bottle out" active={statusStep === 'released'} />
-              <StatusPill label="Reaching people" active={statusStep === 'matching'} />
-              <StatusPill label="Waiting" active={statusStep === 'waiting'} />
+              <View style={styles.copyBlock}>
+                <Text style={styles.title}>Send something into the city</Text>
+                <Text style={styles.subtitle}>
+                  This isn’t regular chat. It’s a note in a bottle.
+                  {'\n'}
+                  Random on the surface. Matched by vibe underneath.
+                </Text>
+              </View>
             </View>
 
-            {!!error && <Text style={styles.errorText}>{error}</Text>}
-            {!!success && <Text style={styles.successText}>{success}</Text>}
-            {!backendReady && <Text style={styles.errorText}>Can’t send right now.</Text>}
+            <View style={[styles.inputCard, isDesktopWeb && styles.inputCardDesktop]}>
+              <Text style={styles.inputLabel}>What do you want to throw out there?</Text>
+              <TextInput
+                style={styles.input}
+                multiline
+                placeholder="Ask for a vibe, a corner, a kind of night..."
+                value={message}
+                onChangeText={setMessage}
+              />
+
+              <TouchableOpacity
+                style={[
+                  styles.sendButton,
+                  (sending || !message.trim() || !backendReady || bottleOpen) && styles.sendButtonDisabled,
+                ]}
+                disabled={sending || !message.trim() || !backendReady || bottleOpen}
+                onPress={handleSend}
+              >
+                {sending && !bottleOpen ? (
+                  <ActivityIndicator color="#FFF" size="small" />
+                ) : (
+                  <Text style={styles.sendText}>Send</Text>
+                )}
+              </TouchableOpacity>
+
+              <View style={styles.statusRow}>
+                <StatusPill label="Bottle out" active={statusStep === 'released'} />
+                <StatusPill label="Reaching people" active={statusStep === 'matching'} />
+                <StatusPill label="Waiting" active={statusStep === 'waiting'} />
+              </View>
+
+              {!!error && <Text style={styles.errorText}>{error}</Text>}
+              {!!success && <Text style={styles.successText}>{success}</Text>}
+              {!backendReady && <Text style={styles.errorText}>Can’t send right now.</Text>}
+            </View>
           </View>
 
           <TouchableOpacity
@@ -291,6 +301,24 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingTop: 16,
     paddingBottom: 32,
+    width: '100%',
+    maxWidth: 1160,
+    alignSelf: 'center',
+  },
+  scrollContentDesktop: {
+    paddingTop: 24,
+  },
+  mainGrid: {
+    width: '100%',
+  },
+  mainGridDesktop: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 24,
+  },
+  copyCol: {
+    flex: 1,
+    minWidth: 280,
   },
   logoBar: {
     marginBottom: 8,
@@ -319,6 +347,10 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: '#E4E4E4',
     padding: 12,
+  },
+  inputCardDesktop: {
+    flex: 1.1,
+    minWidth: 420,
   },
   inputLabel: {
     fontSize: 13,

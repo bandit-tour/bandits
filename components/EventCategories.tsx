@@ -1,5 +1,5 @@
 import { useMemo, useRef } from 'react';
-import { Animated, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Animated, Platform, Pressable, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
 
 import { EventGenre, getGenreIcon } from '@/constants/Genres';
 
@@ -89,6 +89,8 @@ const AnimatedCategoryItem = ({ category, isSelected, onPress }: {
 };
 
 export default function EventCategories({ categories, selectedGenre, onCategoryPress }: EventCategoriesProps) {
+  const { width } = useWindowDimensions();
+  const isDesktopWeb = Platform.OS === 'web' && width >= 1100;
   const byGenre = useMemo(() => {
     const m = new Map<EventGenre, EventCategory>();
     for (const c of categories || []) {
@@ -105,9 +107,9 @@ export default function EventCategories({ categories, selectedGenre, onCategoryP
     const items = genres.map((g) => byGenre.get(g)).filter((c): c is EventCategory => !!c);
     if (items.length === 0) return null;
     return (
-      <View style={styles.categoriesRow}>
+      <View style={[styles.categoriesRow, isDesktopWeb && styles.categoriesRowDesktop]}>
         {items.map((category) => (
-          <View key={category.genre} style={styles.categoryItem}>
+          <View key={category.genre} style={[styles.categoryItem, isDesktopWeb && styles.categoryItemDesktop]}>
             <AnimatedCategoryItem
               category={category}
               isSelected={selectedGenre === category.genre}
@@ -120,7 +122,7 @@ export default function EventCategories({ categories, selectedGenre, onCategoryP
   };
 
   return (
-    <View style={styles.container}>
+    <View style={[styles.container, isDesktopWeb && styles.containerDesktop]}>
       {renderRow(CATEGORY_ROW_1)}
       {renderRow(CATEGORY_ROW_2)}
     </View>
@@ -132,15 +134,24 @@ const styles = StyleSheet.create({
     marginVertical: 16,
     paddingHorizontal: 4,
   },
+  containerDesktop: {
+    marginVertical: 20,
+  },
   categoriesRow: {
     flexDirection: 'row',
     alignItems: 'stretch',
     gap: 6,
     marginBottom: 6,
   },
+  categoriesRowDesktop: {
+    gap: 10,
+  },
   categoryItem: {
     flex: 1,
     minWidth: 0,
+  },
+  categoryItemDesktop: {
+    maxWidth: 260,
   },
   categoryBadge: {
     backgroundColor: '#ECECEC',

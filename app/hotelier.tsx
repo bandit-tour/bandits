@@ -2,7 +2,7 @@ import { PLAY_THEATROU_GUEST_ENTRY_URL } from '@/lib/pilotSession';
 import { Image as ExpoImage } from 'expo-image';
 import { Stack } from 'expo-router';
 import React from 'react';
-import { ScrollView, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
+import { Platform, ScrollView, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 /** Full uncropped property art — same 375×380 source used for PLAY Athenian hero; `contain` shows all branding. */
@@ -16,7 +16,8 @@ function HotelierScreen() {
   const { width: winW } = useWindowDimensions();
   const pad = 20;
   const maxRow = winW - pad * 2;
-  const bannerW = Math.min(400, maxRow);
+  const isDesktopWeb = Platform.OS === 'web' && winW >= 1100;
+  const bannerW = Math.min(isDesktopWeb ? 560 : 400, maxRow);
 
   return (
     <>
@@ -26,36 +27,38 @@ function HotelierScreen() {
         contentContainerStyle={[styles.content, { paddingBottom: 32 + insets.bottom }]}
         keyboardShouldPersistTaps="handled"
       >
-        <View style={[styles.bannerCard, { width: bannerW }]}>
-          <ExpoImage
-            source={HOTELIER_BANNER}
-            style={{ width: bannerW, height: BANNER_VIEWPORT_H }}
-            contentFit="contain"
-            contentPosition="center"
-            cachePolicy="memory-disk"
-            allowDownscaling
-            accessibilityLabel="PLAY Theatrou Athens"
-          />
-        </View>
-
-        <View style={styles.kickerPill}>
-          <Text style={styles.kickerText}>Pilot Partner Showcase</Text>
-        </View>
-        <Text style={styles.partnerLine}>PLAY Theatrou Athens – Curated Guest City Layer</Text>
-        <Text style={styles.bodyLead}>Turn each stay into a signature local experience.</Text>
-        <Text style={styles.body}>
-          This page showcases the active pilot partner inside bandiTour.
-          {'\n'}
-          {'\n'}
-          PLAY Theatrou Athens is currently our featured hospitality partner.
-        </Text>
-
-        <View style={styles.infoCard}>
-          <Text style={styles.infoTitle}>Pilot partner profile</Text>
-          <Text style={styles.infoLine}>Hotel: PLAY Theatrou Athens</Text>
-          <Text style={styles.infoLine}>Group: Israel Canada</Text>
-          <Text style={styles.infoLine}>City: Athens</Text>
-          <Text style={styles.infoLine}>Program: PLAY x bandiTour guest city access</Text>
+        <View style={[styles.topGrid, isDesktopWeb && styles.topGridDesktop]}>
+          <View style={[styles.bannerCard, { width: bannerW }]}>
+            <ExpoImage
+              source={HOTELIER_BANNER}
+              style={{ width: bannerW, height: isDesktopWeb ? 280 : BANNER_VIEWPORT_H }}
+              contentFit="contain"
+              contentPosition="center"
+              cachePolicy="memory-disk"
+              allowDownscaling
+              accessibilityLabel="PLAY Theatrou Athens"
+            />
+          </View>
+          <View style={styles.topCopy}>
+            <View style={styles.kickerPill}>
+              <Text style={styles.kickerText}>Pilot Partner Showcase</Text>
+            </View>
+            <Text style={styles.partnerLine}>PLAY Theatrou Athens – Curated Guest City Layer</Text>
+            <Text style={styles.bodyLead}>Turn each stay into a signature local experience.</Text>
+            <Text style={styles.body}>
+              This page showcases the active pilot partner inside bandiTour.
+              {'\n'}
+              {'\n'}
+              PLAY Theatrou Athens is currently our featured hospitality partner.
+            </Text>
+            <View style={styles.infoCard}>
+              <Text style={styles.infoTitle}>Pilot partner profile</Text>
+              <Text style={styles.infoLine}>Hotel: PLAY Theatrou Athens</Text>
+              <Text style={styles.infoLine}>Group: Israel Canada</Text>
+              <Text style={styles.infoLine}>City: Athens</Text>
+              <Text style={styles.infoLine}>Program: PLAY x bandiTour guest city access</Text>
+            </View>
+          </View>
         </View>
 
         <View style={styles.guestEntryCard}>
@@ -94,7 +97,19 @@ export default function HotelierRoute() {
 
 const styles = StyleSheet.create({
   scroll: { flex: 1, backgroundColor: '#FAFAF8' },
-  content: { paddingHorizontal: 20, paddingTop: 12 },
+  content: { paddingHorizontal: 20, paddingTop: 12, width: '100%', maxWidth: 1240, alignSelf: 'center' },
+  topGrid: {
+    width: '100%',
+  },
+  topGridDesktop: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 20,
+  },
+  topCopy: {
+    flex: 1,
+    minWidth: 280,
+  },
   bannerCard: {
     maxWidth: 400,
     alignSelf: 'center',

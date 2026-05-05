@@ -13,6 +13,7 @@ import {
   Text,
   TextInput,
   TouchableOpacity,
+  useWindowDimensions,
   View,
 } from 'react-native';
 
@@ -79,6 +80,8 @@ function buildFallbackReviews(banditId: string, banditName: string): DisplayRevi
 
 export default function BanditScreen() {
   const { id } = useLocalSearchParams();
+  const { width } = useWindowDimensions();
+  const isDesktopWeb = Platform.OS === 'web' && width >= 1100;
 
   const [bandit, setBandit] = useState<Bandit | null>(null);
   const [tags, setTags] = useState<string[]>([]);
@@ -250,7 +253,10 @@ export default function BanditScreen() {
 
       <ScrollView
         style={styles.container}
-        contentContainerStyle={styles.contentContainer}
+        contentContainerStyle={[
+          styles.contentContainer,
+          isDesktopWeb && styles.contentContainerDesktop,
+        ]}
       >
         {/* HEADER + CATEGORIES */}
         <BanditHeader
@@ -305,67 +311,73 @@ export default function BanditScreen() {
           </View>
         ) : null}
 
-        {/* VIBES (directly under Categories) */}
-        {tags.length > 0 && (
-          <View style={styles.vibesSection}>
-            <Text style={styles.vibesLabel}>Vibes</Text>
-            <ScrollView
-              horizontal
-              showsHorizontalScrollIndicator={false}
-              contentContainerStyle={styles.vibesContainer}
-            >
-              {tags.map((tag, index) => (
-                <TagChip
-                key={index}
-                label={`${TAG_EMOJI_MAP[tag] ?? '✨'} ${tag}`}
-                />
-              
-              ))}
-            </ScrollView>
+        <View style={[styles.profileBodyGrid, isDesktopWeb && styles.profileBodyGridDesktop]}>
+          <View style={styles.profileMainCol}>
+            {/* VIBES (directly under Categories) */}
+            {tags.length > 0 && (
+              <View style={styles.vibesSection}>
+                <Text style={styles.vibesLabel}>Vibes</Text>
+                <ScrollView
+                  horizontal
+                  showsHorizontalScrollIndicator={false}
+                  contentContainerStyle={styles.vibesContainer}
+                >
+                  {tags.map((tag, index) => (
+                    <TagChip
+                    key={index}
+                    label={`${TAG_EMOJI_MAP[tag] ?? '✨'} ${tag}`}
+                    />
+                  
+                  ))}
+                </ScrollView>
+              </View>
+            )}
+
+            {/* DESCRIPTION */}
+            <Text style={styles.description}>{bandit.description}</Text>
+
+            {/* WHY FOLLOW */}
+            <Text style={styles.whyFollowLabel}>
+              {`Why follow ${bandit.name}?`}
+            </Text>
+
+            <View style={styles.why_follow}>
+              {(() => {
+                const wf = resolveWhyFollowText(bandit).trim();
+                if (!wf) return null;
+                const lines = wf
+                  .split('\n')
+                  .map((l) => l.trim())
+                  .filter(Boolean);
+                return lines.map((line, i) => (
+                  <Text key={i} style={styles.whyFollowBullet}>
+                    {line.startsWith('•') ? `${line}` : `• ${line}`}
+                  </Text>
+                ));
+              })()}
+            </View>
           </View>
-        )}
 
-        {/* DESCRIPTION */}
-        <Text style={styles.description}>{bandit.description}</Text>
-
-        {/* WHY FOLLOW */}
-        <Text style={styles.whyFollowLabel}>
-          {`Why follow ${bandit.name}?`}
-        </Text>
-
-        <View style={styles.why_follow}>
-          {(() => {
-            const wf = resolveWhyFollowText(bandit).trim();
-            if (!wf) return null;
-            const lines = wf
-              .split('\n')
-              .map((l) => l.trim())
-              .filter(Boolean);
-            return lines.map((line, i) => (
-              <Text key={i} style={styles.whyFollowBullet}>
-                {line.startsWith('•') ? `${line}` : `• ${line}`}
+          <View style={styles.profileSideCol}>
+            {/* REVIEWS */}
+            <View style={styles.reviewsSection}>
+              <Text style={styles.reviewsTitle}>
+                Reviews <Text style={styles.reviewsCount}>({reviews.length})</Text>
               </Text>
-            ));
-          })()}
-        </View>
 
-        {/* REVIEWS */}
-        <View style={styles.reviewsSection}>
-          <Text style={styles.reviewsTitle}>
-            Reviews <Text style={styles.reviewsCount}>({reviews.length})</Text>
-          </Text>
-
-          {reviews.length > 0 && (
-            <ScrollView
-              horizontal
-              showsHorizontalScrollIndicator={false}
-              contentContainerStyle={styles.reviewsContainer}
-            >
-              {reviews.map((review, index) => (
-                <ReviewCard key={index} review={review} />
-              ))}
-            </ScrollView>
-          )}
+              {reviews.length > 0 && (
+                <ScrollView
+                  horizontal
+                  showsHorizontalScrollIndicator={false}
+                  contentContainerStyle={styles.reviewsContainer}
+                >
+                  {reviews.map((review, index) => (
+                    <ReviewCard key={index} review={review} />
+                  ))}
+                </ScrollView>
+              )}
+            </View>
+          </View>
         </View>
 
         {/* CTA */}
@@ -464,6 +476,28 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingTop: 16,
     paddingBottom: 40,
+    width: '100%',
+    maxWidth: 1220,
+    alignSelf: 'center',
+  },
+  contentContainerDesktop: {
+    paddingHorizontal: 24,
+  },
+  profileBodyGrid: {
+    width: '100%',
+  },
+  profileBodyGridDesktop: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 20,
+  },
+  profileMainCol: {
+    flex: 1,
+    minWidth: 320,
+  },
+  profileSideCol: {
+    flex: 1,
+    minWidth: 300,
   },
   description: {
     fontSize: 14,

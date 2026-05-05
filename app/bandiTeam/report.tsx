@@ -20,6 +20,7 @@ import {
   Text,
   TextInput,
   TouchableOpacity,
+  useWindowDimensions,
   View,
 } from 'react-native';
 
@@ -145,6 +146,8 @@ function ReportSubmitSuccessOverlay({ visible, onBackToHome }: SubmitSuccessOver
 
 export default function BandiTeamReportScreen() {
   const router = useRouter();
+  const { width } = useWindowDimensions();
+  const isDesktopWeb = Platform.OS === 'web' && width >= 1100;
   const [city, setCity] = useState(NONE);
   const [neighborhood, setNeighborhood] = useState(NONE);
   const [locationExtra, setLocationExtra] = useState('');
@@ -329,7 +332,10 @@ export default function BandiTeamReportScreen() {
         keyboardVerticalOffset={Platform.OS === 'ios' ? 88 : 0}
       >
         <ScrollView
-          contentContainerStyle={{ flexGrow: 1, padding: 16, paddingBottom: 40 }}
+          contentContainerStyle={[
+            styles.formScrollContent,
+            isDesktopWeb && styles.formScrollContentDesktop,
+          ]}
           keyboardShouldPersistTaps="handled"
           keyboardDismissMode={Platform.OS === 'ios' ? 'interactive' : 'on-drag'}
           testID="banditeam-report-form-scroll"
@@ -341,76 +347,82 @@ export default function BandiTeamReportScreen() {
               We treat every report seriously. It is reviewed in confidence, and you help protect other travelers.
             </Text>
 
-            <Text style={styles.label}>City</Text>
-            {listsLoading ? (
-              <ActivityIndicator style={{ marginVertical: 8 }} />
-            ) : (
-              <>
+            <View style={[styles.twoCol, isDesktopWeb && styles.twoColDesktop]}>
+              <View style={styles.twoColItem}>
+                <Text style={styles.label}>City</Text>
+                {listsLoading ? (
+                  <ActivityIndicator style={{ marginVertical: 8 }} />
+                ) : (
+                  <>
+                    <Pressable
+                      style={styles.pickerWrap}
+                      onPress={() => setCityMenuOpen(true)}
+                      accessibilityRole="button"
+                      accessibilityLabel="Select city"
+                    >
+                      <Text style={styles.pickerDisplay}>{city === NONE ? 'Select city' : city}</Text>
+                      <Text style={styles.pickerChevron}>▼</Text>
+                    </Pressable>
+                    <Modal
+                      visible={cityMenuOpen}
+                      transparent
+                      animationType="fade"
+                      onRequestClose={() => setCityMenuOpen(false)}
+                    >
+                      <View style={styles.modalRoot}>
+                        <Pressable
+                          style={StyleSheet.absoluteFill}
+                          onPress={() => setCityMenuOpen(false)}
+                          accessibilityLabel="Dismiss"
+                        />
+                        <View style={styles.modalSheet}>
+                          <Text style={styles.modalTitle}>Select city</Text>
+                          <FlatList
+                            data={cities}
+                            keyExtractor={(item) => item}
+                            keyboardShouldPersistTaps="handled"
+                            renderItem={({ item }) => (
+                              <TouchableOpacity
+                                style={styles.modalRow}
+                                onPress={() => {
+                                  setCity(item);
+                                  setCityMenuOpen(false);
+                                }}
+                              >
+                                <Text style={styles.modalRowText}>{item}</Text>
+                              </TouchableOpacity>
+                            )}
+                          />
+                        </View>
+                      </View>
+                    </Modal>
+                  </>
+                )}
+              </View>
+
+              <View style={styles.twoColItem}>
+                <Text style={styles.label}>Area / neighborhood</Text>
                 <Pressable
-                  style={styles.pickerWrap}
-                  onPress={() => setCityMenuOpen(true)}
+                  style={[styles.pickerWrap, (!city || city === NONE) && styles.pickerWrapDisabled]}
+                  onPress={() => {
+                    if (!city || city === NONE) return;
+                    setAreaMenuOpen(true);
+                  }}
+                  disabled={!city || city === NONE}
                   accessibilityRole="button"
-                  accessibilityLabel="Select city"
+                  accessibilityLabel="Select area or neighborhood"
                 >
-                  <Text style={styles.pickerDisplay}>{city === NONE ? 'Select city' : city}</Text>
+                  <Text style={styles.pickerDisplay}>
+                    {neighborhood === NONE
+                      ? neighborhoods.length
+                        ? 'Select area'
+                        : 'No areas — use field below'
+                      : neighborhood}
+                  </Text>
                   <Text style={styles.pickerChevron}>▼</Text>
                 </Pressable>
-                <Modal
-                  visible={cityMenuOpen}
-                  transparent
-                  animationType="fade"
-                  onRequestClose={() => setCityMenuOpen(false)}
-                >
-                  <View style={styles.modalRoot}>
-                    <Pressable
-                      style={StyleSheet.absoluteFill}
-                      onPress={() => setCityMenuOpen(false)}
-                      accessibilityLabel="Dismiss"
-                    />
-                    <View style={styles.modalSheet}>
-                      <Text style={styles.modalTitle}>Select city</Text>
-                      <FlatList
-                        data={cities}
-                        keyExtractor={(item) => item}
-                        keyboardShouldPersistTaps="handled"
-                        renderItem={({ item }) => (
-                          <TouchableOpacity
-                            style={styles.modalRow}
-                            onPress={() => {
-                              setCity(item);
-                              setCityMenuOpen(false);
-                            }}
-                          >
-                            <Text style={styles.modalRowText}>{item}</Text>
-                          </TouchableOpacity>
-                        )}
-                      />
-                    </View>
-                  </View>
-                </Modal>
-              </>
-            )}
-
-            <Text style={styles.label}>Area / neighborhood</Text>
-            <Pressable
-              style={[styles.pickerWrap, (!city || city === NONE) && styles.pickerWrapDisabled]}
-              onPress={() => {
-                if (!city || city === NONE) return;
-                setAreaMenuOpen(true);
-              }}
-              disabled={!city || city === NONE}
-              accessibilityRole="button"
-              accessibilityLabel="Select area or neighborhood"
-            >
-              <Text style={styles.pickerDisplay}>
-                {neighborhood === NONE
-                  ? neighborhoods.length
-                    ? 'Select area'
-                    : 'No areas — use field below'
-                  : neighborhood}
-              </Text>
-              <Text style={styles.pickerChevron}>▼</Text>
-            </Pressable>
+              </View>
+            </View>
             <Modal
               visible={areaMenuOpen}
               transparent
@@ -505,6 +517,27 @@ const styles = StyleSheet.create({
   inner: {
     flex: 1,
     backgroundColor: '#FFFFFF',
+    width: '100%',
+    maxWidth: 1080,
+    alignSelf: 'center',
+  },
+  formScrollContent: {
+    flexGrow: 1,
+    padding: 16,
+    paddingBottom: 40,
+  },
+  formScrollContentDesktop: {
+    paddingHorizontal: 24,
+  },
+  twoCol: {
+    width: '100%',
+  },
+  twoColDesktop: {
+    flexDirection: 'row',
+    gap: 12,
+  },
+  twoColItem: {
+    flex: 1,
   },
   screenTitle: {
     fontSize: 22,
