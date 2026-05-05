@@ -1,4 +1,3 @@
-import { RequireHotelierGate } from '@/components/RequireHotelierGate';
 import { PLAY_THEATROU_GUEST_ENTRY_URL } from '@/lib/pilotSession';
 import { Image as ExpoImage } from 'expo-image';
 import { Stack } from 'expo-router';
@@ -90,11 +89,7 @@ function HotelierScreen() {
 }
 
 export default function HotelierRoute() {
-  return (
-    <RequireHotelierGate>
-      <HotelierScreen />
-    </RequireHotelierGate>
-  );
+  return <HotelierScreen />;
 }
 
 const styles = StyleSheet.create({
