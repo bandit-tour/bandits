@@ -130,7 +130,8 @@ export default function LocalFriendScreen() {
   const [sending, setSending] = useState(false);
   const [success, setSuccess] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [backendReady, setBackendReady] = useState(false);
+  /** Probe only — never disables Send (same rule as Ask Me). */
+  const [optionalReplyHint, setOptionalReplyHint] = useState<string | null>(null);
   const [statusStep, setStatusStep] = useState<'idle' | 'released' | 'matching' | 'waiting'>('idle');
   const [refreshing, setRefreshing] = useState(false);
   const [bottleOpen, setBottleOpen] = useState(false);
@@ -139,9 +140,11 @@ export default function LocalFriendScreen() {
   const refreshBackendStatus = React.useCallback(async () => {
     try {
       const status = await getNotificationsBackendStatus();
-      setBackendReady(status.enabled);
+      setOptionalReplyHint(
+        status.enabled ? null : 'Enable notifications to get pings when travelers reply.',
+      );
     } catch {
-      setBackendReady(false);
+      setOptionalReplyHint(null);
     }
   }, []);
 
@@ -190,7 +193,7 @@ export default function LocalFriendScreen() {
   }, []);
 
   const handleSend = () => {
-    if (!message.trim() || !backendReady || sending || bottleOpen) return;
+    if (!message.trim() || sending || bottleOpen) return;
     const payload = message.trim();
     setError(null);
     setSuccess(null);
@@ -248,9 +251,9 @@ export default function LocalFriendScreen() {
               <TouchableOpacity
                 style={[
                   styles.sendButton,
-                  (sending || !message.trim() || !backendReady || bottleOpen) && styles.sendButtonDisabled,
+                  (sending || !message.trim() || bottleOpen) && styles.sendButtonDisabled,
                 ]}
-                disabled={sending || !message.trim() || !backendReady || bottleOpen}
+                disabled={sending || !message.trim() || bottleOpen}
                 onPress={handleSend}
               >
                 {sending && !bottleOpen ? (
@@ -268,7 +271,7 @@ export default function LocalFriendScreen() {
 
               {!!error && <Text style={styles.errorText}>{error}</Text>}
               {!!success && <Text style={styles.successText}>{success}</Text>}
-              {!backendReady && <Text style={styles.errorText}>Can’t send right now.</Text>}
+              {!!optionalReplyHint && <Text style={styles.hintText}>{optionalReplyHint}</Text>}
             </View>
           </View>
 
@@ -318,7 +321,7 @@ const styles = StyleSheet.create({
   },
   copyCol: {
     flex: 1,
-    minWidth: 280,
+    minWidth: 0,
   },
   logoBar: {
     marginBottom: 8,
@@ -350,7 +353,7 @@ const styles = StyleSheet.create({
   },
   inputCardDesktop: {
     flex: 1.1,
-    minWidth: 420,
+    minWidth: 0,
   },
   inputLabel: {
     fontSize: 13,
@@ -414,6 +417,12 @@ const styles = StyleSheet.create({
     marginTop: 8,
     fontSize: 12,
     color: '#D92C2C',
+  },
+  hintText: {
+    marginTop: 8,
+    fontSize: 12,
+    color: '#555',
+    lineHeight: 17,
   },
   successText: {
     marginTop: 8,

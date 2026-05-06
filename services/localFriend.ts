@@ -45,22 +45,20 @@ export function isPersistenceBlocked(error: { message?: string; code?: string })
 }
 
 /**
- * Validates whether notifications-backed features are usable in this environment.
+ * Lightweight probe only (never use this to hard-block messaging).
+ * Prefer `getUser()` after `ensureAnonymousSession()` — fewer false negatives than stale `getSession()`.
  */
 export async function getNotificationsBackendStatus(): Promise<BackendStatus> {
-  let user: { id: string } | null = null;
   await ensureAnonymousSession().catch(() => undefined);
   const {
-    data: { session },
-    error: sessionError,
-  } = await supabase.auth.getSession();
-  if (session?.user) {
-    user = { id: session.user.id };
-  } else if (sessionError) {
-    return { enabled: false, reason: sessionError.message || 'Could not verify your session.' };
+    data: { user },
+    error: userError,
+  } = await supabase.auth.getUser();
+  if (userError) {
+    return { enabled: false, reason: userError.message || 'Could not verify your session.' };
   }
 
-  if (!user) {
+  if (!user?.id) {
     return {
       enabled: false,
       reason: 'A quick app session is required for notifications. Open the app and try again.',
@@ -116,15 +114,36 @@ export async function sendLocalFriendMessage(message: string): Promise<void> {
     type: 'local_friend' as const,
     title: personaTitle,
     message: trimmed,
-    reference_id: user.id,
+    reference_id: String(user.id || '').trim(),
     reference_type: 'local_friend_request' as const,
   };
-  const { error: insErr } = await supabase.from('notifications').insert(row);
+  const { data: inserted, error: insErr } = await supabase
+    .from('notifications')
+    .insert(row)
+    .select('id')
+    .single();
   if (insErr) {
     if (isPersistenceBlocked(insErr)) {
-      throw new Error('Local Friend is temporarily unavailable. Please try again later.');
+      throw new Error(
+        insErr.message?.trim() ||
+          'Your message could not be delivered (sign-in or network). Please try again.',
+      );
     }
     throw new Error(insErr.message || 'Could not send your message.');
+  }
+  const rootId = String((inserted as { id?: string | null } | null)?.id || '').trim();
+  // Guest-side Notifications mirror row: keeps traveler notifications/badge in sync.
+  const { error: guestEchoError } = await supabase.from('notifications').insert({
+    user_id: String(user.id || '').trim(),
+    type: 'local_friend',
+    title: 'Local Friend request sent',
+    message: trimmed,
+    reference_id: rootId || null,
+    reference_type: 'local_friend_guest_echo',
+    is_read: false,
+  } as never);
+  if (guestEchoError) {
+    throw new Error('Message sent but notification creation failed. Please try again.');
   }
 
   requestNotificationsRefresh();

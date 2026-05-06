@@ -339,10 +339,39 @@ export async function submitScamAlert(input: SubmitScamAlertInput): Promise<void
     throw new Error('Could not verify your session.');
   }
 
-  async function insertDirect(): Promise<{ ok: boolean; lastError: { message?: string } | null }> {
+  async function createGuestReportNotification(reportId: string | null): Promise<void> {
+    const rid = String(reportId || '').trim();
+    const { error } = await supabase.from('notifications').insert({
+      user_id: String(user.id || '').trim(),
+      type: 'bandiTEAM_report',
+      title: 'Report submitted',
+      message: `${String(rowFull.title || 'Scam report').trim()}\n\n${String(rowFull.location || '').trim()} · ${String(rowFull.city || '').trim()}`.trim(),
+      reference_id: rid || null,
+      reference_type: 'scam_alert_guest_echo',
+      is_read: false,
+    } as never);
+    if (error) {
+      throw new Error('Report submitted but notification creation failed.');
+    }
+  }
+
+  async function findLatestReportIdForUser(): Promise<string | null> {
+    const { data } = await supabase
+      .from('scam_alerts')
+      .select('id')
+      .eq('reported_by', String(user.id || '').trim())
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    return String((data as { id?: string } | null)?.id || '').trim() || null;
+  }
+
+  async function insertDirect(): Promise<{ ok: boolean; lastError: { message?: string } | null; reportId: string | null }> {
     const rowInsert = stripScamAlertsInsertPayload({ ...(rowFull as Record<string, unknown>) });
     console.log('FINAL PAYLOAD', JSON.stringify(rowInsert, null, 2));
-    let { error } = await supabase.from('scam_alerts').insert(rowInsert as any);
+    let reportId: string | null = null;
+    let { data: inserted, error } = await supabase.from('scam_alerts').insert(rowInsert as any).select('id').single();
+    reportId = String((inserted as { id?: string } | null)?.id || '').trim() || null;
     if (error && isMissingScamColumnError(error.message ?? '')) {
       const rowLegacy = finalizeScamAlertsInsertPayload({
         city: rowFull.city,
@@ -354,10 +383,11 @@ export async function submitScamAlert(input: SubmitScamAlertInput): Promise<void
       } as Record<string, unknown>);
       const rowLegacyInsert = stripScamAlertsInsertPayload({ ...(rowLegacy as Record<string, unknown>) });
       console.log('FINAL PAYLOAD', JSON.stringify(rowLegacyInsert, null, 2));
-      const second = await supabase.from('scam_alerts').insert(rowLegacyInsert as any);
+      const second = await supabase.from('scam_alerts').insert(rowLegacyInsert as any).select('id').single();
+      reportId = String((second.data as { id?: string } | null)?.id || '').trim() || null;
       error = second.error;
     }
-    return { ok: !error, lastError: error };
+    return { ok: !error, lastError: error, reportId };
   }
 
   /**
@@ -366,6 +396,7 @@ export async function submitScamAlert(input: SubmitScamAlertInput): Promise<void
    */
   const direct = await insertDirect();
   if (direct.ok) {
+    await createGuestReportNotification(direct.reportId);
     void trackEvent({
       eventName: 'bandiTEAM_report_created',
       referenceType: 'report',
@@ -394,6 +425,8 @@ export async function submitScamAlert(input: SubmitScamAlertInput): Promise<void
         referenceType: 'city',
         referenceId: rowFull.city,
       });
+      const guessed = await findLatestReportIdForUser();
+      await createGuestReportNotification(guessed);
       requestNotificationsRefresh();
       return;
     } catch (e) {

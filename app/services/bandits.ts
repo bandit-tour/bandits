@@ -1,24 +1,19 @@
 import {
+  BANDIT_QUESTION_GUEST_ECHO_REF,
   buildAskMeNotificationMessage,
   travelerNameForAskMeTitle,
 } from '@/lib/askMeMessageFormat';
 import { Database } from '@/lib/database.types';
 import { trackEvent } from '@/lib/analytics';
+import { ensureOperatorUserId } from '@/lib/operatorConfig';
 import { ensureAnonymousSession } from '@/lib/pilotSession';
+import { requestNotificationsRefresh } from '@/lib/notificationEvents';
 import { isAuthOrMissingError } from '@/lib/postgrestAuth';
 import { supabase } from '@/lib/supabase';
-import { getOperatorUserId } from '@/services/localFriend';
 
 type Bandit = Database['public']['Tables']['bandit']['Row'];
 type BanditInsert = Database['public']['Tables']['bandit']['Insert'];
 type BanditUpdate = Database['public']['Tables']['bandit']['Update'];
-
-function isNotificationsPolicyError(error: { message?: string; code?: string }): boolean {
-  const code = String(error.code ?? '');
-  const msg = String(error.message ?? '').toLowerCase();
-  if (code === '42501') return true;
-  return /row-level security|rls|policy|permission denied/i.test(msg);
-}
 
 function isAskTargetBanditIdMissingColumnError(error: { message?: string }): boolean {
   const msg = String(error.message ?? '').toLowerCase();
@@ -310,9 +305,10 @@ export async function submitBanditQuestion(banditId: string, question: string): 
   const user = session?.user;
   if (!user) throw new Error('Could not start a session. Try again in a moment.');
 
-  const operatorUserId = getOperatorUserId();
+  /** Must match `notifications_insert_routed` (uses same id as Postgres `app_public_config.operator_user_id`). */
+  const operatorUserId = await ensureOperatorUserId();
   if (!operatorUserId) {
-    throw new Error('Operator routing is not configured. Set EXPO_PUBLIC_OPERATOR_USER_ID.');
+    throw new Error('Operator inbox is not configured. Set operator_user_id in app_public_config or EXPO_PUBLIC_OPERATOR_USER_ID.');
   }
 
   const { data: banditRow } = await supabase
@@ -336,7 +332,7 @@ export async function submitBanditQuestion(banditId: string, question: string): 
     type: 'bandit_question',
     title: travelerTitle,
     message: askMessage,
-    reference_id: user.id,
+    reference_id: String(user.id || '').trim(),
     reference_type: 'bandit_question_request',
     ask_target_bandit_id: targetBanditId,
   } as never;
@@ -360,6 +356,23 @@ export async function submitBanditQuestion(banditId: string, question: string): 
     if (!insertedTarget || insertedTarget !== targetBanditId) {
       throw new Error('Ask target mismatch. Please try again.');
     }
+    const rootId = String((insertedRow as { id?: string | null } | null)?.id || '').trim();
+    // Guest-side Notifications mirror row: visible in Notifications tab, independent from Pilot Desk.
+    const guestEcho = {
+      user_id: String(user.id || '').trim(),
+      type: 'bandit_question',
+      title: `Ask Me · ${banditName}`,
+      message: text,
+      reference_id: rootId || null,
+      reference_type: BANDIT_QUESTION_GUEST_ECHO_REF,
+      ask_target_bandit_id: targetBanditId,
+      is_read: false,
+    } as never;
+    const { error: guestEchoError } = await supabase.from('notifications').insert(guestEcho);
+    if (guestEchoError) {
+      throw new Error('Question sent but notification creation failed. Please try again.');
+    }
+    requestNotificationsRefresh();
     void trackEvent({
       eventName: 'ask_me_sent',
       referenceType: 'bandit',
@@ -368,13 +381,14 @@ export async function submitBanditQuestion(banditId: string, question: string): 
     return;
   }
 
-  if (isNotificationsPolicyError(error)) {
-    throw new Error('Ask is temporarily unavailable until notifications permissions are updated.');
-  }
   if (isAskTargetBanditIdMissingColumnError(error)) {
-    throw new Error('Ask is temporarily unavailable until DB schema is updated.');
+    throw new Error('Ask Me needs a database update (ask_target_bandit_id). Ask your administrator.');
   }
-  throw new Error(error.message || 'Could not send your question.');
+  const sys = error.message?.trim();
+  throw new Error(
+    sys ||
+      'Could not send your question. Check your connection, or tell staff if Pilot routing is offline.',
+  );
 }
 
 export default function BanditsServiceRoutePlaceholder() {

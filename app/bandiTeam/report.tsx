@@ -2,13 +2,11 @@
  * Dedicated **report form** only — opened from hub “Report alert”, alerts feed CTAs, etc.
  * Does not show the alerts list (avoids routing loops).
  */
-import { useRouter } from 'expo-router';
+import { Stack, useRouter } from 'expo-router';
 import * as ImagePicker from 'expo-image-picker';
-import { useVideoPlayer, VideoView } from 'expo-video';
-import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
-  Animated,
   FlatList,
   Image,
   KeyboardAvoidingView,
@@ -23,6 +21,7 @@ import {
   useWindowDimensions,
   View,
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { getUniqueCities } from '@/app/services/bandits';
 import { getUniqueNeighborhoods } from '@/app/services/events';
@@ -32,75 +31,40 @@ import { submitScamAlert, userFacingScamSubmitError } from '@/services/scamAlert
 import { supabase } from '@/lib/supabase';
 
 const NONE = '__none__';
-const BOTTLE_VIDEO_SOURCE = require('@/assets/images/local-friend-bottle.mov');
 
 const SUCCESS_SUBCOPY =
   'Thank you. Your report helps keep trust and safe — the bandiTEAM will review it.';
-const CTA_DELAY_MS = 4000;
 
 type SubmitSuccessOverlayProps = {
   visible: boolean;
+  onClose: () => void;
+  onBackToAlerts: () => void;
   onBackToHome: () => void;
 };
 
-/**
- * After successful submit: real `local-friend-bottle.mov`, looped + muted, rounded on dark; CTA after ~4s.
- * Same asset on iOS, Android, and web (expo-video).
- */
-function ReportSubmitSuccessOverlay({ visible, onBackToHome }: SubmitSuccessOverlayProps) {
-  const player = useVideoPlayer(BOTTLE_VIDEO_SOURCE);
-  const contentOpacity = useRef(new Animated.Value(0)).current;
-  const [showCta, setShowCta] = useState(false);
-
-  useEffect(() => {
-    if (!visible) {
-      setShowCta(false);
-      try {
-        contentOpacity.setValue(0);
-        player.pause();
-      } catch {
-        /* ignore */
-      }
-      return;
-    }
-    setShowCta(false);
-    Animated.timing(contentOpacity, {
-      toValue: 1,
-      duration: 480,
-      useNativeDriver: true,
-    }).start();
-
-    const run = () => {
-      try {
-        player.loop = true;
-        player.muted = true;
-        if ('currentTime' in player && typeof (player as { currentTime?: number }).currentTime === 'number') {
-          (player as { currentTime: number }).currentTime = 0;
-        }
-        void player.play();
-      } catch {
-        /* still show copy + CTA */
-      }
-    };
-    run();
-
-    const ctaTimer = setTimeout(() => setShowCta(true), CTA_DELAY_MS);
-    return () => {
-      clearTimeout(ctaTimer);
-      try {
-        player.pause();
-      } catch {
-        /* ignore */
-      }
-    };
-  }, [visible, player, contentOpacity]);
+function ReportSubmitSuccessOverlay({
+  visible,
+  onClose,
+  onBackToAlerts,
+  onBackToHome,
+}: SubmitSuccessOverlayProps) {
+  const insets = useSafeAreaInsets();
 
   if (!visible) return null;
 
   return (
-    <Modal visible animationType="fade" transparent onRequestClose={onBackToHome}>
-      <View style={styles.successModalRoot} testID="banditeam-report-success-overlay">
-        <Animated.View style={{ flex: 1, width: '100%', opacity: contentOpacity }}>
+    <Modal visible animationType="fade" transparent onRequestClose={onClose}>
+      <View
+        style={[
+          styles.successModalRoot,
+          {
+            paddingTop: Math.max(insets.top + 10, 18),
+            paddingBottom: Math.max(insets.bottom + 12, 18),
+          },
+        ]}
+        testID="banditeam-report-success-overlay"
+      >
+        <View style={{ flex: 1, width: '100%' }}>
           <ScrollView
             contentContainerStyle={styles.successScrollContent}
             style={styles.successScroll}
@@ -111,20 +75,7 @@ function ReportSubmitSuccessOverlay({ visible, onBackToHome }: SubmitSuccessOver
               <Text style={styles.successOverlayTitle}>Report received</Text>
               <Text style={styles.successOverlaySub}>{SUCCESS_SUBCOPY}</Text>
             </View>
-
-            <View style={styles.bottleVideoShell}>
-              <VideoView
-                player={player}
-                style={styles.bottleVideo}
-                nativeControls={false}
-                contentFit="cover"
-                contentPosition="center"
-                allowsFullscreen={false}
-                allowsPictureInPicture={false}
-              />
-            </View>
-
-            {showCta ? (
+            <View style={styles.successActionsRow}>
               <Pressable
                 onPress={onBackToHome}
                 style={({ pressed }) => [styles.backHomeButton, pressed && { opacity: 0.9 }]}
@@ -134,11 +85,25 @@ function ReportSubmitSuccessOverlay({ visible, onBackToHome }: SubmitSuccessOver
               >
                 <Text style={styles.backHomeButtonText}>Back to Home</Text>
               </Pressable>
-            ) : (
-              <View style={styles.backHomePlaceholder} />
-            )}
+              <Pressable
+                onPress={onBackToAlerts}
+                style={({ pressed }) => [styles.backAlertsButton, pressed && { opacity: 0.9 }]}
+                accessibilityRole="button"
+                accessibilityLabel="Back to Alerts"
+              >
+                <Text style={styles.backAlertsButtonText}>Back to Alerts</Text>
+              </Pressable>
+              <Pressable
+                onPress={onClose}
+                style={({ pressed }) => [styles.successCloseButton, pressed && { opacity: 0.9 }]}
+                accessibilityRole="button"
+                accessibilityLabel="Close success message"
+              >
+                <Text style={styles.successCloseButtonText}>Close</Text>
+              </Pressable>
+            </View>
           </ScrollView>
-        </Animated.View>
+        </View>
       </View>
     </Modal>
   );
@@ -167,6 +132,17 @@ export default function BandiTeamReportScreen() {
   const [cityMenuOpen, setCityMenuOpen] = useState(false);
   const [areaMenuOpen, setAreaMenuOpen] = useState(false);
   const [showSubmitTransition, setShowSubmitTransition] = useState(false);
+  const closeSuccessOverlay = useCallback(() => {
+    setShowSubmitTransition(false);
+  }, []);
+  const exitToAlerts = useCallback(() => {
+    setShowSubmitTransition(false);
+    router.replace('/alerts' as never);
+  }, [router]);
+  const exitToHome = useCallback(() => {
+    setShowSubmitTransition(false);
+    router.replace('/bandits' as never);
+  }, [router]);
 
   const neighborhoodRows = useMemo(() => {
     const rows: { value: string; label: string }[] = [];
@@ -319,19 +295,20 @@ export default function BandiTeamReportScreen() {
 
   return (
     <>
+      <Stack.Screen options={{ headerShown: true, title: 'Report Alert', headerBackTitle: 'Back' }} />
       <ReportSubmitSuccessOverlay
         visible={showSubmitTransition}
-        onBackToHome={() => {
-          setShowSubmitTransition(false);
-          router.replace('/bandits' as never);
-        }}
+        onClose={closeSuccessOverlay}
+        onBackToAlerts={exitToAlerts}
+        onBackToHome={exitToHome}
       />
       <KeyboardAvoidingView
-        style={{ flex: 1 }}
+        style={styles.screen}
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
         keyboardVerticalOffset={Platform.OS === 'ios' ? 88 : 0}
       >
         <ScrollView
+          style={styles.formScroll}
           contentContainerStyle={[
             styles.formScrollContent,
             isDesktopWeb && styles.formScrollContentDesktop,
@@ -514,6 +491,16 @@ export default function BandiTeamReportScreen() {
 }
 
 const styles = StyleSheet.create({
+  screen: {
+    flex: 1,
+    backgroundColor: '#FFFFFF',
+    width: '100%',
+    overflow: 'hidden',
+  },
+  formScroll: {
+    flex: 1,
+    width: '100%',
+  },
   inner: {
     flex: 1,
     backgroundColor: '#FFFFFF',
@@ -525,6 +512,7 @@ const styles = StyleSheet.create({
     flexGrow: 1,
     padding: 16,
     paddingBottom: 40,
+    width: '100%',
   },
   formScrollContentDesktop: {
     paddingHorizontal: 24,
@@ -681,8 +669,8 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: 'rgba(0,0,0,0.94)',
     paddingHorizontal: 20,
-    paddingTop: 40,
-    paddingBottom: 32,
+    width: '100%',
+    overflow: 'hidden',
   },
   successScroll: {
     flex: 1,
@@ -693,11 +681,12 @@ const styles = StyleSheet.create({
   successScrollContent: {
     flexGrow: 1,
     alignItems: 'center',
-    paddingBottom: 20,
+    justifyContent: 'center',
+    paddingBottom: 12,
   },
   successTextBlock: {
     alignItems: 'center',
-    marginBottom: 20,
+    marginBottom: 18,
     paddingHorizontal: 8,
     maxWidth: 400,
   },
@@ -714,30 +703,49 @@ const styles = StyleSheet.create({
     lineHeight: 22,
     textAlign: 'center',
   },
-  bottleVideoShell: {
-    width: '100%',
-    maxWidth: 400,
-    aspectRatio: 16 / 9,
-    maxHeight: 360,
-    borderRadius: 22,
-    overflow: 'hidden',
-    backgroundColor: '#0B0F18',
+  successCloseButton: {
+    alignSelf: 'center',
+    marginTop: 2,
+    marginBottom: 2,
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.32)',
   },
-  bottleVideo: {
-    width: '100%',
-    height: '100%',
-    minHeight: 200,
+  successCloseButtonText: {
+    color: '#FFFFFF',
+    fontSize: 13,
+    fontWeight: '700',
   },
-  backHomePlaceholder: {
-    height: 52,
+  successActionsRow: {
+    width: '100%',
+    maxWidth: 420,
     marginTop: 8,
+    alignItems: 'stretch',
+    justifyContent: 'center',
+    gap: 12,
+  },
+  backAlertsButton: {
+    backgroundColor: 'rgba(255,255,255,0.1)',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.34)',
+    paddingHorizontal: 18,
+    paddingVertical: 12,
+    borderRadius: 14,
+    alignItems: 'center',
+  },
+  backAlertsButtonText: {
+    color: '#FFFFFF',
+    fontSize: 15,
+    fontWeight: '700',
   },
   backHomeButton: {
-    marginTop: 20,
     backgroundColor: '#F5F0E8',
-    paddingHorizontal: 28,
-    paddingVertical: 14,
+    paddingHorizontal: 18,
+    paddingVertical: 12,
     borderRadius: 14,
+    alignItems: 'center',
   },
   backHomeButtonText: {
     color: '#12100E',

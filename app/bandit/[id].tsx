@@ -1,4 +1,4 @@
-import { Stack, useLocalSearchParams } from 'expo-router';
+import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
 import React, { useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
@@ -27,6 +27,7 @@ import { resolveWhyFollowText } from '@/services/whyFollowCopy';
 import { getNotificationsBackendStatus } from '@/services/localFriend';
 
 import BanditHeader from '@/components/BanditHeader';
+import EventCard from '@/components/EventCard';
 import ReviewCard from '@/components/ReviewCard';
 import TagChip from '@/components/TagChip';
 
@@ -79,6 +80,7 @@ function buildFallbackReviews(banditId: string, banditName: string): DisplayRevi
 }
 
 export default function BanditScreen() {
+  const router = useRouter();
   const { id } = useLocalSearchParams();
   const { width } = useWindowDimensions();
   const isDesktopWeb = Platform.OS === 'web' && width >= 1100;
@@ -98,8 +100,7 @@ export default function BanditScreen() {
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [submitSuccess, setSubmitSuccess] = useState(false);
-  const [askEnabled, setAskEnabled] = useState(false);
-  const [askDisabledReason, setAskDisabledReason] = useState<string | null>(null);
+  const [askNotificationsHint, setAskNotificationsHint] = useState<string | null>(null);
   const [likeUserId, setLikeUserId] = useState<string | null>(null);
   const askTargetBanditIdRef = useRef<string>('');
 
@@ -176,8 +177,9 @@ export default function BanditScreen() {
       await ensureAnonymousSession();
       const status = await getNotificationsBackendStatus();
       if (!active) return;
-      setAskEnabled(status.enabled);
-      setAskDisabledReason(status.enabled ? null : status.reason || 'Questions are unavailable right now.');
+      setAskNotificationsHint(
+        status.enabled ? null : 'Enable notifications to get replies faster. You can still send now.',
+      );
     })();
     return () => {
       active = false;
@@ -299,14 +301,24 @@ export default function BanditScreen() {
             ) : genreEvents.length === 0 ? (
               <Text style={styles.inlineCategoryEmpty}>No spots in this category yet.</Text>
             ) : (
-              genreEvents.map((event) => (
-                <View key={event.id} style={styles.inlineEventRow}>
-                  <Text style={styles.inlineEventName}>{event.name}</Text>
-                  <Text style={styles.inlineEventMeta}>
-                    {[event.neighborhood, event.city].filter(Boolean).join(' · ')}
-                  </Text>
-                </View>
-              ))
+              <View style={styles.inlineCategoryGrid}>
+                {genreEvents.map((event) => (
+                  <View key={event.id} style={[styles.inlineSpotCardWrap, isDesktopWeb && styles.inlineSpotCardWrapDesktop]}>
+                    <EventCard
+                      event={event}
+                      onLike={() => undefined}
+                      isLiked={false}
+                      showButton={false}
+                      variant="default"
+                      showRecommendations
+                      banditId={bandit.id}
+                      onPress={() =>
+                        router.push(`/spot/${event.id}?banditId=${encodeURIComponent(bandit.id)}` as any)
+                      }
+                    />
+                  </View>
+                ))}
+              </View>
             )}
           </View>
         ) : null}
@@ -430,9 +442,7 @@ export default function BanditScreen() {
                 {submitError && (
                   <Text style={styles.askError}>{submitError}</Text>
                 )}
-                {!askEnabled && !!askDisabledReason && (
-                  <Text style={styles.askError}>{askDisabledReason}</Text>
-                )}
+                {!!askNotificationsHint && <Text style={styles.askHint}>{askNotificationsHint}</Text>}
                 {submitSuccess && (
                   <Text style={styles.askSuccess}>Your local banDit will reply soon.</Text>
                 )}
@@ -447,10 +457,10 @@ export default function BanditScreen() {
                   </TouchableOpacity>
                   <TouchableOpacity
                     onPress={handleAskSubmit}
-                    disabled={submitting || !askText.trim() || !askEnabled}
+                    disabled={submitting || !askText.trim()}
                     style={[
                       styles.askSubmitButton,
-                      (submitting || !askText.trim() || !askEnabled) && styles.askSubmitButtonDisabled,
+                      (submitting || !askText.trim()) && styles.askSubmitButtonDisabled,
                     ]}
                   >
                     <Text style={styles.askSubmitText}>
@@ -493,11 +503,11 @@ const styles = StyleSheet.create({
   },
   profileMainCol: {
     flex: 1,
-    minWidth: 320,
+    minWidth: 0,
   },
   profileSideCol: {
     flex: 1,
-    minWidth: 300,
+    minWidth: 0,
   },
   description: {
     fontSize: 14,
@@ -564,6 +574,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#F7F7F7',
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: '#E2E2E2',
+    gap: 10,
   },
   inlineCategoryHeader: {
     flexDirection: 'row',
@@ -585,20 +596,18 @@ const styles = StyleSheet.create({
     fontSize: 13,
     color: '#666',
   },
-  inlineEventRow: {
-    paddingVertical: 8,
-    borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: '#E6E6E6',
+  inlineCategoryGrid: {
+    width: '100%',
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 12,
+    alignItems: 'flex-start',
   },
-  inlineEventName: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#222',
-    marginBottom: 2,
+  inlineSpotCardWrap: {
+    width: '100%',
   },
-  inlineEventMeta: {
-    fontSize: 12,
-    color: '#666',
+  inlineSpotCardWrapDesktop: {
+    width: '48.8%',
   },
   
   askMeButton: {
@@ -646,6 +655,8 @@ const styles = StyleSheet.create({
     borderTopLeftRadius: 20,
     borderTopRightRadius: 20,
     maxHeight: '88%',
+    width: '100%',
+    alignSelf: 'center',
     zIndex: 10,
   },
   askScrollInner: {
@@ -677,6 +688,12 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: '#FF3B30',
     marginBottom: 4,
+  },
+  askHint: {
+    fontSize: 12,
+    color: '#555',
+    marginBottom: 4,
+    lineHeight: 17,
   },
   askSuccess: {
     fontSize: 12,
