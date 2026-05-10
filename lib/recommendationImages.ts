@@ -1,6 +1,6 @@
 import { Database } from '@/lib/database.types';
 import {
-  fetchGooglePlacePhotoUrls,
+  resolveGooglePlaceBusinessData,
   isGooglePlacesDerivedPhotoUrl,
   isLikelyLogoOrBadPlaceImage,
   normalizeEventImageUri,
@@ -50,6 +50,38 @@ function businessKey(event: Event): string {
   const name = String(event.name ?? '').trim().toLowerCase();
   const addr = String(event.address ?? '').trim().toLowerCase();
   return `name:${name}|addr:${addr}|event:${event.id}`;
+}
+
+function normalizePlaceId(raw: unknown): string {
+  return String(raw ?? '')
+    .trim()
+    .replace(/^places\//i, '')
+    .toLowerCase();
+}
+
+function getPlacesMediaPlaceIdFromUrl(uri: string): string | null {
+  try {
+    const u = new URL(uri);
+    const host = u.hostname.toLowerCase();
+    const path = u.pathname;
+    if (!host.includes('places.googleapis.com') || !path.includes('/media')) return null;
+    const m = path.match(/\/v1\/places\/([^/]+)\/photos\//i);
+    return m?.[1] ? normalizePlaceId(decodeURIComponent(m[1])) : null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Stored URLs must prove they belong to the same venue when we can verify place ids.
+ * If event has a place id but URL does not encode a place id, treat as ambiguous.
+ */
+function isStoredUrlTrustedForEvent(event: Event, uri: string): boolean {
+  const eventPlaceId = normalizePlaceId((event as any).google_place_id);
+  if (!eventPlaceId) return true;
+  const urlPlaceId = getPlacesMediaPlaceIdFromUrl(uri);
+  if (!urlPlaceId) return false;
+  return urlPlaceId === eventPlaceId;
 }
 
 function hashPick(seed: string): number {
@@ -128,71 +160,84 @@ export async function resolveStrictRecommendationImagesByEventId(
   events: Event[],
 ): Promise<Record<string, string | null>> {
   try {
-  const used = new Set<string>();
-  const out: Record<string, string | null> = {};
-  const placeCandidatesByEventId = new Map<string, string[]>();
+    const usedImageToPlaceId = new Map<string, string>();
+    const out: Record<string, string | null> = {};
+    const placeCandidatesByEventId = new Map<string, { placeId: string | null; urls: string[] }>();
 
-  await Promise.all(
-    events.map(async (event) => {
-      try {
-        const photos = await fetchGooglePlacePhotoUrls({
-          placeId: (event as any).google_place_id ?? null,
-          name: String(event.name ?? ''),
-          address: String(event.address ?? ''),
-          city: String(event.city ?? ''),
-          neighborhood: String(event.neighborhood ?? ''),
-          limit: 8,
-        });
-        placeCandidatesByEventId.set(
-          event.id,
-          photos.filter((u) => Boolean(u) && !isLikelyLogoOrBadPlaceImage(u)),
-        );
-      } catch {
-        placeCandidatesByEventId.set(event.id, []);
+    await Promise.all(
+      events.map(async (event) => {
+        try {
+          const resolved = await resolveGooglePlaceBusinessData({
+            placeId: (event as any).google_place_id ?? null,
+            name: String(event.name ?? ''),
+            address: String(event.address ?? ''),
+            city: String(event.city ?? ''),
+            neighborhood: String(event.neighborhood ?? ''),
+            photoLimit: 8,
+          });
+          placeCandidatesByEventId.set(
+            event.id,
+            {
+              placeId: String(resolved?.placeId ?? '').trim() || null,
+              urls: (resolved?.photoUrls ?? []).filter((u) => Boolean(u) && !isLikelyLogoOrBadPlaceImage(u)),
+            },
+          );
+        } catch {
+          placeCandidatesByEventId.set(event.id, { placeId: null, urls: [] });
+        }
+      }),
+    );
+
+    for (const event of events) {
+      let picked: string | null = null;
+      const key = businessKey(event);
+      const storedHero = pickStoredRecommendationHeroUrl(event);
+      const resolved = placeCandidatesByEventId.get(event.id) ?? { placeId: null, urls: [] };
+      const placeIdForEvent = normalizePlaceId(resolved.placeId || (event as any).google_place_id || '');
+      const cached = BUSINESS_IMAGE_CACHE.get(key);
+      const safeCached =
+        cached &&
+        !isStockHostUri(cached) &&
+        !isLikelyLogoOrBadPlaceImage(cached) &&
+        isGooglePlacesDerivedPhotoUrl(cached)
+          ? cached
+          : null;
+      if (cached && !safeCached) BUSINESS_IMAGE_CACHE.delete(key);
+
+      // Only allow stored URLs when they prove same place id.
+      const trustedStoredHero =
+        storedHero && isStoredUrlTrustedForEvent(event, storedHero) ? storedHero : null;
+
+      const orderedCandidates: Array<{ uri: string; source: 'live' | 'cache' | 'stored' | 'db' }> = [];
+      if (safeCached) orderedCandidates.push({ uri: safeCached, source: 'cache' });
+      for (const uri of resolved.urls) orderedCandidates.push({ uri, source: 'live' });
+      if (trustedStoredHero) orderedCandidates.push({ uri: trustedStoredHero, source: 'stored' });
+
+      for (const candidate of orderedCandidates) {
+        const uri = candidate.uri;
+        if (!uri || isLikelyLogoOrBadPlaceImage(uri)) continue;
+        if (candidate.source === 'stored') {
+          if (!isStoredUrlTrustedForEvent(event, uri)) continue;
+        }
+        const imageId = canonicalRecommendationImageIdentity(uri);
+        if (!imageId) continue;
+
+        // Duplicate URL guard: allow same image only for the same verified place id.
+        const prevPlaceId = usedImageToPlaceId.get(imageId);
+        if (prevPlaceId) {
+          if (!placeIdForEvent || prevPlaceId !== placeIdForEvent) continue;
+        } else {
+          usedImageToPlaceId.set(imageId, placeIdForEvent || `event:${event.id}`);
+        }
+        picked = uri;
+        break;
       }
-    }),
-  );
 
-  for (const event of events) {
-    let picked: string | null = null;
-    const key = businessKey(event);
-    const storedHero = pickStoredRecommendationHeroUrl(event);
-    if (storedHero) {
-      const sid = canonicalRecommendationImageIdentity(storedHero);
-      if (sid) used.add(sid);
-      BUSINESS_IMAGE_CACHE.set(key, storedHero);
-      out[event.id] = storedHero;
-      continue;
+      if (picked) BUSINESS_IMAGE_CACHE.set(key, picked);
+      out[event.id] = picked ?? buildNeutralBusinessPlaceholder(event);
     }
 
-    const placeCandidates = placeCandidatesByEventId.get(event.id) ?? [];
-    const dbCandidates = getDbImageCandidates(event);
-    const priorityCandidates = [...placeCandidates, ...dbCandidates];
-    const cached = BUSINESS_IMAGE_CACHE.get(key);
-    const safeCached =
-      cached &&
-      !isStockHostUri(cached) &&
-      !isLikelyLogoOrBadPlaceImage(cached) &&
-      isGooglePlacesDerivedPhotoUrl(cached)
-        ? cached
-        : null;
-    if (cached && !safeCached) BUSINESS_IMAGE_CACHE.delete(key);
-    const candidates = safeCached ? [safeCached, ...priorityCandidates] : priorityCandidates;
-
-    for (const candidate of candidates) {
-      if (!candidate || isLikelyLogoOrBadPlaceImage(candidate)) continue;
-      const id = canonicalRecommendationImageIdentity(candidate);
-      if (!id || used.has(id)) continue;
-      used.add(id);
-      picked = candidate;
-      break;
-    }
-
-    if (picked) BUSINESS_IMAGE_CACHE.set(key, picked);
-    out[event.id] = picked ?? buildNeutralBusinessPlaceholder(event);
-  }
-
-  return out;
+    return out;
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
     console.warn('[recommendationImages] resolveStrictRecommendationImagesByEventId failed', msg);
@@ -221,14 +266,11 @@ export function enforceUniqueRecommendationImagesByEventId(
       out[event.id] = null;
       continue;
     }
-    const isNeutralPlaceholder = src.startsWith('data:image/svg+xml');
-    if (isNeutralPlaceholder) {
-      if (used.has(id)) {
-        out[event.id] = null;
-        continue;
-      }
-      used.add(id);
+    if (used.has(id)) {
+      out[event.id] = null;
+      continue;
     }
+    used.add(id);
     out[event.id] = src;
   }
   return out;

@@ -20,7 +20,6 @@ import { Database } from '@/lib/database.types';
 import { supabase } from '@/lib/supabase';
 import { trackEvent } from '@/lib/analytics';
 import {
-  canonicalRecommendationImageIdentity,
   enforceUniqueRecommendationImagesByEventId,
   resolveStrictRecommendationImagesByEventId,
 } from '@/lib/recommendationImages';
@@ -255,42 +254,17 @@ export default function CityGuideScreen() {
       cancelled = true;
     };
   }, [filteredEvents]);
-  /** Dedupe neutral SVG placeholders only so real venue URLs (incl. duplicates) stay visible like /spot detail. */
-  const finalUniqueRecommendationImageById = useMemo(() => {
-    const used = new Set<string>();
-    const out: Record<string, string | null> = {};
-    for (const e of filteredEvents) {
-      const src = resolvedRecommendationImageById[e.id] ?? null;
-      if (!src) {
-        out[e.id] = null;
-        continue;
-      }
-      if (!src.startsWith('data:image/svg+xml')) {
-        out[e.id] = src;
-        continue;
-      }
-      const id = canonicalRecommendationImageIdentity(src);
-      if (!id || used.has(id)) {
-        out[e.id] = null;
-        continue;
-      }
-      used.add(id);
-      out[e.id] = src;
-    }
-    return out;
-  }, [filteredEvents, resolvedRecommendationImageById]);
-
   useEffect(() => {
     const missingHeroIds = filteredEvents
       .map((e) => e.id)
-      .filter((id) => !finalUniqueRecommendationImageById[id]);
+      .filter((id) => !resolvedRecommendationImageById[id]);
     if (missingHeroIds.length > 0) {
       console.warn('[CityGuide] recommendation hero hidden (unique pool exhausted)', {
         banditId: effectiveBanditId,
         eventIds: missingHeroIds,
       });
     }
-  }, [effectiveBanditId, filteredEvents, finalUniqueRecommendationImageById]);
+  }, [effectiveBanditId, filteredEvents, resolvedRecommendationImageById]);
 
   useEffect(() => {
     if (activeRecommendationIndex >= filteredEvents.length) {
@@ -375,7 +349,7 @@ export default function CityGuideScreen() {
   };
 
   const renderRecommendationCard = (event: Event, index: number) => {
-    const imageUri = finalUniqueRecommendationImageById[event.id] ?? null;
+    const imageUri = resolvedRecommendationImageById[event.id] ?? null;
     const showHero = Boolean(imageUri) && !hiddenHeroEventIds.has(event.id);
     const locationLine = [event.neighborhood, event.city].filter(Boolean).join(' · ') || 'Athens';
     const vibeLine = (event.description?.trim() || 'Curated local pick from your banDit guide.').slice(0, 110);
