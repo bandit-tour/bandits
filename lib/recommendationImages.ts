@@ -52,6 +52,13 @@ function businessKey(event: Event): string {
   return `name:${name}|addr:${addr}|event:${event.id}`;
 }
 
+function venueSignature(event: Event): string {
+  const name = String(event.name ?? '').trim().toLowerCase();
+  const addr = String(event.address ?? '').trim().toLowerCase();
+  const city = String(event.city ?? '').trim().toLowerCase();
+  return `${name}|${addr}|${city}`;
+}
+
 function normalizePlaceId(raw: unknown): string {
   return String(raw ?? '')
     .trim()
@@ -161,6 +168,7 @@ export async function resolveStrictRecommendationImagesByEventId(
 ): Promise<Record<string, string | null>> {
   try {
     const usedImageToPlaceId = new Map<string, string>();
+    const usedPlaceIdToVenueSignature = new Map<string, string>();
     const out: Record<string, string | null> = {};
     const placeCandidatesByEventId = new Map<string, { placeId: string | null; urls: string[] }>();
 
@@ -194,6 +202,7 @@ export async function resolveStrictRecommendationImagesByEventId(
       const storedHero = pickStoredRecommendationHeroUrl(event);
       const resolved = placeCandidatesByEventId.get(event.id) ?? { placeId: null, urls: [] };
       const placeIdForEvent = normalizePlaceId(resolved.placeId || (event as any).google_place_id || '');
+      const currentVenueSignature = venueSignature(event);
       const cached = BUSINESS_IMAGE_CACHE.get(key);
       const safeCached =
         cached &&
@@ -213,6 +222,12 @@ export async function resolveStrictRecommendationImagesByEventId(
       for (const uri of resolved.urls) orderedCandidates.push({ uri, source: 'live' });
       if (trustedStoredHero) orderedCandidates.push({ uri: trustedStoredHero, source: 'stored' });
 
+      // Strict rule: no verified place id -> no real image.
+      if (!placeIdForEvent) {
+        out[event.id] = buildNeutralBusinessPlaceholder(event);
+        continue;
+      }
+
       for (const candidate of orderedCandidates) {
         const uri = candidate.uri;
         if (!uri || isLikelyLogoOrBadPlaceImage(uri)) continue;
@@ -222,13 +237,18 @@ export async function resolveStrictRecommendationImagesByEventId(
         const imageId = canonicalRecommendationImageIdentity(uri);
         if (!imageId) continue;
 
+        // Same place id can only serve the same venue signature in a set.
+        const prevVenueSignature = usedPlaceIdToVenueSignature.get(placeIdForEvent);
+        if (prevVenueSignature && prevVenueSignature !== currentVenueSignature) continue;
+
         // Duplicate URL guard: allow same image only for the same verified place id.
         const prevPlaceId = usedImageToPlaceId.get(imageId);
         if (prevPlaceId) {
-          if (!placeIdForEvent || prevPlaceId !== placeIdForEvent) continue;
+          if (prevPlaceId !== placeIdForEvent) continue;
         } else {
-          usedImageToPlaceId.set(imageId, placeIdForEvent || `event:${event.id}`);
+          usedImageToPlaceId.set(imageId, placeIdForEvent);
         }
+        usedPlaceIdToVenueSignature.set(placeIdForEvent, currentVenueSignature);
         picked = uri;
         break;
       }
