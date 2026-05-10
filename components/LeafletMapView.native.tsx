@@ -15,6 +15,10 @@ interface MapViewProps {
   onMapReady: () => void;
   onError: (error: any) => void;
   onRegionChange: (region: any) => void;
+  children?: React.ReactNode;
+  /** Same props as web — optional bandit scope uses shared `getEvents` (not browser-only). */
+  miniMode?: boolean;
+  banditId?: string;
 }
 
 export default function LeafletMapView({
@@ -22,6 +26,7 @@ export default function LeafletMapView({
   onMapReady,
   onError,
   onRegionChange,
+  banditId: banditIdProp,
 }: MapViewProps) {
   const eventListRef = useRef<EventListRef>(null);
   const webViewRef = useRef<WebView>(null);
@@ -32,7 +37,12 @@ export default function LeafletMapView({
     eventListRef.current?.scrollToEvent(event.id);
   };
 
-  const { events, loading, error, calculateOptimalMapBounds } = useMapEvents();
+  const { events, loading, error, calculateOptimalMapBounds, banditId: mapBanditId } = useMapEvents(
+    undefined,
+    banditIdProp != null ? { banditId: banditIdProp } : undefined,
+  );
+
+  const effectiveBanditId = mapBanditId || (Array.isArray(routeBanditId) ? routeBanditId[0] : routeBanditId);
 
   useEffect(() => {
     if (error) {
@@ -243,7 +253,7 @@ export default function LeafletMapView({
         events={events}
         loading={loading}
         error={error}
-        banditId={routeBanditId as string}
+        banditId={(effectiveBanditId || '') as string}
         variant="horizontal"
         showButton={false}
         imageHeight={120}

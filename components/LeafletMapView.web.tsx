@@ -1,9 +1,8 @@
-import { getEvents } from '@/app/services/events';
 import { useMapEvents as useMapEventsHook } from '@/hooks/useMapEvents';
 import { Database } from '@/lib/database.types';
 import { useLocalSearchParams } from 'expo-router';
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { StyleSheet, View } from 'react-native';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
 import EventList, { EventListRef } from './EventList';
 
 type Event = Database['public']['Tables']['event']['Row'];
@@ -86,56 +85,43 @@ export default function LeafletMapView({
   const { banditId: routeBanditId } = useLocalSearchParams();
   const [leafletLoaded, setLeafletLoaded] = useState(false);
   const [mapInstance, setMapInstance] = useState<any>(null);
+  const [activeEventIndex, setActiveEventIndex] = useState(0);
 
-  // Use provided banditId prop, or fall back to route param
-  const activeBanditId = banditId || routeBanditId;
+  /** Same hook + shared `getEvents` path as native (`LeafletMapView.native.tsx`). */
+  const { events, loading, error, banditId: mapBanditId } = useMapEventsHook(
+    undefined,
+    banditId != null ? { banditId } : undefined,
+  );
+
+  const activeBanditId = mapBanditId || routeBanditId;
 
   // Create a handler that scrolls to the event instead of navigating
   const handleMarkerPress = (event: any) => {
+    const idx = events.findIndex((e) => e.id === event.id);
+    if (idx >= 0) setActiveEventIndex(idx);
     eventListRef.current?.scrollToEvent(event.id);
   };
 
-  // Custom state for mini map with specific banditId
-  const [customEvents, setCustomEvents] = useState<Event[]>([]);
-  const [customLoading, setCustomLoading] = useState(false);
-  const [customError, setCustomError] = useState<string | null>(null);
-
-  // Use hook for normal mode, custom state for mini mode with banditId
-  const hookData = useMapEventsHook();
-  const events = banditId ? customEvents : hookData.events;
-  const loading = banditId ? customLoading : hookData.loading;
-  const error = banditId ? customError : hookData.error;
-
-  // Fetch events for specific banditId when in mini mode
-  useEffect(() => {
-    if (banditId && miniMode) {
-      fetchEventsForBandit();
-    }
-  }, [banditId, miniMode]);
-
-  const fetchEventsForBandit = async () => {
-    try {
-      setCustomLoading(true);
-      setCustomError(null);
-
-      const allEventsData = await getEvents({ banditId });
-
-      // Filter out any events that still have null coordinates
-      const validEvents = allEventsData.filter(event =>
-        event.location_lat != null &&
-        event.location_lng != null &&
-        typeof event.location_lat === 'number' &&
-        typeof event.location_lng === 'number'
-      );
-
-      setCustomEvents(validEvents);
-    } catch (err) {
-      console.error('Error fetching events for bandit:', err);
-      setCustomError(err instanceof Error ? err.message : 'Failed to fetch events');
-    } finally {
-      setCustomLoading(false);
+  const focusEventByStep = (dir: -1 | 1) => {
+    if (events.length === 0) return;
+    const next = Math.max(0, Math.min(events.length - 1, activeEventIndex + dir));
+    setActiveEventIndex(next);
+    const nextEvent = events[next];
+    if (!nextEvent) return;
+    eventListRef.current?.scrollToEvent(nextEvent.id);
+    if (mapInstance && nextEvent.location_lat && nextEvent.location_lng) {
+      mapInstance.flyTo([nextEvent.location_lat, nextEvent.location_lng], mapInstance.getZoom(), {
+        animate: true,
+        duration: 0.45,
+      });
     }
   };
+
+  useEffect(() => {
+    if (activeEventIndex >= events.length) {
+      setActiveEventIndex(0);
+    }
+  }, [activeEventIndex, events.length]);
 
   // Debug logging
   useEffect(() => {
@@ -388,17 +374,46 @@ export default function LeafletMapView({
 
       {/* Bottom 60% - Events List (only in normal mode) */}
       {!miniMode && (
-        <EventList
-          ref={eventListRef}
-          events={events}
-          loading={loading}
-          error={error}
-          banditId={activeBanditId as string}
-          variant="horizontal"
-          showButton={false}
-          imageHeight={154}
-          contentContainerStyle={styles.eventsContainer}
-        />
+        <View style={styles.recommendationsPanel}>
+          <View style={styles.recommendationsHeader}>
+            <Text style={styles.recommendationsTitle}>Map picks</Text>
+            {events.length > 1 ? (
+              <View style={styles.recommendationArrows}>
+                <Pressable
+                  style={[styles.arrowBtn, activeEventIndex === 0 && styles.arrowBtnDisabled]}
+                  disabled={activeEventIndex === 0}
+                  onPress={() => focusEventByStep(-1)}
+                >
+                  <Text style={styles.arrowText}>‹</Text>
+                </Pressable>
+                <Pressable
+                  style={[
+                    styles.arrowBtn,
+                    activeEventIndex >= events.length - 1 && styles.arrowBtnDisabled,
+                  ]}
+                  disabled={activeEventIndex >= events.length - 1}
+                  onPress={() => focusEventByStep(1)}
+                >
+                  <Text style={styles.arrowText}>›</Text>
+                </Pressable>
+              </View>
+            ) : null}
+          </View>
+          <Text style={styles.recommendationsHint}>
+            Scroll the strip or use arrows. Marker and card clicks stay unchanged.
+          </Text>
+          <EventList
+            ref={eventListRef}
+            events={events}
+            loading={loading}
+            error={error}
+            banditId={activeBanditId as string}
+            variant="horizontal"
+            showButton={false}
+            imageHeight={154}
+            contentContainerStyle={styles.eventsContainer}
+          />
+        </View>
       )}
     </View>
   );
@@ -419,8 +434,8 @@ const styles = StyleSheet.create({
     height: '100%',
   },
   mapContainer: {
-    height: '40%',
-    backgroundColor: '#f0f0f0',
+    height: '46%',
+    backgroundColor: '#e9ecef',
   },
   miniMapContainer: {
     flex: 1,
@@ -437,6 +452,56 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   eventsContainer: {
-    marginTop: 8,
+    marginTop: 6,
+    paddingHorizontal: 6,
+    paddingBottom: 12,
+  },
+  recommendationsPanel: {
+    flex: 1,
+    backgroundColor: '#f7f8fa',
+    borderTopWidth: 1,
+    borderTopColor: '#E5E7EB',
+    paddingTop: 10,
+  },
+  recommendationsHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 12,
+    marginBottom: 4,
+  },
+  recommendationsTitle: {
+    fontSize: 15,
+    fontWeight: '800',
+    color: '#1f2937',
+  },
+  recommendationsHint: {
+    fontSize: 12,
+    color: '#6b7280',
+    paddingHorizontal: 12,
+    marginBottom: 6,
+  },
+  recommendationArrows: {
+    flexDirection: 'row',
+    gap: 8,
+  },
+  arrowBtn: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: '#D1D5DB',
+    backgroundColor: '#FFFFFF',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  arrowBtnDisabled: {
+    opacity: 0.35,
+  },
+  arrowText: {
+    fontSize: 17,
+    fontWeight: '700',
+    color: '#111827',
+    marginTop: -1,
   },
 });

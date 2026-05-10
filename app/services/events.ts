@@ -67,6 +67,7 @@ async function fetchEventsByIdsChunked(ids: string[]): Promise<Event[]> {
  * We intentionally do NOT use PostgREST resource embeds (`event:event_id(*)`) here — they have
  * repeatedly returned null nested rows in production, which yielded zero recommendations while links existed.
  * Images are optional and never affect this path.
+ * Used everywhere (Expo web, iOS, Android) through the same `getEvents` API — not a web-only code path.
  */
 async function getEventsForBanditId(banditId: string, filters: EventFilters): Promise<Event[]> {
   let linksRes = await supabase

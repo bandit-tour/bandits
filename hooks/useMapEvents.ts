@@ -6,6 +6,14 @@ import { useCallback, useEffect, useState } from 'react';
 
 type Event = Database['public']['Tables']['event']['Row'];
 
+export type UseMapEventsOptions = {
+  /**
+   * When set (e.g. embedded map / mini preview), overrides `banditId` from the route.
+   * Same `getEvents` path runs on web and native — never browser-only.
+   */
+  banditId?: string | null;
+};
+
 export interface MapBounds {
   center: { latitude: number; longitude: number };
   zoom: number;
@@ -17,9 +25,24 @@ export interface MapBounds {
   };
 }
 
-export function useMapEvents(onEventPress?: (event: Event) => void) {
-  const { banditId: rawBanditId } = useLocalSearchParams<{ banditId?: string }>();
-  const banditId = Array.isArray(rawBanditId) ? rawBanditId[0] : rawBanditId;
+export function useMapEvents(
+  onEventPress?: (event: Event) => void,
+  options?: UseMapEventsOptions,
+) {
+  const { banditId: rawRouteBanditId } = useLocalSearchParams<{ banditId?: string }>();
+  const routeBanditId = Array.isArray(rawRouteBanditId) ? rawRouteBanditId[0] : rawRouteBanditId;
+
+  const propBanditId =
+    options?.banditId != null && String(options.banditId).trim() !== ''
+      ? String(options.banditId).trim()
+      : '';
+  const effectiveBanditId =
+    propBanditId !== ''
+      ? propBanditId
+      : routeBanditId && routeBanditId !== 'undefined'
+        ? routeBanditId
+        : undefined;
+
   const { selectedCity } = useCity();
   const router = useRouter();
   const [events, setEvents] = useState<Event[]>([]);
@@ -32,8 +55,8 @@ export function useMapEvents(onEventPress?: (event: Event) => void) {
       setError(null);
 
       const filters: EventFilters = {};
-      if (banditId && banditId !== 'undefined') {
-        filters.banditId = banditId;
+      if (effectiveBanditId) {
+        filters.banditId = effectiveBanditId;
       } else if (selectedCity?.trim()) {
         filters.city = selectedCity.trim();
       }
@@ -63,7 +86,7 @@ export function useMapEvents(onEventPress?: (event: Event) => void) {
     } finally {
       setLoading(false);
     }
-  }, [banditId, selectedCity]);
+  }, [effectiveBanditId, selectedCity]);
 
   useEffect(() => {
     void fetchEvents();
@@ -138,9 +161,9 @@ export function useMapEvents(onEventPress?: (event: Event) => void) {
       onEventPress(event);
     } else {
       // Default behavior: navigate to event detail page
-      const url = banditId 
-        ? `/event/${event.id}?banditId=${banditId}` as any
-        : `/event/${event.id}` as any;
+      const url = effectiveBanditId
+        ? (`/event/${event.id}?banditId=${effectiveBanditId}` as any)
+        : (`/event/${event.id}` as any);
       router.push(url);
     }
   };
@@ -149,7 +172,7 @@ export function useMapEvents(onEventPress?: (event: Event) => void) {
     events,
     loading,
     error,
-    banditId: banditId as string,
+    banditId: effectiveBanditId ?? '',
     calculateOptimalMapBounds,
     handleEventPress,
     refetchEvents: fetchEvents,
