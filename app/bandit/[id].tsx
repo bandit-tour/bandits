@@ -8,7 +8,7 @@ import {
   Modal,
   Platform,
   Pressable,
-  ScrollView,
+  ScrollView as RNScrollView,
   StyleSheet,
   Text,
   TextInput,
@@ -33,6 +33,11 @@ import TagChip from '@/components/TagChip';
 
 import { TAG_EMOJI_MAP } from '@/constants/tagNameToEmoji';
 import { Database } from '@/lib/database.types';
+import { buildEventListImagePlan } from '@/lib/eventListImagePlan';
+import {
+  enforceUniqueRecommendationImagesByEventId,
+  resolveStrictRecommendationImagesByEventId,
+} from '@/lib/recommendationImages';
 import { trackEvent } from '@/lib/analytics';
 
 type Bandit = Database['public']['Tables']['bandit']['Row'];
@@ -51,6 +56,9 @@ type EventCategory = {
 };
 
 type EventItem = Database['public']['Tables']['event']['Row'];
+
+/** Use RN ScrollView across platforms for consistent responder behavior. */
+const ProfileScrollView = RNScrollView;
 
 const FALLBACK_HANDLES = [
   'athens.nights',
@@ -91,6 +99,7 @@ export default function BanditScreen() {
   const [categories, setCategories] = useState<EventCategory[]>([]);
   const [selectedGenre, setSelectedGenre] = useState<string | null>(null);
   const [genreEvents, setGenreEvents] = useState<EventItem[]>([]);
+  const [genreRecommendationImageById, setGenreRecommendationImageById] = useState<Record<string, string | null>>({});
   const [loadingGenreEvents, setLoadingGenreEvents] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -186,6 +195,18 @@ export default function BanditScreen() {
     };
   }, []);
 
+  useEffect(() => {
+    let cancelled = false;
+    void (async () => {
+      const out = await resolveStrictRecommendationImagesByEventId(genreEvents as any);
+      const uniqueOut = enforceUniqueRecommendationImagesByEventId(genreEvents as any, out);
+      if (!cancelled) setGenreRecommendationImageById(uniqueOut);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [genreEvents]);
+
   if (loading) {
     return (
       <View style={styles.loadingContainer}>
@@ -253,12 +274,18 @@ export default function BanditScreen() {
     <>
       <Stack.Screen options={{ headerShown: true, title: '', headerBackTitle: 'Back' }} />
 
-      <ScrollView
+      <ProfileScrollView
         style={styles.container}
         contentContainerStyle={[
           styles.contentContainer,
           isDesktopWeb && styles.contentContainerDesktop,
         ]}
+        {...(Platform.OS !== 'web'
+          ? {
+              keyboardShouldPersistTaps: 'always' as const,
+              canCancelContentTouches: false,
+            }
+          : {})}
       >
         {/* HEADER + CATEGORIES */}
         <BanditHeader
@@ -302,22 +329,33 @@ export default function BanditScreen() {
               <Text style={styles.inlineCategoryEmpty}>No spots in this category yet.</Text>
             ) : (
               <View style={styles.inlineCategoryGrid}>
-                {genreEvents.map((event) => (
-                  <View key={event.id} style={[styles.inlineSpotCardWrap, isDesktopWeb && styles.inlineSpotCardWrapDesktop]}>
-                    <EventCard
-                      event={event}
-                      onLike={() => undefined}
-                      isLiked={false}
-                      showButton={false}
-                      variant="default"
-                      showRecommendations
-                      banditId={bandit.id}
-                      onPress={() =>
-                        router.push(`/spot/${event.id}?banditId=${encodeURIComponent(bandit.id)}` as any)
-                      }
-                    />
-                  </View>
-                ))}
+                {(() => {
+                  const plan = buildEventListImagePlan(genreEvents);
+                  return genreEvents.map((event) => (
+                    <View
+                      key={event.id}
+                      style={[styles.inlineSpotCardWrap, isDesktopWeb && styles.inlineSpotCardWrapDesktop]}
+                    >
+                      <EventCard
+                        event={event}
+                        onLike={() => undefined}
+                        isLiked={false}
+                        showButton={false}
+                        variant="horizontal"
+                        fillHorizontalCell
+                        showRecommendations
+                        prioritizeCardPress
+                        banditId={bandit.id}
+                        listImageScope={plan.get(event.id)}
+                        resolvedRecommendationImageUri={genreRecommendationImageById[event.id] ?? null}
+                        strictRecommendationImagePolicy
+                        onPress={() =>
+                          router.push(`/spot/${event.id}?banditId=${encodeURIComponent(bandit.id)}` as any)
+                        }
+                      />
+                    </View>
+                  ));
+                })()}
               </View>
             )}
           </View>
@@ -329,7 +367,7 @@ export default function BanditScreen() {
             {tags.length > 0 && (
               <View style={styles.vibesSection}>
                 <Text style={styles.vibesLabel}>Vibes</Text>
-                <ScrollView
+                <RNScrollView
                   horizontal
                   showsHorizontalScrollIndicator={false}
                   contentContainerStyle={styles.vibesContainer}
@@ -341,7 +379,7 @@ export default function BanditScreen() {
                     />
                   
                   ))}
-                </ScrollView>
+                </RNScrollView>
               </View>
             )}
 
@@ -378,7 +416,7 @@ export default function BanditScreen() {
               </Text>
 
               {reviews.length > 0 && (
-                <ScrollView
+                <RNScrollView
                   horizontal
                   showsHorizontalScrollIndicator={false}
                   contentContainerStyle={styles.reviewsContainer}
@@ -386,7 +424,7 @@ export default function BanditScreen() {
                   {reviews.map((review, index) => (
                     <ReviewCard key={index} review={review} />
                   ))}
-                </ScrollView>
+                </RNScrollView>
               )}
             </View>
           </View>
@@ -396,7 +434,7 @@ export default function BanditScreen() {
         <Pressable style={styles.askMeButton} onPress={handleAskMePress}>
           <Text style={styles.askMeText}>Ask me</Text>
         </Pressable>
-      </ScrollView>
+      </ProfileScrollView>
 
       <Modal
         visible={askOpen}
@@ -422,7 +460,7 @@ export default function BanditScreen() {
               accessibilityLabel="Dismiss"
             />
             <View style={styles.askCard}>
-              <ScrollView
+              <RNScrollView
                 keyboardShouldPersistTaps="handled"
                 showsVerticalScrollIndicator={false}
                 contentContainerStyle={styles.askScrollInner}
@@ -468,7 +506,7 @@ export default function BanditScreen() {
                     </Text>
                   </TouchableOpacity>
                 </View>
-              </ScrollView>
+              </RNScrollView>
             </View>
           </View>
         </KeyboardAvoidingView>
@@ -648,6 +686,8 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: 'rgba(0,0,0,0.3)',
     justifyContent: 'flex-end',
+    width: '100%',
+    overflow: 'hidden',
   },
   askCard: {
     backgroundColor: '#FFFFFF',
@@ -656,11 +696,13 @@ const styles = StyleSheet.create({
     borderTopRightRadius: 20,
     maxHeight: '88%',
     width: '100%',
-    alignSelf: 'center',
+    maxWidth: '100%',
+    alignSelf: 'stretch',
     zIndex: 10,
   },
   askScrollInner: {
     paddingBottom: 24,
+    width: '100%',
   },
   askTitle: {
     fontSize: 16,
@@ -702,9 +744,12 @@ const styles = StyleSheet.create({
   },
   askActions: {
     flexDirection: 'row',
+    flexWrap: 'wrap',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginTop: 4,
+    gap: 12,
+    marginTop: 8,
+    width: '100%',
   },
   askCancel: {
     fontSize: 14,
