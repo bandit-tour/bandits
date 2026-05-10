@@ -1,5 +1,10 @@
 import Constants from 'expo-constants';
 
+function logPlacesFetchError(stage: string, err: unknown): void {
+  const msg = err instanceof Error ? err.message : String(err);
+  console.warn(`[placePhoto] ${stage}`, msg);
+}
+
 /** Deterministic real photo when DB + Places are unavailable (never a gray box). */
 export function picsumPlaceImage(seed: string, w = 800, h = 600): string {
   return `https://picsum.photos/seed/${encodeURIComponent(seed)}/${w}/${h}`;
@@ -345,43 +350,53 @@ async function placesNewFetchPlace(placeIdBare: string, apiKey: string): Promise
   const id = normalizeStoredPlaceId(placeIdBare);
   if (!id) return null;
   const url = `${PLACES_API_NEW_BASE}/places/${encodeURIComponent(id)}`;
-  const resp = await fetch(url, {
-    headers: {
-      'X-Goog-Api-Key': apiKey,
-      // Place Details (New) field mask — photos + locality for enrichment
-      'X-Goog-FieldMask': 'id,displayName,formattedAddress,addressComponents,location,photos',
-    },
-  });
-  if (!resp.ok) return null;
   try {
-    return await resp.json();
-  } catch {
+    const resp = await fetch(url, {
+      headers: {
+        'X-Goog-Api-Key': apiKey,
+        // Place Details (New) field mask — photos + locality for enrichment
+        'X-Goog-FieldMask': 'id,displayName,formattedAddress,addressComponents,location,photos',
+      },
+    });
+    if (!resp.ok) return null;
+    try {
+      return await resp.json();
+    } catch {
+      return null;
+    }
+  } catch (err) {
+    logPlacesFetchError(`placesNewFetchPlace(${id.slice(0, 12)}…)`, err);
     return null;
   }
 }
 
 async function placesNewSearchText(textQuery: string, apiKey: string): Promise<any[]> {
-  const resp = await fetch(`${PLACES_API_NEW_BASE}/places:searchText`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'X-Goog-Api-Key': apiKey,
-      'X-Goog-FieldMask': 'places.id,places.displayName,places.formattedAddress,places.location,places.photos',
-    },
-    body: JSON.stringify({
-      textQuery,
-      languageCode: 'en',
-      regionCode: 'GR',
-    }),
-  });
-  if (!resp.ok) return [];
-  let json: any;
   try {
-    json = await resp.json();
-  } catch {
+    const resp = await fetch(`${PLACES_API_NEW_BASE}/places:searchText`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-Goog-Api-Key': apiKey,
+        'X-Goog-FieldMask': 'places.id,places.displayName,places.formattedAddress,places.location,places.photos',
+      },
+      body: JSON.stringify({
+        textQuery,
+        languageCode: 'en',
+        regionCode: 'GR',
+      }),
+    });
+    if (!resp.ok) return [];
+    let json: any;
+    try {
+      json = await resp.json();
+    } catch {
+      return [];
+    }
+    return Array.isArray(json?.places) ? json.places : [];
+  } catch (err) {
+    logPlacesFetchError(`placesNewSearchText(${textQuery.slice(0, 48)}…)`, err);
     return [];
   }
-  return Array.isArray(json?.places) ? json.places : [];
 }
 
 function cityFromPlacesNewAddressComponents(place: any): string | null {
@@ -426,6 +441,7 @@ async function resolveGooglePlaceBusinessDataNew(args: {
   locationLng: number | null;
   photoUrls: string[];
 } | null> {
+  try {
   const expectedName = String(args.name ?? '').trim();
   if (!expectedName) return null;
   const normalizedPlaceId = normalizeStoredPlaceId(String(args.placeId ?? '').trim());
@@ -520,6 +536,10 @@ async function resolveGooglePlaceBusinessDataNew(args: {
     locationLng,
     photoUrls,
   };
+  } catch (err) {
+    logPlacesFetchError('resolveGooglePlaceBusinessDataNew', err);
+    return null;
+  }
 }
 
 async function resolveGooglePlaceBusinessDataLegacy(args: {
@@ -539,6 +559,7 @@ async function resolveGooglePlaceBusinessDataLegacy(args: {
   locationLng: number | null;
   photoUrls: string[];
 } | null> {
+  try {
   const apiKey = args.apiKey;
   const query = [args.name, args.address, args.city, args.neighborhood].filter(Boolean).join(' ').trim();
   const expectedName = String(args.name ?? '').trim();
@@ -550,7 +571,12 @@ async function resolveGooglePlaceBusinessDataLegacy(args: {
       apiKey,
     )}&input=${encodeURIComponent(query)}&inputtype=textquery&fields=place_id,name,formatted_address`;
     const findResp = await fetch(findUrl);
-    const findJson = await findResp.json();
+    let findJson: any = {};
+    try {
+      findJson = await findResp.json();
+    } catch {
+      findJson = {};
+    }
     const candidates = Array.isArray(findJson?.candidates) ? findJson.candidates : [];
     const matched = candidates.find((c: any) => {
       const n = String(c?.name ?? '').trim();
@@ -571,7 +597,12 @@ async function resolveGooglePlaceBusinessDataLegacy(args: {
     placeId,
   )}&fields=place_id,name,formatted_address,address_components,geometry/location,photos`;
   const detailsResp = await fetch(detailsUrl);
-  const detailsJson = await detailsResp.json();
+  let detailsJson: any = {};
+  try {
+    detailsJson = await detailsResp.json();
+  } catch {
+    detailsJson = {};
+  }
   const result = detailsJson?.result;
   if (!result) return null;
 
@@ -619,6 +650,10 @@ async function resolveGooglePlaceBusinessDataLegacy(args: {
       typeof result?.geometry?.location?.lng === 'number' ? result.geometry.location.lng : null,
     photoUrls: out,
   };
+  } catch (err) {
+    logPlacesFetchError('resolveGooglePlaceBusinessDataLegacy', err);
+    return null;
+  }
 }
 
 export async function fetchGooglePlacePhotoUrl(args: {
@@ -628,8 +663,13 @@ export async function fetchGooglePlacePhotoUrl(args: {
   city: string;
   neighborhood: string;
 }): Promise<string | null> {
-  const urls = await fetchGooglePlacePhotoUrls(args);
-  return urls[0] ?? null;
+  try {
+    const urls = await fetchGooglePlacePhotoUrls(args);
+    return urls[0] ?? null;
+  } catch (err) {
+    logPlacesFetchError('fetchGooglePlacePhotoUrl', err);
+    return null;
+  }
 }
 
 export async function fetchGooglePlacePhotoUrls(args: {
@@ -640,11 +680,16 @@ export async function fetchGooglePlacePhotoUrls(args: {
   neighborhood: string;
   limit?: number;
 }): Promise<string[]> {
-  const resolved = await resolveGooglePlaceBusinessData({
-    ...args,
-    photoLimit: args.limit ?? 5,
-  });
-  return resolved?.photoUrls ?? [];
+  try {
+    const resolved = await resolveGooglePlaceBusinessData({
+      ...args,
+      photoLimit: args.limit ?? 5,
+    });
+    return resolved?.photoUrls ?? [];
+  } catch (err) {
+    logPlacesFetchError('fetchGooglePlacePhotoUrls', err);
+    return [];
+  }
 }
 
 export async function resolveGooglePlaceBusinessData(args: {
@@ -663,19 +708,24 @@ export async function resolveGooglePlaceBusinessData(args: {
   locationLng: number | null;
   photoUrls: string[];
 } | null> {
-  const apiKey = getMapsApiKey();
-  if (!apiKey) return null;
+  try {
+    const apiKey = getMapsApiKey();
+    if (!apiKey) return null;
 
-  const nextTry = await resolveGooglePlaceBusinessDataNew({
-    ...args,
-    apiKey,
-  });
-  // New API already applied strict venue matching; never fall through to legacy for a different wrong venue.
-  if (nextTry !== null) return nextTry;
+    const nextTry = await resolveGooglePlaceBusinessDataNew({
+      ...args,
+      apiKey,
+    });
+    // New API already applied strict venue matching; never fall through to legacy for a different wrong venue.
+    if (nextTry !== null) return nextTry;
 
-  const legacy = await resolveGooglePlaceBusinessDataLegacy({
-    ...args,
-    apiKey,
-  });
-  return legacy;
+    const legacy = await resolveGooglePlaceBusinessDataLegacy({
+      ...args,
+      apiKey,
+    });
+    return legacy;
+  } catch (err) {
+    logPlacesFetchError('resolveGooglePlaceBusinessData', err);
+    return null;
+  }
 }

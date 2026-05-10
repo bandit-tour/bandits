@@ -127,6 +127,7 @@ export function pickStoredRecommendationHeroUrl(event: Event): string | null {
 export async function resolveStrictRecommendationImagesByEventId(
   events: Event[],
 ): Promise<Record<string, string | null>> {
+  try {
   const used = new Set<string>();
   const out: Record<string, string | null> = {};
   const placeCandidatesByEventId = new Map<string, string[]>();
@@ -192,6 +193,15 @@ export async function resolveStrictRecommendationImagesByEventId(
   }
 
   return out;
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    console.warn('[recommendationImages] resolveStrictRecommendationImagesByEventId failed', msg);
+    const fallback: Record<string, string | null> = {};
+    for (const event of events) {
+      fallback[event.id] = buildNeutralBusinessPlaceholder(event);
+    }
+    return fallback;
+  }
 }
 
 export function enforceUniqueRecommendationImagesByEventId(

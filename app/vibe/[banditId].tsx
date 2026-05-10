@@ -3,10 +3,12 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
   Linking,
+  Platform,
   Pressable,
   ScrollView,
   StyleSheet,
   Text,
+  useWindowDimensions,
   View,
 } from 'react-native';
 
@@ -46,35 +48,41 @@ function VibeStopImage({ stop }: { stop: VibeStop }) {
     setRemoteDone(false);
     let cancelled = false;
     void (async () => {
-      if (stop.imageCandidates.length > 0) {
-        setRemoteDone(true);
-        return;
-      }
-      if (stop.kind === 'event' && stop.eventId) {
-        const { data } = await supabase.from('event').select('*').eq('id', stop.eventId).maybeSingle();
-        if (cancelled || !data) {
+      try {
+        if (stop.imageCandidates.length > 0) {
           setRemoteDone(true);
           return;
         }
-        const ev = data as EventRow;
+        if (stop.kind === 'event' && stop.eventId) {
+          const { data } = await supabase.from('event').select('*').eq('id', stop.eventId).maybeSingle();
+          if (cancelled || !data) {
+            setRemoteDone(true);
+            return;
+          }
+          const ev = data as EventRow;
+          const url = await fetchGooglePlacePhotoUrl({
+            placeId: (ev as any).google_place_id ?? null,
+            name: ev.name,
+            address: ev.address,
+            city: ev.city,
+            neighborhood: ev.neighborhood,
+          });
+          if (url && !cancelled) setRemote(url);
+          setRemoteDone(true);
+          return;
+        }
         const url = await fetchGooglePlacePhotoUrl({
-          name: ev.name,
-          address: ev.address,
-          city: ev.city,
-          neighborhood: ev.neighborhood,
+          name: stop.name,
+          address: stop.address,
+          city: '',
+          neighborhood: '',
         });
         if (url && !cancelled) setRemote(url);
+      } catch (e) {
+        console.warn('[VibeStopImage] place photo fetch failed', stop.key, e instanceof Error ? e.message : e);
+      } finally {
         setRemoteDone(true);
-        return;
       }
-      const url = await fetchGooglePlacePhotoUrl({
-        name: stop.name,
-        address: stop.address,
-        city: '',
-        neighborhood: '',
-      });
-      if (url && !cancelled) setRemote(url);
-      setRemoteDone(true);
     })();
     return () => {
       cancelled = true;
@@ -112,6 +120,8 @@ export default function VibeRouteScreen() {
   const { banditId: rawId } = useLocalSearchParams<{ banditId: string }>();
   const banditId = Array.isArray(rawId) ? rawId[0] : rawId;
   const router = useRouter();
+  const { width } = useWindowDimensions();
+  const isDesktopWeb = Platform.OS === 'web' && width >= 1024;
 
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -216,7 +226,10 @@ export default function VibeRouteScreen() {
   return (
     <>
       <Stack.Screen options={{ headerShown: true, title: '' }} />
-      <ScrollView style={styles.scroll} contentContainerStyle={styles.scrollContent}>
+      <ScrollView
+        style={styles.scroll}
+        contentContainerStyle={[styles.scrollContent, isDesktopWeb && styles.scrollContentDesktop]}
+      >
         <Text style={styles.kicker}>Curated vibe</Text>
         <Text style={styles.headline}>{title}</Text>
         <Text style={styles.intro}>
@@ -229,7 +242,7 @@ export default function VibeRouteScreen() {
           </Text>
         ) : (
           stops.map((stop) => (
-            <Pressable key={stop.key} style={styles.card} onPress={() => openStop(stop)}>
+            <Pressable key={stop.key} style={[styles.card, isDesktopWeb && styles.cardDesktop]} onPress={() => openStop(stop)}>
               <View style={styles.stepRow}>
                 <Text style={styles.stepNum}>{stop.order}</Text>
                 <View style={styles.stepBody}>
@@ -253,6 +266,12 @@ export default function VibeRouteScreen() {
 const styles = StyleSheet.create({
   scroll: { flex: 1, backgroundColor: '#FFFFFF' },
   scrollContent: { padding: 16, paddingBottom: 40 },
+  scrollContentDesktop: {
+    maxWidth: 980,
+    width: '100%',
+    alignSelf: 'center',
+    paddingHorizontal: 24,
+  },
   centered: { flex: 1, justifyContent: 'center', alignItems: 'center', padding: 24 },
   err: { color: '#B00020', fontSize: 15, textAlign: 'center' },
   kicker: {
@@ -283,6 +302,11 @@ const styles = StyleSheet.create({
     marginBottom: 14,
     overflow: 'hidden',
   },
+  cardDesktop: {
+    maxWidth: 860,
+    alignSelf: 'center',
+    width: '100%',
+  },
   stepRow: { flexDirection: 'row', padding: 12 },
   stepNum: {
     width: 28,
@@ -296,6 +320,7 @@ const styles = StyleSheet.create({
   imageWrap: {
     width: '100%',
     aspectRatio: 16 / 9,
+    maxHeight: 320,
     borderRadius: 10,
     overflow: 'hidden',
     marginBottom: 8,
