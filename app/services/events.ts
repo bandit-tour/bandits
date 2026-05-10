@@ -1,11 +1,13 @@
 import { EVENT_GENRES } from '@/constants/Genres';
 import { Database } from '@/lib/database.types';
 import { isAuthOrMissingError } from '@/lib/postgrestAuth';
+import { resolveGooglePlaceBusinessData } from '@/lib/placePhoto';
 import { supabase } from '@/lib/supabase';
 
 type Event = Database['public']['Tables']['event']['Row'];
 type EventInsert = Database['public']['Tables']['event']['Insert'];
 type EventUpdate = Database['public']['Tables']['event']['Update'];
+const STOCK_IMAGE_HOSTS = ['images.pexels.com', 'pexels.com', 'images.unsplash.com', 'unsplash.com', 'picsum.photos'];
 
 export interface EventFilters {
   searchQuery?: string;
@@ -16,6 +18,17 @@ export interface EventFilters {
   userLat?: number;
   userLng?: number;
   radiusKm?: number;
+}
+
+function normalizeGenre(genre: unknown): 'Food' | 'Culture' | 'Nightlife' | 'Shopping' | 'Coffee' | null {
+  if (typeof genre !== 'string') return null;
+  const normalized = genre.trim().toLowerCase();
+  if (!normalized) return null;
+  const mapped = normalized.charAt(0).toUpperCase() + normalized.slice(1);
+  if ((EVENT_GENRES as readonly string[]).includes(mapped)) {
+    return mapped as 'Food' | 'Culture' | 'Nightlife' | 'Shopping' | 'Coffee';
+  }
+  return null;
 }
 
 // Calculate distance between two points using Haversine formula
@@ -31,6 +44,67 @@ function calculateDistance(lat1: number, lon1: number, lat2: number, lon2: numbe
   return R * c;
 }
 
+function isStockHostUri(uri: string | null | undefined): boolean {
+  const raw = String(uri ?? '').trim();
+  if (!raw) return false;
+  try {
+    const host = new URL(raw).hostname.toLowerCase();
+    return STOCK_IMAGE_HOSTS.some((h) => host === h || host.endsWith(`.${h}`));
+  } catch {
+    return false;
+  }
+}
+
+async function hydrateBusinessMediaCache(events: Event[]): Promise<Event[]> {
+  if (events.length === 0) return events;
+  const next = [...events];
+  const candidates = events
+    .filter((event) => {
+      if (!String(event.name ?? '').trim()) return false;
+      const hasAddressContext =
+        Boolean(String(event.city ?? '').trim()) ||
+        Boolean(String(event.address ?? '').trim()) ||
+        Boolean(String((event as any).google_place_id ?? '').trim());
+      if (!hasAddressContext) return false;
+      const hasPrimary = Boolean(String(event.image_url ?? '').trim());
+      const hasGallery = Boolean(String(event.image_gallery ?? '').trim());
+      const hasPlaceId = Boolean(String((event as any).google_place_id ?? '').trim());
+      // Re-hydrate when media is missing or obviously generic stock.
+      return !hasPlaceId || !hasPrimary || !hasGallery || isStockHostUri(event.image_url);
+    })
+    .slice(0, 12);
+  if (candidates.length === 0) return events;
+
+  await Promise.allSettled(
+    candidates.map(async (event) => {
+      const resolved = await resolveGooglePlaceBusinessData({
+        placeId: (event as any).google_place_id ?? null,
+        name: String(event.name ?? ''),
+        address: String(event.address ?? ''),
+        city: String(event.city ?? ''),
+        neighborhood: String(event.neighborhood ?? ''),
+        photoLimit: 8,
+      });
+      if (!resolved || resolved.photoUrls.length === 0) return;
+      const payload: EventUpdate = {
+        google_place_id: resolved.placeId || ((event as any).google_place_id ?? null),
+        image_url: resolved.photoUrls[0],
+        image_gallery: JSON.stringify(resolved.photoUrls),
+        location_lat: resolved.locationLat ?? event.location_lat,
+        location_lng: resolved.locationLng ?? event.location_lng,
+        address: event.address || resolved.formattedAddress || event.address,
+        city: event.city || resolved.city || event.city,
+      };
+      const { data: updated } = await supabase.from('event').update(payload).eq('id', event.id).select('*').maybeSingle();
+      const merged = (updated as Event | null) ?? ({ ...event, ...payload } as Event);
+      const idx = next.findIndex((row) => row.id === event.id);
+      if (idx >= 0) next[idx] = merged;
+    }),
+  );
+
+  return next;
+}
+
 export async function getEvents(filters: EventFilters = {}): Promise<Event[]> {
   let query;
   let data;
@@ -42,16 +116,25 @@ export async function getEvents(filters: EventFilters = {}): Promise<Event[]> {
       .from('bandit_event')
       // Join correctly via the event_id foreign key
       // bandit_event.event_id -> event.id
-      .select('event:event_id(*)')
+      .select('recommendation_place_photo_url, event:event_id(*)')
       .eq('bandit_id', filters.banditId);
     
     const result = await query;
     data = result.data;
     error = result.error;
     
-    // Extract events from the joined result
+    // Extract events from the joined result; attach per-link hero URL for City Guide cards.
     if (data) {
-      data = data.map((item: any) => item.event);
+      data = data
+        .map((item: any) => {
+          const ev = item?.event;
+          if (!ev) return null;
+          return {
+            ...ev,
+            bandit_photo_url: item.recommendation_place_photo_url ?? null,
+          };
+        })
+        .filter(Boolean);
     }
 
     console.log('[getEvents] banditId join result', {
@@ -142,7 +225,7 @@ export async function getEvents(filters: EventFilters = {}): Promise<Event[]> {
     });
   }
 
-  return events;
+  return hydrateBusinessMediaCache(events);
 }
 
 
@@ -333,7 +416,7 @@ export async function getBanditEventCategories(banditId: string): Promise<{ genr
   const genreCounts = new Map<string, number>();
 
   data?.forEach((item: any) => {
-    const genre = item.event?.genre;
+    const genre = normalizeGenre(item.event?.genre);
     if (genre) {
       genreCounts.set(genre, (genreCounts.get(genre) || 0) + 1);
     }
@@ -341,9 +424,9 @@ export async function getBanditEventCategories(banditId: string): Promise<{ genr
 
   // Convert to array and sort by count (descending)
   const result = Array.from(genreCounts.entries())
-    .map(([genre, count]) => ({ 
-      genre: genre as 'Food' | 'Culture' | 'Nightlife' | 'Shopping' | 'Coffee', 
-      count 
+    .map(([genre, count]) => ({
+      genre: genre as 'Food' | 'Culture' | 'Nightlife' | 'Shopping' | 'Coffee',
+      count
     }))
     .sort((a, b) => b.count - a.count);
 
@@ -389,10 +472,50 @@ export async function getEventBanditRecommendations(eventId: string): Promise<Pi
   return data?.map((item: any) => item.bandit).filter(Boolean) || [];
 }
 
+async function enrichEventBusinessMedia(
+  draft: EventInsert | EventUpdate,
+  base?: Event | null,
+): Promise<EventInsert | EventUpdate> {
+  const name = String((draft as any).name ?? base?.name ?? '').trim();
+  const address = String((draft as any).address ?? base?.address ?? '').trim();
+  const city = String((draft as any).city ?? base?.city ?? '').trim();
+  const neighborhood = String((draft as any).neighborhood ?? base?.neighborhood ?? '').trim();
+  const existingPlaceId = String((draft as any).google_place_id ?? (base as any)?.google_place_id ?? '').trim();
+  if (!name || (!city && !address && !existingPlaceId)) return draft;
+
+  try {
+    const place = await resolveGooglePlaceBusinessData({
+      placeId: existingPlaceId || null,
+      name,
+      address,
+      city,
+      neighborhood,
+      photoLimit: 8,
+    });
+    if (!place) return draft;
+
+    const next: any = { ...draft };
+    next.google_place_id = place.placeId || next.google_place_id || (base as any)?.google_place_id || null;
+    if ((next.location_lat == null || next.location_lat === 0) && place.locationLat != null) next.location_lat = place.locationLat;
+    if ((next.location_lng == null || next.location_lng === 0) && place.locationLng != null) next.location_lng = place.locationLng;
+    if (!next.address && place.formattedAddress) next.address = place.formattedAddress;
+    if (!next.city && place.city) next.city = place.city;
+    if (!next.image_url && place.photoUrls.length > 0) next.image_url = place.photoUrls[0];
+    if ((!next.image_gallery || String(next.image_gallery).trim() === '') && place.photoUrls.length > 0) {
+      next.image_gallery = JSON.stringify(place.photoUrls);
+    }
+    return next;
+  } catch {
+    return draft;
+  }
+}
+
 export async function updateEvent(id: string, updates: EventUpdate): Promise<Event> {
+  const { data: currentEvent } = await supabase.from('event').select('*').eq('id', id).maybeSingle();
+  const enrichedUpdates = (await enrichEventBusinessMedia(updates, currentEvent as Event | null)) as EventUpdate;
   const { data, error } = await supabase
     .from('event')
-    .update(updates)
+    .update(enrichedUpdates)
     .eq('id', id)
     .select()
     .single();
@@ -406,9 +529,10 @@ export async function updateEvent(id: string, updates: EventUpdate): Promise<Eve
 }
 
 export async function createEvent(event: EventInsert): Promise<Event> {
+  const enrichedInsert = (await enrichEventBusinessMedia(event, null)) as EventInsert;
   const { data, error } = await supabase
     .from('event')
-    .insert(event)
+    .insert(enrichedInsert)
     .select()
     .single();
 
