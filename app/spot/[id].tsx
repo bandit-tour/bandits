@@ -6,10 +6,12 @@ import {
   Alert,
   Image,
   Linking,
+  Platform,
   ScrollView,
   StyleSheet,
   Text,
   TouchableOpacity,
+  useWindowDimensions,
   View,
 } from 'react-native';
 
@@ -17,10 +19,11 @@ import { isEventLiked, toggleEventLike } from '@/app/services/events';
 import { Database } from '@/lib/database.types';
 import {
   fetchGooglePlacePhotoUrl as resolveGooglePlacePhotoUrl,
-  getCategoryFallbackImage,
+  isGooglePlacesDerivedPhotoUrl,
   isLikelyLogoOrBadPlaceImage,
   normalizeEventImageUri,
 } from '@/lib/placePhoto';
+import { buildNeutralBusinessPlaceholderFromSeed } from '@/lib/recommendationImages';
 import { getCuratedEventImageCandidates } from '@/lib/eventImageCuration';
 import { supabase } from '@/lib/supabase';
 import ReviewCard from '@/components/ReviewCard';
@@ -51,7 +54,9 @@ function parseGalleryImages(raw: string | null, fallback: string | null, curated
   if (fallback?.trim()) pushNorm(fallback.trim());
   if (!raw) {
     const unique = Array.from(new Set(out));
-    return unique.filter((u) => !isLikelyLogoOrBadPlaceImage(u)).slice(0, 5);
+    return unique
+      .filter((u) => !isLikelyLogoOrBadPlaceImage(u) && isGooglePlacesDerivedPhotoUrl(u))
+      .slice(0, 5);
   }
 
   try {
@@ -70,12 +75,14 @@ function parseGalleryImages(raw: string | null, fallback: string | null, curated
   }
 
   const unique = Array.from(new Set(out));
-  const sanitized = unique.filter((u) => !isLikelyLogoOrBadPlaceImage(u));
+  const sanitized = unique.filter((u) => !isLikelyLogoOrBadPlaceImage(u) && isGooglePlacesDerivedPhotoUrl(u));
   return sanitized.slice(0, 5);
 }
 
 export default function SpotDetailScreen() {
   const { id } = useLocalSearchParams();
+  const { width } = useWindowDimensions();
+  const isDesktopWeb = Platform.OS === 'web' && width >= 1024;
   const [spot, setSpot] = useState<Spot | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -124,18 +131,15 @@ export default function SpotDetailScreen() {
               city: String(data.city ?? ''),
               neighborhood: String(data.neighborhood ?? ''),
             });
-            if (photoUrl) {
-              setVisibleGallery([normalizeEventImageUri(photoUrl) ?? photoUrl]);
+            const norm = photoUrl ? normalizeEventImageUri(photoUrl) ?? photoUrl : null;
+            if (norm && isGooglePlacesDerivedPhotoUrl(norm)) {
+              setVisibleGallery([norm]);
             } else {
-              setVisibleGallery([
-                getCategoryFallbackImage(String(data.genre ?? ''), `spot-detail-${data.id}`, 900, 600),
-              ]);
+              setVisibleGallery([]);
             }
           } catch (e) {
             console.warn('[SpotDetail] google photo fetch failed', { spotId: id, e });
-            setVisibleGallery([
-              getCategoryFallbackImage(String(data.genre ?? ''), `spot-detail-${data.id}`, 900, 600),
-            ]);
+            setVisibleGallery([]);
           } finally {
             setGalleryLoading(false);
           }
@@ -209,7 +213,7 @@ export default function SpotDetailScreen() {
       <Stack.Screen options={{ headerShown: true, title: '' }} />
       <ScrollView
         style={styles.container}
-        contentContainerStyle={styles.content}
+        contentContainerStyle={[styles.content, isDesktopWeb && styles.contentDesktop]}
         refreshControl={spotDetailRefresh}
       >
         <ScrollView
@@ -236,11 +240,9 @@ export default function SpotDetailScreen() {
           ) : (
             <Image
               source={{
-                uri: getCategoryFallbackImage(
-                  spot.genre,
+                uri: buildNeutralBusinessPlaceholderFromSeed(
+                  String(spot.name ?? ''),
                   `spot-detail-${spot.id}`,
-                  900,
-                  600,
                 ),
               }}
               style={styles.image}
@@ -298,6 +300,12 @@ export default function SpotDetailScreen() {
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#FFFFFF' },
   content: { padding: 16, paddingBottom: 40 },
+  contentDesktop: {
+    maxWidth: 980,
+    width: '100%',
+    alignSelf: 'center',
+    paddingHorizontal: 24,
+  },
   center: { flex: 1, justifyContent: 'center', alignItems: 'center' },
   errorText: { fontSize: 16, color: '#FF3B30' },
   image: {

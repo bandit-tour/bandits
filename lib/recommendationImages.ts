@@ -1,6 +1,7 @@
 import { Database } from '@/lib/database.types';
 import {
   fetchGooglePlacePhotoUrls,
+  isGooglePlacesDerivedPhotoUrl,
   isLikelyLogoOrBadPlaceImage,
   normalizeEventImageUri,
 } from '@/lib/placePhoto';
@@ -83,6 +84,7 @@ function getDbImageCandidates(event: Event): string[] {
     if (!n || isLikelyLogoOrBadPlaceImage(n)) return;
     // Do not treat stock-host image URLs as business-primary recommendation images.
     if (isStockHostUri(n)) return;
+    if (!isGooglePlacesDerivedPhotoUrl(n)) return;
     if (!out.includes(n)) out.push(n);
   };
   if (event.image_gallery) {
@@ -109,6 +111,7 @@ export function pickStoredRecommendationHeroUrl(event: Event): string | null {
     const n = normalizeEventImageUri(typeof raw === 'string' ? raw : null);
     if (!n || isLikelyLogoOrBadPlaceImage(n)) return null;
     if (isStockHostUri(n)) return null;
+    if (!isGooglePlacesDerivedPhotoUrl(n)) return null;
     return n;
   };
 
@@ -166,7 +169,12 @@ export async function resolveStrictRecommendationImagesByEventId(
     const priorityCandidates = [...placeCandidates, ...dbCandidates];
     const cached = BUSINESS_IMAGE_CACHE.get(key);
     const safeCached =
-      cached && !isStockHostUri(cached) && !isLikelyLogoOrBadPlaceImage(cached) ? cached : null;
+      cached &&
+      !isStockHostUri(cached) &&
+      !isLikelyLogoOrBadPlaceImage(cached) &&
+      isGooglePlacesDerivedPhotoUrl(cached)
+        ? cached
+        : null;
     if (cached && !safeCached) BUSINESS_IMAGE_CACHE.delete(key);
     const candidates = safeCached ? [safeCached, ...priorityCandidates] : priorityCandidates;
 
