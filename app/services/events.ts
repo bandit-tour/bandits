@@ -43,6 +43,106 @@ function calculateDistance(lat1: number, lon1: number, lat2: number, lon2: numbe
   return R * c;
 }
 
+/** Load event rows by id in chunks (avoids URI limits when a bandit links many picks). */
+async function fetchEventsByIdsChunked(ids: string[]): Promise<Event[]> {
+  const unique = [...new Set(ids.map((id) => String(id).trim()).filter(Boolean))];
+  if (unique.length === 0) return [];
+
+  const CHUNK = 250;
+  const out: Event[] = [];
+  for (let i = 0; i < unique.length; i += CHUNK) {
+    const slice = unique.slice(i, i + CHUNK);
+    const { data, error } = await supabase.from('event').select('*').in('id', slice);
+    if (error) {
+      console.warn('[getEvents] event fetch chunk failed', error.message);
+      continue;
+    }
+    if (data?.length) out.push(...(data as Event[]));
+  }
+  return out;
+}
+
+/**
+ * Bandit recommendations: always load via bandit_event → event_ids → event table.
+ * We intentionally do NOT use PostgREST resource embeds (`event:event_id(*)`) here — they have
+ * repeatedly returned null nested rows in production, which yielded zero recommendations while links existed.
+ * Images are optional and never affect this path.
+ */
+async function getEventsForBanditId(banditId: string, filters: EventFilters): Promise<Event[]> {
+  let linksRes = await supabase
+    .from('bandit_event')
+    .select('event_id, recommendation_place_photo_url')
+    .eq('bandit_id', banditId);
+
+  if (linksRes.error) {
+    console.warn(
+      '[getEvents] bandit_event select with recommendation_place_photo_url failed; retrying ids only',
+      linksRes.error.message,
+    );
+    linksRes = await supabase.from('bandit_event').select('event_id').eq('bandit_id', banditId);
+  }
+
+  if (linksRes.error) {
+    console.warn('[getEvents] bandit_event query failed — returning no events', linksRes.error.message);
+    return [];
+  }
+
+  const linkRows = Array.isArray(linksRes.data) ? linksRes.data : [];
+  const orderedIds = linkRows
+    .map((row: { event_id?: string | null }) => String(row?.event_id ?? '').trim())
+    .filter(Boolean);
+
+  if (orderedIds.length === 0) {
+    console.log('[getEvents] banditId has no linked event_ids', { banditId });
+    return [];
+  }
+
+  const eventsById = new Map<string, Event>();
+  const fetched = await fetchEventsByIdsChunked(orderedIds);
+  for (const ev of fetched) {
+    eventsById.set(ev.id, ev);
+  }
+
+  const mapped: Event[] = [];
+  for (const row of linkRows) {
+    const eid = String((row as { event_id?: string }).event_id ?? '').trim();
+    if (!eid) continue;
+    const base = eventsById.get(eid);
+    if (!base) continue;
+    const photo = (row as { recommendation_place_photo_url?: string | null }).recommendation_place_photo_url ?? null;
+    mapped.push({
+      ...base,
+      bandit_photo_url: photo,
+    } as Event);
+  }
+
+  console.log('[getEvents] bandit two-step load', {
+    banditId,
+    linkRows: linkRows.length,
+    uniqueIds: new Set(orderedIds).size,
+    eventsResolved: mapped.length,
+  });
+
+  let data: Event[] = mapped;
+
+  if (data.length && (filters.searchQuery || filters.genre || filters.city || filters.neighborhood)) {
+    data = data.filter((event: Event) => {
+      if (filters.searchQuery) {
+        const searchTerm = filters.searchQuery.toLowerCase();
+        const nameMatch = event.name?.toLowerCase().includes(searchTerm);
+        const descriptionMatch = event.description?.toLowerCase().includes(searchTerm);
+        if (!nameMatch && !descriptionMatch) return false;
+      }
+      if (filters.genre && event.genre !== filters.genre) return false;
+      if (filters.city && event.city !== filters.city) return false;
+      if (filters.neighborhood && event.neighborhood !== filters.neighborhood) return false;
+      return true;
+    });
+  }
+
+  return data;
+}
+
 export async function getEvents(filters: EventFilters = {}): Promise<Event[]> {
   let query;
   let data;
@@ -50,121 +150,22 @@ export async function getEvents(filters: EventFilters = {}): Promise<Event[]> {
 
   // If bandit filter is applied, use the bandit_event linking table
   if (filters.banditId) {
-    const banditId = filters.banditId;
+    let events = await getEventsForBanditId(filters.banditId, filters);
 
-    // Prefer explicit embed + optional per-link photo when the column exists (migration 048).
-    let linkRows: any[] | null = null;
-    let primary = await supabase
-      .from('bandit_event')
-      .select('recommendation_place_photo_url, event:event_id(*)')
-      .eq('bandit_id', banditId);
-
-    if (primary.error) {
-      console.warn(
-        '[getEvents] bandit_event primary select failed; retrying without optional recommendation_place_photo_url column',
-        primary.error.message,
-      );
-      primary = await supabase
-        .from('bandit_event')
-        .select('event_id, personal_tip, event:event_id(*)')
-        .eq('bandit_id', banditId);
-    }
-
-    error = primary.error;
-    linkRows = primary.data;
-
-    if (error) {
-      console.warn('[getEvents] Supabase bandit_event query failed — returning no events', error.message);
-      return [];
-    }
-
-    const rawRows = Array.isArray(linkRows) ? linkRows : [];
-
-    const mapped: Event[] = [];
-    const orphanEventIds: string[] = [];
-
-    for (const item of rawRows) {
-      const ev = item?.event;
-      const photo = item?.recommendation_place_photo_url ?? null;
-      if (ev && typeof ev === 'object' && (ev as any).id) {
-        mapped.push({
-          ...ev,
-          bandit_photo_url: photo,
-        } as Event);
-      } else if (item?.event_id) {
-        orphanEventIds.push(String(item.event_id));
-      }
-    }
-
-    // If PostgREST returned link rows but nested `event` is null (relationship/cache issues), fetch events by id.
-    const embeddedIds = new Set(mapped.map((e) => e.id));
-    const missingIds = [...new Set(orphanEventIds)].filter((id) => !embeddedIds.has(id));
-
-    if (missingIds.length > 0) {
-      const photoByEventId = new Map<string, string | null>();
-      for (const item of rawRows) {
-        const eid = item?.event_id ? String(item.event_id) : '';
-        if (eid && item?.recommendation_place_photo_url != null) {
-          photoByEventId.set(eid, item.recommendation_place_photo_url);
-        }
-      }
-
-      const { data: fallbackRows, error: fbErr } = await supabase
-        .from('event')
-        .select('*')
-        .in('id', missingIds);
-
-      if (fbErr) {
-        console.warn('[getEvents] fallback event fetch by id failed', fbErr.message);
-      } else if (fallbackRows?.length) {
-        for (const ev of fallbackRows) {
-          mapped.push({
-            ...ev,
-            bandit_photo_url: photoByEventId.get(ev.id) ?? null,
-          } as Event);
-        }
-      }
-    }
-
-    data = mapped;
-
-    console.log('[getEvents] banditId join result', {
-      banditId,
-      rawLinkRows: rawRows.length,
-      eventsReturned: mapped.length,
-    });
-    
-    // Apply additional filters to the bandit-filtered results
-    if (data && (filters.searchQuery || filters.genre || filters.city || filters.neighborhood)) {
-      data = data.filter((event: Event) => {
-        // Text search in name and description
-        if (filters.searchQuery) {
-          const searchTerm = filters.searchQuery.toLowerCase();
-          const nameMatch = event.name?.toLowerCase().includes(searchTerm);
-          const descriptionMatch = event.description?.toLowerCase().includes(searchTerm);
-          if (!nameMatch && !descriptionMatch) {
-            return false;
-          }
-        }
-        
-        // Genre filter
-        if (filters.genre && event.genre !== filters.genre) {
-          return false;
-        }
-        
-        // City filter
-        if (filters.city && event.city !== filters.city) {
-          return false;
-        }
-        
-        // Neighborhood filter
-        if (filters.neighborhood && event.neighborhood !== filters.neighborhood) {
-          return false;
-        }
-        
-        return true;
+    if (filters.userLat && filters.userLng) {
+      const radiusKm = filters.radiusKm || 5;
+      events = events.filter((event) => {
+        const distance = calculateDistance(
+          filters.userLat!,
+          filters.userLng!,
+          event.location_lat,
+          event.location_lng,
+        );
+        return distance <= radiusKm;
       });
     }
+
+    return events;
   } else {
     // Regular event query without bandit filter
     query = supabase.from('event').select('*');
