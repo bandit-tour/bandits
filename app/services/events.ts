@@ -50,35 +50,88 @@ export async function getEvents(filters: EventFilters = {}): Promise<Event[]> {
 
   // If bandit filter is applied, use the bandit_event linking table
   if (filters.banditId) {
-    query = supabase
+    const banditId = filters.banditId;
+
+    // Prefer explicit embed + optional per-link photo when the column exists (migration 048).
+    let linkRows: any[] | null = null;
+    let primary = await supabase
       .from('bandit_event')
-      // Join via event_id -> event.id. Use `*` so we never request a column name that might not exist
-      // yet (e.g. before migration 048); PostgREST errors on unknown columns and would return no rows.
-      .select('*, event:event_id(*)')
-      .eq('bandit_id', filters.banditId);
-    
-    const result = await query;
-    data = result.data;
-    error = result.error;
-    
-    // Extract events from the joined result; attach per-link hero URL for City Guide cards.
-    if (data) {
-      data = data
-        .map((item: any) => {
-          const ev = item?.event;
-          if (!ev) return null;
-          return {
-            ...ev,
-            bandit_photo_url: (item as any)?.recommendation_place_photo_url ?? null,
-          };
-        })
-        .filter(Boolean);
+      .select('recommendation_place_photo_url, event:event_id(*)')
+      .eq('bandit_id', banditId);
+
+    if (primary.error) {
+      console.warn(
+        '[getEvents] bandit_event primary select failed; retrying without optional recommendation_place_photo_url column',
+        primary.error.message,
+      );
+      primary = await supabase
+        .from('bandit_event')
+        .select('event_id, personal_tip, event:event_id(*)')
+        .eq('bandit_id', banditId);
     }
 
+    error = primary.error;
+    linkRows = primary.data;
+
+    if (error) {
+      console.warn('[getEvents] Supabase bandit_event query failed — returning no events', error.message);
+      return [];
+    }
+
+    const rawRows = Array.isArray(linkRows) ? linkRows : [];
+
+    const mapped: Event[] = [];
+    const orphanEventIds: string[] = [];
+
+    for (const item of rawRows) {
+      const ev = item?.event;
+      const photo = item?.recommendation_place_photo_url ?? null;
+      if (ev && typeof ev === 'object' && (ev as any).id) {
+        mapped.push({
+          ...ev,
+          bandit_photo_url: photo,
+        } as Event);
+      } else if (item?.event_id) {
+        orphanEventIds.push(String(item.event_id));
+      }
+    }
+
+    // If PostgREST returned link rows but nested `event` is null (relationship/cache issues), fetch events by id.
+    const embeddedIds = new Set(mapped.map((e) => e.id));
+    const missingIds = [...new Set(orphanEventIds)].filter((id) => !embeddedIds.has(id));
+
+    if (missingIds.length > 0) {
+      const photoByEventId = new Map<string, string | null>();
+      for (const item of rawRows) {
+        const eid = item?.event_id ? String(item.event_id) : '';
+        if (eid && item?.recommendation_place_photo_url != null) {
+          photoByEventId.set(eid, item.recommendation_place_photo_url);
+        }
+      }
+
+      const { data: fallbackRows, error: fbErr } = await supabase
+        .from('event')
+        .select('*')
+        .in('id', missingIds);
+
+      if (fbErr) {
+        console.warn('[getEvents] fallback event fetch by id failed', fbErr.message);
+      } else if (fallbackRows?.length) {
+        for (const ev of fallbackRows) {
+          mapped.push({
+            ...ev,
+            bandit_photo_url: photoByEventId.get(ev.id) ?? null,
+          } as Event);
+        }
+      }
+    }
+
+    data = mapped;
+
     console.log('[getEvents] banditId join result', {
-      banditId: filters.banditId,
-      rawCount: result.data?.length ?? 0,
-      eventsCount: data?.length ?? 0,
+      banditId,
+      rawLinkRows: rawRows.length,
+      eventsReturned: mapped.length,
     });
     
     // Apply additional filters to the bandit-filtered results
