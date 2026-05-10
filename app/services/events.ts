@@ -7,7 +7,6 @@ import { supabase } from '@/lib/supabase';
 type Event = Database['public']['Tables']['event']['Row'];
 type EventInsert = Database['public']['Tables']['event']['Insert'];
 type EventUpdate = Database['public']['Tables']['event']['Update'];
-const STOCK_IMAGE_HOSTS = ['images.pexels.com', 'pexels.com', 'images.unsplash.com', 'unsplash.com', 'picsum.photos'];
 
 export interface EventFilters {
   searchQuery?: string;
@@ -44,67 +43,6 @@ function calculateDistance(lat1: number, lon1: number, lat2: number, lon2: numbe
   return R * c;
 }
 
-function isStockHostUri(uri: string | null | undefined): boolean {
-  const raw = String(uri ?? '').trim();
-  if (!raw) return false;
-  try {
-    const host = new URL(raw).hostname.toLowerCase();
-    return STOCK_IMAGE_HOSTS.some((h) => host === h || host.endsWith(`.${h}`));
-  } catch {
-    return false;
-  }
-}
-
-async function hydrateBusinessMediaCache(events: Event[]): Promise<Event[]> {
-  if (events.length === 0) return events;
-  const next = [...events];
-  const candidates = events
-    .filter((event) => {
-      if (!String(event.name ?? '').trim()) return false;
-      const hasAddressContext =
-        Boolean(String(event.city ?? '').trim()) ||
-        Boolean(String(event.address ?? '').trim()) ||
-        Boolean(String((event as any).google_place_id ?? '').trim());
-      if (!hasAddressContext) return false;
-      const hasPrimary = Boolean(String(event.image_url ?? '').trim());
-      const hasGallery = Boolean(String(event.image_gallery ?? '').trim());
-      const hasPlaceId = Boolean(String((event as any).google_place_id ?? '').trim());
-      // Re-hydrate when media is missing or obviously generic stock.
-      return !hasPlaceId || !hasPrimary || !hasGallery || isStockHostUri(event.image_url);
-    })
-    .slice(0, 12);
-  if (candidates.length === 0) return events;
-
-  await Promise.allSettled(
-    candidates.map(async (event) => {
-      const resolved = await resolveGooglePlaceBusinessData({
-        placeId: (event as any).google_place_id ?? null,
-        name: String(event.name ?? ''),
-        address: String(event.address ?? ''),
-        city: String(event.city ?? ''),
-        neighborhood: String(event.neighborhood ?? ''),
-        photoLimit: 8,
-      });
-      if (!resolved || resolved.photoUrls.length === 0) return;
-      const payload: EventUpdate = {
-        google_place_id: resolved.placeId || ((event as any).google_place_id ?? null),
-        image_url: resolved.photoUrls[0],
-        image_gallery: JSON.stringify(resolved.photoUrls),
-        location_lat: resolved.locationLat ?? event.location_lat,
-        location_lng: resolved.locationLng ?? event.location_lng,
-        address: event.address || resolved.formattedAddress || event.address,
-        city: event.city || resolved.city || event.city,
-      };
-      const { data: updated } = await supabase.from('event').update(payload).eq('id', event.id).select('*').maybeSingle();
-      const merged = (updated as Event | null) ?? ({ ...event, ...payload } as Event);
-      const idx = next.findIndex((row) => row.id === event.id);
-      if (idx >= 0) next[idx] = merged;
-    }),
-  );
-
-  return next;
-}
-
 export async function getEvents(filters: EventFilters = {}): Promise<Event[]> {
   let query;
   let data;
@@ -114,9 +52,9 @@ export async function getEvents(filters: EventFilters = {}): Promise<Event[]> {
   if (filters.banditId) {
     query = supabase
       .from('bandit_event')
-      // Join correctly via the event_id foreign key
-      // bandit_event.event_id -> event.id
-      .select('recommendation_place_photo_url, event:event_id(*)')
+      // Join via event_id -> event.id. Use `*` so we never request a column name that might not exist
+      // yet (e.g. before migration 048); PostgREST errors on unknown columns and would return no rows.
+      .select('*, event:event_id(*)')
       .eq('bandit_id', filters.banditId);
     
     const result = await query;
@@ -131,7 +69,7 @@ export async function getEvents(filters: EventFilters = {}): Promise<Event[]> {
           if (!ev) return null;
           return {
             ...ev,
-            bandit_photo_url: item.recommendation_place_photo_url ?? null,
+            bandit_photo_url: (item as any)?.recommendation_place_photo_url ?? null,
           };
         })
         .filter(Boolean);
@@ -204,8 +142,7 @@ export async function getEvents(filters: EventFilters = {}): Promise<Event[]> {
   }
   
   if (error) {
-    // Production web: network hiccups and auth-protected rows can transiently fail. Return empty
-    // list instead of noisy console spam that breaks runtime audits.
+    console.warn('[getEvents] Supabase query failed — returning no events', error.message);
     return [];
   }
 
@@ -225,7 +162,8 @@ export async function getEvents(filters: EventFilters = {}): Promise<Event[]> {
     });
   }
 
-  return hydrateBusinessMediaCache(events);
+  // Do not run Google Places or media hydration here — listing recommendations must never depend on maps APIs.
+  return events;
 }
 
 
