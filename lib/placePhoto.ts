@@ -274,9 +274,11 @@ export function isConfidentVenuePlacesMatch(
   const en = String(expectedName ?? '').trim();
   const gn = String(googleDisplayName ?? '').trim();
   if (!en || !gn) return false;
+  const exactNameMatch = normalizePlaceName(en) === normalizePlaceName(gn);
+  if (exactNameMatch) return true;
   const nameScore = scorePlaceNameSimilarity(en, gn);
-  if (nameScore >= 0.9) return true;
-  if (nameScore >= 0.72 && hasPlacesFormattedAddressAlignment(expectedAddress, expectedCity, formattedAddress)) {
+  // Non-exact names must include strong token overlap AND geo/address alignment.
+  if (nameScore >= 0.85 && hasPlacesFormattedAddressAlignment(expectedAddress, expectedCity, formattedAddress)) {
     return true;
   }
   return false;
