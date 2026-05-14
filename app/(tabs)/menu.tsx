@@ -4,7 +4,11 @@ import { Stack, useRouter } from 'expo-router';
 import React from 'react';
 import { Alert, Image, Platform, Pressable, ScrollView, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
 
-import { canAccessHotelier, isAnonymousSupabaseSession } from '@/lib/appAdminAccess';
+import {
+  canAccessHotelier,
+  canShowOwnerPrivateMenu,
+  isAnonymousSupabaseSession,
+} from '@/lib/appAdminAccess';
 import { usePremiumRefreshControl } from '@/lib/mobilePullToRefresh';
 import { getHotelWhiteLabelOrDefault } from '@/lib/hotelWhiteLabel';
 import { getHotelEntry } from '@/lib/pilotSession';
@@ -23,11 +27,31 @@ const MENU_ITEMS: MenuItem[] = [
   { title: 'bandiTeam', route: '/bandiTeam' },
 ];
 
+const OWNER_PRIVATE_MENU_ITEMS: MenuItem[] = [
+  { title: 'Pilot Desk', route: '/operatorDesk' },
+  { title: 'CDesk', route: '/admin' },
+];
+
+function applyMenuAuthFromUser(
+  user: User | null,
+  setters: {
+    setMenuSessionUser: (u: User | null) => void;
+    setOwnerPrivateMenuAllowed: (v: boolean) => void;
+    setCanStaffSignOut: (v: boolean) => void;
+    setAuthHydrated: (v: boolean) => void;
+  },
+) {
+  setters.setMenuSessionUser(user);
+  setters.setOwnerPrivateMenuAllowed(canShowOwnerPrivateMenu(user));
+  setters.setCanStaffSignOut(canAccessHotelier(user));
+  setters.setAuthHydrated(true);
+}
+
 export default function MenuScreen() {
   const router = useRouter();
   const { width } = useWindowDimensions();
   const isDesktopWeb = Platform.OS === 'web' && width >= 1000;
-  const [pilotDeskAllowed, setPilotDeskAllowed] = React.useState(false);
+  const [ownerPrivateMenuAllowed, setOwnerPrivateMenuAllowed] = React.useState(false);
   const [authHydrated, setAuthHydrated] = React.useState(false);
   const [canStaffSignOut, setCanStaffSignOut] = React.useState(false);
   const [refreshing, setRefreshing] = React.useState(false);
@@ -36,15 +60,27 @@ export default function MenuScreen() {
   );
   const [menuSessionUser, setMenuSessionUser] = React.useState<User | null>(null);
 
+  const authSetters = React.useMemo(
+    () => ({
+      setMenuSessionUser,
+      setOwnerPrivateMenuAllowed,
+      setCanStaffSignOut,
+      setAuthHydrated,
+    }),
+    [],
+  );
+
   const refreshMenuAccess = React.useCallback(async () => {
-    const { user, isAppAdmin } = await resolveMenuAuthSnapshot();
-    setMenuSessionUser(user);
-    /** Pilot Desk: admin allowlist email only — not tied to Hotelier or operator UUID. */
-    setPilotDeskAllowed(isAppAdmin);
-    /** Anyone with a real email session (not anonymous) can sign out. */
-    setCanStaffSignOut(canAccessHotelier(user));
-    setAuthHydrated(true);
-  }, []);
+    const { user } = await resolveMenuAuthSnapshot();
+    applyMenuAuthFromUser(user, authSetters);
+  }, [authSetters]);
+
+  /** Fast local session read before async merge — avoids blank owner menu on cold open. */
+  React.useLayoutEffect(() => {
+    void supabase.auth.getSession().then(({ data: { session } }) => {
+      applyMenuAuthFromUser(session?.user ?? null, authSetters);
+    });
+  }, [authSetters]);
 
   React.useEffect(() => {
     void refreshMenuAccess();
@@ -53,11 +89,11 @@ export default function MenuScreen() {
   React.useEffect(() => {
     const {
       data: { subscription },
-    } = supabase.auth.onAuthStateChange(() => {
-      void refreshMenuAccess();
+    } = supabase.auth.onAuthStateChange((_event, session) => {
+      applyMenuAuthFromUser(session?.user ?? null, authSetters);
     });
     return () => subscription.unsubscribe();
-  }, [refreshMenuAccess]);
+  }, [authSetters]);
 
   useFocusEffect(
     React.useCallback(() => {
@@ -84,15 +120,16 @@ export default function MenuScreen() {
 
   const items: MenuItem[] = React.useMemo(() => {
     const out: MenuItem[] = [...MENU_ITEMS, { title: 'Hotelier', route: '/hotelier' }];
-    if (authHydrated && pilotDeskAllowed) out.push({ title: 'Pilot Desk', route: '/operatorDesk' });
+    if (ownerPrivateMenuAllowed) {
+      out.push(...OWNER_PRIVATE_MENU_ITEMS);
+    }
     return out;
-  }, [authHydrated, pilotDeskAllowed]);
+  }, [ownerPrivateMenuAllowed]);
 
   const signedInEmailUser = canStaffSignOut;
   const showGuestMenuTitle = !signedInEmailUser;
   const headerTitle = showGuestMenuTitle ? 'Guest Menu' : 'Menu';
-  const showPilotStaffChrome = authHydrated && pilotDeskAllowed;
-  /** Anonymous / no email session: offer email login (Hotelier flows still gated on screen). */
+  const showPilotStaffChrome = authHydrated && ownerPrivateMenuAllowed;
   const showStaffSignIn =
     !signedInEmailUser &&
     (Platform.OS === 'web' || isAnonymousSupabaseSession(menuSessionUser));
@@ -246,4 +283,3 @@ const styles = StyleSheet.create({
     fontWeight: '700',
   },
 });
-

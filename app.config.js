@@ -61,17 +61,37 @@ function resolvePlayGuestEntryUrl(value) {
 
 const resolvedPlayGuestEntryUrl = resolvePlayGuestEntryUrl(process.env.EXPO_PUBLIC_PLAY_GUEST_ENTRY_URL);
 const DEFAULT_APP_ADMIN_EMAILS = 'blonje@gmail.com';
+/** Avishay Ben Eli — pilot operator inbox (Ask Me, Local Friend, Notifications). */
+const DEFAULT_OPERATOR_USER_ID = 'e6d8cb02-6f1a-40c0-96c4-b96961878407';
 const resolvedAppAdminEmails =
   String(process.env.EXPO_PUBLIC_APP_ADMIN_EMAILS ?? '').trim() || DEFAULT_APP_ADMIN_EMAILS;
+
+function resolveOperatorUserId(value) {
+  const raw = typeof value === 'string' ? value.trim() : '';
+  if (raw && /^[0-9a-f-]{36}$/i.test(raw)) return raw;
+  return DEFAULT_OPERATOR_USER_ID;
+}
+
+const resolvedOperatorUserId = resolveOperatorUserId(process.env.EXPO_PUBLIC_OPERATOR_USER_ID);
+const resolvedGoogleMapsKey = String(process.env.EXPO_PUBLIC_GOOGLE_MAPS_KEY ?? '').trim();
 
 process.env.EXPO_PUBLIC_SUPABASE_URL = resolvedUrl;
 process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY = resolvedAnon;
 process.env.EXPO_PUBLIC_PLAY_GUEST_ENTRY_URL = resolvedPlayGuestEntryUrl;
 process.env.EXPO_PUBLIC_APP_ADMIN_EMAILS = resolvedAppAdminEmails;
+process.env.EXPO_PUBLIC_OPERATOR_USER_ID = resolvedOperatorUserId;
+
+/** Ad Hoc preview profile predates Associated Domains; keep production/TestFlight entitlements intact. */
+const buildProfile = process.env.EAS_BUILD_PROFILE;
+const iosConfig = { ...(appJson.expo.ios || {}) };
+if (buildProfile === 'preview') {
+  delete iosConfig.associatedDomains;
+}
 
 module.exports = {
   expo: {
     ...appJson.expo,
+    ios: iosConfig,
     extra: {
       ...(appJson.expo.extra || {}),
       EXPO_PUBLIC_SUPABASE_URL: resolvedUrl,
@@ -79,10 +99,12 @@ module.exports = {
       EXPO_PUBLIC_PLAY_GUEST_ENTRY_URL: resolvedPlayGuestEntryUrl,
       /** Pilot: client-only simulated inbox / Local Friend replies — set EXPO_PUBLIC_DEMO_MODE=true */
       EXPO_PUBLIC_DEMO_MODE: String(process.env.EXPO_PUBLIC_DEMO_MODE ?? '').trim() || 'false',
-      /** Operator inbox routing — must match Supabase Auth user UID (also set in EAS env for release APKs). */
-      EXPO_PUBLIC_OPERATOR_USER_ID: String(process.env.EXPO_PUBLIC_OPERATOR_USER_ID ?? '').trim(),
+      /** Operator inbox routing — Avishay (blonje@gmail.com); baked in for EAS when .env is absent. */
+      EXPO_PUBLIC_OPERATOR_USER_ID: resolvedOperatorUserId,
       /** Comma-separated admin emails: Admin, Pilot Desk operator allowlist (with operator UUID). Not used for Hotelier. */
       EXPO_PUBLIC_APP_ADMIN_EMAILS: resolvedAppAdminEmails,
+      EXPO_PUBLIC_GOOGLE_MAPS_KEY: resolvedGoogleMapsKey,
+      googleMapsApiKey: resolvedGoogleMapsKey,
     },
   },
 };

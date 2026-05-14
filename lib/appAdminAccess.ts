@@ -16,6 +16,9 @@ function readPublicEnv(key: string): string | undefined {
 
 let cachedAppAdminSet: Set<string> | null = null;
 
+/** Sole Pilot Desk menu owner — always checked directly (not only via env allowlist). */
+export const PILOT_DESK_OWNER_EMAIL = 'blonje@gmail.com';
+
 /**
  * Set at build time via `EXPO_PUBLIC_APP_ADMIN_EMAILS` (comma-separated) or
  * `EXPO_PUBLIC_APP_ADMIN_EMAIL`. Emails are compared case-insensitively.
@@ -40,11 +43,9 @@ export function getAppAdminEmailSet(): Set<string> {
   const set = new Set(
     parts.map((x) => x.trim().toLowerCase()).filter((x) => x.length > 0),
   );
-  if (set.size > 0) {
-    cachedAppAdminSet = set;
-  } else {
-    cachedAppAdminSet = null;
-  }
+  /** Owner is always allowlisted — native preview builds must not depend on env being inlined first. */
+  set.add(PILOT_DESK_OWNER_EMAIL.toLowerCase());
+  cachedAppAdminSet = set;
   return set;
 }
 
@@ -53,7 +54,15 @@ export function getAppAdminEmailSet(): Set<string> {
  * Pilot Desk + delete must use the same resolution or `isAppAdminUser` flips false mid-session.
  */
 export function getUserEmailForAdminCheck(
-  user: User | { email?: string | null; user_metadata?: Record<string, unknown> } | null | undefined,
+  user:
+    | User
+    | {
+        email?: string | null;
+        user_metadata?: Record<string, unknown>;
+        identities?: Array<{ identity_data?: Record<string, unknown> }>;
+      }
+    | null
+    | undefined,
 ): string | null {
   if (!user) return null;
   const direct = String(user.email ?? '').trim();
@@ -61,6 +70,10 @@ export function getUserEmailForAdminCheck(
   const meta = user.user_metadata as Record<string, unknown> | undefined;
   const fromMeta = meta?.email;
   if (typeof fromMeta === 'string' && fromMeta.trim()) return fromMeta.trim();
+  for (const identity of user.identities ?? []) {
+    const fromIdentity = identity?.identity_data?.email;
+    if (typeof fromIdentity === 'string' && fromIdentity.trim()) return fromIdentity.trim();
+  }
   return null;
 }
 
@@ -84,6 +97,27 @@ export function isAppAdminUser(user: User | { app_metadata?: Record<string, unkn
   const n = (getUserEmailForAdminCheck(user as User) ?? '').trim().toLowerCase();
   if (!n) return false;
   return set.has(n);
+}
+
+/**
+ * Menu + Pilot Desk visibility: **blonje@gmail.com only** when signed in (not anonymous).
+ * Hard-coded owner email — never tied to operator UUID or env allowlist timing.
+ */
+export function canShowPilotDeskMenu(
+  user: User | { app_metadata?: Record<string, unknown>; email?: string | null } | null | undefined,
+): boolean {
+  if (!user) return false;
+  const a = user.app_metadata as Record<string, unknown> | undefined;
+  if (a?.provider === 'anonymous' || a?.is_anonymous === true) return false;
+  const email = (getUserEmailForAdminCheck(user as User) ?? '').trim().toLowerCase();
+  return email === PILOT_DESK_OWNER_EMAIL.toLowerCase();
+}
+
+/** Owner-only private staff tools in Guest Menu (Pilot Desk, CDesk). Same rule as Pilot Desk. */
+export function canShowOwnerPrivateMenu(
+  user: User | { app_metadata?: Record<string, unknown>; email?: string | null } | null | undefined,
+): boolean {
+  return canShowPilotDeskMenu(user);
 }
 
 /**

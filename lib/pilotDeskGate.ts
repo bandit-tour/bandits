@@ -1,6 +1,6 @@
 import type { User } from '@supabase/supabase-js';
 
-import { canAccessPilotDesk, isAppAdminUser } from '@/lib/appAdminAccess';
+import { canAccessPilotDesk, canShowPilotDeskMenu, getUserEmailForAdminCheck, isAppAdminUser } from '@/lib/appAdminAccess';
 import {
   ensureOperatorUserId,
   fetchDbOperatorUserIdForDiagnostics,
@@ -26,15 +26,30 @@ function mergePilotDeskAuthUser(validated: User | null, fromSession: User | null
   if (!validated && !fromSession) return null;
   if (!validated) return fromSession;
   if (!fromSession) return validated;
-  const email =
-    String(validated.email ?? '').trim() ||
-    String(fromSession.email ?? '').trim() ||
-    undefined;
-  const merged = { ...fromSession, ...validated } as User;
-  if (email) {
-    return { ...merged, email } as User;
+
+  const resolvedEmail =
+    getUserEmailForAdminCheck(validated) || getUserEmailForAdminCheck(fromSession) || undefined;
+
+  const user_metadata = {
+    ...(fromSession.user_metadata ?? {}),
+    ...(validated.user_metadata ?? {}),
+  } as Record<string, unknown>;
+  if (resolvedEmail && typeof user_metadata.email !== 'string') {
+    user_metadata.email = resolvedEmail;
   }
-  return merged;
+
+  const identities =
+    validated.identities && validated.identities.length > 0
+      ? validated.identities
+      : fromSession.identities;
+
+  return {
+    ...fromSession,
+    ...validated,
+    email: resolvedEmail ?? validated.email ?? fromSession.email,
+    user_metadata,
+    identities,
+  } as User;
 }
 
 /**
@@ -49,6 +64,11 @@ export async function resolveSessionUserForPilotDesk(): Promise<{
     data: { session: local },
   } = await supabase.auth.getSession();
   const fromSession = local?.user ?? null;
+
+  /** APK fast path: trust persisted session email — skip flaky `getUser()` round-trip on native. */
+  if (fromSession && getUserEmailForAdminCheck(fromSession)) {
+    return { user: fromSession, authError: null };
+  }
 
   const {
     data: { user: validated },
@@ -75,13 +95,15 @@ export async function resolvePilotDeskAccess(): Promise<{
   user: User | null;
   canUsePilotDesk: boolean;
   isAppAdmin: boolean;
+  showPilotDesk: boolean;
   authError: Error | null;
 }> {
   const operatorId = await ensureOperatorUserId();
   const { user, authError } = await resolveSessionUserForPilotDesk();
   const isAppAdmin = isAppAdminUser(user);
   const canUsePilotDesk = canAccessPilotDesk(user, operatorId);
-  return { operatorId, user, canUsePilotDesk, isAppAdmin, authError };
+  const showPilotDesk = canShowPilotDeskMenu(user);
+  return { operatorId, user, canUsePilotDesk, isAppAdmin, showPilotDesk, authError };
 }
 
 /**
@@ -91,10 +113,16 @@ export async function resolvePilotDeskAccess(): Promise<{
 export async function resolveMenuAuthSnapshot(): Promise<{
   user: User | null;
   isAppAdmin: boolean;
+  showPilotDesk: boolean;
   authError: Error | null;
 }> {
   const { user, authError } = await resolveSessionUserForPilotDesk();
-  return { user, isAppAdmin: isAppAdminUser(user), authError };
+  return {
+    user,
+    isAppAdmin: isAppAdminUser(user),
+    showPilotDesk: canShowPilotDeskMenu(user),
+    authError,
+  };
 }
 
 function pilotDeskAccessExplanation(
