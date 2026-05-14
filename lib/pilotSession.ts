@@ -3,6 +3,7 @@ import Constants from 'expo-constants';
 import { Platform } from 'react-native';
 
 import { DEFAULT_HOTEL_SLUG, HOTEL_WHITE_LABELS, isKnownHotelSlug, normalizeHotelSlug } from '@/lib/hotelWhiteLabel';
+import { getUserEmailForAdminCheck } from '@/lib/appAdminAccess';
 import {
   assignInitialSignalIfNeeded,
   maybeRotateUserSignal24h,
@@ -212,7 +213,7 @@ export async function bootstrapMainAppSession(): Promise<void> {
     session = (await supabase.auth.getSession()).data.session ?? null;
   }
   const u = session?.user;
-  if (u?.email) {
+  if (u && getUserEmailForAdminCheck(u)) {
     await syncPilotHotelProfileIfNeeded();
     return;
   }

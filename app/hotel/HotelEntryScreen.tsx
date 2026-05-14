@@ -1,4 +1,5 @@
 import { getHotelWhiteLabelOrDefault, normalizeHotelSlug } from '@/lib/hotelWhiteLabel';
+import { openStaffEmailLogin } from '@/lib/loginNavigation';
 import {
   HOTEL_BY_SLUG,
   bootstrapMainAppSession,
@@ -167,7 +168,7 @@ export function HotelEntryScreen({ slug: rawSlug }: HotelEntryScreenProps) {
               </Pressable>
               <Pressable
                 style={({ pressed }) => [styles.staffSignInLinkWrap, pressed && styles.staffSignInLinkPressed]}
-                onPress={() => router.push('/login?forceAuth=1&redirect=/menu' as Href)}
+                onPress={() => openStaffEmailLogin(router, '/menu')}
                 accessibilityRole="link"
                 accessibilityLabel="Staff sign in"
               >

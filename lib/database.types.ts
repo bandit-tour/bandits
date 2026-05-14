@@ -64,6 +64,7 @@ export type Database = {
           bandit_id: string;
           event_id: string;
           personal_tip: string | null;
+          recommendation_place_photo_url: string | null;
         };
         Insert: {
           id?: string;
@@ -71,6 +72,7 @@ export type Database = {
           bandit_id: string;
           event_id: string;
           personal_tip?: string | null;
+          recommendation_place_photo_url?: string | null;
         };
         Update: {
           id?: string;
@@ -78,6 +80,7 @@ export type Database = {
           bandit_id?: string;
           event_id?: string;
           personal_tip?: string | null;
+          recommendation_place_photo_url?: string | null;
         };
         Relationships: [];
       };
@@ -100,6 +103,7 @@ export type Database = {
           image_url: string;
           link: string;
           image_gallery: string | null;
+          google_place_id: string | null;
         };
         Insert: {
           id?: string;
@@ -119,6 +123,7 @@ export type Database = {
           image_url: string;
           link: string;
           image_gallery?: string | null;
+          google_place_id?: string | null;
         };
         Update: {
           id?: string;
@@ -138,6 +143,7 @@ export type Database = {
           image_url?: string;
           link?: string;
           image_gallery?: string | null;
+          google_place_id?: string | null;
         };
         Relationships: [];
       };

@@ -2,6 +2,7 @@ import { useRouter } from 'expo-router';
 import React from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
+import { repairDisplayText } from '@/lib/repairTextEncoding';
 import type { TrailWithStops } from '@/services/trails';
 
 interface TrailCardProps {
@@ -17,13 +18,13 @@ export default function TrailCard({ trail }: TrailCardProps) {
       style={styles.card}
       onPress={() => router.push(`/trail/${trail.id}` as any)}
     >
-      <Text style={styles.title}>{trail.title}</Text>
-      <Text style={styles.mood}>{trail.mood}</Text>
+      <Text style={styles.title}>{repairDisplayText(trail.title)}</Text>
+      <Text style={styles.mood}>{repairDisplayText(trail.mood)}</Text>
       <Text style={styles.meta}>
         {trail.duration} · {stopCount} stops
       </Text>
       <Text style={styles.description} numberOfLines={2}>
-        {trail.description}
+        {repairDisplayText(trail.description)}
       </Text>
     </Pressable>
   );

@@ -5,7 +5,6 @@ import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
-  DeviceEventEmitter,
   FlatList,
   Platform,
   Pressable,
@@ -23,7 +22,8 @@ import { usePremiumRefreshControl } from '@/lib/mobilePullToRefresh';
 import { getSavedAlertIds, toggleSavedAlertId } from '@/lib/banditeamSavedAlerts';
 import { renderSafeText } from '@/lib/renderSafeText';
 import { severityAccent } from '@/lib/scamAlertTrust';
-import { BANDITS_NOTIFICATIONS_REFRESH } from '@/lib/notificationEvents';
+import { useScamAlertsFeedRefresh } from '@/lib/scamAlertsRefresh';
+import { useAppBackScreenOptions } from '@/hooks/useAppBackScreenOptions';
 import { supabase } from '@/lib/supabase';
 import { fetchScamAlerts, type ScamAlertRow } from '@/services/scamAlerts';
 
@@ -215,6 +215,11 @@ export default function ScamAlertsScreen() {
 
   const filterCity = cityFromParams || asTrimmedString(selectedCity);
   const scopeLabel = filterCity ? asTrimmedString(filterCity) : 'All destinations';
+  const screenOptions = useAppBackScreenOptions({
+    title: 'bandiTEAM',
+    fallback: '/alerts',
+    headerRight: () => <ScamAlertsHeaderActions filterCity={filterCity} />,
+  });
 
   const [rows, setRows] = useState<ScamAlertRow[]>([]);
   const [loading, setLoading] = useState(true);
@@ -232,19 +237,25 @@ export default function ScamAlertsScreen() {
     void loadSaved();
   }, [loadSaved]);
 
-  const load = useCallback(async () => {
-    setError(null);
+  const load = useCallback(async (opts?: { silent?: boolean }) => {
+    const silent = opts?.silent === true;
+    if (!silent) setError(null);
     try {
       const data = await fetchScamAlerts({ city: filterCity || null });
       setRows(data);
     } catch (e: unknown) {
       const raw = e instanceof Error ? e.message : 'Could not load alerts.';
       const msg = asTrimmedString(raw) || 'Could not load alerts.';
-      setError(msg);
-      setRows([]);
+      if (!silent) {
+        setError(msg);
+        setRows([]);
+      }
     } finally {
-      setLoading(false);
-      setRefreshing(false);
+      if (silent) setRefreshing(false);
+      else {
+        setLoading(false);
+        setRefreshing(false);
+      }
     }
   }, [filterCity]);
 
@@ -253,10 +264,7 @@ export default function ScamAlertsScreen() {
     void load();
   }, [load]);
 
-  useEffect(() => {
-    const sub = DeviceEventEmitter.addListener(BANDITS_NOTIFICATIONS_REFRESH, () => void load());
-    return () => sub.remove();
-  }, [load]);
+  useScamAlertsFeedRefresh(load);
 
   useFocusEffect(
     useCallback(() => {
@@ -415,14 +423,7 @@ export default function ScamAlertsScreen() {
 
   return (
     <>
-      <Stack.Screen
-        options={{
-          headerShown: true,
-          title: 'bandiTEAM',
-          headerBackTitle: 'Back',
-          headerRight: () => <ScamAlertsHeaderActions filterCity={filterCity} />,
-        }}
-      />
+      <Stack.Screen options={screenOptions} />
       <View style={styles.screen}>
         <Text style={styles.scope}>{scopeLabel}</Text>
         <Text style={styles.hint}>{filterCity ? 'Destination protection view' : 'Global protection view'}</Text>

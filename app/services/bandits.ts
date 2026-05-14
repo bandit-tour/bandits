@@ -7,13 +7,27 @@ import { Database } from '@/lib/database.types';
 import { trackEvent } from '@/lib/analytics';
 import { ensureOperatorUserId } from '@/lib/operatorConfig';
 import { ensureAnonymousSession } from '@/lib/pilotSession';
+import { insertGuestEchoViaApi } from '@/lib/guestNotificationEchoApi';
+import {
+  deliverOperatorMessage,
+  shouldRequireOperatorMessageApi,
+} from '@/lib/operatorMessageDelivery';
 import { requestNotificationsRefresh } from '@/lib/notificationEvents';
+import { userFacingMessagingError } from '@/lib/userFacingMessagingError';
+import { isPersistenceBlocked } from '@/services/localFriend';
 import { isAuthOrMissingError } from '@/lib/postgrestAuth';
 import { supabase } from '@/lib/supabase';
 
 type Bandit = Database['public']['Tables']['bandit']['Row'];
 type BanditInsert = Database['public']['Tables']['bandit']['Insert'];
 type BanditUpdate = Database['public']['Tables']['bandit']['Update'];
+
+function createClientUuid(): string {
+  const c = globalThis.crypto as { randomUUID?: () => string } | undefined;
+  if (c?.randomUUID) return c.randomUUID();
+  const s4 = () => Math.floor((1 + Math.random()) * 0x10000).toString(16).slice(1);
+  return `${s4()}${s4()}-${s4()}-4${s4().slice(0, 3)}-${((8 + Math.floor(Math.random() * 4)).toString(16) + s4().slice(0, 3))}-${s4()}${s4()}${s4()}`;
+}
 
 function isAskTargetBanditIdMissingColumnError(error: { message?: string }): boolean {
   const msg = String(error.message ?? '').toLowerCase();
@@ -301,9 +315,9 @@ export async function submitBanditQuestion(banditId: string, question: string): 
     data: { session },
     error: sessionError,
   } = await supabase.auth.getSession();
-  if (sessionError) throw new Error(sessionError.message || 'Could not verify your session.');
+  if (sessionError) throw userFacingMessagingError(sessionError);
   const user = session?.user;
-  if (!user) throw new Error('Could not start a session. Try again in a moment.');
+  if (!user) throw userFacingMessagingError(new Error('Session required.'));
 
   /** Must match `notifications_insert_routed` (uses same id as Postgres `app_public_config.operator_user_id`). */
   const operatorUserId = await ensureOperatorUserId();
@@ -326,8 +340,20 @@ export async function submitBanditQuestion(banditId: string, question: string): 
   const meta = (user.user_metadata ?? {}) as { full_name?: string; name?: string };
   const travelerTitle = travelerNameForAskMeTitle(fromProfile, meta);
   const askMessage = buildAskMeNotificationMessage(banditName, text);
+  const rootId = createClientUuid();
+
+  const apiPayload = {
+    kind: 'ask_me' as const,
+    threadRootId: rootId,
+    askTargetBanditId: targetBanditId,
+    title: travelerTitle,
+    message: text,
+    operatorMessage: askMessage,
+    guestTitle: `Ask Me · ${banditName}`,
+  };
 
   const row = {
+    id: rootId,
     user_id: operatorUserId,
     type: 'bandit_question',
     title: travelerTitle,
@@ -338,27 +364,55 @@ export async function submitBanditQuestion(banditId: string, question: string): 
   } as never;
   console.log('ASK TARGET', targetBanditId);
 
-  const { data: insertedRow, error } = await supabase
-    .from('notifications')
-    .insert(row)
-    .select('id,created_at,ask_target_bandit_id')
-    .single();
+  if (shouldRequireOperatorMessageApi()) {
+    await deliverOperatorMessage(apiPayload);
+    requestNotificationsRefresh();
+    void trackEvent({
+      eventName: 'ask_me_sent',
+      referenceType: 'bandit',
+      referenceId: targetBanditId,
+    });
+    return;
+  }
 
-  if (!error) {
-    const insertedTarget = String(
-      (
-        insertedRow as {
-          ask_target_bandit_id?: string | null;
-          created_at?: string | null;
-        } | null
-      )?.ask_target_bandit_id || '',
-    ).trim();
-    if (!insertedTarget || insertedTarget !== targetBanditId) {
-      throw new Error('Ask target mismatch. Please try again.');
+  try {
+    await deliverOperatorMessage(apiPayload);
+    requestNotificationsRefresh();
+    void trackEvent({
+      eventName: 'ask_me_sent',
+      referenceType: 'bandit',
+      referenceId: targetBanditId,
+    });
+    return;
+  } catch {
+    /* local dev: optional direct insert below */
+  }
+
+  const { error } = await supabase.from('notifications').insert(row);
+
+  if (error) {
+    if (isAskTargetBanditIdMissingColumnError(error)) {
+      throw new Error('Ask Me needs a database update. Please try again later.');
     }
-    const rootId = String((insertedRow as { id?: string | null } | null)?.id || '').trim();
-    // Guest-side Notifications mirror row: visible in Notifications tab, independent from Pilot Desk.
-    const guestEcho = {
+    if (isPersistenceBlocked(error)) {
+      try {
+        await deliverOperatorMessage(apiPayload);
+        requestNotificationsRefresh();
+        void trackEvent({
+          eventName: 'ask_me_sent',
+          referenceType: 'bandit',
+          referenceId: targetBanditId,
+        });
+        return;
+      } catch (err) {
+        throw userFacingMessagingError(err);
+      }
+    }
+    throw userFacingMessagingError(error);
+  }
+
+  // Guest-side Notifications mirror row: visible in Notifications tab, independent from Pilot Desk.
+  const guestEcho = {
       user_id: String(user.id || '').trim(),
       type: 'bandit_question',
       title: `Ask Me · ${banditName}`,
@@ -370,7 +424,17 @@ export async function submitBanditQuestion(banditId: string, question: string): 
     } as never;
     const { error: guestEchoError } = await supabase.from('notifications').insert(guestEcho);
     if (guestEchoError) {
-      throw new Error('Question sent but notification creation failed. Please try again.');
+      try {
+        await insertGuestEchoViaApi({
+          kind: 'ask_me',
+          threadRootId: rootId,
+          askTargetBanditId: targetBanditId,
+          title: String((guestEcho as { title?: string }).title || '').trim() || `Ask Me · ${banditName}`,
+          message: text,
+        });
+      } catch (err) {
+        throw userFacingMessagingError(err);
+      }
     }
     requestNotificationsRefresh();
     void trackEvent({
@@ -378,17 +442,6 @@ export async function submitBanditQuestion(banditId: string, question: string): 
       referenceType: 'bandit',
       referenceId: targetBanditId,
     });
-    return;
-  }
-
-  if (isAskTargetBanditIdMissingColumnError(error)) {
-    throw new Error('Ask Me needs a database update (ask_target_bandit_id). Ask your administrator.');
-  }
-  const sys = error.message?.trim();
-  throw new Error(
-    sys ||
-      'Could not send your question. Check your connection, or tell staff if Pilot routing is offline.',
-  );
 }
 
 export default function BanditsServiceRoutePlaceholder() {

@@ -14,7 +14,9 @@ import {
 } from 'react-native';
 
 import { useCity } from '@/contexts/CityContext';
+import { useAppBackScreenOptions } from '@/hooks/useAppBackScreenOptions';
 import { usePremiumRefreshControl } from '@/lib/mobilePullToRefresh';
+import { useScamAlertsFeedRefresh } from '@/lib/scamAlertsRefresh';
 import { formatRelativeTime } from '@/lib/formatRelativeTime';
 import { renderSafeText } from '@/lib/renderSafeText';
 import { fetchScamAlerts, type ScamAlertRow } from '@/services/scamAlerts';
@@ -31,17 +33,23 @@ export default function BandiTeamHubScreen() {
   const [err, setErr] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState(false);
 
-  const load = useCallback(async () => {
-    setErr(null);
+  const load = useCallback(async (opts?: { silent?: boolean }) => {
+    const silent = opts?.silent === true;
+    if (!silent) setErr(null);
     try {
       const data = await fetchScamAlerts({ city: previewCity || null });
       setRows(data.slice(0, PREVIEW_MAX));
     } catch (e: unknown) {
-      setErr(e instanceof Error ? renderSafeText(e.message, 'Could not load alerts.') : 'Could not load alerts.');
-      setRows([]);
+      if (!silent) {
+        setErr(e instanceof Error ? renderSafeText(e.message, 'Could not load alerts.') : 'Could not load alerts.');
+        setRows([]);
+      }
     } finally {
-      setLoading(false);
-      setRefreshing(false);
+      if (silent) setRefreshing(false);
+      else {
+        setLoading(false);
+        setRefreshing(false);
+      }
     }
   }, [previewCity]);
 
@@ -49,6 +57,8 @@ export default function BandiTeamHubScreen() {
     setLoading(true);
     void load();
   }, [load]);
+
+  useScamAlertsFeedRefresh(load);
 
   const onPullRefresh = useCallback(() => {
     setRefreshing(true);
@@ -65,9 +75,14 @@ export default function BandiTeamHubScreen() {
     router.push(`/scam-alert/${id}` as never);
   };
 
+  const screenOptions = useAppBackScreenOptions({
+    title: 'bandiTEAM',
+    fallback: '/menu',
+  });
+
   return (
     <>
-      <Stack.Screen options={{ title: 'bandiTEAM', headerBackTitle: 'Back' }} />
+      <Stack.Screen options={screenOptions} />
       <ScrollView
         contentContainerStyle={styles.scroll}
         refreshControl={hubRefreshControl}

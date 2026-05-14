@@ -2,33 +2,41 @@ import React, { useCallback, useEffect, useState } from 'react';
 import { getBanditEventPersonalTip, isEventLiked, toggleEventLike } from '@/app/services/events';
 import { ThemedView } from '@/components/ThemedView';
 import { Database } from '@/lib/database.types';
-import { getCategoryFallbackImage, isLikelyLogoOrBadPlaceImage } from '@/lib/placePhoto';
-import { getCuratedEventImageCandidates } from '@/lib/eventImageCuration';
+import {
+  fetchGooglePlacePhotoUrl,
+  isGooglePlacesDerivedPhotoUrl,
+  normalizeEventImageUri,
+} from '@/lib/placePhoto';
+import { buildUserFacingVenueFallbackImage } from '@/lib/recommendationImages';
+import { getEventVenueGalleryOrdered } from '@/lib/eventVenueGallery';
 import { supabase } from '@/lib/supabase';
-import { useLocalSearchParams, useRouter } from 'expo-router';
+import { useLocalSearchParams, useRouter, Stack } from 'expo-router';
 import LocalBanditOctopusIcon from '@/components/LocalBanditOctopusIcon';
 import { VenueScamWarningsSection } from '@/components/VenueScamWarningsSection';
 import { usePremiumRefreshControl } from '@/lib/mobilePullToRefresh';
+import { useAppBackScreenOptions } from '@/hooks/useAppBackScreenOptions';
 import { repairDisplayText } from '@/lib/repairTextEncoding';
+import { Image as ExpoImage } from 'expo-image';
 import {
-  Dimensions,
-  Image,
   ScrollView,
   StatusBar,
   StyleSheet,
   Text,
   TouchableOpacity,
+  useWindowDimensions,
   View,
 } from 'react-native';
 
 type Event = Database['public']['Tables']['event']['Row'];
 type Bandit = Database['public']['Tables']['bandit']['Row'];
 
-const { width: screenWidth } = Dimensions.get('window');
-
 export default function EventDetailScreen() {
   const { id, banditId } = useLocalSearchParams();
   const router = useRouter();
+  const { width } = useWindowDimensions();
+  const contentMaxWidth = Math.min(980, Math.max(320, width));
+  const heroWidth = Math.min(contentMaxWidth, width);
+  const heroHeight = Math.max(220, Math.min(360, Math.round(width * 0.52)));
 
   const [event, setEvent] = useState<Event | null>(null);
   const [bandit, setBandit] = useState<Bandit | null>(null);
@@ -37,6 +45,12 @@ export default function EventDetailScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [isLiked, setIsLiked] = useState(false);
   const [imageFailed, setImageFailed] = useState(false);
+  const [verifiedGallery, setVerifiedGallery] = useState<string[]>([]);
+  const [galleryResolving, setGalleryResolving] = useState(false);
+  const screenOptions = useAppBackScreenOptions({
+    title: '',
+    fallback: '/explore',
+  });
 
   const loadEventData = useCallback(
     async (opts?: { silent?: boolean }) => {
@@ -55,6 +69,32 @@ export default function EventDetailScreen() {
 
         if (eventError) throw eventError;
         setEvent(eventData);
+
+        const stored = getEventVenueGalleryOrdered(eventData);
+        setVerifiedGallery(stored);
+        if (stored.length === 0) {
+          setGalleryResolving(true);
+          try {
+            const placeUrl = await fetchGooglePlacePhotoUrl({
+              placeId: (eventData as any).google_place_id ?? null,
+              name: String(eventData.name ?? ''),
+              address: String(eventData.address ?? ''),
+              city: String(eventData.city ?? ''),
+              neighborhood: String(eventData.neighborhood ?? ''),
+            });
+            const norm = placeUrl ? normalizeEventImageUri(placeUrl) ?? placeUrl : null;
+            if (norm && isGooglePlacesDerivedPhotoUrl(norm)) {
+              setVerifiedGallery([norm]);
+            } else {
+              setVerifiedGallery([]);
+            }
+          } catch (err) {
+            console.warn('[EventDetail] google photo fetch failed', err instanceof Error ? err.message : err);
+            setVerifiedGallery([]);
+          } finally {
+            setGalleryResolving(false);
+          }
+        }
 
         if (banditId) {
           const bid = Array.isArray(banditId) ? banditId[0] : banditId;
@@ -115,35 +155,39 @@ export default function EventDetailScreen() {
 
   if (loading) {
     return (
-      <ThemedView style={styles.container}>
-        <View style={styles.loadingContainer}>
-          <Text>Loading...</Text>
-        </View>
-      </ThemedView>
+      <>
+        <Stack.Screen options={screenOptions} />
+        <ThemedView style={styles.container}>
+          <View style={styles.loadingContainer}>
+            <Text>Loading...</Text>
+          </View>
+        </ThemedView>
+      </>
     );
   }
 
   if (!event) {
     return (
-      <ThemedView style={styles.container}>
-        <View style={styles.errorContainer}>
-          <Text>Event not found</Text>
-        </View>
-      </ThemedView>
+      <>
+        <Stack.Screen options={screenOptions} />
+        <ThemedView style={styles.container}>
+          <View style={styles.errorContainer}>
+            <Text>Event not found</Text>
+          </View>
+        </ThemedView>
+      </>
     );
   }
 
-  // Parse gallery images from comma-separated string
-  const galleryImages = event.image_gallery
-    ? (event.image_gallery || '').split(',').map(url => url.trim()).filter(url => url)
-    : [];
-  const safeMainImage =
-    event.image_url && !isLikelyLogoOrBadPlaceImage(event.image_url) ? event.image_url : null;
-  const curatedCandidates = getCuratedEventImageCandidates(event as any);
-  const curatedMain = curatedCandidates[0] ?? null;
+  // Strict policy: only Google Places–verified gallery URLs reach the UI. No stock pools.
+  const galleryImages = verifiedGallery;
+  const heroUri = !imageFailed && galleryImages[0]
+    ? galleryImages[0]
+    : buildUserFacingVenueFallbackImage(event, `event-detail-${event.id}`);
 
   return (
     <ThemedView style={styles.container}>
+      <Stack.Screen options={screenOptions} />
       <StatusBar barStyle="light-content" />
       
       {/* Header with like button */}
@@ -160,25 +204,26 @@ export default function EventDetailScreen() {
         style={styles.scrollView}
         showsVerticalScrollIndicator={false}
         refreshControl={eventDetailRefresh}
+        contentContainerStyle={styles.scrollContent}
       >
         {/* Main Event Image */}
-        <View style={styles.mainImageContainer}>
-          <Image
-            source={{ 
-              uri:
-                !imageFailed && (safeMainImage || curatedMain)
-                  ? (safeMainImage || curatedMain)
-                  : getCategoryFallbackImage(event.genre, `event-detail-${event.id}`, 1200, 900),
-            }}
+        <View style={[styles.mainImageContainer, { width: heroWidth, height: heroHeight }]}>
+          <ExpoImage
+            source={{ uri: heroUri }}
             style={styles.mainImage}
-            resizeMode="cover"
+            contentFit="cover"
+            transition={150}
+            cachePolicy="memory-disk"
+            recyclingKey={`event-hero:${event.id}`}
+            priority="high"
             onError={() => setImageFailed(true)}
           />
         </View>
 
         {/* Event Title */}
+        <View style={[styles.contentContainer, { maxWidth: contentMaxWidth }]}>
         <View style={styles.titleContainer}>
-          <Text style={styles.eventTitle}>{event.name || ''}</Text>
+          <Text style={styles.eventTitle}>{repairDisplayText(event.name || '')}</Text>
         </View>
 
         {/* Rating */}
@@ -215,12 +260,12 @@ export default function EventDetailScreen() {
               <LocalBanditOctopusIcon />
               <Text style={styles.personalTipTitle}>{`${bandit.name}'s Personal Tip`}</Text>
             </View>
-            <Text style={styles.personalTipText}>{personalTip || ''}</Text>
+            <Text style={styles.personalTipText}>{repairDisplayText(personalTip || '')}</Text>
           </View>
         )}
 
-        {/* Gallery Section */}
-        {galleryImages.length > 0 && (
+        {/* Gallery Section — only verified Google Places photos appear here. */}
+        {galleryImages.length > 1 && (
           <View style={styles.galleryContainer}>
             <Text style={styles.galleryTitle}>Gallery</Text>
             <ScrollView 
@@ -228,21 +273,26 @@ export default function EventDetailScreen() {
               showsHorizontalScrollIndicator={false}
               contentContainerStyle={styles.galleryScrollContainer}
             >
-              {galleryImages.map((imageUrl, index) => (
-                <View key={index} style={styles.galleryImageContainer}>
-                  <Image
+              {galleryImages.slice(1).map((imageUrl, index) => (
+                <View key={`${imageUrl}-${index}`} style={styles.galleryImageContainer}>
+                  <ExpoImage
                     source={{ uri: imageUrl }}
                     style={styles.galleryImage}
-                    resizeMode="cover"
+                    contentFit="cover"
+                    transition={120}
+                    cachePolicy="memory-disk"
+                    recyclingKey={`event-gallery:${event.id}:${index}`}
                   />
                 </View>
               ))}
             </ScrollView>
           </View>
         )}
+        {galleryResolving && galleryImages.length === 0 && null}
 
         {/* Bottom spacing to avoid tab bar */}
         <View style={styles.bottomSpacing} />
+        </View>
       </ScrollView>
     </ThemedView>
   );
@@ -294,10 +344,18 @@ const styles = StyleSheet.create({
   scrollView: {
     flex: 1,
   },
+  scrollContent: {
+    alignItems: 'center',
+  },
+  contentContainer: {
+    width: '100%',
+    alignSelf: 'center',
+  },
   mainImageContainer: {
-    height: 395,
-    width: screenWidth,
+    borderRadius: 14,
+    overflow: 'hidden',
     position: 'relative',
+    marginTop: 14,
   },
   mainImage: {
     width: '100%',

@@ -16,7 +16,11 @@ create policy "notifications_insert_routed"
         and reference_type in ('local_friend_request', 'bandit_question_request')
         and reference_id = auth.uid()::text
         and user_id = (
-          select (nullif(trim(value), ''))::uuid
+          select case
+            when trim(value) = '' then null
+            when trim(value) ~ '^[0-9a-fA-F-]{36}$' then trim(value)::uuid
+            else null
+          end
           from public.app_public_config
           where key = 'operator_user_id'
           limit 1
@@ -36,7 +40,11 @@ create policy "notifications_insert_routed"
         and reference_type in ('signal_delivery', 'presence_thread')
         and reference_id is not null
         and user_id = (
-          select (nullif(trim(value), ''))::uuid
+          select case
+            when trim(value) = '' then null
+            when trim(value) ~ '^[0-9a-fA-F-]{36}$' then trim(value)::uuid
+            else null
+          end
           from public.app_public_config
           where key = 'operator_user_id'
           limit 1

@@ -31,7 +31,14 @@ export function RequireHotelierGate({ children }: Props) {
     );
   }
   if (gate === 'deny') {
-    return <Redirect href="/login?forceAuth=1&redirect=/hotelier" />;
+    return (
+      <Redirect
+        href={{
+          pathname: '/login',
+          params: { forceAuth: '1', redirect: '/hotelier' },
+        }}
+      />
+    );
   }
   return children;
 }

@@ -25,7 +25,12 @@
     "db:apply-avatar-rls": "node scripts/apply-avatar-rls-production.mjs",
     "db:apply-scam-report-rls": "node scripts/apply-scam-report-rls-production.mjs",
     "verify:scam-anon-rls": "node scripts/verify-scam-anon-insert-production.mjs",
-    "verify:storage-avatar": "node scripts/test-storage-upload-prod.mjs"
+    "verify:storage-avatar": "node scripts/test-storage-upload-prod.mjs",
+    "backfill:recommendation-places": "node scripts/backfill-all-recommendation-places.mjs",
+    "audit:recommendation-places": "node scripts/audit-recommendation-place-health.mjs",
+    "audit:batch3-qa-names": "node scripts/audit-batch3-qa-names.mjs",
+    "verify:authentic-venue-images": "node scripts/verify-authentic-venue-images.mjs",
+    "db:fix-mojibake": "node scripts/db-fix-mojibake-globally.mjs"
   },
   "dependencies": {
     "@expo/vector-icons": "^15.0.3",

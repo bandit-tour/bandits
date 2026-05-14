@@ -1,10 +1,10 @@
 import { Stack, useLocalSearchParams } from 'expo-router';
 import Constants from 'expo-constants';
+import { Image as ExpoImage } from 'expo-image';
 import React, { useCallback, useEffect, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
-  Image,
   Linking,
   Platform,
   ScrollView,
@@ -20,16 +20,16 @@ import { Database } from '@/lib/database.types';
 import {
   fetchGooglePlacePhotoUrl as resolveGooglePlacePhotoUrl,
   isGooglePlacesDerivedPhotoUrl,
-  isLikelyLogoOrBadPlaceImage,
   normalizeEventImageUri,
 } from '@/lib/placePhoto';
-import { buildNeutralBusinessPlaceholderFromSeed } from '@/lib/recommendationImages';
-import { getCuratedEventImageCandidates } from '@/lib/eventImageCuration';
+import { buildUserFacingVenueFallbackImage } from '@/lib/recommendationImages';
+import { getEventVenueGalleryOrdered } from '@/lib/eventVenueGallery';
 import { supabase } from '@/lib/supabase';
 import ReviewCard from '@/components/ReviewCard';
 import { VenueScamWarningsSection } from '@/components/VenueScamWarningsSection';
 import { trackEvent } from '@/lib/analytics';
 import { usePremiumRefreshControl } from '@/lib/mobilePullToRefresh';
+import { useAppBackScreenOptions } from '@/hooks/useAppBackScreenOptions';
 import { repairDisplayText } from '@/lib/repairTextEncoding';
 
 // For City Guide, the ID passed into /spot/[id] comes from the event card,
@@ -44,44 +44,13 @@ type SpotReview = {
   user_name: string;
 };
 
-function parseGalleryImages(raw: string | null, fallback: string | null, curated: string[] = []): string[] {
-  const out: string[] = [];
-  const pushNorm = (u: string) => {
-    const n = normalizeEventImageUri(u);
-    if (n) out.push(n);
-  };
-  curated.forEach((u) => pushNorm(u));
-  if (fallback?.trim()) pushNorm(fallback.trim());
-  if (!raw) {
-    const unique = Array.from(new Set(out));
-    return unique
-      .filter((u) => !isLikelyLogoOrBadPlaceImage(u) && isGooglePlacesDerivedPhotoUrl(u))
-      .slice(0, 5);
-  }
-
-  try {
-    const parsed = JSON.parse(raw);
-    if (Array.isArray(parsed)) {
-      parsed.forEach((v) => {
-        if (typeof v === 'string' && v.trim()) pushNorm(v.trim());
-      });
-    }
-  } catch {
-    raw
-      .split(',')
-      .map((v) => v.trim())
-      .filter(Boolean)
-      .forEach((v) => pushNorm(v));
-  }
-
-  const unique = Array.from(new Set(out));
-  const sanitized = unique.filter((u) => !isLikelyLogoOrBadPlaceImage(u) && isGooglePlacesDerivedPhotoUrl(u));
-  return sanitized.slice(0, 5);
-}
-
 export default function SpotDetailScreen() {
   const { id } = useLocalSearchParams();
   const { width } = useWindowDimensions();
+  const screenOptions = useAppBackScreenOptions({
+    title: '',
+    fallback: '/explore',
+  });
   const isDesktopWeb = Platform.OS === 'web' && width >= 1024;
   const [spot, setSpot] = useState<Spot | null>(null);
   const [loading, setLoading] = useState(true);
@@ -117,8 +86,7 @@ export default function SpotDetailScreen() {
           onceKey: `spot_opened:${data.id}`,
         });
         setGalleryLoading(false);
-        const curated = getCuratedEventImageCandidates(data as any);
-        const parsedGallery = parseGalleryImages(data.image_gallery, data.image_url, curated);
+        const parsedGallery = getEventVenueGalleryOrdered(data);
         setVisibleGallery(parsedGallery);
 
         if (parsedGallery.length === 0) {
@@ -194,23 +162,29 @@ export default function SpotDetailScreen() {
 
   if (loading) {
     return (
-      <View style={styles.center}>
-        <ActivityIndicator size="large" />
-      </View>
+      <>
+        <Stack.Screen options={screenOptions} />
+        <View style={styles.center}>
+          <ActivityIndicator size="large" />
+        </View>
+      </>
     );
   }
 
   if (error || !spot) {
     return (
-      <View style={styles.center}>
-        <Text style={styles.errorText}>{error ?? 'Spot not found'}</Text>
-      </View>
+      <>
+        <Stack.Screen options={screenOptions} />
+        <View style={styles.center}>
+          <Text style={styles.errorText}>{error ?? 'Spot not found'}</Text>
+        </View>
+      </>
     );
   }
 
   return (
     <>
-      <Stack.Screen options={{ headerShown: true, title: '' }} />
+      <Stack.Screen options={screenOptions} />
       <ScrollView
         style={styles.container}
         contentContainerStyle={[styles.content, isDesktopWeb && styles.contentDesktop]}
@@ -223,11 +197,15 @@ export default function SpotDetailScreen() {
         >
           {visibleGallery.length > 0 ? (
             visibleGallery.map((uri, index) => (
-              <Image
+              <ExpoImage
                 key={`${uri}-${index}`}
                 source={{ uri }}
                 style={styles.image}
-                resizeMode="cover"
+                contentFit="cover"
+                transition={120}
+                cachePolicy="memory-disk"
+                recyclingKey={`spot-gallery:${spot.id}:${index}`}
+                priority={index === 0 ? 'high' : 'normal'}
                 onError={() =>
                   setVisibleGallery((prev) => prev.filter((u) => u !== uri))
                 }
@@ -238,20 +216,18 @@ export default function SpotDetailScreen() {
               <ActivityIndicator size="small" />
             </View>
           ) : (
-            <Image
+            <ExpoImage
               source={{
-                uri: buildNeutralBusinessPlaceholderFromSeed(
-                  String(spot.name ?? ''),
-                  `spot-detail-${spot.id}`,
-                ),
+                uri: buildUserFacingVenueFallbackImage(spot, `spot-detail-${spot.id}`),
               }}
               style={styles.image}
-              resizeMode="cover"
+              contentFit="cover"
+              cachePolicy="memory-disk"
             />
           )}
         </ScrollView>
         <View style={styles.titleRow}>
-          <Text style={styles.name}>{spot.name}</Text>
+          <Text style={styles.name}>{repairDisplayText(spot.name || '')}</Text>
           <TouchableOpacity onPress={() => void onToggleLike()} style={styles.likeBtn} hitSlop={12}>
             <Text style={styles.likeEmoji}>{liked ? '❤️' : '🤍'}</Text>
             <Text style={styles.likeLabel}>{liked ? 'Saved' : 'Save'}</Text>
@@ -264,7 +240,7 @@ export default function SpotDetailScreen() {
             onPress={() => Linking.openURL(`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(spot.address)}`)}
           >
             <Text style={styles.addressLabel}>Address</Text>
-            <Text style={styles.addressValue}>{spot.address}</Text>
+            <Text style={styles.addressValue}>{repairDisplayText(spot.address || '')}</Text>
           </TouchableOpacity>
         )}
         {spot.description && (

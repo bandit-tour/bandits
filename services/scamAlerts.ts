@@ -103,6 +103,16 @@ function normalizeRows(data: unknown, opts: NormalizeOpts): ScamAlertRow[] {
   });
 }
 
+/** Public traveler feeds — never show hidden/rejected/archived rows (defense in depth with RLS). */
+export function isPublicScamAlertRow(row: ScamAlertRow): boolean {
+  const status = String(row.moderation_status ?? 'published').trim().toLowerCase();
+  return status === 'published' || status === '';
+}
+
+function publicScamAlertRows(rows: ScamAlertRow[]): ScamAlertRow[] {
+  return rows.filter(isPublicScamAlertRow);
+}
+
 export type SubmitScamAlertInput = {
   city: string;
   location: string;
@@ -464,7 +474,8 @@ export async function fetchScamAlertById(id: string): Promise<ScamAlertRow | nul
   for (const a of attempts) {
     const { data, error } = await selectScamAlertRowById(rid, a.select);
     if (!error && data) {
-      return normalizeRows([data], a.opts)[0] ?? null;
+      const row = normalizeRows([data], a.opts)[0] ?? null;
+      return row && isPublicScamAlertRow(row) ? row : null;
     }
     if (!error && !data) {
       return null;
@@ -510,7 +521,7 @@ export async function fetchScamAlerts(options: { city?: string | null }): Promis
 
   for (const a of attempts) {
     try {
-      return await runSelect(a.select, a.opts);
+      return publicScamAlertRows(await runSelect(a.select, a.opts));
     } catch (e: unknown) {
       const msg = renderSafeText(e, '') || (e instanceof Error ? renderSafeText(e.message, '') : '');
       if (!isMissingScamColumnError(msg)) {

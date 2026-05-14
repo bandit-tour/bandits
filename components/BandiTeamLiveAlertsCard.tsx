@@ -6,6 +6,7 @@ import { useCity } from '@/contexts/CityContext';
 import { trackEvent } from '@/lib/analytics';
 import { formatRelativeTime } from '@/lib/formatRelativeTime';
 import { renderSafeText } from '@/lib/renderSafeText';
+import { useScamAlertsFeedRefresh } from '@/lib/scamAlertsRefresh';
 import { fetchScamAlerts, type ScamAlertRow } from '@/services/scamAlerts';
 
 const PREVIEW_MAX = 2;
@@ -22,17 +23,20 @@ export default function BandiTeamLiveAlertsCard() {
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState<string | null>(null);
 
-  const load = useCallback(async () => {
-    setErr(null);
+  const load = useCallback(async (opts?: { silent?: boolean }) => {
+    const silent = opts?.silent === true;
+    if (!silent) setErr(null);
     try {
       const data = await fetchScamAlerts({ city: city || null });
       setRows(data.slice(0, PREVIEW_MAX));
     } catch (e: unknown) {
-      const msg = e instanceof Error ? renderSafeText(e.message, 'Could not load') : 'Could not load alerts';
-      setErr(msg);
-      setRows([]);
+      if (!silent) {
+        const msg = e instanceof Error ? renderSafeText(e.message, 'Could not load') : 'Could not load alerts';
+        setErr(msg);
+        setRows([]);
+      }
     } finally {
-      setLoading(false);
+      if (!silent) setLoading(false);
     }
   }, [city]);
 
@@ -40,6 +44,8 @@ export default function BandiTeamLiveAlertsCard() {
     setLoading(true);
     void load();
   }, [load]);
+
+  useScamAlertsFeedRefresh(load);
 
   const openFeed = () => {
     void trackEvent({

@@ -1,13 +1,9 @@
 import { Stack, useRouter } from 'expo-router';
-import { useVideoPlayer, VideoView } from 'expo-video';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
-  KeyboardAvoidingView,
   Platform,
   ActivityIndicator,
   Image,
-  Modal,
-  Pressable,
   StyleSheet,
   Text,
   TextInput,
@@ -18,114 +14,19 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
+import { BottleSubmitVideo } from '@/components/BottleSubmitVideo';
 import { isDemoMode, scheduleDemoLocalFriendReply } from '@/lib/demoMode';
 import { usePremiumRefreshControl } from '@/lib/mobilePullToRefresh';
+import { useKeyboardBottomInset } from '@/lib/useKeyboardBottomInset';
+import { LOCAL_FRIEND_SUCCESS_MESSAGE, userFacingMessagingError } from '@/lib/userFacingMessagingError';
 import { getNotificationsBackendStatus, sendLocalFriendMessage } from '@/services/localFriend';
-
-/** Full-screen send overlay — must match hero asset (no play-intro). */
-const BOTTLE_SEND_SOURCE = require('@/assets/images/local-friend-bottle.mov');
-
-type BottleLaunchVideoProps = {
-  visible: boolean;
-  onFinished: () => void;
-};
-
-function LocalFriendBottleVideo({ visible, onFinished }: BottleLaunchVideoProps) {
-  const insets = useSafeAreaInsets();
-  const doneRef = useRef(false);
-  const player = useVideoPlayer(BOTTLE_SEND_SOURCE);
-
-  const finish = useCallback(() => {
-    if (doneRef.current) return;
-    doneRef.current = true;
-    onFinished();
-  }, [onFinished]);
-
-  useEffect(() => {
-    if (!visible) {
-      try {
-        player.pause();
-      } catch {
-        /* ignore */
-      }
-      return;
-    }
-    doneRef.current = false;
-    try {
-      player.muted = true;
-      player.loop = false;
-      if ('currentTime' in player && typeof (player as { currentTime?: number }).currentTime === 'number') {
-        (player as { currentTime: number }).currentTime = 0;
-      }
-      player.play();
-    } catch {
-      finish();
-    }
-  }, [visible, player, finish]);
-
-  useEffect(() => {
-    if (!visible) return;
-    const sub = player.addListener('playToEnd', finish);
-    const t = setTimeout(finish, 9_000);
-    return () => {
-      sub.remove();
-      clearTimeout(t);
-    };
-  }, [visible, player, finish]);
-
-  if (!visible) return null;
-
-  return (
-    <Modal visible animationType="fade" transparent onRequestClose={finish}>
-      <View style={launchStyles.backdrop} accessibilityViewIsModal>
-        <VideoView
-          player={player}
-          style={launchStyles.video}
-          nativeControls={false}
-          contentFit="contain"
-          allowsFullscreen={false}
-        />
-        <Pressable
-          onPress={finish}
-          style={[launchStyles.skip, { top: insets.top + 8 }]}
-          hitSlop={12}
-          accessibilityRole="button"
-          accessibilityLabel="Skip video"
-        >
-          <Text style={launchStyles.skipText}>Skip</Text>
-        </Pressable>
-      </View>
-    </Modal>
-  );
-}
-
-const launchStyles = StyleSheet.create({
-  backdrop: {
-    flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.92)',
-    justifyContent: 'center',
-  },
-  video: {
-    width: '100%',
-    height: '88%',
-    backgroundColor: 'transparent',
-  },
-  skip: {
-    position: 'absolute',
-    right: 18,
-    zIndex: 2,
-    paddingVertical: 10,
-    paddingHorizontal: 14,
-    borderRadius: 999,
-    backgroundColor: 'rgba(0,0,0,0.5)',
-  },
-  skipText: { color: '#fff', fontSize: 14, fontWeight: '700' },
-});
 
 export default function LocalFriendScreen() {
   const router = useRouter();
   const { width } = useWindowDimensions();
   const isDesktopWeb = Platform.OS === 'web' && width >= 1024;
+  const insets = useSafeAreaInsets();
+  const keyboardInset = useKeyboardBottomInset();
   const [message, setMessage] = useState('');
   const [sending, setSending] = useState(false);
   const [success, setSuccess] = useState<string | null>(null);
@@ -174,18 +75,12 @@ export default function LocalFriendScreen() {
       if (p) await p;
       setMessage('');
       setStatusStep('waiting');
-      setSuccess('Sent to nearby travelers.');
+      setSuccess(LOCAL_FRIEND_SUCCESS_MESSAGE);
       if (isDemoMode()) {
         scheduleDemoLocalFriendReply();
       }
     } catch (e: unknown) {
-      const msg =
-        e instanceof Error
-          ? e.message
-          : typeof e === 'object' && e !== null && 'message' in e
-            ? String((e as { message: unknown }).message ?? '')
-            : '';
-      if (msg.trim()) setError(msg.trim());
+      setError(userFacingMessagingError(e).message);
       setStatusStep('idle');
     } finally {
       setSending(false);
@@ -205,17 +100,16 @@ export default function LocalFriendScreen() {
   return (
     <>
       <Stack.Screen options={{ headerShown: true, title: 'Local Friend', headerBackTitle: 'Back' }} />
-      <LocalFriendBottleVideo visible={bottleOpen} onFinished={onBottleVideoFinished} />
-      <KeyboardAvoidingView
-        style={{ flex: 1 }}
-        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-      >
+      <BottleSubmitVideo visible={bottleOpen} onFinished={onBottleVideoFinished} />
+      <View style={styles.screenRoot}>
         <ScrollView
+          style={styles.scroll}
           contentContainerStyle={[
             styles.scrollContent,
             isDesktopWeb && styles.scrollContentDesktop,
           ]}
           keyboardShouldPersistTaps="handled"
+          keyboardDismissMode={Platform.OS === 'ios' ? 'interactive' : 'on-drag'}
           refreshControl={listRefreshControl}
         >
           <View style={[styles.mainGrid, isDesktopWeb && styles.mainGridDesktop]}>
@@ -238,31 +132,32 @@ export default function LocalFriendScreen() {
               </View>
             </View>
 
-            <View style={[styles.inputCard, isDesktopWeb && styles.inputCardDesktop]}>
-              <Text style={styles.inputLabel}>What do you want to throw out there?</Text>
-              <TextInput
-                style={styles.input}
-                multiline
-                placeholder="Ask for a vibe, a corner, a kind of night..."
-                value={message}
-                onChangeText={setMessage}
-              />
+            {isDesktopWeb && (
+              <View style={[styles.inputCard, styles.inputCardDesktop]}>
+                <Text style={styles.inputLabel}>What do you want to throw out there?</Text>
+                <TextInput
+                  style={styles.input}
+                  multiline
+                  placeholder="Ask for a vibe, a corner, a kind of night..."
+                  value={message}
+                  onChangeText={setMessage}
+                />
 
-              <TouchableOpacity
-                style={[
-                  styles.sendButton,
-                  (sending || !message.trim() || bottleOpen) && styles.sendButtonDisabled,
-                ]}
-                disabled={sending || !message.trim() || bottleOpen}
-                onPress={handleSend}
-              >
-                {sending && !bottleOpen ? (
-                  <ActivityIndicator color="#FFF" size="small" />
-                ) : (
-                  <Text style={styles.sendText}>Send</Text>
-                )}
-              </TouchableOpacity>
+                <View style={styles.statusRow}>
+                  <StatusPill label="Bottle out" active={statusStep === 'released'} />
+                  <StatusPill label="Reaching people" active={statusStep === 'matching'} />
+                  <StatusPill label="Waiting" active={statusStep === 'waiting'} />
+                </View>
 
+                {!!error && <Text style={styles.errorText}>{error}</Text>}
+                {!!success && <Text style={styles.successText}>{success}</Text>}
+                {!!optionalReplyHint && <Text style={styles.hintText}>{optionalReplyHint}</Text>}
+              </View>
+            )}
+          </View>
+
+          {!isDesktopWeb && (
+            <>
               <View style={styles.statusRow}>
                 <StatusPill label="Bottle out" active={statusStep === 'released'} />
                 <StatusPill label="Reaching people" active={statusStep === 'matching'} />
@@ -272,8 +167,8 @@ export default function LocalFriendScreen() {
               {!!error && <Text style={styles.errorText}>{error}</Text>}
               {!!success && <Text style={styles.successText}>{success}</Text>}
               {!!optionalReplyHint && <Text style={styles.hintText}>{optionalReplyHint}</Text>}
-            </View>
-          </View>
+            </>
+          )}
 
           <TouchableOpacity
             style={styles.exitButton}
@@ -284,7 +179,46 @@ export default function LocalFriendScreen() {
             <Text style={styles.exitButtonText}>Back to Home</Text>
           </TouchableOpacity>
         </ScrollView>
-      </KeyboardAvoidingView>
+
+        {/* Compose bar: input + Send stay together above the keyboard on native. */}
+        <View
+          style={[
+            styles.composeBar,
+            {
+              paddingBottom: Math.max(insets.bottom, 10) + keyboardInset,
+            },
+          ]}
+        >
+          {!isDesktopWeb && (
+            <>
+              <Text style={styles.inputLabel}>What do you want to throw out there?</Text>
+              <TextInput
+                style={styles.input}
+                multiline
+                placeholder="Ask for a vibe, a corner, a kind of night..."
+                value={message}
+                onChangeText={setMessage}
+              />
+            </>
+          )}
+          <TouchableOpacity
+            style={[
+              styles.sendButton,
+              (sending || !message.trim() || bottleOpen) && styles.sendButtonDisabled,
+            ]}
+            disabled={sending || !message.trim() || bottleOpen}
+            onPress={handleSend}
+            accessibilityRole="button"
+            accessibilityLabel="Send message"
+          >
+            {sending && !bottleOpen ? (
+              <ActivityIndicator color="#FFF" size="small" />
+            ) : (
+              <Text style={styles.sendText}>Send</Text>
+            )}
+          </TouchableOpacity>
+        </View>
+      </View>
     </>
   );
 }
@@ -298,12 +232,19 @@ function StatusPill({ label, active }: { label: string; active: boolean }) {
 }
 
 const styles = StyleSheet.create({
+  screenRoot: {
+    flex: 1,
+    backgroundColor: '#FFFFFF',
+  },
+  scroll: {
+    flex: 1,
+  },
   scrollContent: {
     flexGrow: 1,
     backgroundColor: '#FFFFFF',
     paddingHorizontal: 16,
     paddingTop: 16,
-    paddingBottom: 32,
+    paddingBottom: 16,
     width: '100%',
     maxWidth: 1160,
     alignSelf: 'center',
@@ -372,20 +313,28 @@ const styles = StyleSheet.create({
     marginBottom: 8,
     textAlignVertical: 'top',
   },
+  composeBar: {
+    paddingHorizontal: 16,
+    paddingTop: 10,
+    backgroundColor: '#FFFFFF',
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: '#E4E4E4',
+  },
   sendButton: {
-    alignSelf: 'flex-end',
-    paddingHorizontal: 18,
-    paddingVertical: 8,
-    borderRadius: 18,
+    alignSelf: 'stretch',
+    paddingVertical: 14,
+    borderRadius: 24,
     backgroundColor: '#000',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   sendButtonDisabled: {
     backgroundColor: '#999',
   },
   sendText: {
     color: '#FFF',
-    fontSize: 14,
-    fontWeight: '600',
+    fontSize: 15,
+    fontWeight: '700',
   },
   statusRow: {
     flexDirection: 'row',

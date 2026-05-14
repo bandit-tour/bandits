@@ -1,8 +1,15 @@
 import { getEvents, type EventFilters } from '@/app/services/events';
 import { useCity } from '@/contexts/CityContext';
 import { Database } from '@/lib/database.types';
+import { readExploreMapSeedEvents } from '@/lib/exploreMapEventsCache';
+import {
+  ATHENS_CENTER,
+  boundsFromMapEvents,
+  eventMapCoordinates,
+} from '@/lib/mapCoordinates';
+import { resolveGooglePlaceBusinessData } from '@/lib/placePhoto';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 
 type Event = Database['public']['Tables']['event']['Row'];
 
@@ -25,6 +32,51 @@ export interface MapBounds {
   };
 }
 
+async function enrichEventCoordinates(event: Event): Promise<Event> {
+  if (eventMapCoordinates(event)) return event;
+
+  const placeId = String((event as { google_place_id?: string | null }).google_place_id ?? '').trim();
+  if (!placeId) return event;
+
+  try {
+    const resolved = await resolveGooglePlaceBusinessData({
+      placeId,
+      name: event.name ?? '',
+      address: event.address ?? '',
+      city: event.city ?? 'Athens',
+      neighborhood: event.neighborhood ?? '',
+      photoLimit: 1,
+    });
+    if (resolved?.locationLat != null && resolved?.locationLng != null) {
+      return {
+        ...event,
+        location_lat: resolved.locationLat,
+        location_lng: resolved.locationLng,
+      };
+    }
+  } catch {
+    // keep row for list; map will skip until coords exist
+  }
+  return event;
+}
+
+async function enrichEventsForMap(events: Event[]): Promise<Event[]> {
+  const needsBackfill = events.filter((event) => !eventMapCoordinates(event));
+  if (needsBackfill.length === 0) return events;
+
+  const backfilledById = new Map<string, Event>();
+  const chunkSize = 4;
+  for (let i = 0; i < needsBackfill.length; i += chunkSize) {
+    const chunk = needsBackfill.slice(i, i + chunkSize);
+    const results = await Promise.all(chunk.map((event) => enrichEventCoordinates(event)));
+    for (const row of results) {
+      backfilledById.set(row.id, row);
+    }
+  }
+
+  return events.map((event) => backfilledById.get(event.id) ?? event);
+}
+
 export function useMapEvents(
   onEventPress?: (event: Event) => void,
   options?: UseMapEventsOptions,
@@ -45,13 +97,15 @@ export function useMapEvents(
 
   const { selectedCity } = useCity();
   const router = useRouter();
-  const [events, setEvents] = useState<Event[]>([]);
-  const [loading, setLoading] = useState(true);
+  const seedEvents = readExploreMapSeedEvents(selectedCity ?? undefined, effectiveBanditId);
+  const [events, setEvents] = useState<Event[]>(seedEvents);
+  const [loading, setLoading] = useState(seedEvents.length === 0);
   const [error, setError] = useState<string | null>(null);
+  const hasPaintedEventsRef = useRef(seedEvents.length > 0);
 
   const fetchEvents = useCallback(async () => {
     try {
-      setLoading(true);
+      if (!hasPaintedEventsRef.current) setLoading(true);
       setError(null);
 
       const filters: EventFilters = {};
@@ -73,17 +127,15 @@ export function useMapEvents(
         ),
       ]);
 
-      // Supabase / JSON may return numerics as strings — coerce before map markers.
-      const validEvents = allEventsData.filter((event) => {
-        const lat = Number(event.location_lat);
-        const lng = Number(event.location_lng);
-        return Number.isFinite(lat) && Number.isFinite(lng);
+      setEvents(allEventsData);
+      hasPaintedEventsRef.current = true;
+      setLoading(false);
+      void enrichEventsForMap(allEventsData).then((enriched) => {
+        setEvents(enriched);
       });
-      setEvents(validEvents);
     } catch (err) {
       console.error('Error fetching events:', err);
       setError(err instanceof Error ? err.message : 'Failed to fetch events');
-    } finally {
       setLoading(false);
     }
   }, [effectiveBanditId, selectedCity]);
@@ -98,61 +150,50 @@ export function useMapEvents(
     latitudeDelta: number;
     longitudeDelta: number;
   }): MapBounds => {
-    if (events.length === 0) {
+    const fallback = {
+      latitude: initialRegion.latitude,
+      longitude: initialRegion.longitude,
+      latitudeDelta: initialRegion.latitudeDelta,
+      longitudeDelta: initialRegion.longitudeDelta,
+    };
+    const { center, zoom } = boundsFromMapEvents(events, fallback);
+
+    const mappable = events
+      .map((event) => eventMapCoordinates(event))
+      .filter((coords): coords is { lat: number; lng: number } => coords != null);
+
+    if (mappable.length === 0) {
       return {
-        center: { latitude: initialRegion.latitude, longitude: initialRegion.longitude },
-        zoom: 12,
+        center,
+        zoom,
         bounds: {
-          north: initialRegion.latitude + initialRegion.latitudeDelta / 2,
-          south: initialRegion.latitude - initialRegion.latitudeDelta / 2,
-          east: initialRegion.longitude + initialRegion.longitudeDelta / 2,
-          west: initialRegion.longitude - initialRegion.longitudeDelta / 2,
-        }
+          north: fallback.latitude + fallback.latitudeDelta / 2,
+          south: fallback.latitude - fallback.latitudeDelta / 2,
+          east: fallback.longitude + fallback.longitudeDelta / 2,
+          west: fallback.longitude - fallback.longitudeDelta / 2,
+        },
       };
     }
-    
-    // Find the bounding box of all events
-    const lats = events.map(event => event.location_lat);
-    const lngs = events.map(event => event.location_lng);
-    
+
+    const lats = mappable.map((c) => c.lat);
+    const lngs = mappable.map((c) => c.lng);
     const minLat = Math.min(...lats);
     const maxLat = Math.max(...lats);
     const minLng = Math.min(...lngs);
     const maxLng = Math.max(...lngs);
-    
-    // Calculate center point
-    const centerLat = (minLat + maxLat) / 2;
-    const centerLng = (minLng + maxLng) / 2;
-    
-    // Calculate the span (delta) of the bounding box
-    const latSpan = maxLat - minLat;
-    const lngSpan = maxLng - minLng;
-    
-    // Add some padding (10% on each side)
+    const latSpan = Math.max(maxLat - minLat, 0.0001);
+    const lngSpan = Math.max(maxLng - minLng, 0.0001);
     const padding = 0.1;
-    const paddedLatSpan = latSpan * (1 + padding * 2);
-    const paddedLngSpan = lngSpan * (1 + padding * 2);
-    
-    // Calculate optimal zoom level based on the span
-    let zoom = 14; // Default zoom
-    
-    if (paddedLatSpan > 0.1) zoom = 10;  // Very wide area
-    else if (paddedLatSpan > 0.05) zoom = 11;  // Wide area
-    else if (paddedLatSpan > 0.02) zoom = 12; // Medium area
-    else if (paddedLatSpan > 0.01) zoom = 13; // Small area
-    else if (paddedLatSpan > 0.005) zoom = 14; // Very small area
-    else if (paddedLatSpan > 0.002) zoom = 15; // Tiny area
-    else zoom = 16; // Very tiny area
-    
+
     return {
-      center: { latitude: centerLat, longitude: centerLng },
-      zoom: zoom,
+      center,
+      zoom,
       bounds: {
-        north: maxLat + (latSpan * padding),
-        south: minLat - (latSpan * padding),
-        east: maxLng + (lngSpan * padding),
-        west: minLng - (lngSpan * padding)
-      }
+        north: maxLat + latSpan * padding,
+        south: minLat - latSpan * padding,
+        east: maxLng + lngSpan * padding,
+        west: minLng - lngSpan * padding,
+      },
     };
   };
 
@@ -160,7 +201,6 @@ export function useMapEvents(
     if (onEventPress) {
       onEventPress(event);
     } else {
-      // Default behavior: navigate to event detail page
       const url = effectiveBanditId
         ? (`/event/${event.id}?banditId=${effectiveBanditId}` as any)
         : (`/event/${event.id}` as any);
@@ -176,5 +216,6 @@ export function useMapEvents(
     calculateOptimalMapBounds,
     handleEventPress,
     refetchEvents: fetchEvents,
+    athensFallback: ATHENS_CENTER,
   };
 }

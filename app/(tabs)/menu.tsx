@@ -7,10 +7,10 @@ import { Alert, Image, Platform, Pressable, ScrollView, StyleSheet, Text, View, 
 import {
   canAccessHotelier,
   canShowOwnerPrivateMenu,
-  isAnonymousSupabaseSession,
 } from '@/lib/appAdminAccess';
 import { usePremiumRefreshControl } from '@/lib/mobilePullToRefresh';
 import { getHotelWhiteLabelOrDefault } from '@/lib/hotelWhiteLabel';
+import { openStaffEmailLogin } from '@/lib/loginNavigation';
 import { getHotelEntry } from '@/lib/pilotSession';
 import { resolveMenuAuthSnapshot } from '@/lib/pilotDeskGate';
 import { supabase } from '@/lib/supabase';
@@ -35,13 +35,11 @@ const OWNER_PRIVATE_MENU_ITEMS: MenuItem[] = [
 function applyMenuAuthFromUser(
   user: User | null,
   setters: {
-    setMenuSessionUser: (u: User | null) => void;
     setOwnerPrivateMenuAllowed: (v: boolean) => void;
     setCanStaffSignOut: (v: boolean) => void;
     setAuthHydrated: (v: boolean) => void;
   },
 ) {
-  setters.setMenuSessionUser(user);
   setters.setOwnerPrivateMenuAllowed(canShowOwnerPrivateMenu(user));
   setters.setCanStaffSignOut(canAccessHotelier(user));
   setters.setAuthHydrated(true);
@@ -58,11 +56,9 @@ export default function MenuScreen() {
   const [menuLocationLine, setMenuLocationLine] = React.useState(
     () => getHotelWhiteLabelOrDefault(null).menuLocationLine,
   );
-  const [menuSessionUser, setMenuSessionUser] = React.useState<User | null>(null);
 
   const authSetters = React.useMemo(
     () => ({
-      setMenuSessionUser,
       setOwnerPrivateMenuAllowed,
       setCanStaffSignOut,
       setAuthHydrated,
@@ -130,9 +126,8 @@ export default function MenuScreen() {
   const showGuestMenuTitle = !signedInEmailUser;
   const headerTitle = showGuestMenuTitle ? 'Guest Menu' : 'Menu';
   const showPilotStaffChrome = authHydrated && ownerPrivateMenuAllowed;
-  const showStaffSignIn =
-    !signedInEmailUser &&
-    (Platform.OS === 'web' || isAnonymousSupabaseSession(menuSessionUser));
+  /** Match web Guest Menu: always offer email sign-in until a real account session exists. */
+  const showStaffSignIn = !signedInEmailUser;
 
   return (
     <ScrollView
@@ -165,9 +160,7 @@ export default function MenuScreen() {
       {showStaffSignIn ? (
         <Pressable
           style={styles.staffSignIn}
-          onPress={() =>
-            router.push('/login?forceAuth=1&redirect=/menu' as never)
-          }
+          onPress={() => openStaffEmailLogin(router, '/menu')}
         >
           <Text style={styles.staffSignInTitle}>Sign in with email</Text>
           <Text style={styles.staffSignInSub}>For hotel partners and verified accounts.</Text>
@@ -180,7 +173,7 @@ export default function MenuScreen() {
           onPress={async () => {
             await supabase.auth.signOut();
             Alert.alert('Signed out', 'You have been signed out successfully.');
-            router.replace('/login?forceAuth=1' as never);
+            openStaffEmailLogin(router, '/menu');
           }}
         >
           <Text style={styles.signOutText}>Sign out</Text>

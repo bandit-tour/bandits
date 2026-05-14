@@ -2,7 +2,7 @@
   "expo": {
     "name": "bandiTour",
     "slug": "bandits",
-    "version": "1.0.1",
+    "version": "1.0.2",
     "orientation": "portrait",
     "icon": "./assets/images/play_athens_bg.png",
     "scheme": "bandits",
@@ -11,6 +11,7 @@
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.yuvaldafni.bandits",
+      "buildNumber": "19",
       "associatedDomains": [
         "applinks:bandits-two.vercel.app",
         "applinks:bandit-tours.vercel.app"
@@ -52,7 +53,10 @@
               "pathPrefix": "/hotel"
             }
           ],
-          "category": ["BROWSABLE", "DEFAULT"]
+          "category": [
+            "BROWSABLE",
+            "DEFAULT"
+          ]
         },
         {
           "action": "VIEW",
@@ -61,9 +65,13 @@
               "scheme": "bandits"
             }
           ],
-          "category": ["BROWSABLE", "DEFAULT"]
+          "category": [
+            "BROWSABLE",
+            "DEFAULT"
+          ]
         }
-      ]
+      ],
+      "versionCode": 6
     },
     "web": {
       "bundler": "metro",
@@ -118,6 +126,7 @@
     },
     "extra": {
       "router": {},
+      "googleMapsApiKey": "AIzaSyBfv6k8wNTEtWYL6iKTw1O3XC0vf_CS7Xg",
       "eas": {
         "projectId": "02867d6d-fb41-4f54-80ad-aae3d6831060"
       }

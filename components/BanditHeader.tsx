@@ -1,11 +1,11 @@
 import { Database } from '@/lib/database.types';
+import { Image as ExpoImage } from 'expo-image';
 import { router } from 'expo-router';
 import React, { useEffect, useMemo, useState } from 'react';
-import { Image, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Image, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 
 import BanditMiniMapPreview from '@/components/BanditMiniMapPreview';
 import LocalBanditOctopusIcon from '@/components/LocalBanditOctopusIcon';
-import { picsumPlaceImage } from '@/lib/placePhoto';
 import TagChip from '@/components/TagChip';
 import { TAG_EMOJI_MAP } from './../constants/tagNameToEmoji';
 import EventCategories from './EventCategories';
@@ -26,9 +26,11 @@ interface BanditHeaderProps {
   variant?: 'list' | 'detail';
   showActionButtons?: boolean;
   onCategoryPress?: (genre: string) => void;
+  /** Accordion panel rendered directly under category chips (same scroll surface, no navigation). */
+  categoryExpandBelow?: React.ReactNode;
 }
 
-export default function BanditHeader({
+function BanditHeaderImpl({
   bandit,
   categories,
   selectedGenre,
@@ -36,6 +38,7 @@ export default function BanditHeader({
   variant = 'detail',
   showActionButtons = true,
   onCategoryPress,
+  categoryExpandBelow,
 }: BanditHeaderProps) {
   const {
     id,
@@ -50,7 +53,7 @@ export default function BanditHeader({
     bandit_tags,
   } = bandit as any;
 
-  const [imageAspectRatio, setImageAspectRatio] = useState<number>(1);
+  const [imageAspectRatio] = useState<number>(1.24);
   const [heroUriIndex, setHeroUriIndex] = useState(0);
   const [useLocalFallback, setUseLocalFallback] = useState(false);
 
@@ -65,20 +68,23 @@ export default function BanditHeader({
     return out;
   }, [isListVariant, face_image_url, image_url]);
 
-  const heroUri =
-    heroUriIndex < heroCandidates.length
-      ? heroCandidates[heroUriIndex]
-      : picsumPlaceImage(`banDit-${id}`, 800, 600);
+  // When we run out of remote bandit portrait candidates we fall straight to the
+  // local in-app asset. Never substitute a random stock photo (e.g. Picsum) — a
+  // wrong portrait is worse than no portrait.
+  const useLocalNow = useLocalFallback || heroUriIndex >= heroCandidates.length;
+  const heroUri = heroCandidates[heroUriIndex] ?? null;
 
   useEffect(() => {
     setHeroUriIndex(0);
     setUseLocalFallback(false);
   }, [id, isListVariant, face_image_url, image_url]);
 
-  const imageHeight = isListVariant ? 238 : undefined;
+  const imageHeight = isListVariant ? 212 : undefined;
   const containerPadding = isListVariant ? 0 : 16;
 
   const goFocusHome = () => {
+    // Warm the next screen's bandit hero so the navigation feels instant.
+    if (heroUri) void ExpoImage.prefetch(heroUri, 'memory-disk');
     router.push(`/bandits?focusBanditId=${encodeURIComponent(id)}` as any);
   };
 
@@ -89,26 +95,27 @@ export default function BanditHeader({
         isListVariant && styles.listImageContainer,
       ]}
     >
-      <Image
+      <ExpoImage
         source={
-          useLocalFallback
+          useLocalNow || !heroUri
             ? require('@/assets/images/play_athens_bg.png')
             : { uri: heroUri }
         }
+        contentFit="contain"
+        transition={150}
+        cachePolicy="memory-disk"
+        recyclingKey={`bandit-hero:${id}`}
+        priority="high"
         style={[
           styles.mainImage,
           isListVariant
             ? { height: imageHeight }
             : { aspectRatio: imageAspectRatio },
           isListVariant && styles.listImage,
+          !isListVariant && styles.detailImage,
         ]}
-        onLoad={() => {
-          if (!isListVariant) {
-            setImageAspectRatio(0.8);
-          }
-        }}
         onError={() => {
-          if (heroUriIndex < heroCandidates.length) {
+          if (heroUriIndex < heroCandidates.length - 1) {
             setHeroUriIndex((i) => i + 1);
             return;
           }
@@ -150,14 +157,36 @@ export default function BanditHeader({
     </View>
   );
 
-  const infoBlock = (
-    <>
-      <View
-        style={[
-          styles.infoContainer,
-          isListVariant && styles.listInfoContainer,
-        ]}
-      >
+  const infoRow = (
+    <View
+      style={[
+        styles.infoContainer,
+        isListVariant && styles.listInfoContainer,
+      ]}
+    >
+      {isListVariant ? (
+        <Pressable
+          onPress={goFocusHome}
+          style={({ pressed }) => [styles.nameContainer, pressed && { opacity: 0.97 }]}
+        >
+          <View style={styles.nameRow}>
+            <View style={styles.octopusWrap}>
+              <LocalBanditOctopusIcon />
+            </View>
+            <Text style={styles.name}>{`${name} ${family_name}`}</Text>
+          </View>
+          <Text style={styles.descriptionLine}>
+            {`(${age} y/o, local banDit)`}
+          </Text>
+          <Text style={styles.occupation}>{occupation}</Text>
+          <Pressable
+            onPress={() => router.push(`/bandit/${id}` as any)}
+            hitSlop={6}
+          >
+            <Text style={styles.openProfileCue}>Open profile</Text>
+          </Pressable>
+        </Pressable>
+      ) : (
         <View style={styles.nameContainer}>
           <View style={styles.nameRow}>
             <View style={styles.octopusWrap}>
@@ -169,55 +198,70 @@ export default function BanditHeader({
             {`(${age} y/o, local banDit)`}
           </Text>
           <Text style={styles.occupation}>{occupation}</Text>
-          {isListVariant && (
-            <Pressable
-              onPress={() => router.push(`/bandit/${id}` as any)}
-              hitSlop={6}
-            >
-              <Text style={styles.openProfileCue}>Open profile</Text>
-            </Pressable>
-          )}
         </View>
+      )}
 
-        <View style={styles.ratingContainer}>
-          {!isListVariant && (
-            <>
-              <ThemedText style={styles.stars}>⭐️</ThemedText>
-              <ThemedText style={styles.rating}>{rating}</ThemedText>
-            </>
-          )}
-          {onLike && (
-            <Pressable onPress={() => onLike(id, is_liked)} style={styles.followButton}>
-              <Text style={styles.followButtonText}>{is_liked ? 'Following' : 'Follow'}</Text>
-            </Pressable>
-          )}
-        </View>
+      <View style={styles.ratingContainer}>
+        {!isListVariant && (
+          <>
+            <ThemedText style={styles.stars}>⭐️</ThemedText>
+            <ThemedText style={styles.rating}>{rating}</ThemedText>
+          </>
+        )}
+        {onLike && (
+          <Pressable onPress={() => onLike(id, is_liked)} style={styles.followButton}>
+            <Text style={styles.followButtonText}>{is_liked ? 'Following' : 'Follow'}</Text>
+          </Pressable>
+        )}
       </View>
+    </View>
+  );
 
-      <View style={isListVariant ? styles.listCategoriesWrapper : undefined}>
+  const categoriesSection = (
+    <View
+      collapsable={false}
+      style={isListVariant ? styles.listCategoriesWrapper : undefined}
+      pointerEvents="box-none"
+    >
+      <View
+        collapsable={false}
+        style={
+          isListVariant && Platform.OS !== 'web'
+            ? styles.nativeListCategoriesFrontLayer
+            : !isListVariant && Platform.OS !== 'web'
+              ? styles.nativeDetailCategoriesFrontLayer
+              : undefined
+        }
+      >
         <EventCategories
           categories={categories}
           selectedGenre={selectedGenre ?? undefined}
           onCategoryPress={onCategoryPress}
         />
-
-        {bandit_tags?.length > 0 && (
-          <View style={styles.vibesContainer}>
-            {bandit_tags.map((bt: any) => {
-              const tagName = bt.tags?.name;
-              if (!tagName) return null;
-
-              return (
-                <TagChip
-                  key={tagName}
-                  label={`${TAG_EMOJI_MAP[tagName] ?? ''} ${tagName}`}
-                />
-              );
-            })}
-          </View>
-        )}
       </View>
-    </>
+
+      {categoryExpandBelow ? (
+        <View style={styles.categoryExpandBelow} pointerEvents="box-none">
+          {categoryExpandBelow}
+        </View>
+      ) : null}
+
+      {bandit_tags?.length > 0 && (
+        <View style={styles.vibesContainer}>
+          {bandit_tags.map((bt: any) => {
+            const tagName = bt.tags?.name;
+            if (!tagName) return null;
+
+            return (
+              <TagChip
+                key={tagName}
+                label={`${TAG_EMOJI_MAP[tagName] ?? ''} ${tagName}`}
+              />
+            );
+          })}
+        </View>
+      )}
+    </View>
   );
 
   return (
@@ -226,27 +270,30 @@ export default function BanditHeader({
         styles.container,
         { paddingHorizontal: containerPadding },
         isListVariant && styles.listContainer,
+        isListVariant && selectedGenre ? styles.listContainerExpanded : undefined,
       ]}
     >
       {isListVariant ? (
         <View style={styles.touchableContainer}>
           {heroBlock}
-          <Pressable
-            onPress={goFocusHome}
-            style={({ pressed }) => [styles.listBodyPressable, pressed && { opacity: 0.97 }]}
-          >
-            {infoBlock}
-          </Pressable>
+          <View style={styles.listBodyPressable}>
+            {infoRow}
+            {categoriesSection}
+          </View>
         </View>
       ) : (
         <>
           {heroBlock}
-          {infoBlock}
+          {infoRow}
+          {categoriesSection}
         </>
       )}
     </View>
   );
 }
+
+const BanditHeader = BanditHeaderImpl;
+export default BanditHeader;
 
 /* ---------------- STYLES ---------------- */
 
@@ -263,8 +310,12 @@ const styles = StyleSheet.create({
     shadowRadius: 8,
     elevation: 8,
   },
+  listContainerExpanded: {
+    shadowOpacity: 0,
+    elevation: 0,
+  },
   touchableContainer: {
-    overflow: 'hidden',
+    overflow: 'visible',
     borderRadius: 20,
   },
   listBodyPressable: {
@@ -286,13 +337,19 @@ const styles = StyleSheet.create({
     marginBottom: 32,
     position: 'relative',
     zIndex: 1,
+    backgroundColor: '#EEF1F4',
+    borderRadius: 20,
+    overflow: 'hidden',
   },
   listImageContainer: {
     marginBottom: 0,
   },
   mainImage: {
     width: '100%',
-    borderRadius: 20,
+    borderRadius: 0,
+  },
+  detailImage: {
+    maxHeight: 360,
   },
   listImage: {
     borderTopLeftRadius: 20,
@@ -302,8 +359,8 @@ const styles = StyleSheet.create({
   },
   exploreButton: {
     position: 'absolute',
-    right: 16,
-    bottom: -12,
+    right: 12,
+    bottom: 12,
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: '#FF3B30',
@@ -349,6 +406,18 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingTop: 6,
     paddingBottom: 10,
+  },
+  categoryExpandBelow: {
+    marginTop: 2,
+    marginBottom: 4,
+  },
+  nativeDetailCategoriesFrontLayer: {
+    position: 'relative',
+    zIndex: 3,
+  },
+  nativeListCategoriesFrontLayer: {
+    position: 'relative',
+    zIndex: 3,
   },
   nameContainer: {
     flex: 1,

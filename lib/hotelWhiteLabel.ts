@@ -166,7 +166,7 @@ export const HOTEL_WHITE_LABELS: Record<HotelSlug, HotelWhiteLabelConfig> = {
     profileGuestIdentity: 'This is your guest identity for bandiTour city access.',
     profileAccessTitle: 'PLAY guest access',
     profileAccessBullets:
-      '· Local banDits recommendations by neighborhood\n· City routes with map context and live spots\n· Local Friend requests and replies in Inbox',
+      '· Local banDits recommendations by neighborhood\n· City routes with map context and live spots\n· Local Friend requests and replies in Notifications',
   },
   'nyx-athens': {
     slug: 'nyx-athens',
@@ -197,7 +197,7 @@ export const HOTEL_WHITE_LABELS: Record<HotelSlug, HotelWhiteLabelConfig> = {
     profileGuestIdentity: 'This is your guest identity for bandiTour city access.',
     profileAccessTitle: 'NYX guest access',
     profileAccessBullets:
-      '· Local banDits recommendations by neighborhood\n· City routes with map context and live spots\n· Local Friend requests and replies in Inbox',
+      '· Local banDits recommendations by neighborhood\n· City routes with map context and live spots\n· Local Friend requests and replies in Notifications',
   },
   'aluma-athens': {
     slug: 'aluma-athens',
@@ -229,7 +229,7 @@ export const HOTEL_WHITE_LABELS: Record<HotelSlug, HotelWhiteLabelConfig> = {
     profileGuestIdentity: 'This is your guest identity for bandiTour city access.',
     profileAccessTitle: 'Guest access',
     profileAccessBullets:
-      '· Local banDits recommendations by neighborhood\n· City routes with map context and live spots\n· Local Friend requests and replies in Inbox',
+      '· Local banDits recommendations by neighborhood\n· City routes with map context and live spots\n· Local Friend requests and replies in Notifications',
   },
 };
 

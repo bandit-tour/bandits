@@ -1,4 +1,5 @@
 import React from 'react';
+import { repairDisplayText } from '@/lib/repairTextEncoding';
 import { ScrollView, StyleSheet, Text, View, ViewStyle } from 'react-native';
 
 export type BasicTrailStop = {
@@ -50,10 +51,10 @@ export default function TrailDetailView({ trail, containerStyle, inline }: Trail
               <Text style={styles.stopMeta}>
                 Stop {stop.position} of {totalStops}
               </Text>
-              <Text style={styles.stopName}>{stop.stop_name}</Text>
+              <Text style={styles.stopName}>{repairDisplayText(stop.stop_name)}</Text>
             </View>
           </View>
-          {stop.note && <Text style={styles.stopNote}>{stop.note}</Text>}
+          {stop.note && <Text style={styles.stopNote}>{repairDisplayText(stop.note)}</Text>}
         </View>
       ))}
     </Wrapper>

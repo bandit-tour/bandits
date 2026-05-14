@@ -15,6 +15,8 @@ import {
 } from 'react-native';
 
 import { usePremiumRefreshControl } from '@/lib/mobilePullToRefresh';
+import { useScamAlertsFeedRefresh } from '@/lib/scamAlertsRefresh';
+import { useAppBackScreenOptions } from '@/hooks/useAppBackScreenOptions';
 import { buildTrustBadges, buildTrustContextFromRows, severityAccent, type TrustBadge } from '@/lib/scamAlertTrust';
 import { formatRelativeTime } from '@/lib/formatRelativeTime';
 import { trackEvent } from '@/lib/analytics';
@@ -94,6 +96,8 @@ export default function ScamAlertDetailScreen() {
   useEffect(() => {
     void load();
   }, [load]);
+
+  useScamAlertsFeedRefresh(load);
 
   useEffect(() => {
     if (!row || openedTracked) return;
@@ -181,20 +185,20 @@ export default function ScamAlertDetailScreen() {
   }, [load]);
   const scamAlertDetailRefresh = usePremiumRefreshControl(refreshing, onRefreshAlert);
 
+  const screenOptions = useAppBackScreenOptions({
+    title: 'Alert',
+    fallback: '/alerts',
+    headerRight: () =>
+      row ? (
+        <Pressable onPress={() => void shareAlert()} style={styles.headerIconBtn} accessibilityLabel="Share alert">
+          <Ionicons name="share-outline" size={22} color="#111" />
+        </Pressable>
+      ) : null,
+  });
+
   return (
     <>
-      <Stack.Screen
-        options={{
-          title: 'Alert',
-          headerBackTitle: 'Back',
-          headerRight: () =>
-            row ? (
-              <Pressable onPress={() => void shareAlert()} style={styles.headerIconBtn} accessibilityLabel="Share alert">
-                <Ionicons name="share-outline" size={22} color="#111" />
-              </Pressable>
-            ) : null,
-        }}
-      />
+      <Stack.Screen options={screenOptions} />
       <ScrollView
         contentContainerStyle={styles.scroll}
         testID="scam-alert-detail-root"
@@ -205,8 +209,8 @@ export default function ScamAlertDetailScreen() {
         ) : error && !row ? (
           <View style={styles.centerBlock}>
             <Text style={styles.err}>{error}</Text>
-            <Pressable style={styles.backBtn} onPress={() => router.back()} accessibilityRole="button">
-              <Text style={styles.backBtnText}>Go back</Text>
+            <Pressable style={styles.backBtn} onPress={handleBack} accessibilityRole="button">
+              <Text style={styles.backBtnText}>Back</Text>
             </Pressable>
           </View>
         ) : row ? (

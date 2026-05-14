@@ -10,8 +10,14 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
+import { useAppBackScreenOptions } from '@/hooks/useAppBackScreenOptions';
+
 export default function SettingsScreen() {
   const insets = useSafeAreaInsets();
+  const screenOptions = useAppBackScreenOptions({
+    title: 'Settings',
+    fallback: '/menu',
+  });
   const [pushEnabled, setPushEnabled] = useState(true);
   const [emailEnabled, setEmailEnabled] = useState(true);
   const [savingPrefs, setSavingPrefs] = useState(false);
@@ -31,7 +37,7 @@ export default function SettingsScreen() {
 
   return (
     <>
-      <Stack.Screen options={{ headerShown: true, title: 'Settings' }} />
+      <Stack.Screen options={screenOptions} />
       <ScrollView
         style={styles.scroll}
         contentContainerStyle={[styles.container, { paddingBottom: 24 + insets.bottom }]}

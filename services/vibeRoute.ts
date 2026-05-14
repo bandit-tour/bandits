@@ -1,6 +1,10 @@
-import { getCuratedEventImageCandidates } from '@/lib/eventImageCuration';
+import { getEventVenueGalleryOrdered } from '@/lib/eventVenueGallery';
 import { Database } from '@/lib/database.types';
-import { isLikelyLogoOrBadPlaceImage, normalizeEventImageUri } from '@/lib/placePhoto';
+import {
+  isGooglePlacesDerivedPhotoUrl,
+  isLikelyLogoOrBadPlaceImage,
+  normalizeEventImageUri,
+} from '@/lib/placePhoto';
 import { repairDisplayText } from '@/lib/repairTextEncoding';
 
 type Event = Database['public']['Tables']['event']['Row'];
@@ -26,26 +30,15 @@ function cleanUrl(u: string | null | undefined): string | null {
   return t;
 }
 
+/**
+ * Strict candidate list for a Vibe Route stop. Only Google Places–derived
+ * gallery photos are returned; stock photo hosts (Pexels / Unsplash / Picsum)
+ * and editorial Wikimedia stand-ins are dropped to avoid showing unrelated
+ * imagery for a real venue. When nothing verified exists the consumer renders
+ * a category-aware neutral placeholder rather than an inferred stock photo.
+ */
 export function eventImageCandidates(event: Event): string[] {
-  const out: string[] = [];
-  const add = (raw: string | null | undefined) => {
-    const c = cleanUrl(raw);
-    const n = normalizeEventImageUri(c);
-    if (n && !isLikelyLogoOrBadPlaceImage(n) && !out.includes(n)) out.push(n);
-  };
-  getCuratedEventImageCandidates(event as any).forEach((u) => add(u));
-  if (event.image_gallery) {
-    try {
-      const parsed = JSON.parse(event.image_gallery);
-      if (Array.isArray(parsed)) {
-        parsed.forEach((x: unknown) => typeof x === 'string' && add(x));
-      }
-    } catch {
-      event.image_gallery.split(',').forEach((x) => add(x.trim()));
-    }
-  }
-  add(event.image_url);
-  return out;
+  return getEventVenueGalleryOrdered(event);
 }
 
 function truncateVibe(text: string, max = 140): string {
@@ -100,7 +93,9 @@ export function buildVibeStopsFromEvents(
     name: event.name || 'Place',
     category: event.genre,
     vibeLine: vibeLineForEvent(event, tipsByEventId[event.id]),
-    address: [event.address, event.neighborhood, event.city].filter(Boolean).join(', '),
+    address: repairDisplayText(
+      [event.address, event.neighborhood, event.city].filter(Boolean).join(', '),
+    ),
     imageCandidates: eventImageCandidates(event),
     eventId: event.id,
   }));
@@ -108,13 +103,38 @@ export function buildVibeStopsFromEvents(
 
 type SpotRow = Database['public']['Tables']['spots']['Row'];
 
+function spotTrustedImageCandidates(s: SpotRow): string[] {
+  const out: string[] = [];
+  const push = (raw: string | null | undefined) => {
+    const c = cleanUrl(raw);
+    const n = normalizeEventImageUri(c);
+    if (!n) return;
+    if (isLikelyLogoOrBadPlaceImage(n)) return;
+    if (!isGooglePlacesDerivedPhotoUrl(n)) return;
+    if (!out.includes(n)) out.push(n);
+  };
+  const gallery = (s as any).image_gallery;
+  if (typeof gallery === 'string' && gallery.trim()) {
+    try {
+      const parsed = JSON.parse(gallery);
+      if (Array.isArray(parsed)) {
+        for (const v of parsed) if (typeof v === 'string') push(v);
+      } else {
+        gallery.split(',').forEach((v: string) => push(v.trim()));
+      }
+    } catch {
+      gallery.split(',').forEach((v: string) => push(v.trim()));
+    }
+  }
+  push(s.image_url);
+  return out;
+}
+
 export function buildVibeStopsFromSpots(spots: SpotRow[], startOrder: number, max: number): VibeStop[] {
   const out: VibeStop[] = [];
   for (let i = 0; i < spots.length && out.length < max; i++) {
     const s = spots[i];
-    const imgs: string[] = [];
-    const c = cleanUrl(s.image_url);
-    if (c) imgs.push(c);
+    const imgs = spotTrustedImageCandidates(s);
     const desc = s.description?.trim();
     out.push({
       key: `spot-${s.id}`,
@@ -123,7 +143,7 @@ export function buildVibeStopsFromSpots(spots: SpotRow[], startOrder: number, ma
       name: s.name || 'Spot',
       category: (s.category || 'Local').trim() || 'Local',
       vibeLine: desc ? truncateVibe(desc) : 'A local-coded stop on this thread.',
-      address: [s.address, s.city].filter(Boolean).join(', ') || '',
+      address: repairDisplayText([s.address, s.city].filter(Boolean).join(', ') || ''),
       imageCandidates: imgs,
       spotId: s.id,
     });

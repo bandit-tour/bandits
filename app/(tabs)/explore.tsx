@@ -1,108 +1,163 @@
 import { getEvents, toggleEventLike } from '@/app/services/events';
 import EventCard from '@/components/EventCard';
+import ExploreCategoryChips from '@/components/ExploreCategoryChips';
 import { useCity } from '@/contexts/CityContext';
+import { exploreEventsCacheKey, hydrateExploreEventsFromDisk, persistExploreEventsSnapshot } from '@/lib/exploreEventsCache';
+import { fetchSWR, readCacheStale } from '@/lib/appDataCache';
 import { Database } from '@/lib/database.types';
+import {
+  exploreChipFromGenreParam,
+  filterEventsByExploreCategory,
+  type ExploreCategoryChip,
+} from '@/lib/exploreCategoryFilter';
+import { buildEventListImagePlan } from '@/lib/eventListImagePlan';
 import { usePremiumRefreshControl } from '@/lib/mobilePullToRefresh';
 import { useFocusEffect } from '@react-navigation/native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { ActivityIndicator, FlatList, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import {
+  ActivityIndicator,
+  FlatList,
+  Platform,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  View,
+  useWindowDimensions,
+} from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 type Event = Database['public']['Tables']['event']['Row'];
 
+const EXPLORE_CACHE_TTL_MS = 90 * 1000;
+
 export default function Explore() {
   const router = useRouter();
+  const { width } = useWindowDimensions();
+  const insets = useSafeAreaInsets();
   const { selectedCity } = useCity();
   const params = useLocalSearchParams<{ banditId?: string; genre?: string }>();
   const rawBanditId = params.banditId;
   const banditId = Array.isArray(rawBanditId) ? rawBanditId[0] : rawBanditId;
   const rawGenre = params.genre;
   const selectedGenre = Array.isArray(rawGenre) ? rawGenre[0] : rawGenre;
-  const hasExploreDataRef = useRef(false);
-  const [events, setEvents] = useState<Event[]>([]);
-  const [likedEventIds, setLikedEventIds] = useState<Set<string>>(new Set());
-  const [loading, setLoading] = useState(true);
-  const [refreshing, setRefreshing] = useState(false);
-  const [loadedOnce, setLoadedOnce] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-
-  const loadEvents = useCallback(async (opts?: { silent?: boolean }) => {
-    const silent = opts?.silent === true;
-    try {
-      if (!silent) setLoading(true);
-      setError(null);
-      const rows = await getEvents({
-        ...(selectedCity ? { city: selectedCity } : {}),
-        ...(banditId ? { banditId } : {}),
-        ...(selectedGenre ? { genre: selectedGenre } : {}),
-      });
-      setEvents(rows || []);
-    } catch (e) {
-      setError(e instanceof Error ? e.message : 'Could not load Explore.');
-    } finally {
-      if (!silent) setLoading(false);
-      setLoadedOnce(true);
-    }
-  }, [selectedCity, banditId, selectedGenre]);
-
-  useEffect(() => {
-    hasExploreDataRef.current = events.length > 0;
-  }, [events.length]);
-
-  const exploreFilterKey = useMemo(
-    () => `${selectedCity ?? ''}|${banditId ?? ''}|${selectedGenre ?? ''}`,
+  const exploreCacheKey = useMemo(
+    () => exploreEventsCacheKey(selectedCity, banditId, selectedGenre),
     [selectedCity, banditId, selectedGenre],
   );
-  const prevExploreFilterKeyRef = useRef<string | null>(null);
 
-  /** City / bandit / genre can change while Explore stays focused — refetch without waiting for tab blur. */
+  const exploreInitialFocusDoneRef = useRef(false);
+  const diskHydratedRef = useRef(false);
+
+  const [events, setEvents] = useState<Event[]>(
+    () => readCacheStale<Event[]>(exploreCacheKey) ?? [],
+  );
+  const [likedEventIds, setLikedEventIds] = useState<Set<string>>(new Set());
+  const [refreshing, setRefreshing] = useState(false);
+  const [backgroundLoading, setBackgroundLoading] = useState(
+    () => (readCacheStale<Event[]>(exploreCacheKey) ?? []).length === 0,
+  );
+  const [error, setError] = useState<string | null>(null);
+  const [categoryChip, setCategoryChip] = useState<ExploreCategoryChip>(() =>
+    exploreChipFromGenreParam(selectedGenre),
+  );
+
   useEffect(() => {
-    if (prevExploreFilterKeyRef.current === null) {
-      prevExploreFilterKeyRef.current = exploreFilterKey;
-      return;
-    }
-    if (prevExploreFilterKeyRef.current === exploreFilterKey) return;
-    prevExploreFilterKeyRef.current = exploreFilterKey;
-    let cancelled = false;
+    setCategoryChip(exploreChipFromGenreParam(selectedGenre));
+  }, [selectedGenre]);
+
+  const listBottomPad = useMemo(
+    () => 72 + (Platform.OS === 'android' ? Math.max(insets.bottom, 12) : Math.max(insets.bottom, 8)) + 16,
+    [insets.bottom],
+  );
+
+  useLayoutEffect(() => {
+    if (diskHydratedRef.current) return;
+    diskHydratedRef.current = true;
     void (async () => {
-      setRefreshing(true);
-      try {
-        await loadEvents({ silent: true });
-      } finally {
-        if (!cancelled) setRefreshing(false);
+      await hydrateExploreEventsFromDisk();
+      const stale = readCacheStale<Event[]>(exploreCacheKey);
+      if (stale?.length) {
+        setEvents(stale);
+        setBackgroundLoading(false);
       }
     })();
-    return () => {
-      cancelled = true;
-    };
-  }, [exploreFilterKey, loadEvents]);
+  }, [exploreCacheKey]);
+
+  useEffect(() => {
+    const stale = readCacheStale<Event[]>(exploreCacheKey);
+    if (stale?.length) {
+      setEvents(stale);
+      setBackgroundLoading(false);
+    }
+  }, [exploreCacheKey]);
+
+  const runExploreFetch = useCallback(
+    (asRefresh: boolean) => {
+      if (asRefresh) setRefreshing(true);
+      setError(null);
+      const cacheKey = exploreEventsCacheKey(selectedCity, banditId, selectedGenre);
+      const hadCache = (readCacheStale<Event[]>(cacheKey) ?? []).length > 0;
+      if (!hadCache) setBackgroundLoading(true);
+
+      const handle = fetchSWR<Event[]>(
+        cacheKey,
+        EXPLORE_CACHE_TTL_MS,
+        () =>
+          getEvents({
+            ...(selectedCity ? { city: selectedCity } : {}),
+            ...(banditId ? { banditId } : {}),
+            ...(selectedGenre ? { genre: selectedGenre } : {}),
+          }).then((rows) => rows || []),
+        (rows, meta) => {
+          setEvents(rows);
+          setBackgroundLoading(false);
+          setRefreshing(false);
+          exploreInitialFocusDoneRef.current = true;
+          if (!meta.fromCache) {
+            void persistExploreEventsSnapshot(cacheKey, rows);
+          }
+        },
+        (err) => {
+          setError(err instanceof Error ? err.message : 'Could not load Explore.');
+          setBackgroundLoading(false);
+          setRefreshing(false);
+          exploreInitialFocusDoneRef.current = true;
+        },
+      );
+      return handle;
+    },
+    [selectedCity, banditId, selectedGenre],
+  );
+
+  const prevExploreFilterSigRef = useRef<string | null>(null);
+  const exploreFilterSig = exploreCacheKey;
+
+  useEffect(() => {
+    if (prevExploreFilterSigRef.current === null) {
+      prevExploreFilterSigRef.current = exploreFilterSig;
+      return;
+    }
+    if (prevExploreFilterSigRef.current === exploreFilterSig) return;
+    prevExploreFilterSigRef.current = exploreFilterSig;
+    if (!exploreInitialFocusDoneRef.current) return;
+    runExploreFetch(true);
+  }, [exploreFilterSig, runExploreFetch]);
 
   useFocusEffect(
     useCallback(() => {
-      void (async () => {
-        if (hasExploreDataRef.current) {
-          setRefreshing(true);
-          try {
-            await loadEvents({ silent: true });
-          } finally {
-            setRefreshing(false);
-          }
-          return;
-        }
-        await loadEvents();
-      })();
-    }, [loadEvents]),
+      const handle = runExploreFetch(exploreInitialFocusDoneRef.current);
+      return () => handle.cancel();
+    }, [runExploreFetch]),
   );
 
   const toggleLike = useCallback(async (eventId: string) => {
     const currentlyLiked = likedEventIds.has(eventId);
     setLikedEventIds((prev) => {
       const next = new Set(prev);
-      if (currentlyLiked) {
-        next.delete(eventId);
-      } else {
-        next.add(eventId);
-      }
+      if (currentlyLiked) next.delete(eventId);
+      else next.add(eventId);
       return next;
     });
     try {
@@ -110,24 +165,18 @@ export default function Explore() {
     } catch {
       setLikedEventIds((prev) => {
         const next = new Set(prev);
-        if (currentlyLiked) {
-          next.add(eventId);
-        } else {
-          next.delete(eventId);
-        }
+        if (currentlyLiked) next.add(eventId);
+        else next.delete(eventId);
         return next;
       });
     }
   }, [likedEventIds]);
 
   const onPullRefresh = useCallback(async () => {
-    setRefreshing(true);
-    try {
-      await loadEvents({ silent: true });
-    } finally {
-      setRefreshing(false);
-    }
-  }, [loadEvents]);
+    const { invalidateAppDataCache } = await import('@/lib/appDataCache');
+    invalidateAppDataCache(exploreCacheKey);
+    runExploreFetch(true);
+  }, [runExploreFetch, exploreCacheKey]);
 
   const exploreRefreshControl = usePremiumRefreshControl(refreshing, onPullRefresh);
 
@@ -136,20 +185,54 @@ export default function Explore() {
     return selectedCity ? `Explore in ${selectedCity}` : 'Explore';
   }, [selectedCity, selectedGenre]);
 
+  const columns = useMemo(() => (width >= 560 ? 2 : 1), [width]);
+
+  const filteredEvents = useMemo(
+    () => filterEventsByExploreCategory(events, categoryChip),
+    [events, categoryChip],
+  );
+
+  const exploreListImagePlan = useMemo(
+    () => buildEventListImagePlan(filteredEvents, { w: 900, h: 675 }),
+    [filteredEvents],
+  );
+
   const goBackToBanditHome = useCallback(() => {
     if (!banditId) return;
     router.push(`/bandits?focusBanditId=${encodeURIComponent(banditId)}` as any);
   }, [banditId, router]);
 
-  if (loading && !loadedOnce) {
-    return (
-      <View style={styles.loadingWrap}>
-        <ActivityIndicator size="large" />
-      </View>
-    );
-  }
+  const keyExtractor = useCallback((item: Event) => item.id, []);
 
-  if (error && events.length === 0) {
+  const handleNavigateToSpot = useCallback(
+    (eventId: string) => {
+      router.push(
+        `${banditId ? `/spot/${eventId}?banditId=${encodeURIComponent(banditId)}` : `/spot/${eventId}`}` as any,
+      );
+    },
+    [banditId, router],
+  );
+
+  const renderEventRow = useCallback(
+    ({ item }: { item: Event }) => (
+      <View style={[styles.cardWrap, columns > 1 && styles.cardWrapMulti]}>
+        <EventCard
+          event={item}
+          onLike={() => void toggleLike(item.id)}
+          isLiked={likedEventIds.has(item.id)}
+          variant="horizontal"
+          fillHorizontalCell
+          showRecommendations
+          banditId={banditId}
+          listImageScope={exploreListImagePlan.get(item.id)}
+          onPress={() => handleNavigateToSpot(item.id)}
+        />
+      </View>
+    ),
+    [columns, likedEventIds, banditId, exploreListImagePlan, toggleLike, handleNavigateToSpot],
+  );
+
+  if (error && events.length === 0 && !backgroundLoading) {
     return (
       <ScrollView
         style={{ flex: 1, backgroundColor: '#FFFFFF' }}
@@ -175,40 +258,45 @@ export default function Explore() {
         <Text style={styles.headerText} numberOfLines={1}>
           {title}
         </Text>
-        <View style={styles.headerSide}>
-          <Pressable
-            style={styles.mapBtn}
-            onPress={() => router.push(`/cityMap${banditId ? `?banditId=${encodeURIComponent(banditId)}` : ''}` as any)}
-          >
-            <Text style={styles.mapBtnText}>Map</Text>
-          </Pressable>
+        <View style={[styles.headerSide, styles.headerSideRight]}>
+          {backgroundLoading && events.length === 0 ? (
+            <ActivityIndicator size="small" color="#0a7ea4" style={styles.headerSpinner} />
+          ) : (
+            <Pressable
+              style={styles.mapBtn}
+              onPress={() => router.push(`/cityMap${banditId ? `?banditId=${encodeURIComponent(banditId)}` : ''}` as any)}
+            >
+              <Text style={styles.mapBtnText}>Map</Text>
+            </Pressable>
+          )}
         </View>
       </View>
+      <ExploreCategoryChips selected={categoryChip} onSelect={setCategoryChip} />
       <FlatList
-        data={events}
-        keyExtractor={(item) => item.id}
-        numColumns={2}
+        style={styles.listFlex}
+        data={filteredEvents}
+        key={`explore-cols-${columns}-${categoryChip}`}
+        keyExtractor={keyExtractor}
+        numColumns={columns}
         refreshControl={exploreRefreshControl}
-        columnWrapperStyle={styles.row}
-        contentContainerStyle={styles.gridContent}
-        ListEmptyComponent={<Text style={styles.emptyText}>No places found in Explore yet.</Text>}
-        renderItem={({ item }) => (
-          <View style={styles.cardWrap}>
-            <EventCard
-              event={item}
-              onLike={() => void toggleLike(item.id)}
-              isLiked={likedEventIds.has(item.id)}
-              variant="horizontal"
-              showRecommendations
-              banditId={banditId}
-              onPress={() =>
-                router.push(
-                  `${banditId ? `/spot/${item.id}?banditId=${encodeURIComponent(banditId)}` : `/spot/${item.id}`}` as any,
-                )
-              }
-            />
-          </View>
-        )}
+        columnWrapperStyle={columns > 1 ? styles.row : undefined}
+        contentContainerStyle={[styles.gridContent, { paddingBottom: listBottomPad }]}
+        ListEmptyComponent={
+          backgroundLoading ? (
+            <Text style={styles.emptyText}>Loading places…</Text>
+          ) : events.length === 0 ? (
+            <Text style={styles.emptyText}>No places found in Explore yet.</Text>
+          ) : (
+            <Text style={styles.emptyText}>
+              {`No ${categoryChip === 'All' ? '' : `${categoryChip} `}places in this view yet.`}
+            </Text>
+          )
+        }
+        initialNumToRender={8}
+        maxToRenderPerBatch={6}
+        windowSize={7}
+        removeClippedSubviews={Platform.OS !== 'web'}
+        renderItem={renderEventRow}
       />
     </View>
   );
@@ -218,6 +306,14 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: '#FFFFFF',
+    width: '100%',
+    maxWidth: '100%',
+    overflow: 'hidden',
+  },
+  listFlex: {
+    flex: 1,
+    width: '100%',
+    maxWidth: '100%',
   },
   headerContainer: {
     flexDirection: 'row',
@@ -232,6 +328,12 @@ const styles = StyleSheet.create({
     minWidth: 88,
     alignItems: 'stretch',
     justifyContent: 'center',
+  },
+  headerSideRight: {
+    alignItems: 'flex-end',
+  },
+  headerSpinner: {
+    marginRight: 8,
   },
   headerText: {
     flex: 1,
@@ -263,15 +365,30 @@ const styles = StyleSheet.create({
     fontWeight: '700',
   },
   gridContent: {
-    paddingHorizontal: 10,
+    paddingHorizontal: 12,
     paddingBottom: 108,
+    maxWidth: 1200,
+    width: '100%',
+    alignSelf: 'center',
   },
   row: {
+    flex: 1,
     justifyContent: 'space-between',
-    marginBottom: 10,
+    gap: 12,
+    marginBottom: 12,
+    paddingHorizontal: 4,
+    maxWidth: '100%',
+    width: '100%',
+    alignSelf: 'stretch',
   },
   cardWrap: {
-    width: '48%',
+    width: '100%',
+    minWidth: 0,
+    maxWidth: '100%',
+  },
+  cardWrapMulti: {
+    flex: 1,
+    flexBasis: 0,
   },
   emptyText: {
     textAlign: 'center',
@@ -298,4 +415,3 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
 });
-

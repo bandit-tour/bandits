@@ -1,9 +1,15 @@
 import { ensureOperatorUserId, getOperatorUserId } from '@/lib/operatorConfig';
+import {
+  deliverOperatorMessage,
+  shouldRequireOperatorMessageApi,
+} from '@/lib/operatorMessageDelivery';
 import { ensureAnonymousSession } from '@/lib/pilotSession';
+import { insertGuestEchoViaApi } from '@/lib/guestNotificationEchoApi';
 import { requestNotificationsRefresh } from '@/lib/notificationEvents';
 import { fetchSenderBanditIdentity } from '@/lib/signalDelivery';
 import { supabase } from '@/lib/supabase';
 import { trackEvent } from '@/lib/analytics';
+import { userFacingMessagingError } from '@/lib/userFacingMessagingError';
 
 const DEFAULT_PRODUCTION_API_ORIGIN = 'https://bandits-two.vercel.app';
 
@@ -28,6 +34,13 @@ export type BackendStatus = {
 };
 
 export { ensureOperatorUserId, getOperatorUserId };
+
+function createClientUuid(): string {
+  const c = globalThis.crypto as { randomUUID?: () => string } | undefined;
+  if (c?.randomUUID) return c.randomUUID();
+  const s4 = () => Math.floor((1 + Math.random()) * 0x10000).toString(16).slice(1);
+  return `${s4()}${s4()}-${s4()}-4${s4().slice(0, 3)}-${((8 + Math.floor(Math.random() * 4)).toString(16) + s4().slice(0, 3))}-${s4()}${s4()}${s4()}`;
+}
 
 export function isPersistenceBlocked(error: { message?: string; code?: string }): boolean {
   const msg = (error.message ?? '').toLowerCase();
@@ -88,9 +101,9 @@ export async function sendLocalFriendMessage(message: string): Promise<void> {
     data: { session },
     error: sessionError,
   } = await supabase.auth.getSession();
-  if (sessionError) throw new Error(sessionError.message || 'Could not verify your session.');
+  if (sessionError) throw userFacingMessagingError(sessionError);
   const user = session?.user;
-  if (!user) throw new Error('Could not start a session. Open the app and try again in a moment.');
+  if (!user) throw userFacingMessagingError(new Error('Session required.'));
   const operatorUserId = await ensureOperatorUserId();
   if (!operatorUserId) {
     throw new Error(
@@ -108,8 +121,42 @@ export async function sendLocalFriendMessage(message: string): Promise<void> {
     (typeof meta.name === 'string' && meta.name.trim()) ||
     '';
   const personaTitle = (fromProfile || fromLink || metaName || 'Traveler').trim() || 'Traveler';
+  const rootId = createClientUuid();
+
+  const apiPayload = {
+    kind: 'local_friend' as const,
+    threadRootId: rootId,
+    title: personaTitle,
+    message: trimmed,
+    guestTitle: 'Local Friend request sent',
+  };
+
+  if (shouldRequireOperatorMessageApi()) {
+    await deliverOperatorMessage(apiPayload);
+    requestNotificationsRefresh();
+    void trackEvent({
+      eventName: 'local_friend_message_sent',
+      referenceType: 'chat',
+      referenceId: user.id,
+    });
+    return;
+  }
+
+  try {
+    await deliverOperatorMessage(apiPayload);
+    requestNotificationsRefresh();
+    void trackEvent({
+      eventName: 'local_friend_message_sent',
+      referenceType: 'chat',
+      referenceId: user.id,
+    });
+    return;
+  } catch {
+    /* local dev: optional direct insert below */
+  }
 
   const row = {
+    id: rootId,
     user_id: operatorUserId,
     type: 'local_friend' as const,
     title: personaTitle,
@@ -117,33 +164,46 @@ export async function sendLocalFriendMessage(message: string): Promise<void> {
     reference_id: String(user.id || '').trim(),
     reference_type: 'local_friend_request' as const,
   };
-  const { data: inserted, error: insErr } = await supabase
-    .from('notifications')
-    .insert(row)
-    .select('id')
-    .single();
+  const { error: insErr } = await supabase.from('notifications').insert(row);
   if (insErr) {
     if (isPersistenceBlocked(insErr)) {
-      throw new Error(
-        insErr.message?.trim() ||
-          'Your message could not be delivered (sign-in or network). Please try again.',
-      );
+      try {
+        await deliverOperatorMessage(apiPayload);
+        requestNotificationsRefresh();
+        void trackEvent({
+          eventName: 'local_friend_message_sent',
+          referenceType: 'chat',
+          referenceId: user.id,
+        });
+        return;
+      } catch (err) {
+        throw userFacingMessagingError(err);
+      }
     }
-    throw new Error(insErr.message || 'Could not send your message.');
+    throw userFacingMessagingError(insErr);
   }
-  const rootId = String((inserted as { id?: string | null } | null)?.id || '').trim();
   // Guest-side Notifications mirror row: keeps traveler notifications/badge in sync.
-  const { error: guestEchoError } = await supabase.from('notifications').insert({
+  const guestRow = {
     user_id: String(user.id || '').trim(),
-    type: 'local_friend',
+    type: 'local_friend' as const,
     title: 'Local Friend request sent',
     message: trimmed,
     reference_id: rootId || null,
-    reference_type: 'local_friend_guest_echo',
+    reference_type: 'local_friend_guest_echo' as const,
     is_read: false,
-  } as never);
+  };
+  const { error: guestEchoError } = await supabase.from('notifications').insert(guestRow as never);
   if (guestEchoError) {
-    throw new Error('Message sent but notification creation failed. Please try again.');
+    try {
+      await insertGuestEchoViaApi({
+        kind: 'local_friend',
+        threadRootId: rootId,
+        title: guestRow.title,
+        message: guestRow.message,
+      });
+    } catch {
+      throw userFacingMessagingError(guestEchoError);
+    }
   }
 
   requestNotificationsRefresh();

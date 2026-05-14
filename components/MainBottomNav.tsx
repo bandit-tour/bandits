@@ -1,11 +1,12 @@
 import React from 'react';
-import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { Platform, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { IconSymbol } from '@/components/ui/IconSymbol';
 import { Colors } from '@/constants/Colors';
 import { useColorScheme } from '@/hooks/useColorScheme';
 
-type BottomTabKey = 'home' | 'localFriend' | 'chat' | 'alerts' | 'inbox' | 'menu';
+type BottomTabKey = 'home' | 'localFriend' | 'chat' | 'alerts' | 'notifications' | 'menu';
 
 interface MainBottomNavProps {
   activeTab: BottomTabKey;
@@ -13,7 +14,7 @@ interface MainBottomNavProps {
   onLocalFriend: () => void;
   onChat: () => void;
   onAlerts: () => void;
-  onInbox: () => void;
+  onNotifications: () => void;
   onMenu: () => void;
   inboxBadgeCount?: number;
   chatBadgeCount?: number;
@@ -25,13 +26,15 @@ export default function MainBottomNav({
   onLocalFriend,
   onChat,
   onAlerts,
-  onInbox,
+  onNotifications,
   onMenu,
   inboxBadgeCount = 0,
   chatBadgeCount = 0,
 }: MainBottomNavProps) {
   const colorScheme = useColorScheme();
   const theme = Colors[colorScheme ?? 'light'];
+  const insets = useSafeAreaInsets();
+  const bottomPad = Platform.OS === 'android' ? Math.max(insets.bottom, 12) : Math.max(insets.bottom, 8);
 
   const getColor = (key: BottomTabKey) =>
     activeTab === key ? theme.tint : theme.text;
@@ -43,6 +46,7 @@ export default function MainBottomNav({
         {
           backgroundColor: theme.background,
           borderTopColor: theme.tabIconDefault,
+          paddingBottom: bottomPad,
         },
       ]}
     >
@@ -76,10 +80,10 @@ export default function MainBottomNav({
       />
 
       <NavButton
-        label="Inbox"
+        label="Notifications"
         iconName="bell.badge.fill"
-        color={getColor('inbox')}
-        onPress={onInbox}
+        color={getColor('notifications')}
+        onPress={onNotifications}
         badgeCount={inboxBadgeCount}
       />
 

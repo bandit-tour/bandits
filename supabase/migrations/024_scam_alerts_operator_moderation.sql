@@ -18,7 +18,11 @@ as $$
   select coalesce(
     auth.uid() is not null
     and auth.uid() = (
-      select (nullif(trim(value), ''))::uuid
+      select case
+        when trim(value) = '' then null
+        when trim(value) ~ '^[0-9a-fA-F-]{36}$' then trim(value)::uuid
+        else null
+      end
       from public.app_public_config
       where key = 'operator_user_id'
       limit 1

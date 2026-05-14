@@ -107,7 +107,11 @@ declare
   v_sender uuid;
   v_delivery_id uuid;
 begin
-  select (nullif(trim(value), ''))::uuid into v_operator
+  select case
+    when trim(value) = '' then null
+    when trim(value) ~ '^[0-9a-fA-F-]{36}$' then trim(value)::uuid
+    else null
+  end into v_operator
   from public.app_public_config
   where key = 'operator_user_id'
   limit 1;
@@ -119,8 +123,12 @@ begin
      and v_operator is not null
      and NEW.user_id = v_operator
      and NEW.reference_id is not null
-     and btrim(NEW.reference_id) ~ '^[0-9a-f-]{36}$' then
-    v_recipient := NEW.reference_id::uuid;
+     and trim(NEW.reference_id) ~ '^[0-9a-fA-F-]{36}$' then
+    v_recipient := case
+      when trim(NEW.reference_id) = '' then null
+      when trim(NEW.reference_id) ~ '^[0-9a-fA-F-]{36}$' then trim(NEW.reference_id)::uuid
+      else null
+    end;
 
     if NEW.type = 'bandit_question' and NEW.ask_target_bandit_id is not null then
       select b.id, b.name, coalesce(nullif(trim(b.face_image_url), ''), nullif(trim(b.image_url), ''), '')
@@ -179,8 +187,12 @@ begin
   if NEW.type = 'signal_peer_delivery'
      and NEW.reference_type in ('signal_delivery', 'signal_delivery_peer')
      and NEW.reference_id is not null
-     and btrim(NEW.reference_id) ~ '^[0-9a-f-]{36}$' then
-    v_delivery_id := NEW.reference_id::uuid;
+     and trim(NEW.reference_id) ~ '^[0-9a-fA-F-]{36}$' then
+    v_delivery_id := case
+      when trim(NEW.reference_id) = '' then null
+      when trim(NEW.reference_id) ~ '^[0-9a-fA-F-]{36}$' then trim(NEW.reference_id)::uuid
+      else null
+    end;
     v_recipient := NEW.user_id;
 
     select sd.sender_user_id into v_sender
@@ -284,7 +296,11 @@ create policy "notifications_insert_routed"
         and reference_type in ('signal_delivery', 'presence_thread')
         and reference_id is not null
         and user_id = (
-          select (nullif(trim(value), ''))::uuid
+          select case
+            when trim(value) = '' then null
+            when trim(value) ~ '^[0-9a-fA-F-]{36}$' then trim(value)::uuid
+            else null
+          end
           from public.app_public_config
           where key = 'operator_user_id'
           limit 1

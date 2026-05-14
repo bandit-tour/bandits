@@ -2,13 +2,13 @@ import { Redirect } from 'expo-router';
 import React, { useEffect, useState, type ReactNode } from 'react';
 import { ActivityIndicator, StyleSheet, View } from 'react-native';
 
-import { isAppAdminUser } from '@/lib/appAdminAccess';
-import { supabase } from '@/lib/supabase';
+import { canShowOwnerPrivateMenu } from '@/lib/appAdminAccess';
+import { resolveSessionUserForPilotDesk } from '@/lib/pilotDeskGate';
 
 type Props = { children: ReactNode };
 
 /**
- * Renders `children` only for sessions whose email is in `EXPO_PUBLIC_APP_ADMIN_EMAILS`.
+ * Renders `children` only for the owner private menu account (blonje@gmail.com).
  * Other users (including guests) are redirected to the not-found screen.
  */
 export function RequireAppAdminGate({ children }: Props) {
@@ -16,10 +16,8 @@ export function RequireAppAdminGate({ children }: Props) {
 
   useEffect(() => {
     void (async () => {
-      const {
-        data: { user },
-      } = await supabase.auth.getUser();
-      setGate(isAppAdminUser(user) ? 'allow' : 'deny');
+      const { user } = await resolveSessionUserForPilotDesk();
+      setGate(canShowOwnerPrivateMenu(user) ? 'allow' : 'deny');
     })();
   }, []);
 

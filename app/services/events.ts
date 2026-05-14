@@ -1,4 +1,5 @@
 import { EVENT_GENRES } from '@/constants/Genres';
+import { getCachedAuthUser, invalidateAuthUserCache } from '@/lib/authUserCache';
 import { Database } from '@/lib/database.types';
 import { isAuthOrMissingError } from '@/lib/postgrestAuth';
 import { resolveGooglePlaceBusinessData } from '@/lib/placePhoto';
@@ -282,18 +283,29 @@ export async function getCurrentLocation(): Promise<{ lat: number; lng: number }
 
 // Toggle event like for current user
 export async function toggleEventLike(eventId: string, currentLikeStatus: boolean): Promise<void> {
-  const { data: { user } } = await supabase.auth.getUser();
-  
+  const user = await getCachedAuthUser();
   if (!user) {
-    throw new Error('User not authenticated');
+    // Fall back to forcing a fresh read once — covers the case where the cache
+    // is stale because a sign-in just completed but the listener hasn't fired
+    // yet.
+    invalidateAuthUserCache();
+    const fresh = await getCachedAuthUser();
+    if (!fresh) throw new Error('User not authenticated');
+    return toggleEventLikeForUser(fresh.id, eventId, currentLikeStatus);
   }
+  return toggleEventLikeForUser(user.id, eventId, currentLikeStatus);
+}
 
+async function toggleEventLikeForUser(
+  userId: string,
+  eventId: string,
+  currentLikeStatus: boolean,
+): Promise<void> {
   if (currentLikeStatus) {
-    // Remove like
     const { error } = await supabase
       .from('event_user_likes')
       .delete()
-      .eq('user_id', user.id)
+      .eq('user_id', userId)
       .eq('event_id', eventId);
 
     if (error) {
@@ -301,12 +313,11 @@ export async function toggleEventLike(eventId: string, currentLikeStatus: boolea
       throw error;
     }
   } else {
-    // Add like
     const { error } = await supabase
       .from('event_user_likes')
       .insert({
-        user_id: user.id,
-        event_id: eventId
+        user_id: userId,
+        event_id: eventId,
       });
 
     if (error) {
@@ -318,8 +329,7 @@ export async function toggleEventLike(eventId: string, currentLikeStatus: boolea
 
 // Get user's liked events
 export async function getUserLikedEvents(): Promise<Event[]> {
-  const { data: { user } } = await supabase.auth.getUser();
-  
+  const user = await getCachedAuthUser();
   if (!user) {
     throw new Error('User not authenticated');
   }
@@ -336,18 +346,14 @@ export async function getUserLikedEvents(): Promise<Event[]> {
     throw error;
   }
 
-  // Extract events from the joined result
   const events = data?.map((item: any) => item.event) || [];
   return events;
 }
 
 // Check if an event is liked by current user
 export async function isEventLiked(eventId: string): Promise<boolean> {
-  const { data: { user } } = await supabase.auth.getUser();
-  
-  if (!user) {
-    return false;
-  }
+  const user = await getCachedAuthUser();
+  if (!user) return false;
 
   const { data, error } = await supabase
     .from('event_user_likes')
@@ -356,7 +362,7 @@ export async function isEventLiked(eventId: string): Promise<boolean> {
     .eq('event_id', eventId)
     .single();
 
-  if (error && error.code !== 'PGRST116') { // PGRST116 is "not found" error
+  if (error && error.code !== 'PGRST116') {
     console.error('Error checking event like status:', error);
     throw error;
   }
@@ -366,11 +372,8 @@ export async function isEventLiked(eventId: string): Promise<boolean> {
 
 // Get all liked event IDs for current user (efficient for bulk checking)
 export async function getUserLikedEventIds(): Promise<Set<string>> {
-  const { data: { user } } = await supabase.auth.getUser();
-  
-  if (!user) {
-    return new Set();
-  }
+  const user = await getCachedAuthUser();
+  if (!user) return new Set();
 
   const { data, error } = await supabase
     .from('event_user_likes')
@@ -382,8 +385,7 @@ export async function getUserLikedEventIds(): Promise<Set<string>> {
     throw error;
   }
 
-  // Return a Set for O(1) lookup performance
-  return new Set(data?.map(item => item.event_id) || []);
+  return new Set(data?.map((item) => item.event_id) || []);
 } 
 
 // Get event categories/genres count for a specific bandit

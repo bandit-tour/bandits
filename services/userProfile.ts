@@ -537,8 +537,8 @@ export async function navigateAfterAuth(router: unknown, redirectPath?: string |
     r.replace(safe);
     return;
   }
-  const { isAppAdmin } = await resolveMenuAuthSnapshot();
-  if (isAppAdmin) {
+  const { showPilotDesk } = await resolveMenuAuthSnapshot();
+  if (showPilotDesk) {
     r.replace('/operatorDesk');
     return;
   }

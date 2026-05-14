@@ -1,4 +1,5 @@
 import { Database } from '@/lib/database.types';
+import { repairDisplayText } from '@/lib/repairTextEncoding';
 
 type Bandit = Database['public']['Tables']['bandit']['Row'];
 
@@ -39,6 +40,6 @@ export function getWhyFollowSupplement(bandit: Bandit): string | null {
  */
 export function resolveWhyFollowText(bandit: Bandit): string {
   const raw = (bandit.why_follow || '').trim();
-  if (raw) return raw;
+  if (raw) return repairDisplayText(raw);
   return getWhyFollowSupplement(bandit) || '';
 }

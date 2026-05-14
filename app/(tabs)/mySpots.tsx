@@ -1,74 +1,116 @@
 import { useFocusEffect } from '@react-navigation/native';
-import React, { useCallback, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Alert, Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { getUserLikedEvents, toggleEventLike } from '@/app/services/events';
+import EventCardSkeleton from '@/components/EventCardSkeleton';
 import EventList from '@/components/EventList';
 import { useCity } from '@/contexts/CityContext';
+import { fetchSWR, invalidateAppDataCache, readCacheStale } from '@/lib/appDataCache';
 import { Database } from '@/lib/database.types';
 
 type Event = Database['public']['Tables']['event']['Row'];
 
+const LIKED_EVENTS_CACHE_KEY = 'mySpots:likedEvents:all';
+const LIKED_EVENTS_TTL_MS = 60 * 1000;
+
 
 
 export default function MySpotsScreen() {
-  const [likedEvents, setLikedEvents] = useState<Event[]>([]);
-  const [loading, setLoading] = useState(true);
+  const mySpotsInitialFocusDoneRef = useRef(false);
+  /** Skip one city effect tick after initial load completes (avoid double-fetch vs first focus load). */
+  const skipCityRefetchOnceRef = useRef(true);
+  // Seed from cache for an instant re-paint on tab switch.
+  const cachedAll = useMemo(() => readCacheStale<Event[]>(LIKED_EVENTS_CACHE_KEY), []);
+  const [likedEventsAll, setLikedEventsAll] = useState<Event[]>(cachedAll ?? []);
+  const [loadedOnce, setLoadedOnce] = useState(cachedAll !== undefined);
   const [refreshing, setRefreshing] = useState(false);
   const { selectedCity } = useCity();
 
-  const loadLikedEvents = useCallback(
-    async (silent?: boolean) => {
-      try {
-        if (!silent) setLoading(true);
-        const events = await getUserLikedEvents();
-
-        const filteredEvents = selectedCity
-          ? events.filter((event) => event.city === selectedCity)
-          : events;
-
-        setLikedEvents(filteredEvents);
-      } catch (error) {
-        console.error('Error loading liked events:', error);
-        Alert.alert('Error', 'Failed to load your liked events');
-      } finally {
-        if (!silent) setLoading(false);
-      }
-    },
-    [selectedCity],
+  // Stable Set reference so EventList / EventCard don't see "different"
+  // liked-id values on every parent state change.
+  const likedEventIds = useMemo(
+    () => new Set(likedEventsAll.map((e) => e.id)),
+    [likedEventsAll],
   );
+
+  // Client-side city filtering so the cached list can be reused across cities
+  // without re-hitting Supabase.
+  const filteredEvents = useMemo(
+    () =>
+      selectedCity
+        ? likedEventsAll.filter((event) => event.city === selectedCity)
+        : likedEventsAll,
+    [selectedCity, likedEventsAll],
+  );
+
+  const loadLikedEvents = useCallback((asRefresh: boolean) => {
+    if (asRefresh) setRefreshing(true);
+    const handle = fetchSWR<Event[]>(
+      LIKED_EVENTS_CACHE_KEY,
+      LIKED_EVENTS_TTL_MS,
+      () => getUserLikedEvents(),
+      (events) => {
+        setLikedEventsAll(events);
+        setLoadedOnce(true);
+        setRefreshing(false);
+        mySpotsInitialFocusDoneRef.current = true;
+      },
+      (error) => {
+        console.error('Error loading liked events:', error);
+        setLoadedOnce(true);
+        setRefreshing(false);
+        mySpotsInitialFocusDoneRef.current = true;
+      },
+    );
+    return handle;
+  }, []);
 
   useFocusEffect(
     React.useCallback(() => {
-      void loadLikedEvents(false);
+      const handle = loadLikedEvents(mySpotsInitialFocusDoneRef.current);
+      return () => handle.cancel();
     }, [loadLikedEvents]),
   );
 
-  const onRefresh = useCallback(async () => {
-    setRefreshing(true);
-    try {
-      await loadLikedEvents(true);
-    } finally {
-      setRefreshing(false);
+  /** City filter changes while mounted no longer require a refetch — filtering is now client-side. */
+  useEffect(() => {
+    if (!loadedOnce) return;
+    if (skipCityRefetchOnceRef.current) {
+      skipCityRefetchOnceRef.current = false;
+      return;
     }
+  }, [selectedCity, loadedOnce]);
+
+  const onRefresh = useCallback(async () => {
+    invalidateAppDataCache(LIKED_EVENTS_CACHE_KEY);
+    loadLikedEvents(true);
   }, [loadLikedEvents]);
 
-  const handleEventRemove = async (eventId: string) => {
+  const handleEventRemove = useCallback(async (eventId: string) => {
     try {
-      await toggleEventLike(eventId, true); // true because it's currently liked
-      
-      // Remove from local state
-      setLikedEvents(prev => prev.filter(event => event.id !== eventId));
+      await toggleEventLike(eventId, true);
+      setLikedEventsAll((prev) => prev.filter((event) => event.id !== eventId));
+      // Update the cache too so a re-mount doesn't re-add the removed event.
+      const cached = readCacheStale<Event[]>(LIKED_EVENTS_CACHE_KEY);
+      if (cached) invalidateAppDataCache(LIKED_EVENTS_CACHE_KEY);
     } catch (error) {
       console.error('Error removing event like:', error);
       Alert.alert('Error', 'Failed to remove like');
     }
-  };
+  }, []);
 
-  if (loading) {
+  if (!loadedOnce) {
     return (
-      <View style={styles.loadingContainer}>
-        <Text>Loading your spots...</Text>
+      <View style={styles.mainContainer}>
+        <View style={styles.headerContainer}>
+          <Text style={styles.headerText}>My Spots</Text>
+        </View>
+        <View style={{ paddingHorizontal: 12, gap: 12 }}>
+          {[0, 1, 2].map((i) => (
+            <EventCardSkeleton key={i} />
+          ))}
+        </View>
       </View>
     );
   }
@@ -85,9 +127,9 @@ export default function MySpotsScreen() {
       </View>
       
       <EventList
-        events={likedEvents}
+        events={filteredEvents}
         onEventLike={handleEventRemove}
-        likedEventIds={new Set(likedEvents.map(event => event.id))}
+        likedEventIds={likedEventIds}
         emptyMessage="No liked events yet"
         variant="vertical"
         showRecommendations={true}
@@ -110,6 +152,13 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
+    backgroundColor: '#FFFFFF',
+  },
+  loadingCaption: {
+    marginTop: 12,
+    fontSize: 15,
+    color: '#555',
+    fontWeight: '600',
   },
   headerContainer: {
     alignItems: 'center',

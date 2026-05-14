@@ -5,6 +5,8 @@ import React from 'react';
 import { Platform, ScrollView, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
+import { useAppBackScreenOptions } from '@/hooks/useAppBackScreenOptions';
+
 /** Full uncropped property art — same 375×380 source used for PLAY Athenian hero; `contain` shows all branding. */
 const HOTELIER_BANNER = require('@/assets/images/play_athens_bg.png');
 
@@ -13,6 +15,10 @@ const BANNER_VIEWPORT_H = 200;
 
 function HotelierScreen() {
   const insets = useSafeAreaInsets();
+  const screenOptions = useAppBackScreenOptions({
+    title: 'Hotelier',
+    fallback: '/menu',
+  });
   const { width: winW } = useWindowDimensions();
   const pad = 20;
   const maxRow = winW - pad * 2;
@@ -21,7 +27,7 @@ function HotelierScreen() {
 
   return (
     <>
-      <Stack.Screen options={{ headerShown: true, title: 'Hotelier', headerBackTitle: 'Back' }} />
+      <Stack.Screen options={screenOptions} />
       <ScrollView
         style={styles.scroll}
         contentContainerStyle={[styles.content, { paddingBottom: 32 + insets.bottom }]}

@@ -11,47 +11,15 @@ function normalizeName(v: string | null | undefined): string {
     .trim();
 }
 
+/**
+ * Curated lookup tables were previously hand-mapped Pexels/Unsplash photos by
+ * venue name. They are intentionally empty now: per the global image policy a
+ * wrong image is worse than no image, and the runtime falls through to the
+ * verified Google Places photo (or a category-specific neutral placeholder)
+ * instead of an unrelated stock photo that "matches" only the genre.
+ */
 const CURATED_BY_ID: Record<string, string[]> = {};
-
-const CURATED_BY_NAME: Record<string, string[]> = {
-  'soil restaurant': [
-    'https://images.pexels.com/photos/262978/pexels-photo-262978.jpeg?auto=compress&cs=tinysrgb&w=1200&h=900&fit=crop',
-  ],
-  'sylvia kouveli art gallery': [
-    'https://images.pexels.com/photos/161154/stained-glass-museum-art-glass-161154.jpeg?auto=compress&cs=tinysrgb&w=1200&h=900&fit=crop',
-  ],
-  'impact hub athens': [
-    'https://images.pexels.com/photos/3183197/pexels-photo-3183197.jpeg?auto=compress&cs=tinysrgb&w=1200&h=900&fit=crop',
-  ],
-  'spinster bar': [
-    'https://images.pexels.com/photos/274192/pexels-photo-274192.jpeg?auto=compress&cs=tinysrgb&w=1200&h=900&fit=crop',
-  ],
-  'roma gallery': [
-    'https://images.pexels.com/photos/20967/pexels-photo.jpg?auto=compress&cs=tinysrgb&w=1200&h=900&fit=crop',
-  ],
-  'rawbata': [
-    'https://images.pexels.com/photos/2098085/pexels-photo-2098085.jpeg?auto=compress&cs=tinysrgb&w=1200&h=900&fit=crop',
-  ],
-  'nolita athens': [
-    'https://images.pexels.com/photos/6267/menu-restaurant-vintage-table.jpg?auto=compress&cs=tinysrgb&w=1200&h=900&fit=crop',
-  ],
-  'fine mess smokehouse': [
-    'https://images.pexels.com/photos/1639562/pexels-photo-1639562.jpeg?auto=compress&cs=tinysrgb&w=1200&h=900&fit=crop',
-  ],
-  'the brunchers': [
-    'https://images.pexels.com/photos/70497/pexels-photo-70497.jpeg?auto=compress&cs=tinysrgb&w=1200&h=900&fit=crop',
-  ],
-  'tragos modern kafeneio': [
-    'https://images.pexels.com/photos/1581384/pexels-photo-1581384.jpeg?auto=compress&cs=tinysrgb&w=1200&h=900&fit=crop',
-  ],
-  /** Athens EMST — avoid wrong generic “museum” stock (e.g. Paris) from DB */
-  'national museum of contemporary art emst': [
-    'https://images.pexels.com/photos/2251247/pexels-photo-2251247.jpeg?auto=compress&cs=tinysrgb&w=1200&h=900&fit=crop',
-  ],
-  'national museum of contemporary art': [
-    'https://images.pexels.com/photos/2251247/pexels-photo-2251247.jpeg?auto=compress&cs=tinysrgb&w=1200&h=900&fit=crop',
-  ],
-};
+const CURATED_BY_NAME: Record<string, string[]> = {};
 
 export function getCuratedEventImageCandidates(event: EventLike): string[] {
   const out: string[] = [];

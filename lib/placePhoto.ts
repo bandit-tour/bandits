@@ -5,9 +5,20 @@ function logPlacesFetchError(stage: string, err: unknown): void {
   console.warn(`[placePhoto] ${stage}`, msg);
 }
 
-/** Deterministic real photo when DB + Places are unavailable (never a gray box). */
-export function picsumPlaceImage(seed: string, w = 800, h = 600): string {
-  return `https://picsum.photos/seed/${encodeURIComponent(seed)}/${w}/${h}`;
+/**
+ * @deprecated Stock-photo fallback. Returns a neutral inline SVG instead of a
+ * random `picsum.photos` URL so a wrong-image regression cannot reach the UI.
+ * Prefer `buildCategoryNeutralPlaceholder` from `@/lib/recommendationImages`.
+ */
+export function picsumPlaceImage(seed: string, _w = 800, _h = 600): string {
+  const safeSeed = String(seed ?? '').replace(/[<>&"']/g, '');
+  const svg =
+    `<svg xmlns='http://www.w3.org/2000/svg' width='1200' height='900' viewBox='0 0 1200 900'>`
+    + `<rect width='1200' height='900' fill='hsl(210, 14%, 92%)'/>`
+    + `<text x='600' y='470' text-anchor='middle' font-family='-apple-system,Segoe UI,Roboto,Arial,sans-serif' font-size='38' font-weight='600' fill='hsl(215, 16%, 28%)'>Image pending</text>`
+    + `<text x='600' y='520' text-anchor='middle' font-family='-apple-system,Segoe UI,Roboto,Arial,sans-serif' font-size='22' fill='hsl(215, 14%, 40%)' opacity='0.7'>${safeSeed}</text>`
+    + `</svg>`;
+  return `data:image/svg+xml;utf8,${encodeURIComponent(svg)}`;
 }
 
 export function isLikelyLogoOrBadPlaceImage(uri: string | null | undefined): boolean {
@@ -46,25 +57,17 @@ export function hashPickIndex(seed: string, modulo: number): number {
   return Math.abs(h) % modulo;
 }
 
-/** Neutral city/places pool when genre is unknown (no random picsum). */
-export function getGenericCityImagePoolUrls(w = 800, h = 600): readonly string[] {
-  return [
-    `https://images.pexels.com/photos/378570/pexels-photo-378570.jpeg?auto=compress&cs=tinysrgb&w=${w}&h=${h}&fit=crop`,
-    `https://images.pexels.com/photos/2901209/pexels-photo-2901209.jpeg?auto=compress&cs=tinysrgb&w=${w}&h=${h}&fit=crop`,
-    `https://images.pexels.com/photos/2904944/pexels-photo-2904944.jpeg?auto=compress&cs=tinysrgb&w=${w}&h=${h}&fit=crop`,
-    `https://images.pexels.com/photos/3408354/pexels-photo-3408354.jpeg?auto=compress&cs=tinysrgb&w=${w}&h=${h}&fit=crop`,
-    `https://images.pexels.com/photos/264636/pexels-photo-264636.jpeg?auto=compress&cs=tinysrgb&w=${w}&h=${h}&fit=crop`,
-    `https://images.pexels.com/photos/1438761/pexels-photo-1438761.jpeg?auto=compress&cs=tinysrgb&w=${w}&h=${h}&fit=crop`,
-    `https://images.pexels.com/photos/2904948/pexels-photo-2904948.jpeg?auto=compress&cs=tinysrgb&w=${w}&h=${h}&fit=crop`,
-    `https://images.pexels.com/photos/325044/pexels-photo-325044.jpeg?auto=compress&cs=tinysrgb&w=${w}&h=${h}&fit=crop`,
-  ];
-}
-
-/** Ordered URLs for thematic fallbacks — used list-wide without repeating URLs in the same assignment pass. */
-export function getCategoryImagePoolUrls(genre: string | null | undefined, w = 800, h = 600): readonly string[] {
+/**
+ * Curated category stock library for user-facing fallbacks when verified venue
+ * photos are unavailable. Never shown as "pending verification" placeholders.
+ */
+export function getCategoryImagePoolUrls(
+  genre: string | null | undefined,
+  w = 900,
+  h = 675,
+): readonly string[] {
   const key = String(genre ?? '').trim().toLowerCase();
-
-  const FOOD_IMAGES = [
+  const FOOD = [
     `https://images.pexels.com/photos/262978/pexels-photo-262978.jpeg?auto=compress&cs=tinysrgb&w=${w}&h=${h}&fit=crop`,
     `https://images.pexels.com/photos/67468/pexels-photo-67468.jpeg?auto=compress&cs=tinysrgb&w=${w}&h=${h}&fit=crop`,
     `https://images.pexels.com/photos/70497/pexels-photo-70497.jpeg?auto=compress&cs=tinysrgb&w=${w}&h=${h}&fit=crop`,
@@ -72,27 +75,7 @@ export function getCategoryImagePoolUrls(genre: string | null | undefined, w = 8
     `https://images.pexels.com/photos/1267320/pexels-photo-1267320.jpeg?auto=compress&cs=tinysrgb&w=${w}&h=${h}&fit=crop`,
     `https://images.pexels.com/photos/460537/pexels-photo-460537.jpeg?auto=compress&cs=tinysrgb&w=${w}&h=${h}&fit=crop`,
   ];
-  const NIGHTLIFE_IMAGES = [
-    `https://images.pexels.com/photos/274192/pexels-photo-274192.jpeg?auto=compress&cs=tinysrgb&w=${w}&h=${h}&fit=crop`,
-    `https://images.pexels.com/photos/1105666/pexels-photo-1105666.jpeg?auto=compress&cs=tinysrgb&w=${w}&h=${h}&fit=crop`,
-    `https://images.pexels.com/photos/167636/pexels-photo-167636.jpeg?auto=compress&cs=tinysrgb&w=${w}&h=${h}&fit=crop`,
-    `https://images.pexels.com/photos/941864/pexels-photo-941864.jpeg?auto=compress&cs=tinysrgb&w=${w}&h=${h}&fit=crop`,
-    `https://images.pexels.com/photos/696218/pexels-photo-696218.jpeg?auto=compress&cs=tinysrgb&w=${w}&h=${h}&fit=crop`,
-    `https://images.pexels.com/photos/1540406/pexels-photo-1540406.jpeg?auto=compress&cs=tinysrgb&w=${w}&h=${h}&fit=crop`,
-    `https://images.pexels.com/photos/1763075/pexels-photo-1763075.jpeg?auto=compress&cs=tinysrgb&w=${w}&h=${h}&fit=crop`,
-    `https://images.pexels.com/photos/2251247/pexels-photo-2251247.jpeg?auto=compress&cs=tinysrgb&w=${w}&h=${h}&fit=crop`,
-    `https://images.pexels.com/photos/2089698/pexels-photo-2089698.jpeg?auto=compress&cs=tinysrgb&w=${w}&h=${h}&fit=crop`,
-    `https://images.pexels.com/photos/69903/pexels-photo-69903.jpeg?auto=compress&cs=tinysrgb&w=${w}&h=${h}&fit=crop`,
-  ];
-  const SHOPPING_IMAGES = [
-    `https://images.pexels.com/photos/264547/pexels-photo-264547.jpeg?auto=compress&cs=tinysrgb&w=${w}&h=${h}&fit=crop`,
-    `https://images.pexels.com/photos/1884584/pexels-photo-1884584.jpeg?auto=compress&cs=tinysrgb&w=${w}&h=${h}&fit=crop`,
-    `https://images.pexels.com/photos/994523/pexels-photo-994523.jpeg?auto=compress&cs=tinysrgb&w=${w}&h=${h}&fit=crop`,
-    `https://images.pexels.com/photos/2954405/pexels-photo-2954405.jpeg?auto=compress&cs=tinysrgb&w=${w}&h=${h}&fit=crop`,
-    `https://images.pexels.com/photos/5632402/pexels-photo-5632402.jpeg?auto=compress&cs=tinysrgb&w=${w}&h=${h}&fit=crop`,
-    `https://images.pexels.com/photos/972995/pexels-photo-972995.jpeg?auto=compress&cs=tinysrgb&w=${w}&h=${h}&fit=crop`,
-  ];
-  const CULTURE_IMAGES = [
+  const CULTURE = [
     `https://images.pexels.com/photos/2363/france-landmark-lights-night.jpg?auto=compress&cs=tinysrgb&w=${w}&h=${h}&fit=crop`,
     `https://images.pexels.com/photos/161154/stained-glass-museum-art-glass-161154.jpeg?auto=compress&cs=tinysrgb&w=${w}&h=${h}&fit=crop`,
     `https://images.pexels.com/photos/256369/pexels-photo-256369.jpeg?auto=compress&cs=tinysrgb&w=${w}&h=${h}&fit=crop`,
@@ -100,35 +83,48 @@ export function getCategoryImagePoolUrls(genre: string | null | undefined, w = 8
     `https://images.pexels.com/photos/2089698/pexels-photo-2089698.jpeg?auto=compress&cs=tinysrgb&w=${w}&h=${h}&fit=crop`,
     `https://images.pexels.com/photos/69903/pexels-photo-69903.jpeg?auto=compress&cs=tinysrgb&w=${w}&h=${h}&fit=crop`,
   ];
-  const COFFEE_IMAGES = [
+  const NIGHT = [
+    `https://images.pexels.com/photos/274192/pexels-photo-274192.jpeg?auto=compress&cs=tinysrgb&w=${w}&h=${h}&fit=crop`,
+    `https://images.pexels.com/photos/1105666/pexels-photo-1105666.jpeg?auto=compress&cs=tinysrgb&w=${w}&h=${h}&fit=crop`,
+    `https://images.pexels.com/photos/167636/pexels-photo-167636.jpeg?auto=compress&cs=tinysrgb&w=${w}&h=${h}&fit=crop`,
+  ];
+  const SHOP = [
+    `https://images.pexels.com/photos/264547/pexels-photo-264547.jpeg?auto=compress&cs=tinysrgb&w=${w}&h=${h}&fit=crop`,
+    `https://images.pexels.com/photos/1884584/pexels-photo-1884584.jpeg?auto=compress&cs=tinysrgb&w=${w}&h=${h}&fit=crop`,
+    `https://images.pexels.com/photos/994523/pexels-photo-994523.jpeg?auto=compress&cs=tinysrgb&w=${w}&h=${h}&fit=crop`,
+  ];
+  const COFFEE = [
     `https://images.pexels.com/photos/302899/pexels-photo-302899.jpeg?auto=compress&cs=tinysrgb&w=${w}&h=${h}&fit=crop`,
     `https://images.pexels.com/photos/2074130/pexels-photo-2074130.jpeg?auto=compress&cs=tinysrgb&w=${w}&h=${h}&fit=crop`,
     `https://images.pexels.com/photos/312418/pexels-photo-312418.jpeg?auto=compress&cs=tinysrgb&w=${w}&h=${h}&fit=crop`,
-    `https://images.pexels.com/photos/1233528/pexels-photo-1233528.jpeg?auto=compress&cs=tinysrgb&w=${w}&h=${h}&fit=crop`,
-    `https://images.pexels.com/photos/585753/pexels-photo-585753.jpeg?auto=compress&cs=tinysrgb&w=${w}&h=${h}&fit=crop`,
-    `https://images.pexels.com/photos/374885/pexels-photo-374885.jpeg?auto=compress&cs=tinysrgb&w=${w}&h=${h}&fit=crop`,
   ];
-
-  if (key.includes('food')) return FOOD_IMAGES;
-  if (key.includes('shopping')) return SHOPPING_IMAGES;
-  if (key.includes('nightlife')) return NIGHTLIFE_IMAGES;
-  if (key.includes('culture')) return CULTURE_IMAGES;
-  if (key.includes('coffee')) return COFFEE_IMAGES;
-  return getGenericCityImagePoolUrls(w, h);
+  const GENERIC = [
+    `https://images.pexels.com/photos/378570/pexels-photo-378570.jpeg?auto=compress&cs=tinysrgb&w=${w}&h=${h}&fit=crop`,
+    `https://images.pexels.com/photos/2901209/pexels-photo-2901209.jpeg?auto=compress&cs=tinysrgb&w=${w}&h=${h}&fit=crop`,
+    `https://images.pexels.com/photos/2904944/pexels-photo-2904944.jpeg?auto=compress&cs=tinysrgb&w=${w}&h=${h}&fit=crop`,
+  ];
+  if (key.includes('food')) return FOOD;
+  if (key.includes('culture')) return CULTURE;
+  if (key.includes('nightlife')) return NIGHT;
+  if (key.includes('shopping')) return SHOP;
+  if (key.includes('coffee')) return COFFEE;
+  return GENERIC;
 }
 
+export function getGenericCityImagePoolUrls(w = 800, h = 600): readonly string[] {
+  return getCategoryImagePoolUrls(null, w, h);
+}
+
+/** User-facing category stock (never the internal SVG placeholder). */
 export function getCategoryFallbackImage(
   genre: string | null | undefined,
   seed: string,
-  w = 800,
-  h = 600,
+  w = 900,
+  h = 675,
 ): string {
-  const key = String(genre ?? '').trim().toLowerCase();
-  const themed = getCategoryImagePoolUrls(genre, w, h);
-  const pickKey = `${seed}|${key}`;
-  if (themed.length > 0) return themed[hashPickIndex(pickKey, themed.length)];
-  const generic = getGenericCityImagePoolUrls(w, h);
-  return generic[hashPickIndex(pickKey, generic.length)];
+  const pool = getCategoryImagePoolUrls(genre, w, h);
+  if (pool.length === 0) return pool[0] as string;
+  return pool[hashPickIndex(seed, pool.length)] ?? pool[0];
 }
 
 /**
@@ -227,6 +223,7 @@ export function hasPlacesFormattedAddressAlignment(
   expectedAddress: string,
   expectedCity: string,
   formattedAddress: string | null | undefined,
+  neighborhood?: string,
 ): boolean {
   const fa = normalizeForAddressMatch(formattedAddress ?? '');
   if (!fa) return false;
@@ -234,11 +231,6 @@ export function hasPlacesFormattedAddressAlignment(
   const addr = normalizeForAddressMatch(expectedAddress);
 
   const cityParts = city.split(/\s+/).filter((p) => p.length >= 3);
-  for (const part of cityParts) {
-    if (fa.includes(part)) return true;
-  }
-
-  const tokens = addr.split(/\s+/).filter((t) => t.length >= 3);
   const generic = new Set([
     'athina',
     'athens',
@@ -249,15 +241,31 @@ export function hasPlacesFormattedAddressAlignment(
     'the',
     'and',
   ]);
+  const tokens = addr.split(/\s+/).filter((t) => t.length >= 3);
   const significant = tokens.filter((t) => !generic.has(t));
-  if (significant.length === 0) return false;
+  const nbTokens = normalizeForAddressMatch(neighborhood ?? '')
+    .split(/\s+/)
+    .filter((t) => t.length >= 4 && !generic.has(t));
+
+  // No street tokens in DB: require a distinctive locality hint (never “Athens alone”) plus a substantive formatted address.
+  if (significant.length === 0) {
+    const locHints = [
+      ...cityParts.filter((c) => !generic.has(c) && c.length >= 5),
+      ...nbTokens.filter((t) => t.length >= 5),
+    ];
+    const uniq = [...new Set(locHints)];
+    if (uniq.length === 0) return false;
+    if (!uniq.some((h) => fa.includes(h))) return false;
+    return /\d/.test(fa) || fa.replace(/\s/g, '').length >= 45;
+  }
 
   let hits = 0;
   for (const t of significant) {
     if (fa.includes(t)) hits += 1;
   }
-  if (hits >= 2) return true;
-  return hits >= 1 && cityParts.some((c) => fa.includes(c));
+  // Never accept “city only” (e.g. Athens) as sufficient — need real address tokens in formattedAddress.
+  if (significant.length >= 2) return hits >= 2;
+  return hits >= 1 && cityParts.some((c) => c.length >= 3 && !generic.has(c) && fa.includes(c));
 }
 
 /**
@@ -270,15 +278,32 @@ export function isConfidentVenuePlacesMatch(
   formattedAddress: string | null | undefined,
   expectedCity: string,
   expectedAddress: string,
+  expectedNeighborhood?: string,
 ): boolean {
   const en = String(expectedName ?? '').trim();
   const gn = String(googleDisplayName ?? '').trim();
   if (!en || !gn) return false;
   const exactNameMatch = normalizePlaceName(en) === normalizePlaceName(gn);
-  if (exactNameMatch) return true;
+  // Even exact name still needs locality signal so two different businesses with similar names fail closed.
+  if (exactNameMatch) {
+    return hasPlacesFormattedAddressAlignment(
+      expectedAddress,
+      expectedCity,
+      formattedAddress,
+      expectedNeighborhood,
+    );
+  }
   const nameScore = scorePlaceNameSimilarity(en, gn);
   // Non-exact names must include strong token overlap AND geo/address alignment.
-  if (nameScore >= 0.85 && hasPlacesFormattedAddressAlignment(expectedAddress, expectedCity, formattedAddress)) {
+  if (
+    nameScore >= 0.85 &&
+    hasPlacesFormattedAddressAlignment(
+      expectedAddress,
+      expectedCity,
+      formattedAddress,
+      expectedNeighborhood,
+    )
+  ) {
     return true;
   }
   return false;
@@ -461,7 +486,14 @@ async function resolveGooglePlaceBusinessDataNew(args: {
     if (
       expectedName &&
       fetchedName &&
-      !isConfidentVenuePlacesMatch(expectedName, fetchedName, faStored, args.city, args.address)
+      !isConfidentVenuePlacesMatch(
+        expectedName,
+        fetchedName,
+        faStored,
+        args.city,
+        args.address,
+        args.neighborhood,
+      )
     ) {
       place = null;
     }
@@ -482,7 +514,14 @@ async function resolveGooglePlaceBusinessDataNew(args: {
         const n = String(p?.displayName?.text ?? '').trim();
         if (!n) return false;
         const fa = String(p?.formattedAddress ?? '').trim();
-        return isConfidentVenuePlacesMatch(expectedName, n, fa, args.city, args.address);
+        return isConfidentVenuePlacesMatch(
+          expectedName,
+          n,
+          fa,
+          args.city,
+          args.address,
+          args.neighborhood,
+        );
       });
       if (matched) break;
     }
@@ -507,7 +546,14 @@ async function resolveGooglePlaceBusinessDataNew(args: {
   if (
     expectedName &&
     displayName &&
-    !isConfidentVenuePlacesMatch(expectedName, displayName, formattedAddress, args.city, args.address)
+    !isConfidentVenuePlacesMatch(
+      expectedName,
+      displayName,
+      formattedAddress,
+      args.city,
+      args.address,
+      args.neighborhood,
+    )
   ) {
     return null;
   }
@@ -583,7 +629,14 @@ async function resolveGooglePlaceBusinessDataLegacy(args: {
     const matched = candidates.find((c: any) => {
       const n = String(c?.name ?? '').trim();
       const fa = String(c?.formatted_address ?? '').trim();
-      return isConfidentVenuePlacesMatch(expectedName, n, fa, args.city, args.address);
+      return isConfidentVenuePlacesMatch(
+        expectedName,
+        n,
+        fa,
+        args.city,
+        args.address,
+        args.neighborhood,
+      );
     });
     if (matched?.place_id) {
       placeId = String(matched.place_id).trim();
@@ -613,7 +666,14 @@ async function resolveGooglePlaceBusinessDataLegacy(args: {
   if (
     expectedName &&
     detailsName &&
-    !isConfidentVenuePlacesMatch(expectedName, detailsName, formattedAddr, args.city, args.address)
+    !isConfidentVenuePlacesMatch(
+      expectedName,
+      detailsName,
+      formattedAddr,
+      args.city,
+      args.address,
+      args.neighborhood,
+    )
   ) {
     return null;
   }
@@ -658,6 +718,34 @@ async function resolveGooglePlaceBusinessDataLegacy(args: {
   }
 }
 
+/**
+ * Per-call cache for `fetchGooglePlacePhotoUrl`. The function is invoked from
+ * many screens (event detail, spot detail, city guide, EventCard non-strict
+ * path) — caching avoids paying for the same Places lookup repeatedly when
+ * the user navigates back and forth.
+ *
+ * Cache key prefers `placeId` when present (most precise) and falls back to
+ * a normalized name+address signature. TTL: 5 minutes.
+ */
+const PLACE_PHOTO_URL_CACHE = new Map<string, { value: string | null; expiresAt: number }>();
+const PLACE_PHOTO_INFLIGHT = new Map<string, Promise<string | null>>();
+const PLACE_PHOTO_TTL_MS = 5 * 60 * 1000;
+
+function buildPlacePhotoCacheKey(args: {
+  placeId?: string | null;
+  name: string;
+  address: string;
+  city: string;
+  neighborhood: string;
+}): string {
+  const placeId = String(args.placeId ?? '').trim().toLowerCase();
+  if (placeId) return `pid:${placeId}`;
+  const sig = [args.name, args.address, args.city, args.neighborhood]
+    .map((s) => String(s ?? '').trim().toLowerCase())
+    .join('|');
+  return `sig:${sig}`;
+}
+
 export async function fetchGooglePlacePhotoUrl(args: {
   placeId?: string | null;
   name: string;
@@ -665,13 +753,27 @@ export async function fetchGooglePlacePhotoUrl(args: {
   city: string;
   neighborhood: string;
 }): Promise<string | null> {
-  try {
-    const urls = await fetchGooglePlacePhotoUrls(args);
-    return urls[0] ?? null;
-  } catch (err) {
-    logPlacesFetchError('fetchGooglePlacePhotoUrl', err);
-    return null;
-  }
+  const key = buildPlacePhotoCacheKey(args);
+  const cached = PLACE_PHOTO_URL_CACHE.get(key);
+  const now = Date.now();
+  if (cached && cached.expiresAt > now) return cached.value;
+  const inflight = PLACE_PHOTO_INFLIGHT.get(key);
+  if (inflight) return inflight;
+  const p = (async () => {
+    try {
+      const urls = await fetchGooglePlacePhotoUrls(args);
+      const value = urls[0] ?? null;
+      PLACE_PHOTO_URL_CACHE.set(key, { value, expiresAt: Date.now() + PLACE_PHOTO_TTL_MS });
+      return value;
+    } catch (err) {
+      logPlacesFetchError('fetchGooglePlacePhotoUrl', err);
+      return null;
+    } finally {
+      PLACE_PHOTO_INFLIGHT.delete(key);
+    }
+  })();
+  PLACE_PHOTO_INFLIGHT.set(key, p);
+  return p;
 }
 
 export async function fetchGooglePlacePhotoUrls(args: {

@@ -1,5 +1,12 @@
-import { useMemo, useRef } from 'react';
-import { Animated, Platform, Pressable, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
+import React, { useMemo } from 'react';
+import {
+  Platform,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  useWindowDimensions,
+  View,
+} from 'react-native';
 
 import { EventGenre, getGenreIcon } from '@/constants/Genres';
 
@@ -18,75 +25,35 @@ interface EventCategoriesProps {
   onCategoryPress?: (genre: string) => void;
 }
 
-const AnimatedCategoryItem = ({ category, isSelected, onPress }: {
+const CategoryChip = ({
+  category,
+  isSelected,
+  onPress,
+}: {
   category: EventCategory;
   isSelected: boolean;
   onPress: () => void;
-}) => {
-  const scaleAnim = useRef(new Animated.Value(1)).current;
-  const opacityAnim = useRef(new Animated.Value(1)).current;
-
-  const handlePressIn = () => {
-    Animated.parallel([
-      Animated.spring(scaleAnim, {
-        toValue: 0.95,
-        useNativeDriver: true,
-        tension: 300,
-        friction: 10,
-      }),
-      Animated.timing(opacityAnim, {
-        toValue: 0.7,
-        duration: 100,
-        useNativeDriver: true,
-      })
-    ]).start();
-  };
-
-  const handlePressOut = () => {
-    Animated.parallel([
-      Animated.spring(scaleAnim, {
-        toValue: 1,
-        useNativeDriver: true,
-        tension: 300,
-        friction: 10,
-      }),
-      Animated.timing(opacityAnim, {
-        toValue: 1,
-        duration: 100,
-        useNativeDriver: true,
-      })
-    ]).start();
-  };
-
-  return (
-    <Animated.View
-      style={{
-        transform: [{ scale: scaleAnim }],
-        opacity: opacityAnim,
-      }}
+}) => (
+  <View style={styles.categoryItemTouchTarget}>
+    <TouchableOpacity
+      style={[styles.categoryBadge, isSelected && styles.categoryBadgeSelected]}
+      onPress={onPress}
+      activeOpacity={0.85}
+      delayPressIn={0}
+      hitSlop={{ top: 10, bottom: 10, left: 8, right: 8 }}
     >
-      <Pressable
-        style={[
-          styles.categoryBadge,
-          isSelected && styles.categoryBadgeSelected,
-        ]}
-        onPress={onPress}
-        onPressIn={handlePressIn}
-        onPressOut={handlePressOut}
+      <Text style={styles.categoryIcon}>{getGenreIcon(category.genre)}</Text>
+      <Text
+        style={[styles.categoryText, isSelected && styles.categoryTextSelected]}
+        numberOfLines={1}
+        adjustsFontSizeToFit
+        minimumFontScale={0.72}
       >
-        <Text style={styles.categoryIcon}>{getGenreIcon(category.genre)}</Text>
-        <Text
-          style={[styles.categoryText, isSelected && styles.categoryTextSelected]}
-          numberOfLines={1}
-          adjustsFontSizeToFit
-          minimumFontScale={0.72}
-        >
-          {category.count} {category.genre.toUpperCase()}
-        </Text>
-      </Pressable>
-    </Animated.View>
-  );
-};
+        {category.count} {category.genre.toUpperCase()}
+      </Text>
+    </TouchableOpacity>
+  </View>
+);
 
 export default function EventCategories({ categories, selectedGenre, onCategoryPress }: EventCategoriesProps) {
   const { width } = useWindowDimensions();
@@ -110,7 +77,7 @@ export default function EventCategories({ categories, selectedGenre, onCategoryP
       <View style={[styles.categoriesRow, isDesktopWeb && styles.categoriesRowDesktop]}>
         {items.map((category) => (
           <View key={category.genre} style={[styles.categoryItem, isDesktopWeb && styles.categoryItemDesktop]}>
-            <AnimatedCategoryItem
+            <CategoryChip
               category={category}
               isSelected={selectedGenre === category.genre}
               onPress={() => onCategoryPress?.(category.genre)}
@@ -122,7 +89,7 @@ export default function EventCategories({ categories, selectedGenre, onCategoryP
   };
 
   return (
-    <View style={[styles.container, isDesktopWeb && styles.containerDesktop]}>
+    <View style={[styles.container, isDesktopWeb && styles.containerDesktop]} collapsable={false}>
       {renderRow(CATEGORY_ROW_1)}
       {renderRow(CATEGORY_ROW_2)}
     </View>
@@ -152,6 +119,10 @@ const styles = StyleSheet.create({
   },
   categoryItemDesktop: {
     maxWidth: 260,
+  },
+  categoryItemTouchTarget: {
+    flex: 1,
+    alignSelf: 'stretch',
   },
   categoryBadge: {
     backgroundColor: '#ECECEC',
@@ -192,4 +163,4 @@ const styles = StyleSheet.create({
   categoryTextSelected: {
     color: '#FF0000',
   },
-}); 
+});

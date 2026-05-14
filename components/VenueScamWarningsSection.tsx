@@ -3,6 +3,7 @@ import React, { useCallback, useEffect, useState } from 'react';
 import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { formatRelativeTime } from '@/lib/formatRelativeTime';
+import { useScamAlertsFeedRefresh } from '@/lib/scamAlertsRefresh';
 import { fetchScamAlerts, type ScamAlertRow } from '@/services/scamAlerts';
 
 type Props = {
@@ -21,19 +22,20 @@ export function VenueScamWarningsSection({ city, areaLabel }: Props) {
   const [rows, setRows] = useState<ScamAlertRow[]>([]);
   const [loading, setLoading] = useState(true);
 
-  const load = useCallback(async () => {
+  const load = useCallback(async (opts?: { silent?: boolean }) => {
+    const silent = opts?.silent === true;
     if (!c) {
       setRows([]);
-      setLoading(false);
+      if (!silent) setLoading(false);
       return;
     }
     try {
       const data = await fetchScamAlerts({ city: c });
       setRows(data.slice(0, MAX));
     } catch {
-      setRows([]);
+      if (!silent) setRows([]);
     } finally {
-      setLoading(false);
+      if (!silent) setLoading(false);
     }
   }, [c]);
 
@@ -41,6 +43,8 @@ export function VenueScamWarningsSection({ city, areaLabel }: Props) {
     setLoading(true);
     void load();
   }, [load]);
+
+  useScamAlertsFeedRefresh(load);
 
   if (!c) return null;
 

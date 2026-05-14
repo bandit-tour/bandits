@@ -23,6 +23,8 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
+import { BottleSubmitVideo } from '@/components/BottleSubmitVideo';
+import { useAppBackScreenOptions } from '@/hooks/useAppBackScreenOptions';
 import { getUniqueCities } from '@/app/services/bandits';
 import { getUniqueNeighborhoods } from '@/app/services/events';
 import { usePremiumRefreshControl } from '@/lib/mobilePullToRefresh';
@@ -52,6 +54,11 @@ function ReportSubmitSuccessOverlay({
 
   if (!visible) return null;
 
+  /**
+   * Centered, viewport-fitting card. No ScrollView — the content is intentionally
+   * compact so the user does not need to scroll on any phone (text, icon, three
+   * buttons all fit comfortably within standard mobile viewports).
+   */
   return (
     <Modal visible animationType="fade" transparent onRequestClose={onClose}>
       <View
@@ -64,45 +71,41 @@ function ReportSubmitSuccessOverlay({
         ]}
         testID="banditeam-report-success-overlay"
       >
-        <View style={{ flex: 1, width: '100%' }}>
-          <ScrollView
-            contentContainerStyle={styles.successScrollContent}
-            style={styles.successScroll}
-            keyboardShouldPersistTaps="handled"
-            bounces={false}
-          >
-            <View style={styles.successTextBlock}>
-              <Text style={styles.successOverlayTitle}>Report received</Text>
-              <Text style={styles.successOverlaySub}>{SUCCESS_SUBCOPY}</Text>
-            </View>
-            <View style={styles.successActionsRow}>
-              <Pressable
-                onPress={onBackToHome}
-                style={({ pressed }) => [styles.backHomeButton, pressed && { opacity: 0.9 }]}
-                testID="banditeam-success-back-home"
-                accessibilityRole="button"
-                accessibilityLabel="Back to Home"
-              >
-                <Text style={styles.backHomeButtonText}>Back to Home</Text>
-              </Pressable>
-              <Pressable
-                onPress={onBackToAlerts}
-                style={({ pressed }) => [styles.backAlertsButton, pressed && { opacity: 0.9 }]}
-                accessibilityRole="button"
-                accessibilityLabel="Back to Alerts"
-              >
-                <Text style={styles.backAlertsButtonText}>Back to Alerts</Text>
-              </Pressable>
-              <Pressable
-                onPress={onClose}
-                style={({ pressed }) => [styles.successCloseButton, pressed && { opacity: 0.9 }]}
-                accessibilityRole="button"
-                accessibilityLabel="Close success message"
-              >
-                <Text style={styles.successCloseButtonText}>Close</Text>
-              </Pressable>
-            </View>
-          </ScrollView>
+        <View style={styles.successCard}>
+          <View style={styles.successCheckCircle}>
+            <Text style={styles.successCheckMark}>✓</Text>
+          </View>
+          <View style={styles.successTextBlock}>
+            <Text style={styles.successOverlayTitle}>Report received</Text>
+            <Text style={styles.successOverlaySub}>{SUCCESS_SUBCOPY}</Text>
+          </View>
+          <View style={styles.successActionsRow}>
+            <Pressable
+              onPress={onBackToHome}
+              style={({ pressed }) => [styles.backHomeButton, pressed && { opacity: 0.9 }]}
+              testID="banditeam-success-back-home"
+              accessibilityRole="button"
+              accessibilityLabel="Back to Home"
+            >
+              <Text style={styles.backHomeButtonText}>Back to Home</Text>
+            </Pressable>
+            <Pressable
+              onPress={onBackToAlerts}
+              style={({ pressed }) => [styles.backAlertsButton, pressed && { opacity: 0.9 }]}
+              accessibilityRole="button"
+              accessibilityLabel="Back to Alerts"
+            >
+              <Text style={styles.backAlertsButtonText}>Back to Alerts</Text>
+            </Pressable>
+            <Pressable
+              onPress={onClose}
+              style={({ pressed }) => [styles.successCloseButton, pressed && { opacity: 0.9 }]}
+              accessibilityRole="button"
+              accessibilityLabel="Close success message"
+            >
+              <Text style={styles.successCloseButtonText}>Close</Text>
+            </Pressable>
+          </View>
         </View>
       </View>
     </Modal>
@@ -111,6 +114,10 @@ function ReportSubmitSuccessOverlay({
 
 export default function BandiTeamReportScreen() {
   const router = useRouter();
+  const screenOptions = useAppBackScreenOptions({
+    title: 'Report Alert',
+    fallback: '/bandiTeam',
+  });
   const { width } = useWindowDimensions();
   const isDesktopWeb = Platform.OS === 'web' && width >= 1100;
   const [city, setCity] = useState(NONE);
@@ -131,7 +138,18 @@ export default function BandiTeamReportScreen() {
 
   const [cityMenuOpen, setCityMenuOpen] = useState(false);
   const [areaMenuOpen, setAreaMenuOpen] = useState(false);
+  /**
+   * Two-stage post-submit UX:
+   *   1. `showSubmitVideo` — the bottle video plays exactly once (no loop).
+   *   2. `showSubmitTransition` — when the video ends (or is skipped), the
+   *      compact "Report received" card appears, fully centered on mobile.
+   */
+  const [showSubmitVideo, setShowSubmitVideo] = useState(false);
   const [showSubmitTransition, setShowSubmitTransition] = useState(false);
+  const onSubmitVideoFinished = useCallback(() => {
+    setShowSubmitVideo(false);
+    setShowSubmitTransition(true);
+  }, []);
   const closeSuccessOverlay = useCallback(() => {
     setShowSubmitTransition(false);
   }, []);
@@ -285,7 +303,8 @@ export default function BandiTeamReportScreen() {
       setImageUri(null);
       setLocationExtra('');
       setNeighborhood(NONE);
-      setShowSubmitTransition(true);
+      /** Start the single-play video; `onSubmitVideoFinished` will flip to the success card. */
+      setShowSubmitVideo(true);
     } catch (e: unknown) {
       setError(userFacingScamSubmitError(e));
     } finally {
@@ -295,7 +314,8 @@ export default function BandiTeamReportScreen() {
 
   return (
     <>
-      <Stack.Screen options={{ headerShown: true, title: 'Report Alert', headerBackTitle: 'Back' }} />
+      <Stack.Screen options={screenOptions} />
+      <BottleSubmitVideo visible={showSubmitVideo} onFinished={onSubmitVideoFinished} />
       <ReportSubmitSuccessOverlay
         visible={showSubmitTransition}
         onClose={closeSuccessOverlay}
@@ -667,38 +687,52 @@ const styles = StyleSheet.create({
   },
   successModalRoot: {
     flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.94)',
+    backgroundColor: '#F7F7F9',
     paddingHorizontal: 20,
     width: '100%',
     overflow: 'hidden',
-  },
-  successScroll: {
-    flex: 1,
-    maxWidth: 480,
-    width: '100%' as const,
-    alignSelf: 'center',
-  },
-  successScrollContent: {
-    flexGrow: 1,
     alignItems: 'center',
     justifyContent: 'center',
-    paddingBottom: 12,
+  },
+  /** Compact card — sized so all content fits without scroll on phones >= 320px wide. */
+  successCard: {
+    width: '100%',
+    maxWidth: 420,
+    alignSelf: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+  },
+  successCheckCircle: {
+    width: 64,
+    height: 64,
+    borderRadius: 32,
+    backgroundColor: '#E8F5EC',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 16,
+  },
+  successCheckMark: {
+    color: '#0A7D32',
+    fontSize: 30,
+    fontWeight: '900',
+    lineHeight: 32,
   },
   successTextBlock: {
     alignItems: 'center',
-    marginBottom: 18,
-    paddingHorizontal: 8,
+    marginBottom: 22,
+    paddingHorizontal: 4,
     maxWidth: 400,
+    width: '100%',
   },
   successOverlayTitle: {
-    color: '#FFFFFF',
+    color: '#111',
     fontSize: 22,
     fontWeight: '800',
     textAlign: 'center',
     marginBottom: 8,
   },
   successOverlaySub: {
-    color: 'rgba(255,255,255,0.88)',
+    color: '#444',
     fontSize: 15,
     lineHeight: 22,
     textAlign: 'center',
@@ -711,10 +745,11 @@ const styles = StyleSheet.create({
     paddingVertical: 8,
     borderRadius: 999,
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.32)',
+    borderColor: '#C8C8C8',
+    backgroundColor: '#FFF',
   },
   successCloseButtonText: {
-    color: '#FFFFFF',
+    color: '#111',
     fontSize: 13,
     fontWeight: '700',
   },
@@ -727,9 +762,9 @@ const styles = StyleSheet.create({
     gap: 12,
   },
   backAlertsButton: {
-    backgroundColor: 'rgba(255,255,255,0.1)',
+    backgroundColor: '#111',
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.34)',
+    borderColor: '#111',
     paddingHorizontal: 18,
     paddingVertical: 12,
     borderRadius: 14,

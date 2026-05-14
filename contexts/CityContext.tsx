@@ -1,5 +1,5 @@
 import { supabase } from '@/lib/supabase';
-import React, { createContext, ReactNode, useContext, useEffect, useState } from 'react';
+import React, { createContext, ReactNode, useContext, useEffect, useMemo, useState } from 'react';
 
 interface CityContextType {
   selectedCity: string;
@@ -52,5 +52,14 @@ export const CityProvider: React.FC<CityProviderProps> = ({ children }) => {
     };
   }, []);
 
-  return <CityContext.Provider value={{ selectedCity, setSelectedCity }}>{children}</CityContext.Provider>;
+  // Memoize the provider value so consumers (Explore, mySpots, etc.) don't
+  // re-render on every CityProvider re-render. Without this, the outer
+  // AppStateProvider's polling-driven re-renders cascade into every screen
+  // that calls `useCity()`.
+  const value = useMemo<CityContextType>(
+    () => ({ selectedCity, setSelectedCity }),
+    [selectedCity],
+  );
+
+  return <CityContext.Provider value={value}>{children}</CityContext.Provider>;
 };

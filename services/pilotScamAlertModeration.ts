@@ -1,5 +1,6 @@
 import { isMissingPostgrestRpcError } from '@/lib/rpcFallback';
 import { getPilotApiBaseUrl } from '@/lib/pilotApiBase';
+import { requestScamAlertsRefresh } from '@/lib/scamAlertsRefresh';
 import { supabase } from '@/lib/supabase';
 
 export type ModerationStatus = 'published' | 'hidden' | 'rejected';
@@ -9,6 +10,7 @@ export async function pilotVerifyScamAlert(id: string): Promise<void> {
   if (!rid) throw new Error('Missing alert id.');
   const { error } = await supabase.from('scam_alerts').update({ admin_verified: true }).eq('id', rid);
   if (error) throw new Error(error.message || 'Could not verify alert.');
+  requestScamAlertsRefresh();
 }
 
 export async function pilotSetScamAlertModeration(id: string, status: ModerationStatus): Promise<void> {
@@ -16,6 +18,7 @@ export async function pilotSetScamAlertModeration(id: string, status: Moderation
   if (!rid) throw new Error('Missing alert id.');
   const { error } = await supabase.from('scam_alerts').update({ moderation_status: status }).eq('id', rid);
   if (error) throw new Error(error.message || 'Could not update moderation.');
+  requestScamAlertsRefresh();
 }
 
 export async function pilotDeleteScamAlert(id: string): Promise<void> {
@@ -55,7 +58,10 @@ export async function pilotDeleteScamAlert(id: string): Promise<void> {
         body: JSON.stringify({ id: rid }),
       });
       const j = (await res.json().catch(() => ({}))) as { error?: string };
-      if (res.ok) return;
+      if (res.ok) {
+        requestScamAlertsRefresh();
+        return;
+      }
       if (res.status !== 503 && res.status !== 404 && res.status !== 403) {
         throw new Error((j.error && String(j.error)) || 'Could not delete report.');
       }
@@ -65,7 +71,10 @@ export async function pilotDeleteScamAlert(id: string): Promise<void> {
   }
 
   const { error: rpcErr } = await supabase.rpc('delete_scam_alert_if_operator', { p_id: rid } as never);
-  if (!rpcErr) return;
+  if (!rpcErr) {
+    requestScamAlertsRefresh();
+    return;
+  }
 
   const { data, error } = await supabase.from('scam_alerts').delete().eq('id', rid).select('id');
   if (!error && data?.length) {
@@ -76,11 +85,15 @@ export async function pilotDeleteScamAlert(id: string): Promise<void> {
       const refs = [...new Set([rid, rid.toLowerCase(), rid.toUpperCase()])];
       await supabase.from('notifications').delete().eq('type', 'bandiTEAM_report').in('reference_id', refs);
     }
+    requestScamAlertsRefresh();
     return;
   }
 
   const { error: rpcError } = await supabase.rpc('delete_scam_alert_if_operator', { p_id: rid } as never);
-  if (!rpcError) return;
+  if (!rpcError) {
+    requestScamAlertsRefresh();
+    return;
+  }
   if (error && !isMissingPostgrestRpcError(rpcError)) {
     throw new Error(error.message || rpcError.message || 'Could not delete alert.');
   }

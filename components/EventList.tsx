@@ -1,7 +1,12 @@
 import { Database } from '@/lib/database.types';
 import { usePremiumRefreshControl } from '@/lib/mobilePullToRefresh';
-import React, { forwardRef, useImperativeHandle, useRef } from 'react';
-import { ScrollView, StyleSheet, Text, View } from 'react-native';
+import React, { forwardRef, useCallback, useEffect, useImperativeHandle, useMemo, useRef, useState } from 'react';
+import { FlatList, Platform, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { buildEventListImagePlan } from '@/lib/eventListImagePlan';
+import {
+  enforceUniqueRecommendationImagesByEventId,
+  resolveStrictRecommendationImagesByEventId,
+} from '@/lib/recommendationImages';
 import EventCard from './EventCard';
 
 type Event = Database['public']['Tables']['event']['Row'];
@@ -56,6 +61,7 @@ const EventList = forwardRef<EventListRef, EventListProps>(({
 }, ref) => {
   const isHorizontal = variant === 'horizontal';
   const scrollViewRef = useRef<ScrollView>(null);
+  const flatListRef = useRef<FlatList<Event>>(null);
   const eventRefs = useRef<{ [key: string]: View | null }>({});
   const refreshControl = usePremiumRefreshControl(
     refreshing,
@@ -64,30 +70,92 @@ const EventList = forwardRef<EventListRef, EventListProps>(({
     },
     { active: onRefresh != null },
   );
+  const listImagePlan = useMemo(() => buildEventListImagePlan(events), [events]);
+  const [resolvedRecommendationImageById, setResolvedRecommendationImageById] = useState<Record<string, string>>({});
+  const [recoHeroReady, setRecoHeroReady] = useState(true);
+
+  useEffect(() => {
+    if (!showRecommendations || events.length === 0) {
+      setResolvedRecommendationImageById({});
+      setRecoHeroReady(true);
+      return;
+    }
+    let cancelled = false;
+    setRecoHeroReady(false);
+    void (async () => {
+      const out = await resolveStrictRecommendationImagesByEventId(events);
+      const uniqueOut = enforceUniqueRecommendationImagesByEventId(events, out);
+      if (!cancelled) {
+        setResolvedRecommendationImageById(uniqueOut);
+        setRecoHeroReady(true);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [showRecommendations, events]);
 
   useImperativeHandle(ref, () => ({
     scrollToEvent: (eventId: string) => {
-      if (!scrollViewRef.current) {
-        return;
-      }
-
-      const eventIndex = events.findIndex(e => e.id === eventId);
-
-      if (eventIndex >= 0) {
-        if (isHorizontal) {
-          const estimatedCardWidth = 180;
-          const estimatedGap = 2;
-          const estimatedX = eventIndex * (estimatedCardWidth + estimatedGap);
-          scrollViewRef.current.scrollTo({ x: estimatedX, animated: true });
-        } else {
-          const estimatedCardHeight = 135;
-          const estimatedGap = 11;
-          const estimatedY = eventIndex * (estimatedCardHeight + estimatedGap);
-          scrollViewRef.current.scrollTo({ y: estimatedY, animated: true });
-        }
+      const eventIndex = events.findIndex((e) => e.id === eventId);
+      if (eventIndex < 0) return;
+      if (isHorizontal) {
+        if (!scrollViewRef.current) return;
+        const estimatedCardWidth = 180;
+        const estimatedGap = 2;
+        const estimatedX = eventIndex * (estimatedCardWidth + estimatedGap);
+        scrollViewRef.current.scrollTo({ x: estimatedX, animated: true });
+      } else {
+        if (!flatListRef.current) return;
+        flatListRef.current.scrollToIndex({ index: eventIndex, animated: true, viewPosition: 0.1 });
       }
     },
   }));
+
+  // Stable keyExtractor / renderItem for the vertical FlatList path. These
+  // capture `likedEventIds`, `resolvedRecommendationImageById`, etc. via
+  // closure but use `useCallback` so the references only change when the
+  // captured inputs actually change.
+  const keyExtractor = useCallback((item: Event) => item.id, []);
+  const renderVerticalItem = useCallback(
+    ({ item }: { item: Event }) => (
+      <View style={styles.verticalCardWrap}>
+        <EventCard
+          event={item}
+          onLike={() => onEventLike?.(item.id)}
+          isLiked={likedEventIds.has(item.id)}
+          variant="default"
+          showRecommendations={showRecommendations}
+          banditId={banditId}
+          buttonType={buttonType}
+          buttonText={buttonText}
+          showButton={showButton}
+          imageHeight={imageHeight}
+          listImageScope={listImagePlan.get(item.id)}
+          resolvedRecommendationImageUri={
+            showRecommendations ? (resolvedRecommendationImageById[item.id] ?? null) : null
+          }
+          recommendationHeroResolverReady={showRecommendations ? recoHeroReady : true}
+          strictRecommendationImagePolicy={showRecommendations}
+          onPress={onEventPress ? () => onEventPress(item) : undefined}
+        />
+      </View>
+    ),
+    [
+      onEventLike,
+      likedEventIds,
+      showRecommendations,
+      banditId,
+      buttonType,
+      buttonText,
+      showButton,
+      imageHeight,
+      listImagePlan,
+      resolvedRecommendationImageById,
+      recoHeroReady,
+      onEventPress,
+    ],
+  );
 
   // Handle loading state
   if (loading) {
@@ -120,48 +188,75 @@ const EventList = forwardRef<EventListRef, EventListProps>(({
     );
   }
 
-  const scrollViewProps = isHorizontal
-    ? {
-        horizontal: true,
-        showsHorizontalScrollIndicator: false,
-        contentContainerStyle: [styles.horizontalContentContainer, contentContainerStyle]
-      }
-    : {
-        style: [styles.verticalScrollView, scrollViewStyle],
-        contentContainerStyle: [styles.verticalContentContainer, contentContainerStyle]
-      };
+  if (isHorizontal) {
+    // Horizontal carousel: keep the ScrollView path (counts are usually small
+    // and the imperative `scrollToEvent` API depends on it).
+    return (
+      <ScrollView
+        ref={scrollViewRef}
+        horizontal
+        showsHorizontalScrollIndicator={false}
+        contentContainerStyle={[styles.horizontalContentContainer, contentContainerStyle]}
+        refreshControl={refreshControl}
+      >
+        <View style={styles.horizontalContainer}>
+          {events.map((event) => (
+            <View
+              key={event.id}
+              ref={(refNode) => {
+                eventRefs.current[event.id] = refNode;
+              }}
+            >
+              <EventCard
+                event={event}
+                onLike={() => onEventLike?.(event.id)}
+                isLiked={likedEventIds.has(event.id)}
+                variant="horizontal"
+                showRecommendations={showRecommendations}
+                banditId={banditId}
+                buttonType={buttonType}
+                buttonText={buttonText}
+                showButton={showButton}
+                imageHeight={imageHeight}
+                listImageScope={listImagePlan.get(event.id)}
+                resolvedRecommendationImageUri={
+                  showRecommendations ? (resolvedRecommendationImageById[event.id] ?? null) : null
+                }
+                recommendationHeroResolverReady={showRecommendations ? recoHeroReady : true}
+                strictRecommendationImagePolicy={showRecommendations}
+                onPress={onEventPress ? () => onEventPress(event) : undefined}
+              />
+            </View>
+          ))}
+        </View>
+      </ScrollView>
+    );
+  }
 
-  const content = (
-    <ScrollView {...scrollViewProps} ref={scrollViewRef} refreshControl={refreshControl}>
-      <View style={isHorizontal ? styles.horizontalContainer : styles.verticalContainer}>
-        {events.map((event) => (
-          <View
-            key={event.id}
-            ref={(ref) => {
-              eventRefs.current[event.id] = ref;
-            }}
-          >
-            <EventCard
-              event={event}
-              onLike={() => onEventLike?.(event.id)}
-              isLiked={likedEventIds.has(event.id)}
-              variant={isHorizontal ? 'horizontal' : 'default'}
-              showRecommendations={showRecommendations}
-              banditId={banditId}
-              buttonType={buttonType}
-              buttonText={buttonText}
-              showButton={showButton}
-              imageHeight={imageHeight}
-              onPress={onEventPress ? () => onEventPress(event) : undefined}
-            />
-          </View>
-        ))}
-      </View>
-    </ScrollView>
+  // Vertical lists (e.g. My Spots) can grow unbounded — virtualize so we don't
+  // render every card eagerly. Previously this was a ScrollView + .map which
+  // rendered every liked event on mount.
+  return (
+    <FlatList
+      ref={flatListRef}
+      data={events}
+      keyExtractor={keyExtractor}
+      renderItem={renderVerticalItem}
+      style={[styles.verticalScrollView, scrollViewStyle]}
+      contentContainerStyle={[styles.verticalContentContainer, styles.verticalContainerPadding, contentContainerStyle]}
+      refreshControl={refreshControl}
+      initialNumToRender={6}
+      maxToRenderPerBatch={4}
+      windowSize={5}
+      removeClippedSubviews={Platform.OS !== 'web'}
+      ItemSeparatorComponent={VerticalGap}
+    />
   );
-
-  return content;
 });
+
+function VerticalGap() {
+  return <View style={{ height: 11 }} />;
+}
 
 EventList.displayName = 'EventList';
 
@@ -211,13 +306,24 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   verticalContentContainer: {
+    /** Let content shrink-wrap list rows; avoid web flex-expanding rows to viewport height */
     flexGrow: 1,
   },
   verticalContainer: {
-    flex: 1,
+    width: '100%',
+    maxWidth: '100%',
     paddingHorizontal: 16,
     paddingTop: 0,
     gap: 11,
+  },
+  verticalContainerPadding: {
+    paddingHorizontal: 16,
+    paddingTop: 0,
+  },
+  verticalCardWrap: {
+    width: '100%',
+    maxWidth: '100%',
+    overflow: 'hidden',
   },
   horizontalContentContainer: {
     paddingHorizontal: 8,

@@ -13,10 +13,11 @@ import {
 } from 'react-native';
 
 import { getEvents } from '@/app/services/events';
-import { fetchGooglePlacePhotoUrl, getCategoryFallbackImage, picsumPlaceImage } from '@/lib/placePhoto';
+import { fetchGooglePlacePhotoUrl, isGooglePlacesDerivedPhotoUrl, normalizeEventImageUri } from '@/lib/placePhoto';
 import { Image as ExpoImage } from 'expo-image';
 import { getSpotsByBanditId } from '@/services/spots';
 import { mergeVibeSequence, type VibeStop } from '@/services/vibeRoute';
+import { buildCategoryNeutralPlaceholder } from '@/lib/recommendationImages';
 import { Database } from '@/lib/database.types';
 import { supabase } from '@/lib/supabase';
 
@@ -28,16 +29,18 @@ function VibeStopImage({ stop }: { stop: VibeStop }) {
   const [remote, setRemote] = useState<string | null>(null);
   const [remoteDone, setRemoteDone] = useState(false);
 
-  const fallbackPicsum = getCategoryFallbackImage(stop.category, stop.key, 800, 600);
-  const backupPicsum = picsumPlaceImage(`${stop.key}-vibe`, 800, 600);
+  // Neutral category-specific SVG placeholder. Never an unrelated stock photo.
+  const neutralFallback = useMemo(
+    () => buildCategoryNeutralPlaceholder(stop.name, stop.category, `vibe-${stop.key}`),
+    [stop.name, stop.category, stop.key],
+  );
 
   const uris = useMemo(() => {
     const list = stop.imageCandidates.map((u) => String(u).trim()).filter(Boolean);
     if (remote) list.push(remote);
-    list.push(fallbackPicsum);
-    list.push(backupPicsum);
+    list.push(neutralFallback);
     return list;
-  }, [stop.imageCandidates, stop.key, remote, fallbackPicsum, backupPicsum]);
+  }, [stop.imageCandidates, remote, neutralFallback]);
 
   useEffect(() => {
     setAttempt(0);
@@ -67,7 +70,8 @@ function VibeStopImage({ stop }: { stop: VibeStop }) {
             city: ev.city,
             neighborhood: ev.neighborhood,
           });
-          if (url && !cancelled) setRemote(url);
+          const norm = url ? normalizeEventImageUri(url) ?? url : null;
+          if (norm && isGooglePlacesDerivedPhotoUrl(norm) && !cancelled) setRemote(norm);
           setRemoteDone(true);
           return;
         }
@@ -77,7 +81,8 @@ function VibeStopImage({ stop }: { stop: VibeStop }) {
           city: '',
           neighborhood: '',
         });
-        if (url && !cancelled) setRemote(url);
+        const norm = url ? normalizeEventImageUri(url) ?? url : null;
+        if (norm && isGooglePlacesDerivedPhotoUrl(norm) && !cancelled) setRemote(norm);
       } catch (e) {
         console.warn('[VibeStopImage] place photo fetch failed', stop.key, e instanceof Error ? e.message : e);
       } finally {
@@ -90,7 +95,7 @@ function VibeStopImage({ stop }: { stop: VibeStop }) {
   }, [stop.key, stop.kind, stop.eventId, stop.name, stop.address, stop.imageCandidates.length]);
 
   const safeIndex = Math.min(attempt, Math.max(0, uris.length - 1));
-  const uri = uris[safeIndex] ?? backupPicsum;
+  const uri = uris[safeIndex] ?? neutralFallback;
   const showLoader = stop.imageCandidates.length === 0 && !remoteDone && !remote;
 
   if (showLoader) {

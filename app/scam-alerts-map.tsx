@@ -14,7 +14,9 @@ import {
 import { WebView } from 'react-native-webview';
 
 import { useCity } from '@/contexts/CityContext';
+import { useAppBackScreenOptions } from '@/hooks/useAppBackScreenOptions';
 import { usePremiumRefreshControl } from '@/lib/mobilePullToRefresh';
+import { useScamAlertsFeedRefresh } from '@/lib/scamAlertsRefresh';
 import { buildScamAlertsLeafletHtml, defaultCenterForCity } from '@/lib/scamAlertsMapHtml';
 import { fetchScamAlerts, type ScamAlertRow } from '@/services/scamAlerts';
 
@@ -60,6 +62,8 @@ export default function ScamAlertsMapScreen() {
     void load();
   }, [load]);
 
+  useScamAlertsFeedRefresh(load);
+
   const onMapRefresh = useCallback(() => {
     void load({ silent: true });
   }, [load]);
@@ -101,23 +105,23 @@ export default function ScamAlertsMapScreen() {
     });
   }, [markers, city]);
 
+  const screenOptions = useAppBackScreenOptions({
+    title: 'Safety map',
+    fallback: '/scam-alerts',
+    headerRight: () => (
+      <Pressable
+        onPress={() => router.push('/scam-alerts' as never)}
+        style={{ paddingHorizontal: 12, paddingVertical: 8 }}
+        accessibilityLabel="Back to list"
+      >
+        <Text style={{ fontWeight: '800', color: '#0a7ea4', fontSize: 15 }}>List</Text>
+      </Pressable>
+    ),
+  });
+
   return (
     <>
-      <Stack.Screen
-        options={{
-          title: 'Safety map',
-          headerBackTitle: 'Back',
-          headerRight: () => (
-            <Pressable
-              onPress={() => router.push('/scam-alerts' as never)}
-              style={{ paddingHorizontal: 12, paddingVertical: 8 }}
-              accessibilityLabel="Back to list"
-            >
-              <Text style={{ fontWeight: '800', color: '#0a7ea4', fontSize: 15 }}>List</Text>
-            </Pressable>
-          ),
-        }}
-      />
+      <Stack.Screen options={screenOptions} />
       <ScrollView
         style={styles.screen}
         contentContainerStyle={{ flexGrow: 1, minHeight: Dimensions.get('window').height }}

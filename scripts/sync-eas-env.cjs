@@ -7,7 +7,12 @@ const path = require('path');
 
 require('dotenv').config({ path: path.join(__dirname, '..', '.env') });
 
-const keys = ['EXPO_PUBLIC_SUPABASE_URL', 'EXPO_PUBLIC_SUPABASE_ANON_KEY'];
+const keys = [
+  'EXPO_PUBLIC_SUPABASE_URL',
+  'EXPO_PUBLIC_SUPABASE_ANON_KEY',
+  'EXPO_PUBLIC_OPERATOR_USER_ID',
+  'EXPO_PUBLIC_APP_ADMIN_EMAILS',
+];
 const envs = ['preview', 'production', 'development'];
 
 for (const name of keys) {

@@ -1,6 +1,4 @@
--- Fix Postgres parse where `nullif(trim(x), '')::uuid` can bind like `nullif(trim(x), (''::uuid))`,
--- forcing evaluation of empty-string-to-uuid and raising: invalid input syntax for type uuid: "".
--- Affects notifications sync trigger (runs on EVERY insert, incl. bandiTEAM_report) + operator lookups.
+-- Never cast blank config / reference_id text to uuid (avoids ''::uuid and invalid uuid text).
 
 create or replace function public.is_pilot_operator()
 returns boolean
@@ -12,7 +10,11 @@ as $$
   select coalesce(
     auth.uid() is not null
     and auth.uid() = (
-      select (nullif(trim(value), ''))::uuid
+      select case
+        when trim(value) = '' then null
+        when trim(value) ~ '^[0-9a-fA-F-]{36}$' then trim(value)::uuid
+        else null
+      end
       from public.app_public_config
       where key = 'operator_user_id'
       limit 1
@@ -23,7 +25,7 @@ $$;
 
 grant execute on function public.is_pilot_operator() to authenticated;
 
--- Same trigger body as migration 025; only v_operator loader uses safe cast precedence.
+-- Aligns with migration 025 (safe text→uuid for operator + reference_id).
 create or replace function public.sync_pilot_thread_identity_from_notification()
 returns trigger
 language plpgsql
@@ -40,7 +42,11 @@ declare
   v_sender uuid;
   v_delivery_id uuid;
 begin
-  select (nullif(trim(value), ''))::uuid into v_operator
+  select case
+    when trim(value) = '' then null
+    when trim(value) ~ '^[0-9a-fA-F-]{36}$' then trim(value)::uuid
+    else null
+  end into v_operator
   from public.app_public_config
   where key = 'operator_user_id'
   limit 1;
@@ -52,8 +58,12 @@ begin
      and v_operator is not null
      and NEW.user_id = v_operator
      and NEW.reference_id is not null
-     and btrim(NEW.reference_id) ~ '^[0-9a-f-]{36}$' then
-    v_recipient := NEW.reference_id::uuid;
+     and trim(NEW.reference_id) ~ '^[0-9a-fA-F-]{36}$' then
+    v_recipient := case
+      when trim(NEW.reference_id) = '' then null
+      when trim(NEW.reference_id) ~ '^[0-9a-fA-F-]{36}$' then trim(NEW.reference_id)::uuid
+      else null
+    end;
 
     if NEW.type = 'bandit_question' and NEW.ask_target_bandit_id is not null then
       select b.id, b.name, coalesce(nullif(trim(b.face_image_url), ''), nullif(trim(b.image_url), ''), '')
@@ -112,8 +122,12 @@ begin
   if NEW.type = 'signal_peer_delivery'
      and NEW.reference_type in ('signal_delivery', 'signal_delivery_peer')
      and NEW.reference_id is not null
-     and btrim(NEW.reference_id) ~ '^[0-9a-f-]{36}$' then
-    v_delivery_id := NEW.reference_id::uuid;
+     and trim(NEW.reference_id) ~ '^[0-9a-fA-F-]{36}$' then
+    v_delivery_id := case
+      when trim(NEW.reference_id) = '' then null
+      when trim(NEW.reference_id) ~ '^[0-9a-fA-F-]{36}$' then trim(NEW.reference_id)::uuid
+      else null
+    end;
     v_recipient := NEW.user_id;
 
     select sd.sender_user_id into v_sender
@@ -196,7 +210,11 @@ create policy "notifications_insert_routed"
         and reference_type in ('local_friend_request', 'bandit_question_request')
         and reference_id = auth.uid()::text
         and user_id = (
-          select (nullif(trim(value), ''))::uuid
+          select case
+            when trim(value) = '' then null
+            when trim(value) ~ '^[0-9a-fA-F-]{36}$' then trim(value)::uuid
+            else null
+          end
           from public.app_public_config
           where key = 'operator_user_id'
           limit 1
@@ -216,7 +234,11 @@ create policy "notifications_insert_routed"
         and reference_type in ('signal_delivery', 'presence_thread')
         and reference_id is not null
         and user_id = (
-          select (nullif(trim(value), ''))::uuid
+          select case
+            when trim(value) = '' then null
+            when trim(value) ~ '^[0-9a-fA-F-]{36}$' then trim(value)::uuid
+            else null
+          end
           from public.app_public_config
           where key = 'operator_user_id'
           limit 1

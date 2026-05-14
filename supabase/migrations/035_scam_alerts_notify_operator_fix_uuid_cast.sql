@@ -1,5 +1,4 @@
--- Fix: `nullif(x, '')::uuid` was parsed as `nullif(x, (''::uuid))` — empty ::uuid cast throws
--- and every bandiTEAM insert failed. Parenthesize so we cast the nullif result.
+-- Avoid any path that evaluates ''::uuid (config operator_user_id, text reported_by).
 create or replace function public.scam_alerts_notify_operator()
 returns trigger
 language plpgsql
@@ -8,11 +7,16 @@ set search_path = public
 as $$
 declare
   v_op uuid;
+  v_rb uuid;
   v_name text;
   v_from text;
   rmsg text;
 begin
-  select (nullif(trim(c.value), ''))::uuid
+  select case
+    when trim(c.value) = '' then null
+    when trim(c.value) ~ '^[0-9a-fA-F-]{36}$' then trim(c.value)::uuid
+    else null
+  end
     into v_op
   from public.app_public_config c
   where c.key = 'operator_user_id'
@@ -22,10 +26,15 @@ begin
   end if;
 
   v_from := 'Traveler';
-  if coalesce(NEW.reported_by, '') ~* '^[0-9a-f-]{36}$' then
+  v_rb := case
+    when trim(coalesce(NEW.reported_by, '')) = '' then null
+    when trim(NEW.reported_by) ~ '^[0-9a-fA-F-]{36}$' then trim(NEW.reported_by)::uuid
+    else null
+  end;
+  if v_rb is not null then
     select nullif(trim(up.name), '') into v_name
     from public.user_profile up
-    where up.id = (NEW.reported_by)::uuid
+    where up.id = v_rb
     limit 1;
     if v_name is not null and btrim(v_name) <> '' then
       v_from := v_name;

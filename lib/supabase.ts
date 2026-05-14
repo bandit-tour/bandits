@@ -29,6 +29,26 @@ export function isSupabaseConfigured(): boolean {
   return Boolean(supabaseUrl && supabaseAnonKey);
 }
 
+let authOpQueue: Promise<void> = Promise.resolve();
+
+const serializedAuthLock = async <R>(
+  _name: string,
+  _acquireTimeout: number,
+  fn: () => Promise<R>,
+): Promise<R> => {
+  const prev = authOpQueue;
+  let release!: () => void;
+  authOpQueue = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  await prev.catch(() => undefined);
+  try {
+    return await fn();
+  } finally {
+    release();
+  }
+};
+
 function createSupabaseClient(): ReturnType<typeof createClient<Database>> {
   const supabaseUrl = readEnv('EXPO_PUBLIC_SUPABASE_URL');
   const supabaseAnonKey = readEnv('EXPO_PUBLIC_SUPABASE_ANON_KEY');
@@ -63,6 +83,9 @@ function createSupabaseClient(): ReturnType<typeof createClient<Database>> {
         persistSession: true,
         autoRefreshToken: true,
         detectSessionInUrl: false,
+        // Prevent auth lock-steal races that can throw:
+        // "Lock broken by another request with the 'steal' option."
+        lock: serializedAuthLock,
       },
     },
   );

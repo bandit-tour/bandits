@@ -748,7 +748,12 @@ export default function ProfileScreen() {
                     style={StyleSheet.absoluteFillObject}
                     contentFit="cover"
                     key={avatarUrl}
-                    cachePolicy="none"
+                    // `key={avatarUrl}` already remounts the image when the
+                    // URL changes (after a fresh upload), so we can keep the
+                    // bytes for the current URL in disk+memory cache and
+                    // avoid re-downloading on every screen visit.
+                    cachePolicy="memory-disk"
+                    transition={150}
                   />
                 </View>
               ) : (
@@ -897,7 +902,7 @@ export default function ProfileScreen() {
           <Text style={styles.sectionBody}>
             {joinedLabel}
             {'\n'}
-            Inbox, follow list, and requests are tied to this profile.
+            Notifications, follow list, and requests are tied to this profile.
           </Text>
         </View>
 

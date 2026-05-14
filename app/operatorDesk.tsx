@@ -157,9 +157,9 @@ export default function OperatorDeskScreen() {
   const [reportSelected, setReportSelected] = useState<Set<string>>(new Set());
 
   const loadAll = useCallback(async () => {
-    const { operatorId, isAppAdmin } = await resolvePilotDeskAccess();
-    /** Pilot Desk entry: admin allowlist email only (not operator UUID — same rule as Menu). */
-    const allowed = isAppAdmin;
+    const { operatorId, user, showPilotDesk } = await resolvePilotDeskAccess();
+    /** Pilot Desk: owner email only (blonje@gmail.com) — same rule as Guest Menu. */
+    const allowed = showPilotDesk;
     setIsOperator(allowed);
     setDeskOperatorId(allowed ? operatorId : null);
     if (!allowed) {
@@ -612,10 +612,10 @@ export default function OperatorDeskScreen() {
                         : 'Ask';
                   const rowTitle =
                     item.type === 'bandit_question'
-                      ? `Operator inbox for ${aboutBandit || 'Ask'}`
+                      ? `Operator notifications for ${aboutBandit || 'Ask'}`
                       : item.type === 'local_friend'
-                        ? 'Operator inbox for Local Friend'
-                        : 'Operator inbox';
+                        ? 'Operator notifications for Local Friend'
+                        : 'Operator notifications';
                   const inner = (
                     <View style={[styles.row, selected && styles.rowSelected]}>
                       <Pressable

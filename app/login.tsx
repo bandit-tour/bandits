@@ -1,8 +1,11 @@
 import { isBenignAuthStateMessage, safeSignOut } from '@/lib/authSafe';
+import { isAnonymousSupabaseSession } from '@/lib/appAdminAccess';
+import { useAppBackScreenOptions } from '@/hooks/useAppBackScreenOptions';
+import { parseLoginForceAuth } from '@/lib/loginNavigation';
 import { isSupabaseConfigured, supabase } from '@/lib/supabase';
 import { navigateAfterAuth, normalizePostAuthRedirect } from '@/services/userProfile';
 import * as Linking from 'expo-linking';
-import { Redirect, useLocalSearchParams, useRouter, type Href } from 'expo-router';
+import { Redirect, Stack, useLocalSearchParams, useRouter, type Href } from 'expo-router';
 import * as WebBrowser from 'expo-web-browser';
 import React, { useEffect, useRef, useState } from 'react';
 import {
@@ -24,12 +27,18 @@ export default function Login() {
     forceAuth?: string;
     redirect?: string;
   }>();
-  const forceAuth = (Array.isArray(rawForceAuth) ? rawForceAuth[0] : rawForceAuth) === '1';
+  const forceAuth = parseLoginForceAuth(rawForceAuth);
   const redirectParam = Array.isArray(rawRedirect) ? rawRedirect[0] : rawRedirect;
   const redirectRef = useRef<string | null>(null);
   useEffect(() => {
     redirectRef.current = normalizePostAuthRedirect(redirectParam ?? null);
   }, [redirectParam]);
+
+  const screenOptions = useAppBackScreenOptions({
+    title: 'Sign in',
+    fallback: '/menu',
+    headerShown: true,
+  });
   
   /** Session restore finished (success or failure). Avoid infinite spinner when user is null. */
   const [sessionReady, setSessionReady] = useState(false);
@@ -177,6 +186,13 @@ export default function Login() {
     setError(null);
     setLoading(true);
     try {
+      const {
+        data: { session: existing },
+      } = await supabase.auth.getSession();
+      if (isAnonymousSupabaseSession(existing?.user ?? null)) {
+        await safeSignOut();
+      }
+
       const { data, error: signInError } = await withTimeout(
         supabase.auth.signInWithPassword({
           email: email.trim(),
@@ -398,16 +414,24 @@ export default function Login() {
 
   if (!sessionReady) {
     return (
-      <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color="#ff0000" />
-        <Text style={styles.loadingHint}>Checking session…</Text>
-      </View>
+      <>
+        <Stack.Screen options={screenOptions} />
+        <View style={styles.loadingContainer}>
+          <ActivityIndicator size="large" color="#ff0000" />
+          <Text style={styles.loadingHint}>Checking session…</Text>
+        </View>
+      </>
     );
   }
 
   if (user && !forceAuth) {
     const safe = normalizePostAuthRedirect(redirectParam ?? null);
-    return <Redirect href={(safe ?? '/bandits') as Href} />;
+    return (
+      <>
+        <Stack.Screen options={screenOptions} />
+        <Redirect href={(safe ?? '/bandits') as Href} />
+      </>
+    );
   }
 
   /**
@@ -415,11 +439,18 @@ export default function Login() {
    * Staff (operator / admin) open `/login?forceAuth=1` to sign in with password or Google.
    */
   if (sessionReady && !authInitError && !user && !forceAuth && !emailSent) {
-    return <Redirect href={('/bandits' as Href)} />;
+    return (
+      <>
+        <Stack.Screen options={screenOptions} />
+        <Redirect href={('/bandits' as Href)} />
+      </>
+    );
   }
 
   return (
-    <ScrollView style={styles.container} contentContainerStyle={styles.scrollContent}>
+    <>
+      <Stack.Screen options={screenOptions} />
+      <ScrollView style={styles.container} contentContainerStyle={styles.scrollContent}>
         {/* Logo */}
         <View style={styles.logoContainer}>
           <Image
@@ -596,6 +627,7 @@ export default function Login() {
           </>
         )}
       </ScrollView>
+    </>
   );
 }
 
@@ -606,7 +638,7 @@ const styles = StyleSheet.create({
   },
   scrollContent: {
     paddingHorizontal: 20,
-    paddingTop: 60,
+    paddingTop: Platform.OS === 'web' ? 60 : 16,
     paddingBottom: 40,
   },
   loadingContainer: {

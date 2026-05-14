@@ -20,9 +20,13 @@ import { Database } from '@/lib/database.types';
 import { supabase } from '@/lib/supabase';
 import { trackEvent } from '@/lib/analytics';
 import {
-  enforceUniqueRecommendationImagesByEventId,
-  resolveStrictRecommendationImagesByEventId,
-} from '@/lib/recommendationImages';
+  fetchGooglePlacePhotoUrl,
+  isGooglePlacesDerivedPhotoUrl,
+  normalizeEventImageUri,
+} from '@/lib/placePhoto';
+import { pickCityGuideHeroUriByEventId } from '@/lib/eventVenueGallery';
+import { buildUserFacingVenueFallbackImage, claimVerifiedHeroPhotoUrl } from '@/lib/recommendationImages';
+import { repairDisplayText } from '@/lib/repairTextEncoding';
 
 type Bandit = Database['public']['Tables']['bandit']['Row'];
 type Event = Database['public']['Tables']['event']['Row'];
@@ -45,15 +49,33 @@ function RecommendationHeroImage({
   eventId: string;
   onInvalid: () => void;
 }) {
+  // One inline retry for transient mobile network blips before we surface a fallback image.
+  // expo-image fires `onError` for any load failure (DNS hiccup, slow 3G timeout, server 5xx);
+  // a permanent gray placeholder for an otherwise-valid Google Places URL is worse UX than retrying once.
+  const [retryAttempt, setRetryAttempt] = useState(0);
+  useEffect(() => {
+    setRetryAttempt(0);
+  }, [sourceUri]);
+  const effectiveUri =
+    retryAttempt > 0
+      ? `${sourceUri}${sourceUri.includes('?') ? '&' : '?'}__retry=${retryAttempt}`
+      : sourceUri;
   return (
     <ExpoImage
-      source={{ uri: sourceUri }}
+      source={{ uri: effectiveUri }}
+      cachePolicy="memory-disk"
       style={styles.recommendationImage}
       contentFit="cover"
       transition={120}
       accessibilityLabel={`recommendation-hero:${eventId}`}
       accessibilityRole="image"
-      onError={onInvalid}
+      onError={() => {
+        if (retryAttempt < 1) {
+          setRetryAttempt((n) => n + 1);
+          return;
+        }
+        onInvalid();
+      }}
     />
   );
 }
@@ -83,8 +105,8 @@ export default function CityGuideScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [likedEventIds, setLikedEventIds] = useState<Set<string>>(new Set());
   const [activeRecommendationIndex, setActiveRecommendationIndex] = useState(0);
-  const [resolvedRecommendationImageById, setResolvedRecommendationImageById] = useState<Record<string, string | null>>({});
   const [hiddenHeroEventIds, setHiddenHeroEventIds] = useState<Set<string>>(new Set());
+  const [placesFallbackHeroUriById, setPlacesFallbackHeroUriById] = useState<Record<string, string>>({});
   const recommendationScrollRef = useRef<ScrollView>(null);
 
   const refreshLikedIds = useCallback(async () => {
@@ -242,29 +264,60 @@ export default function CityGuideScreen() {
     Math.min(420, Math.round(recommendationsContainerWidth * 0.86)),
   );
   const recommendationGap = isDesktopWeb ? 20 : 14;
+  const cityGuideHeroUriById = useMemo(() => pickCityGuideHeroUriByEventId(filteredEvents), [filteredEvents]);
+
   useEffect(() => {
     let cancelled = false;
-    setResolvedRecommendationImageById({});
+    const syncedHeroById = pickCityGuideHeroUriByEventId(filteredEvents);
+    const needPlacesFallback = filteredEvents.filter((e) => !syncedHeroById[e.id]);
+
+    if (needPlacesFallback.length === 0) {
+      setPlacesFallbackHeroUriById({});
+      return () => {
+        cancelled = true;
+      };
+    }
+
     void (async () => {
-      const out = await resolveStrictRecommendationImagesByEventId(filteredEvents as any);
-      const uniqueOut = enforceUniqueRecommendationImagesByEventId(filteredEvents as any, out);
-      if (!cancelled) setResolvedRecommendationImageById(uniqueOut);
+      const fetched: Record<string, string> = {};
+      await Promise.all(
+        needPlacesFallback.map(async (e) => {
+          try {
+            const raw = await fetchGooglePlacePhotoUrl({
+              placeId: (e as any).google_place_id ?? null,
+              name: String(e.name ?? ''),
+              address: String(e.address ?? ''),
+              city: String(e.city ?? ''),
+              neighborhood: String(e.neighborhood ?? ''),
+            });
+            const uri = raw ? normalizeEventImageUri(raw) ?? raw : null;
+            if (!uri || !isGooglePlacesDerivedPhotoUrl(uri)) return;
+            const claimed = claimVerifiedHeroPhotoUrl(uri, {
+              eventId: e.id,
+              googlePlaceId: (e as any).google_place_id ?? null,
+            });
+            if (claimed) fetched[e.id] = claimed;
+          } catch {
+            /* ignore row */
+          }
+        }),
+      );
+
+      if (cancelled) return;
+
+      const nextById: Record<string, string> = {};
+      for (const row of filteredEvents) {
+        if (!syncedHeroById[row.id] && fetched[row.id]) {
+          nextById[row.id] = fetched[row.id];
+        }
+      }
+      setPlacesFallbackHeroUriById(nextById);
     })();
+
     return () => {
       cancelled = true;
     };
   }, [filteredEvents]);
-  useEffect(() => {
-    const missingHeroIds = filteredEvents
-      .map((e) => e.id)
-      .filter((id) => !resolvedRecommendationImageById[id]);
-    if (missingHeroIds.length > 0) {
-      console.warn('[CityGuide] recommendation hero hidden (unique pool exhausted)', {
-        banditId: effectiveBanditId,
-        eventIds: missingHeroIds,
-      });
-    }
-  }, [effectiveBanditId, filteredEvents, resolvedRecommendationImageById]);
 
   useEffect(() => {
     if (activeRecommendationIndex >= filteredEvents.length) {
@@ -349,10 +402,20 @@ export default function CityGuideScreen() {
   };
 
   const renderRecommendationCard = (event: Event, index: number) => {
-    const imageUri = resolvedRecommendationImageById[event.id] ?? null;
-    const showHero = Boolean(imageUri) && !hiddenHeroEventIds.has(event.id);
+    const fromGallery = cityGuideHeroUriById[event.id] ?? null;
+    const fromPlacesFallback = placesFallbackHeroUriById[event.id] ?? null;
+    const fallbackPlaceholder = buildUserFacingVenueFallbackImage(
+      event,
+      `city-guide-hero:${event.id}`,
+    );
+    const imageUri = hiddenHeroEventIds.has(event.id)
+      ? fallbackPlaceholder
+      : (fromGallery ?? fromPlacesFallback ?? fallbackPlaceholder);
+    const showHero = true;
     const locationLine = [event.neighborhood, event.city].filter(Boolean).join(' · ') || 'Athens';
-    const vibeLine = (event.description?.trim() || 'Curated local pick from your banDit guide.').slice(0, 110);
+    const vibeLine = repairDisplayText(
+      (event.description?.trim() || 'Curated local pick from your banDit guide.').slice(0, 110),
+    );
     return (
       <Pressable
         key={event.id}
@@ -372,13 +435,47 @@ export default function CityGuideScreen() {
           <RecommendationHeroImage
             sourceUri={imageUri as string}
             eventId={event.id}
-            onInvalid={() =>
+            onInvalid={() => {
               setHiddenHeroEventIds((prev) => {
                 const next = new Set(prev);
                 next.add(event.id);
                 return next;
-              })
-            }
+              });
+              // Best-effort re-resolve: if the stored Places photo URL has gone stale,
+              // ask Google for a fresh photo resource by `google_place_id` so future renders
+              // can use a real venue photo (still shows the category fallback meanwhile).
+              const placeId = String((event as any).google_place_id ?? '').trim();
+              if (!placeId) return;
+              void (async () => {
+                try {
+                  const fresh = await fetchGooglePlacePhotoUrl({
+                    placeId,
+                    name: String(event.name ?? ''),
+                    address: String(event.address ?? ''),
+                    city: String(event.city ?? ''),
+                    neighborhood: String(event.neighborhood ?? ''),
+                  });
+                  const uri = fresh ? normalizeEventImageUri(fresh) ?? fresh : null;
+                  if (!uri || !isGooglePlacesDerivedPhotoUrl(uri)) return;
+                  const claimed = claimVerifiedHeroPhotoUrl(uri, {
+                    eventId: event.id,
+                    googlePlaceId: placeId,
+                  });
+                  if (!claimed) return;
+                  setPlacesFallbackHeroUriById((prev) =>
+                    prev[event.id] === claimed ? prev : { ...prev, [event.id]: claimed },
+                  );
+                  setHiddenHeroEventIds((prev) => {
+                    if (!prev.has(event.id)) return prev;
+                    const next = new Set(prev);
+                    next.delete(event.id);
+                    return next;
+                  });
+                } catch {
+                  /* ignore — category fallback already rendered */
+                }
+              })();
+            }}
           />
         ) : null}
         <View style={styles.recommendationBody}>
@@ -389,7 +486,7 @@ export default function CityGuideScreen() {
             </Text>
           </View>
           <Text style={styles.recommendationTitle} numberOfLines={2}>
-            {event.name}
+            {repairDisplayText(event.name || '')}
           </Text>
           <Text style={styles.recommendationVibe} numberOfLines={2}>
             {vibeLine}

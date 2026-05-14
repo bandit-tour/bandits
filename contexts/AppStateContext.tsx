@@ -65,19 +65,18 @@ type AppStateContextType = {
 
 const AppStateContext = createContext<AppStateContextType | undefined>(undefined);
 
+/**
+ * Mirror of the equivalent helper in `app/(tabs)/notifications.tsx`. We keep
+ * the function around for symmetry but always return `false`: Ask Me /
+ * Local Friend operator-bound rows now count toward the inbox badge and
+ * appear in the Notifications tab (just like bandiTEAM reports).
+ */
 function isOperatorInboundRequestRowForDualRoleUser(
-  n: NotificationLite,
-  currentUserId: string,
-  operatorUserId: string,
+  _n: NotificationLite,
+  _currentUserId: string,
+  _operatorUserId: string,
 ): boolean {
-  if (!currentUserId || !operatorUserId) return false;
-  if (currentUserId.toLowerCase() !== operatorUserId.toLowerCase()) return false;
-  const t = String(n.type || '').trim();
-  const rt = String(n.reference_type || '').trim();
-  return (
-    (t === 'bandit_question' && rt === 'bandit_question_request') ||
-    (t === 'local_friend' && rt === 'local_friend_request')
-  );
+  return false;
 }
 
 const ASK_ME_GUEST_BANDIT_REPLY_REFS = new Set(['operator_reply', 'operator_reply_bandit_question']);
@@ -264,8 +263,14 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
     async (id: string) => {
       const nid = String(id || '').trim();
       if (!nid) return;
-      await supabase.from('notifications').update({ is_read: true }).eq('id', nid);
-      void refreshNotifications();
+      setUnreadCount((c) => Math.max(0, c - 1));
+      try {
+        await supabase.from('notifications').update({ is_read: true }).eq('id', nid);
+      } catch {
+        await refreshNotifications();
+        return;
+      }
+      await refreshNotifications();
     },
     [refreshNotifications],
   );
@@ -315,8 +320,14 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     void refreshIdentity();
     void refreshNotifications();
-    const notifTimer = setInterval(() => void refreshNotifications(), 10000);
-    const identityTimer = setInterval(() => void refreshIdentity(), 15000);
+    // Polling cadence relaxed from 10 s/15 s to 60 s/120 s. The previous values
+    // generated a network round-trip and a provider re-render every 10 seconds
+    // — which cascaded into every screen consuming `useAppState()` (the
+    // entire tabs shell). DeviceEventEmitter / auth-state-change still trigger
+    // immediate refreshes for user-driven mutations, so the perceived latency
+    // for "your new notification shows up" is unchanged.
+    const notifTimer = setInterval(() => void refreshNotifications(), 60000);
+    const identityTimer = setInterval(() => void refreshIdentity(), 120000);
     const auth = supabase.auth.onAuthStateChange((event) => {
       if (event === 'SIGNED_OUT') {
         lastStableUserRef.current = null;

@@ -1,53 +1,82 @@
 import { useMapEvents as useMapEventsHook } from '@/hooks/useMapEvents';
+import { ATHENS_CENTER, boundsFromMapEvents, eventMapCoordinates } from '@/lib/mapCoordinates';
 import { Database } from '@/lib/database.types';
 import { useLocalSearchParams } from 'expo-router';
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { repairDisplayText } from '@/lib/repairTextEncoding';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import EventList, { EventListRef } from './EventList';
 
 type Event = Database['public']['Tables']['event']['Row'];
 
-function boundsFromEvents(
-  events: Event[],
-  initialRegion: {
-    latitude: number;
-    longitude: number;
-    latitudeDelta: number;
-    longitudeDelta: number;
-  },
-): { center: [number, number]; zoom: number } {
-  const valid = events.filter(
-    (e) =>
-      e.location_lat != null &&
-      e.location_lng != null &&
-      typeof e.location_lat === 'number' &&
-      typeof e.location_lng === 'number',
+/**
+ * Branded placeholder used when a bandit has no events with coordinates yet.
+ * Keeps every mini-map thumbnail visually consistent (same size, same rounding,
+ * same brand tones) so we never expose raw, empty OSM tiles to the user.
+ */
+function MiniMapPlaceholder() {
+  return (
+    <View style={styles.miniPlaceholder} accessibilityLabel="City map preview">
+      <div
+        style={{
+          width: '100%',
+          height: '100%',
+          background:
+            'linear-gradient(135deg, #FFD9A8 0%, #FFB475 35%, #FF7E5F 70%, #5B6EE1 100%)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          position: 'relative',
+        }}
+      >
+        <div
+          style={{
+            position: 'absolute',
+            top: 14,
+            left: 18,
+            width: 8,
+            height: 8,
+            borderRadius: '50%',
+            backgroundColor: '#FFFFFF',
+            boxShadow: '0 0 0 2px #C0392B inset, 0 1px 2px rgba(0,0,0,0.25)',
+          }}
+        />
+        <div
+          style={{
+            position: 'absolute',
+            top: 36,
+            right: 20,
+            width: 8,
+            height: 8,
+            borderRadius: '50%',
+            backgroundColor: '#FFFFFF',
+            boxShadow: '0 0 0 2px #27AE60 inset, 0 1px 2px rgba(0,0,0,0.25)',
+          }}
+        />
+        <div
+          style={{
+            position: 'absolute',
+            bottom: 16,
+            left: 26,
+            width: 8,
+            height: 8,
+            borderRadius: '50%',
+            backgroundColor: '#FFFFFF',
+            boxShadow: '0 0 0 2px #2980B9 inset, 0 1px 2px rgba(0,0,0,0.25)',
+          }}
+        />
+        <div
+          style={{
+            fontSize: 22,
+            color: '#FFFFFF',
+            textShadow: '0 1px 2px rgba(0,0,0,0.35)',
+          }}
+        >
+          📍
+        </div>
+      </div>
+    </View>
   );
-  if (valid.length === 0) {
-    return {
-      center: [initialRegion.latitude, initialRegion.longitude],
-      zoom: 13,
-    };
-  }
-  const lats = valid.map((e) => e.location_lat as number);
-  const lngs = valid.map((e) => e.location_lng as number);
-  const minLat = Math.min(...lats);
-  const maxLat = Math.max(...lats);
-  const minLng = Math.min(...lngs);
-  const maxLng = Math.max(...lngs);
-  const latSpan = Math.max(maxLat - minLat, 0.0001);
-  const paddedLatSpan = latSpan * 1.2;
-  let zoom = 14;
-  if (paddedLatSpan > 0.1) zoom = 10;
-  else if (paddedLatSpan > 0.05) zoom = 11;
-  else if (paddedLatSpan > 0.02) zoom = 12;
-  else if (paddedLatSpan > 0.01) zoom = 13;
-  else if (paddedLatSpan > 0.005) zoom = 14;
-  else zoom = 15;
-  if (valid.length === 1) zoom = Math.min(15, zoom + 1);
-  const centerLat = (minLat + maxLat) / 2;
-  const centerLng = (minLng + maxLng) / 2;
-  return { center: [centerLat, centerLng], zoom };
 }
 
 // Dynamic imports for Leaflet (client-side only)
@@ -82,18 +111,20 @@ export default function LeafletMapView({
   banditId
 }: MapViewProps) {
   const eventListRef = useRef<EventListRef>(null);
-  const { banditId: routeBanditId } = useLocalSearchParams();
   const [leafletLoaded, setLeafletLoaded] = useState(false);
   const [mapInstance, setMapInstance] = useState<any>(null);
   const [activeEventIndex, setActiveEventIndex] = useState(0);
+  const { banditId: routeBanditId } = useLocalSearchParams();
+  const routeBanditIdValue = Array.isArray(routeBanditId) ? routeBanditId[0] : routeBanditId;
+  const scopedBanditId = banditId ?? routeBanditIdValue;
 
   /** Same hook + shared `getEvents` path as native (`LeafletMapView.native.tsx`). */
   const { events, loading, error, banditId: mapBanditId } = useMapEventsHook(
     undefined,
-    banditId != null ? { banditId } : undefined,
+    scopedBanditId ? { banditId: scopedBanditId } : undefined,
   );
 
-  const activeBanditId = mapBanditId || routeBanditId;
+  const activeBanditId = mapBanditId || scopedBanditId;
 
   // Create a handler that scrolls to the event instead of navigating
   const handleMarkerPress = (event: any) => {
@@ -102,6 +133,21 @@ export default function LeafletMapView({
     eventListRef.current?.scrollToEvent(event.id);
   };
 
+  const focusMapOnEvent = useCallback(
+    (event: Event) => {
+      const idx = events.findIndex((e) => e.id === event.id);
+      if (idx >= 0) setActiveEventIndex(idx);
+      const coords = eventMapCoordinates(event);
+      if (mapInstance && coords) {
+        mapInstance.flyTo([coords.lat, coords.lng], Math.max(mapInstance.getZoom(), 15), {
+          animate: true,
+          duration: 0.45,
+        });
+      }
+    },
+    [events, mapInstance],
+  );
+
   const focusEventByStep = (dir: -1 | 1) => {
     if (events.length === 0) return;
     const next = Math.max(0, Math.min(events.length - 1, activeEventIndex + dir));
@@ -109,8 +155,9 @@ export default function LeafletMapView({
     const nextEvent = events[next];
     if (!nextEvent) return;
     eventListRef.current?.scrollToEvent(nextEvent.id);
-    if (mapInstance && nextEvent.location_lat && nextEvent.location_lng) {
-      mapInstance.flyTo([nextEvent.location_lat, nextEvent.location_lng], mapInstance.getZoom(), {
+    const coords = eventMapCoordinates(nextEvent);
+    if (mapInstance && coords) {
+      mapInstance.flyTo([coords.lat, coords.lng], mapInstance.getZoom(), {
         animate: true,
         duration: 0.45,
       });
@@ -218,7 +265,7 @@ export default function LeafletMapView({
     const m = new Map<string, string>();
     let idx = 0;
     for (const e of events) {
-      if (!e.location_lat || !e.location_lng) continue;
+      if (!eventMapCoordinates(e)) continue;
       if (!m.has(e.id)) {
         m.set(e.id, markerColors[idx % markerColors.length]);
         idx += 1;
@@ -230,8 +277,9 @@ export default function LeafletMapView({
   const createCustomIcon = (eventId: string) => {
     if (!L) return null;
     const color = eventColorById.get(eventId) ?? '#C0392B';
-    const size = miniMode ? 10 : 20;
-    const borderWidth = miniMode ? 1 : 2;
+    /** Mini-mode markers are larger and bolder so the dots are clearly visible at 80×80. */
+    const size = miniMode ? 14 : 20;
+    const borderWidth = miniMode ? 2 : 2;
 
     return L.divIcon({
       html: `
@@ -241,19 +289,33 @@ export default function LeafletMapView({
           background-color: ${color};
           border: ${borderWidth}px solid white;
           border-radius: 50%;
-          box-shadow: 0 2px 6px rgba(0,0,0,0.3);
+          box-shadow: 0 2px 6px rgba(0,0,0,0.45);
         "></div>
       `,
       className: 'custom-marker',
       iconSize: [size, size],
-      iconAnchor: [size/2, size/2],
+      iconAnchor: [size / 2, size / 2],
     });
   };
 
-  const mapBounds = useMemo(
-    () => boundsFromEvents(events, initialRegion),
-    [events, initialRegion.latitude, initialRegion.longitude],
+  /**
+   * Detect "no mappable events" so the mini-mode thumbnail can render a
+   * branded placeholder instead of empty OSM tiles. Without this guard, bandits
+   * with no event coordinates show up as a confusing "pale blue lines" preview.
+   */
+  const hasMappableEvents = useMemo(
+    () => events.some((e) => eventMapCoordinates(e) != null),
+    [events],
   );
+
+  const mapBounds = useMemo(() => {
+    const { center, zoom } = boundsFromMapEvents(
+      events,
+      initialRegion.latitude ? initialRegion : ATHENS_CENTER,
+      miniMode,
+    );
+    return { center: [center.latitude, center.longitude] as [number, number], zoom };
+  }, [events, initialRegion.latitude, initialRegion.longitude, miniMode]);
 
   useEffect(() => {
     if (!mapInstance || miniMode) return;
@@ -273,14 +335,19 @@ export default function LeafletMapView({
     };
   }, [mapInstance, miniMode, onRegionChange]);
 
+  /**
+   * Mini-mode rendering policy (every bandit thumbnail looks consistent):
+   *  - While events are loading OR Leaflet isn't ready → show the branded placeholder.
+   *  - If the bandit has zero mappable events → show the branded placeholder.
+   *  - Only render the actual Leaflet preview when we are sure markers will appear.
+   * This eliminates the "pale blue lines / cropped OSM tiles" case the user
+   * reported on Neo's card and removes any cold-start flicker.
+   */
+  if (miniMode && (loading || !leafletLoaded || !hasMappableEvents)) {
+    return <MiniMapPlaceholder />;
+  }
+
   if (!leafletLoaded) {
-    if (miniMode) {
-      return (
-        <View style={[styles.miniMapContainer, styles.miniLoadingBox]}>
-          <div style={{ textAlign: 'center', fontSize: 11, color: '#888' }}>…</div>
-        </View>
-      );
-    }
     return (
       <View style={styles.container}>
         <View style={styles.mapContainer}>
@@ -334,14 +401,15 @@ export default function LeafletMapView({
 
           {/* Event markers */}
           {events.map((event) => {
-            if (!event.location_lat || !event.location_lng) {
+            const coords = eventMapCoordinates(event);
+            if (!coords) {
               return null;
             }
 
             return (
               <Marker
                 key={event.id}
-                position={[event.location_lat, event.location_lng]}
+                position={[coords.lat, coords.lng]}
                 icon={createCustomIcon(event.id)}
                 eventHandlers={miniMode ? {} : {
                   click: () => handleMarkerPress(event),
@@ -350,10 +418,10 @@ export default function LeafletMapView({
                 {!miniMode && (
                   <Popup>
                     <div style={{ minWidth: '200px' }}>
-                      <h3 style={{ margin: '0 0 8px 0', fontSize: '16px' }}>{event.name}</h3>
+                      <h3 style={{ margin: '0 0 8px 0', fontSize: '16px' }}>{repairDisplayText(event.name || '')}</h3>
                       {event.address && (
                         <p style={{ margin: '0 0 4px 0', fontSize: '12px', color: '#666' }}>
-                          {event.address}
+                          {repairDisplayText(event.address || '')}
                         </p>
                       )}
                       {event.genre && (
@@ -412,6 +480,7 @@ export default function LeafletMapView({
             showButton={false}
             imageHeight={154}
             contentContainerStyle={styles.eventsContainer}
+            onEventPress={focusMapOnEvent}
           />
         </View>
       )}
@@ -445,6 +514,13 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     minHeight: 48,
+  },
+  miniPlaceholder: {
+    flex: 1,
+    width: '100%',
+    height: '100%',
+    overflow: 'hidden',
+    backgroundColor: '#FFB475',
   },
   loadingContainer: {
     flex: 1,

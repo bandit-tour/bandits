@@ -1,10 +1,9 @@
 import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
   Keyboard,
-  KeyboardAvoidingView,
   Modal,
   Platform,
   Pressable,
@@ -16,10 +15,15 @@ import {
   useWindowDimensions,
   View,
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { ScrollView as GHScrollView } from 'react-native-gesture-handler';
 
 import { getBanditById, getBanditTags, submitBanditQuestion, toggleBanditLike } from '@/app/services/bandits';
 import { getBanditEventCategories, getEvents } from '@/app/services/events';
 import { formatAskMeModalSubtitle } from '@/lib/askMeMessageFormat';
+import { ASK_ME_SUCCESS_MESSAGE, userFacingMessagingError } from '@/lib/userFacingMessagingError';
+import { useKeyboardBottomInset } from '@/lib/useKeyboardBottomInset';
+import { useAppBackScreenOptions } from '@/hooks/useAppBackScreenOptions';
 import { getBanditReviews } from '@/app/services/reviews';
 import { supabase } from '@/lib/supabase';
 import { ensureAnonymousSession } from '@/lib/pilotSession';
@@ -33,6 +37,7 @@ import TagChip from '@/components/TagChip';
 
 import { TAG_EMOJI_MAP } from '@/constants/tagNameToEmoji';
 import { Database } from '@/lib/database.types';
+import { repairDisplayText } from '@/lib/repairTextEncoding';
 import { buildEventListImagePlan } from '@/lib/eventListImagePlan';
 import {
   enforceUniqueRecommendationImagesByEventId,
@@ -57,8 +62,8 @@ type EventCategory = {
 
 type EventItem = Database['public']['Tables']['event']['Row'];
 
-/** Use RN ScrollView across platforms for consistent responder behavior. */
-const ProfileScrollView = RNScrollView;
+/** GH ScrollView on native so category chip taps win over scroll gesture deferral. */
+const ProfileScrollView = Platform.OS === 'web' ? RNScrollView : GHScrollView;
 
 const FALLBACK_HANDLES = [
   'athens.nights',
@@ -89,9 +94,15 @@ function buildFallbackReviews(banditId: string, banditName: string): DisplayRevi
 
 export default function BanditScreen() {
   const router = useRouter();
+  const screenOptions = useAppBackScreenOptions({
+    title: '',
+    fallback: '/bandits',
+  });
   const { id } = useLocalSearchParams();
   const { width } = useWindowDimensions();
   const isDesktopWeb = Platform.OS === 'web' && width >= 1100;
+  const insets = useSafeAreaInsets();
+  const keyboardInset = useKeyboardBottomInset();
 
   const [bandit, setBandit] = useState<Bandit | null>(null);
   const [tags, setTags] = useState<string[]>([]);
@@ -99,7 +110,8 @@ export default function BanditScreen() {
   const [categories, setCategories] = useState<EventCategory[]>([]);
   const [selectedGenre, setSelectedGenre] = useState<string | null>(null);
   const [genreEvents, setGenreEvents] = useState<EventItem[]>([]);
-  const [genreRecommendationImageById, setGenreRecommendationImageById] = useState<Record<string, string | null>>({});
+  const [genreRecommendationImageById, setGenreRecommendationImageById] = useState<Record<string, string>>({});
+  const [genreRecoHeroReady, setGenreRecoHeroReady] = useState(true);
   const [loadingGenreEvents, setLoadingGenreEvents] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -115,17 +127,34 @@ export default function BanditScreen() {
 
   useEffect(() => {
     if (!id) return;
+    const banditIdStr = id as string;
 
     const fetchBanditData = async () => {
       try {
         setLoading(true);
 
-        const { data: { user } } = await supabase.auth.getUser();
-        const uid = user?.id ?? null;
+        // Resolve user identity once via cached helper (avoids serialized
+        // auth lock latency).
+        const cachedUser = await import('@/lib/authUserCache').then((m) => m.getCachedAuthUser());
+        const uid = cachedUser?.id ?? null;
         setLikeUserId(uid);
 
-        // Bandit
-        const banditData = await getBanditById(id as string, uid);
+        // Kick off all the independent reads in parallel — the previous flow
+        // awaited bandit, tags, categories, reviews sequentially. We need
+        // `banditData` for analytics + fallback reviews, but tags/categories/
+        // reviews can race alongside it.
+        const banditPromise = getBanditById(banditIdStr, uid);
+        const tagsPromise: Promise<any[]> = getBanditTags(banditIdStr).catch(() => []);
+        const categoriesPromise: Promise<any[]> = getBanditEventCategories(banditIdStr).catch(() => []);
+        const reviewsPromise: Promise<any[]> = getBanditReviews(banditIdStr).catch(() => []);
+
+        const [banditData, tagData, catData, raw] = await Promise.all([
+          banditPromise,
+          tagsPromise,
+          categoriesPromise,
+          reviewsPromise,
+        ]);
+
         if (!banditData) throw new Error('banDit not found');
         setBandit(banditData);
         void trackEvent({
@@ -134,42 +163,22 @@ export default function BanditScreen() {
           referenceId: banditData.id,
           onceKey: `bandit_profile_opened:${banditData.id}`,
         });
+        setTags(tagData ?? []);
+        setCategories(catData ?? []);
 
-        // Vibes (how it feels)
-        try {
-          const tagData = await getBanditTags(id as string);
-          setTags(tagData);
-        } catch {
-          setTags([]);
-        }
-
-        // Category chips / counts for inline expansion.
-        try {
-          const catData = await getBanditEventCategories(id as string);
-          setCategories(catData);
-        } catch {
-          setCategories([]);
-        }
-
-        // Reviews (limit to 3–5, fallback to underground-style samples)
-        try {
-          const raw = await getBanditReviews(id as string);
-          const mapped: DisplayReview[] = (raw || []).map((r: any) => ({
-            user_id: r.user_id ?? 'anon',
-            review: r.review ?? '',
-            rating: typeof r.rating === 'number' ? r.rating : 5,
-            created_at: r.created_at,
-            user_name: r.user_name ?? 'local wanderer',
-          }));
-          const limited = mapped.slice(0, 5);
-          setReviews(
-            limited.length > 0
-              ? limited
-              : buildFallbackReviews(banditData.id, banditData.name).slice(0, 3),
-          );
-        } catch {
-          setReviews(buildFallbackReviews(banditData.id, banditData.name).slice(0, 3));
-        }
+        const mapped: DisplayReview[] = (raw || []).map((r: any) => ({
+          user_id: r.user_id ?? 'anon',
+          review: r.review ?? '',
+          rating: typeof r.rating === 'number' ? r.rating : 5,
+          created_at: r.created_at,
+          user_name: r.user_name ?? 'local wanderer',
+        }));
+        const limited = mapped.slice(0, 5);
+        setReviews(
+          limited.length > 0
+            ? limited
+            : buildFallbackReviews(banditData.id, banditData.name).slice(0, 3),
+        );
       } catch (err) {
         setError(err instanceof Error ? err.message : 'Failed to fetch bandit');
       } finally {
@@ -197,15 +206,135 @@ export default function BanditScreen() {
 
   useEffect(() => {
     let cancelled = false;
+    if (genreEvents.length === 0) {
+      setGenreRecoHeroReady(true);
+      setGenreRecommendationImageById({});
+      return;
+    }
+    setGenreRecoHeroReady(false);
     void (async () => {
       const out = await resolveStrictRecommendationImagesByEventId(genreEvents as any);
       const uniqueOut = enforceUniqueRecommendationImagesByEventId(genreEvents as any, out);
-      if (!cancelled) setGenreRecommendationImageById(uniqueOut);
+      if (!cancelled) {
+        setGenreRecommendationImageById(uniqueOut);
+        setGenreRecoHeroReady(true);
+      }
     })();
     return () => {
       cancelled = true;
     };
   }, [genreEvents]);
+
+  const banditIdParam = typeof id === 'string' ? id : Array.isArray(id) ? id[0] : '';
+
+  const handleCategoryPress = useCallback(
+    async (genre: string) => {
+      const bid = bandit?.id ?? banditIdParam;
+      if (!bid) return;
+      // Tap same chip to collapse and keep user on profile.
+      if (selectedGenre === genre) {
+        setSelectedGenre(null);
+        setGenreEvents([]);
+        return;
+      }
+      setSelectedGenre(genre);
+      setLoadingGenreEvents(true);
+      try {
+        const events = await getEvents({ banditId: bid, genre });
+        setGenreEvents(events);
+      } catch {
+        setGenreEvents([]);
+      } finally {
+        setLoadingGenreEvents(false);
+      }
+    },
+    [bandit?.id, banditIdParam, selectedGenre],
+  );
+
+  const handleBanditLike = useCallback(
+    async (banditId: string, currentLikeStatus: boolean) => {
+      setBandit((prev) => (prev ? { ...prev, is_liked: !currentLikeStatus } : prev));
+      try {
+        await toggleBanditLike(banditId, currentLikeStatus, likeUserId);
+      } catch (e) {
+        setBandit((prev) => (prev ? { ...prev, is_liked: currentLikeStatus } : prev));
+        const msg = e instanceof Error ? e.message : '';
+        Alert.alert('Follow unavailable', msg || 'Could not update follow state.');
+      }
+    },
+    [likeUserId],
+  );
+
+  const onHeaderCategoryPress = useCallback(
+    (genre: string) => {
+      void handleCategoryPress(genre);
+    },
+    [handleCategoryPress],
+  );
+
+  const categoryExpandBelow = useMemo(() => {
+    if (!selectedGenre || !bandit) return null;
+    return (
+      <View style={styles.inlineCategorySection} pointerEvents="box-none">
+        <View style={styles.inlineCategoryHeader}>
+          <Text style={styles.inlineCategoryTitle}>{selectedGenre} picks</Text>
+          <Pressable
+            onPress={() => {
+              setSelectedGenre(null);
+              setGenreEvents([]);
+            }}
+            hitSlop={6}
+          >
+            <Text style={styles.inlineCategoryCollapse}>Hide</Text>
+          </Pressable>
+        </View>
+        {loadingGenreEvents ? (
+          <ActivityIndicator size="small" />
+        ) : genreEvents.length === 0 ? (
+          <Text style={styles.inlineCategoryEmpty}>No spots in this category yet.</Text>
+        ) : (
+          <View style={styles.inlineCategoryGrid}>
+            {(() => {
+              const plan = buildEventListImagePlan(genreEvents);
+              return genreEvents.map((event) => (
+                <View
+                  key={event.id}
+                  style={[styles.inlineSpotCardWrap, isDesktopWeb && styles.inlineSpotCardWrapDesktop]}
+                >
+                  <EventCard
+                    event={event}
+                    onLike={() => undefined}
+                    isLiked={false}
+                    showButton={false}
+                    variant="horizontal"
+                    fillHorizontalCell
+                    showRecommendations
+                    prioritizeCardPress
+                    banditId={bandit.id}
+                    listImageScope={plan.get(event.id)}
+                    resolvedRecommendationImageUri={genreRecommendationImageById[event.id] ?? null}
+                    strictRecommendationImagePolicy
+                    onPress={() =>
+                      router.push(`/spot/${event.id}?banditId=${encodeURIComponent(bandit.id)}` as any)
+                    }
+                  />
+                </View>
+              ));
+            })()}
+          </View>
+        )}
+      </View>
+    );
+  }, [
+    bandit,
+    genreEvents,
+    genreRecommendationImageById,
+    isDesktopWeb,
+    loadingGenreEvents,
+    router,
+    selectedGenre,
+  ]);
+
 
   if (loading) {
     return (
@@ -243,36 +372,15 @@ export default function BanditScreen() {
       setSubmitSuccess(true);
       setAskText('');
     } catch (e) {
-      const msg = e instanceof Error ? e.message : '';
-      setSubmitError(msg.trim() || 'Could not send your question. Please try again.');
+      setSubmitError(userFacingMessagingError(e).message);
     } finally {
       setSubmitting(false);
     }
   };
 
-  const handleCategoryPress = async (genre: string) => {
-    if (!bandit) return;
-    // Tap same chip to collapse and keep user on profile.
-    if (selectedGenre === genre) {
-      setSelectedGenre(null);
-      setGenreEvents([]);
-      return;
-    }
-    setSelectedGenre(genre);
-    setLoadingGenreEvents(true);
-    try {
-      const events = await getEvents({ banditId: bandit.id, genre });
-      setGenreEvents(events);
-    } catch {
-      setGenreEvents([]);
-    } finally {
-      setLoadingGenreEvents(false);
-    }
-  };
-
   return (
     <>
-      <Stack.Screen options={{ headerShown: true, title: '', headerBackTitle: 'Back' }} />
+      <Stack.Screen options={screenOptions} />
 
       <ProfileScrollView
         style={styles.container}
@@ -283,83 +391,20 @@ export default function BanditScreen() {
         {...(Platform.OS !== 'web'
           ? {
               keyboardShouldPersistTaps: 'always' as const,
-              canCancelContentTouches: false,
             }
           : {})}
       >
-        {/* HEADER + CATEGORIES */}
+        {/* HEADER + CATEGORIES + inline accordion under chips */}
         <BanditHeader
           bandit={bandit}
           categories={categories}
           selectedGenre={selectedGenre}
           variant="detail"
           showActionButtons
-          onCategoryPress={(genre) => {
-            void handleCategoryPress(genre);
-          }}
-          onLike={async (banditId, currentLikeStatus) => {
-            setBandit((prev) => (prev ? { ...prev, is_liked: !currentLikeStatus } : prev));
-            try {
-              await toggleBanditLike(banditId, currentLikeStatus, likeUserId);
-            } catch (e) {
-              setBandit((prev) => (prev ? { ...prev, is_liked: currentLikeStatus } : prev));
-              const msg = e instanceof Error ? e.message : '';
-              Alert.alert('Follow unavailable', msg || 'Could not update follow state.');
-            }
-          }}
+          onCategoryPress={onHeaderCategoryPress}
+          onLike={handleBanditLike}
+          categoryExpandBelow={categoryExpandBelow}
         />
-
-        {selectedGenre ? (
-          <View style={styles.inlineCategorySection}>
-            <View style={styles.inlineCategoryHeader}>
-              <Text style={styles.inlineCategoryTitle}>{selectedGenre} picks</Text>
-              <Pressable
-                onPress={() => {
-                  setSelectedGenre(null);
-                  setGenreEvents([]);
-                }}
-                hitSlop={6}
-              >
-                <Text style={styles.inlineCategoryCollapse}>Hide</Text>
-              </Pressable>
-            </View>
-            {loadingGenreEvents ? (
-              <ActivityIndicator size="small" />
-            ) : genreEvents.length === 0 ? (
-              <Text style={styles.inlineCategoryEmpty}>No spots in this category yet.</Text>
-            ) : (
-              <View style={styles.inlineCategoryGrid}>
-                {(() => {
-                  const plan = buildEventListImagePlan(genreEvents);
-                  return genreEvents.map((event) => (
-                    <View
-                      key={event.id}
-                      style={[styles.inlineSpotCardWrap, isDesktopWeb && styles.inlineSpotCardWrapDesktop]}
-                    >
-                      <EventCard
-                        event={event}
-                        onLike={() => undefined}
-                        isLiked={false}
-                        showButton={false}
-                        variant="horizontal"
-                        fillHorizontalCell
-                        showRecommendations
-                        prioritizeCardPress
-                        banditId={bandit.id}
-                        listImageScope={plan.get(event.id)}
-                        resolvedRecommendationImageUri={genreRecommendationImageById[event.id] ?? null}
-                        strictRecommendationImagePolicy
-                        onPress={() =>
-                          router.push(`/spot/${event.id}?banditId=${encodeURIComponent(bandit.id)}` as any)
-                        }
-                      />
-                    </View>
-                  ));
-                })()}
-              </View>
-            )}
-          </View>
-        ) : null}
 
         <View style={[styles.profileBodyGrid, isDesktopWeb && styles.profileBodyGridDesktop]}>
           <View style={styles.profileMainCol}>
@@ -401,7 +446,7 @@ export default function BanditScreen() {
                   .filter(Boolean);
                 return lines.map((line, i) => (
                   <Text key={i} style={styles.whyFollowBullet}>
-                    {line.startsWith('•') ? `${line}` : `• ${line}`}
+                    {line.startsWith('•') ? repairDisplayText(line) : `• ${repairDisplayText(line)}`}
                   </Text>
                 ));
               })()}
@@ -440,16 +485,16 @@ export default function BanditScreen() {
         visible={askOpen}
         transparent
         animationType="slide"
+        statusBarTranslucent
         onRequestClose={() => {
           Keyboard.dismiss();
           setAskOpen(false);
         }}
       >
-        <KeyboardAvoidingView
-          style={styles.askModalRoot}
-          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-          keyboardVerticalOffset={Platform.OS === 'ios' ? 8 : 0}
-        >
+        {/**
+         * Bottom sheet: title scrolls; input + Send share one compose block lifted by keyboard inset.
+         */}
+        <View style={styles.askModalRoot}>
           <View style={styles.askOverlay}>
             <Pressable
               style={StyleSheet.absoluteFill}
@@ -459,57 +504,69 @@ export default function BanditScreen() {
               }}
               accessibilityLabel="Dismiss"
             />
-            <View style={styles.askCard}>
+            <View
+              style={[
+                styles.askCard,
+                {
+                  paddingBottom: Math.max(insets.bottom, 12) + keyboardInset,
+                },
+              ]}
+            >
               <RNScrollView
                 keyboardShouldPersistTaps="handled"
+                keyboardDismissMode={Platform.OS === 'ios' ? 'interactive' : 'on-drag'}
                 showsVerticalScrollIndicator={false}
                 contentContainerStyle={styles.askScrollInner}
+                style={styles.askScroll}
               >
                 <Text style={styles.askTitle}>{`Ask ${bandit.name}`}</Text>
                 <Text style={styles.askSubtitle}>
                   {`Ask anything about the city, spots, or vibes. ${bandit.name} gets your question — you’ll see your message in Chat, and replies there too.`}
                 </Text>
-                <TextInput
-                  style={styles.askInput}
-                  multiline
-                  placeholder="Type your question..."
-                  placeholderTextColor="#999"
-                  value={askText}
-                  onChangeText={setAskText}
-                />
                 {submitError && (
                   <Text style={styles.askError}>{submitError}</Text>
                 )}
                 {!!askNotificationsHint && <Text style={styles.askHint}>{askNotificationsHint}</Text>}
                 {submitSuccess && (
-                  <Text style={styles.askSuccess}>Your local banDit will reply soon.</Text>
+                  <Text style={styles.askSuccess}>{ASK_ME_SUCCESS_MESSAGE}</Text>
                 )}
-                <View style={styles.askActions}>
-                  <TouchableOpacity
-                    onPress={() => {
-                      Keyboard.dismiss();
-                      setAskOpen(false);
-                    }}
-                  >
-                    <Text style={styles.askCancel}>Close</Text>
-                  </TouchableOpacity>
-                  <TouchableOpacity
-                    onPress={handleAskSubmit}
-                    disabled={submitting || !askText.trim()}
-                    style={[
-                      styles.askSubmitButton,
-                      (submitting || !askText.trim()) && styles.askSubmitButtonDisabled,
-                    ]}
-                  >
-                    <Text style={styles.askSubmitText}>
-                      {submitting ? 'Sending…' : 'Send'}
-                    </Text>
-                  </TouchableOpacity>
-                </View>
               </RNScrollView>
+
+              <TextInput
+                style={styles.askInput}
+                multiline
+                placeholder="Type your question..."
+                placeholderTextColor="#999"
+                value={askText}
+                onChangeText={setAskText}
+              />
+
+              <View style={styles.askActions}>
+                <TouchableOpacity
+                  onPress={() => {
+                    Keyboard.dismiss();
+                    setAskOpen(false);
+                  }}
+                  hitSlop={8}
+                >
+                  <Text style={styles.askCancel}>Close</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  onPress={handleAskSubmit}
+                  disabled={submitting || !askText.trim()}
+                  style={[
+                    styles.askSubmitButton,
+                    (submitting || !askText.trim()) && styles.askSubmitButtonDisabled,
+                  ]}
+                >
+                  <Text style={styles.askSubmitText}>
+                    {submitting ? 'Sending…' : 'Send'}
+                  </Text>
+                </TouchableOpacity>
+              </View>
             </View>
           </View>
-        </KeyboardAvoidingView>
+        </View>
       </Modal>
     </>
   );
@@ -684,24 +741,34 @@ const styles = StyleSheet.create({
   },
   askOverlay: {
     flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.3)',
+    backgroundColor: 'rgba(0,0,0,0.35)',
     justifyContent: 'flex-end',
     width: '100%',
     overflow: 'hidden',
   },
+  /**
+   * Bottom-sheet card. We deliberately do NOT cap maxHeight here — KeyboardAvoidingView
+   * pushes the card up so the input + sticky Send footer remain visible. A hard cap
+   * caused the previous "screen jumps sideways / gets cut off" bug.
+   */
   askCard: {
     backgroundColor: '#FFFFFF',
-    padding: 16,
+    paddingTop: 16,
+    paddingHorizontal: 16,
     borderTopLeftRadius: 20,
     borderTopRightRadius: 20,
-    maxHeight: '88%',
     width: '100%',
     maxWidth: '100%',
+    maxHeight: '88%',
     alignSelf: 'stretch',
     zIndex: 10,
   },
+  askScroll: {
+    flexGrow: 0,
+    flexShrink: 1,
+  },
   askScrollInner: {
-    paddingBottom: 24,
+    paddingBottom: 12,
     width: '100%',
   },
   askTitle: {
@@ -744,12 +811,14 @@ const styles = StyleSheet.create({
   },
   askActions: {
     flexDirection: 'row',
-    flexWrap: 'wrap',
     justifyContent: 'space-between',
     alignItems: 'center',
     gap: 12,
-    marginTop: 8,
+    paddingTop: 12,
+    marginTop: 4,
     width: '100%',
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: '#EEE',
   },
   askCancel: {
     fontSize: 14,

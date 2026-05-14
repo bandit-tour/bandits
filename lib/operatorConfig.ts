@@ -5,6 +5,9 @@ import { supabase } from '@/lib/supabase';
 const UUID_RE =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
+/** Avishay Ben Eli (blonje@gmail.com) — Ask Me / Local Friend operator inbox. */
+export const DEFAULT_OPERATOR_USER_ID = 'e6d8cb02-6f1a-40c0-96c4-b96961878407';
+
 /**
  * Same resolution order as `lib/supabase.ts` so EAS `extra` mirrors work when
  * `EXPO_PUBLIC_*` is not inlined into the JS bundle for a given profile.
@@ -59,7 +62,7 @@ let resolveCache: OperatorResolveCache;
 
 /** Build-time / `extra` operator id only (does not query DB). */
 export function getEnvOperatorUserIdOnly(): string | null {
-  return normalizeOperatorId(readPublicEnv('EXPO_PUBLIC_OPERATOR_USER_ID'));
+  return normalizeOperatorId(readPublicEnv('EXPO_PUBLIC_OPERATOR_USER_ID')) ?? DEFAULT_OPERATOR_USER_ID;
 }
 
 /**

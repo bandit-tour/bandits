@@ -210,9 +210,10 @@ export async function runNearbyContextScan(): Promise<void> {
   try {
     const scamsRes = await supabase
       .from('scam_alerts')
-      .select('id, title, location, city, location_lat, location_lng')
+      .select('id, title, location, city, location_lat, location_lng, moderation_status')
       .not('location_lat', 'is', null)
       .not('location_lng', 'is', null)
+      .or('moderation_status.is.null,moderation_status.eq.published')
       .order('created_at', { ascending: false })
       .limit(30);
     if (scamsRes.error) throw scamsRes.error;

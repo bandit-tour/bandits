@@ -1,5 +1,5 @@
-import { Stack, usePathname, useRouter } from 'expo-router';
-import React, { useEffect, useLayoutEffect, useState } from 'react';
+import { Stack, usePathname, useRouter, type Href } from 'expo-router';
+import React, { useCallback, useEffect } from 'react';
 import { Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
@@ -7,19 +7,32 @@ import MainBottomNav from '@/components/MainBottomNav';
 import NearbyContextRunner from '@/components/NearbyContextRunner';
 import { useColorScheme } from '@/hooks/useColorScheme';
 import { useAppState } from '@/contexts/AppStateContext';
+import { useCity } from '@/contexts/CityContext';
+import { preloadExploreEvents, bootstrapExploreEventsCache } from '@/lib/exploreEventsCache';
 import {
   hasSeenOpeningIntro,
 } from '@/lib/openingIntroStorage';
 import { bootstrapMainAppSession, syncPilotHotelProfileIfNeeded } from '@/lib/pilotSession';
 
-type LowerTabKey = 'home' | 'localFriend' | 'chat' | 'alerts' | 'inbox' | 'menu';
+type LowerTabKey = 'home' | 'localFriend' | 'chat' | 'alerts' | 'notifications' | 'menu';
 type UpperTabKey = 'bandits' | 'mySpots' | 'explore';
+
+function upperTabHref(tab: UpperTabKey): '/bandits' | '/mySpots' | '/explore' {
+  if (tab === 'mySpots') return '/mySpots';
+  if (tab === 'explore') return '/explore';
+  return '/bandits';
+}
 
 function getLowerTabFromPath(pathname: string | null): LowerTabKey {
   if (!pathname) return 'home';
-  if (pathname.includes('/chat')) return 'chat';
+  /**
+   * Bottom-nav "Chat" = traveler-to-traveler community (the /community surface).
+   * /chat is the operator thread-reply route opened from Pilot Desk + Notifications;
+   * it must NOT highlight the Chat tab (operators are doing operational work, not socializing).
+   */
+  if (pathname.includes('/community')) return 'chat';
   if (pathname.includes('/alerts') || pathname.includes('/scam-alerts')) return 'alerts';
-  if (pathname.includes('/inbox')) return 'inbox';
+  if (pathname.includes('/notifications') || pathname.includes('/inbox')) return 'notifications';
   if (pathname.includes('/localFriend')) return 'localFriend';
   if (pathname.includes('/menu')) return 'menu';
   /** Menu stack: avoid showing Home active while on Profile / Following / Settings (cross-flow confusion). */
@@ -33,8 +46,10 @@ function getUpperTabFromPath(pathname: string | null): UpperTabKey | null {
   if (!pathname) return 'bandits';
   if (
     pathname.includes('/chat') ||
+    pathname.includes('/community') ||
     pathname.includes('/alerts') ||
     pathname.includes('/scam-alerts') ||
+    pathname.includes('/notifications') ||
     pathname.includes('/inbox') ||
     pathname.includes('/menu') ||
     pathname.includes('/localFriend') ||
@@ -56,6 +71,23 @@ export default function TabsLayout() {
   const colorScheme = useColorScheme();
   const insets = useSafeAreaInsets();
   const { unreadCount } = useAppState();
+  const { selectedCity } = useCity();
+
+  /** Warm Explore list cache after paint — never compete with tab presses on the JS thread. */
+  useEffect(() => {
+    const handle = requestAnimationFrame(() => {
+      void bootstrapExploreEventsCache(selectedCity || undefined);
+    });
+    return () => cancelAnimationFrame(handle);
+  }, [selectedCity]);
+
+  useEffect(() => {
+    if (!selectedCity) return;
+    const handle = requestAnimationFrame(() => {
+      preloadExploreEvents(selectedCity);
+    });
+    return () => cancelAnimationFrame(handle);
+  }, [selectedCity]);
 
   const lowerTab = getLowerTabFromPath(pathname) as LowerTabKey;
   const upperTab = getUpperTabFromPath(pathname);
@@ -68,13 +100,22 @@ export default function TabsLayout() {
       | '/mySpots'
       | '/explore'
       | '/localFriend'
-      | '/chat'
+      | '/community'
       | '/alerts'
-      | '/inbox'
+      | '/notifications'
       | '/menu',
   ) => {
-    router.push(path);
+    router.navigate(path);
   };
+
+  /** Upper tabs: always replace — navigate() can no-op when the route is already in the stack. */
+  const goUpperTab = useCallback(
+    (tab: UpperTabKey) => {
+      if (upperTab === tab) return;
+      router.replace(upperTabHref(tab) as Href);
+    },
+    [router, upperTab],
+  );
 
   useEffect(() => {
     void (async () => {
@@ -112,21 +153,21 @@ export default function TabsLayout() {
             <UpperTabButton
               label="Local banDits"
               active={upperTab === 'bandits'}
-              onPress={() => go('/bandits')}
+              onPress={() => goUpperTab('bandits')}
               color={tabColor}
               inactiveColor={inactiveColor}
             />
             <UpperTabButton
               label="My Spots"
               active={upperTab === 'mySpots'}
-              onPress={() => go('/mySpots')}
+              onPress={() => goUpperTab('mySpots')}
               color={tabColor}
               inactiveColor={inactiveColor}
             />
             <UpperTabButton
               label="Explore"
               active={upperTab === 'explore'}
-              onPress={() => go('/explore')}
+              onPress={() => goUpperTab('explore')}
               color={tabColor}
               inactiveColor={inactiveColor}
             />
@@ -134,16 +175,24 @@ export default function TabsLayout() {
         )}
 
         <View style={styles.content}>
-          <Stack screenOptions={{ headerShown: false, headerBackTitleVisible: false }} />
+          <Stack
+            screenOptions={{
+              headerShown: false,
+              headerBackTitle: 'Back',
+              headerBackTitleVisible: true,
+              animation: 'fade',
+              animationDuration: 120,
+            }}
+          />
         </View>
 
         <MainBottomNav
           activeTab={lowerTab}
           onHome={() => go('/bandits')}
           onLocalFriend={() => go('/localFriend')}
-          onChat={() => go('/chat')}
+          onChat={() => go('/community')}
           onAlerts={() => go('/alerts')}
-          onInbox={() => go('/inbox')}
+          onNotifications={() => go('/notifications')}
           onMenu={() => go('/menu')}
           inboxBadgeCount={unreadCount}
         />
@@ -166,7 +215,13 @@ function UpperTabButton({
   inactiveColor: string;
 }) {
   return (
-    <Pressable onPress={onPress} style={styles.upperTabButton}>
+    <Pressable
+      onPress={onPress}
+      hitSlop={{ top: 8, bottom: 8, left: 4, right: 4 }}
+      style={styles.upperTabButton}
+      accessibilityRole="tab"
+      accessibilityState={{ selected: active }}
+    >
       <Text style={{ color: active ? color : inactiveColor, fontWeight: active ? '700' : '600' }}>
         {label}
       </Text>
@@ -192,11 +247,13 @@ const styles = StyleSheet.create({
     borderBottomWidth: StyleSheet.hairlineWidth,
     borderBottomColor: '#e5e5e5',
     backgroundColor: '#FFFFFF',
+    zIndex: 20,
+    ...Platform.select({ android: { elevation: 8 }, default: {} }),
   },
   upperTabButton: {
     alignItems: 'center',
     width: '33%',
-    minHeight: 34,
+    minHeight: 44,
     justifyContent: 'center',
   },
   upperTabUnderline: { height: 3, width: 60, marginTop: 8, borderRadius: 999 },

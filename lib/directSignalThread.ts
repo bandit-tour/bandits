@@ -15,7 +15,8 @@ export async function createGuestPresenceSignalThread(args: {
   if (!user) return null;
 
   const title = args.banditName.trim() || 'Local banDit';
-  const message = args.previewMessage.trim() || 'A new note in a bottle is waiting in your inbox.';
+  const message =
+    args.previewMessage.trim() || 'A new note in a bottle is waiting in your Notifications.';
 
   const { data, error } = await supabase
     .from('notifications')
