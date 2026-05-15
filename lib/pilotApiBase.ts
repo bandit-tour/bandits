@@ -9,10 +9,10 @@ export function getPilotApiBaseUrl(): string | null {
   const fromEnv = String(process.env.EXPO_PUBLIC_PILOT_API_BASE ?? process.env.EXPO_PUBLIC_AVATAR_API_BASE ?? '').trim();
   if (fromEnv) return fromEnv.replace(/\/$/, '');
   if (__DEV__) return null;
-  if (Platform.OS === 'web' && typeof window !== 'undefined') {
+  if (Platform.OS === 'web' && typeof window !== 'undefined' && window.location?.hostname) {
     const h = window.location.hostname;
     if (h && h !== 'localhost' && h !== '127.0.0.1' && !h.endsWith('.local')) {
-      return window.location.origin.replace(/\/$/, '');
+      return (window.location.origin || '').replace(/\/$/, '');
     }
   }
   if (Platform.OS !== 'web') {

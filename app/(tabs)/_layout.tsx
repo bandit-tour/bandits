@@ -1,6 +1,6 @@
 import { Stack, usePathname, useRouter, type Href } from 'expo-router';
 import React, { useCallback, useEffect } from 'react';
-import { Platform, Pressable, StyleSheet, Text, View } from 'react-native';
+import { InteractionManager, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import MainBottomNav from '@/components/MainBottomNav';
@@ -73,20 +73,24 @@ export default function TabsLayout() {
   const { unreadCount } = useAppState();
   const { selectedCity } = useCity();
 
-  /** Warm Explore list cache after paint — never compete with tab presses on the JS thread. */
+  /** Warm Explore cache after transitions idle — keeps upper-tab taps responsive. */
   useEffect(() => {
-    const handle = requestAnimationFrame(() => {
-      void bootstrapExploreEventsCache(selectedCity || undefined);
+    const task = InteractionManager.runAfterInteractions(() => {
+      requestAnimationFrame(() => {
+        void bootstrapExploreEventsCache(selectedCity || undefined);
+      });
     });
-    return () => cancelAnimationFrame(handle);
+    return () => task.cancel();
   }, [selectedCity]);
 
   useEffect(() => {
     if (!selectedCity) return;
-    const handle = requestAnimationFrame(() => {
-      preloadExploreEvents(selectedCity);
+    const task = InteractionManager.runAfterInteractions(() => {
+      requestAnimationFrame(() => {
+        preloadExploreEvents(selectedCity);
+      });
     });
-    return () => cancelAnimationFrame(handle);
+    return () => task.cancel();
   }, [selectedCity]);
 
   const lowerTab = getLowerTabFromPath(pathname) as LowerTabKey;
@@ -108,16 +112,11 @@ export default function TabsLayout() {
     router.navigate(path);
   };
 
-  /** Upper tabs: `replace` on next frame so Android paints the tab press before heavy screen work. */
+  /** Upper tabs: immediate `replace` — stack uses no animation on native for snappy switching. */
   const goUpperTab = useCallback(
     (tab: UpperTabKey) => {
       if (upperTab === tab) return;
-      const href = upperTabHref(tab) as Href;
-      if (Platform.OS === 'android') {
-        requestAnimationFrame(() => router.replace(href));
-      } else {
-        router.replace(href);
-      }
+      router.replace(upperTabHref(tab) as Href);
     },
     [router, upperTab],
   );
@@ -186,8 +185,8 @@ export default function TabsLayout() {
               headerBackTitle: 'Back',
               headerBackTitleVisible: true,
               ...Platform.select({
-                android: { animation: 'none' as const },
-                default: { animation: 'fade' as const, animationDuration: 120 },
+                web: { animation: 'fade' as const, animationDuration: 120 },
+                default: { animation: 'none' as const },
               }),
             }}
           />

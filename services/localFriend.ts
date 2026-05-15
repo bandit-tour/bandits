@@ -15,15 +15,17 @@ const DEFAULT_PRODUCTION_API_ORIGIN = 'https://bandits-two.vercel.app';
 
 function isLocalWebHost(): boolean {
   if (typeof window === 'undefined') return true;
-  const h = window.location.hostname;
-  return h === 'localhost' || h === '127.0.0.1' || h.endsWith('.local');
+  const host = window.location?.hostname;
+  if (host == null || typeof host !== 'string') return true;
+  return host === 'localhost' || host === '127.0.0.1' || host.endsWith('.local');
 }
 
 function getApiBaseUrl(): string | null {
   const fromEnv = String(process.env.EXPO_PUBLIC_AVATAR_API_BASE ?? '').trim();
   if (fromEnv) return fromEnv.replace(/\/$/, '');
   if (__DEV__) return null;
-  if (typeof window !== 'undefined' && !isLocalWebHost()) return window.location.origin;
+  const origin = typeof window !== 'undefined' && window.location?.origin ? String(window.location.origin).trim() : '';
+  if (origin && !isLocalWebHost()) return origin.replace(/\/$/, '');
   return DEFAULT_PRODUCTION_API_ORIGIN;
 }
 

@@ -5,19 +5,28 @@ import { mapOperatorApiHttpError } from '@/lib/userFacingMessagingError';
 
 const DEFAULT_PRODUCTION_API_ORIGIN = 'https://bandits-two.vercel.app';
 
+/**
+ * Hermes / RN often define `window` without `location`. Never read `hostname` unless it exists
+ * or Ask Me / Local Friend throws: "Cannot read property 'hostname' of undefined".
+ */
 function isLocalWebHost(): boolean {
   if (typeof window === 'undefined') return true;
-  const h = window.location.hostname;
-  return h === 'localhost' || h === '127.0.0.1' || h.endsWith('.local');
+  const host = window.location?.hostname;
+  if (host == null || typeof host !== 'string') return true;
+  return host === 'localhost' || host === '127.0.0.1' || host.endsWith('.local');
 }
 
-function notifyApiOrigin(): string | null {
+function notifyApiOrigin(): string {
   const fromEnv = String(
     process.env.EXPO_PUBLIC_MESSAGING_API_BASE ?? process.env.EXPO_PUBLIC_AVATAR_API_BASE ?? '',
   ).trim();
   if (fromEnv) return fromEnv.replace(/\/$/, '');
-  if (typeof window !== 'undefined' && !isLocalWebHost()) {
-    return window.location.origin.replace(/\/$/, '');
+  if (Platform.OS !== 'web') {
+    return DEFAULT_PRODUCTION_API_ORIGIN;
+  }
+  const origin = typeof window !== 'undefined' && window.location?.origin ? String(window.location.origin).trim() : '';
+  if (origin && !isLocalWebHost()) {
+    return origin.replace(/\/$/, '');
   }
   return DEFAULT_PRODUCTION_API_ORIGIN;
 }
@@ -93,7 +102,7 @@ async function postOperatorRoute(base: string, token: string, payload: RoutePayl
 /** Service-role route: operator inbox row + traveler echo (bypasses notifications RLS). */
 export async function routeOperatorMessageViaApi(payload: RoutePayload): Promise<void> {
   const base = notifyApiOrigin();
-  if (!base) {
+  if (!base.trim()) {
     throw new Error('messaging_api_missing');
   }
   const {
