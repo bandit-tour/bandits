@@ -108,11 +108,16 @@ export default function TabsLayout() {
     router.navigate(path);
   };
 
-  /** Upper tabs: always replace — navigate() can no-op when the route is already in the stack. */
+  /** Upper tabs: `replace` on next frame so Android paints the tab press before heavy screen work. */
   const goUpperTab = useCallback(
     (tab: UpperTabKey) => {
       if (upperTab === tab) return;
-      router.replace(upperTabHref(tab) as Href);
+      const href = upperTabHref(tab) as Href;
+      if (Platform.OS === 'android') {
+        requestAnimationFrame(() => router.replace(href));
+      } else {
+        router.replace(href);
+      }
     },
     [router, upperTab],
   );
@@ -180,8 +185,10 @@ export default function TabsLayout() {
               headerShown: false,
               headerBackTitle: 'Back',
               headerBackTitleVisible: true,
-              animation: 'fade',
-              animationDuration: 120,
+              ...Platform.select({
+                android: { animation: 'none' as const },
+                default: { animation: 'fade' as const, animationDuration: 120 },
+              }),
             }}
           />
         </View>

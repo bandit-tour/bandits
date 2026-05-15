@@ -16,6 +16,8 @@ import { ScrollView as GHScrollView, Swipeable } from 'react-native-gesture-hand
 
 import { parseAboutBanditFromAskMessage } from '@/lib/askMeMessageFormat';
 import { useAppState } from '@/contexts/AppStateContext';
+import { useAppBackScreenOptions } from '@/hooks/useAppBackScreenOptions';
+import { operatorSurfaceTextInputProps, operatorSurfaceTextInputStyle } from '@/lib/operatorSurfaceTextInput';
 import { resolvePilotDeskAccess } from '@/lib/pilotDeskGate';
 import { usePremiumRefreshControl } from '@/lib/mobilePullToRefresh';
 import { renderSafeText } from '@/lib/renderSafeText';
@@ -155,6 +157,11 @@ export default function OperatorDeskScreen() {
   const [deskSelected, setDeskSelected] = useState<Set<string>>(new Set());
   const [reportSelectMode, setReportSelectMode] = useState(false);
   const [reportSelected, setReportSelected] = useState<Set<string>>(new Set());
+
+  const pilotDeskScreenOptions = useAppBackScreenOptions({
+    title: 'Pilot Desk',
+    fallback: '/menu',
+  });
 
   const loadAll = useCallback(async () => {
     const { operatorId, user, showPilotDesk } = await resolvePilotDeskAccess();
@@ -508,7 +515,7 @@ export default function OperatorDeskScreen() {
 
   return (
     <>
-      <Stack.Screen options={{ headerShown: true, title: 'Desk', headerBackTitle: 'Back' }} />
+      <Stack.Screen options={pilotDeskScreenOptions} />
       <GHScrollView
         style={styles.container}
         contentContainerStyle={styles.content}
@@ -533,13 +540,15 @@ export default function OperatorDeskScreen() {
             <Text style={styles.title}>Live Alerts</Text>
             <View style={styles.card}>
               <TextInput
-                style={styles.input}
+                style={[styles.input, operatorSurfaceTextInputStyle]}
+                {...operatorSurfaceTextInputProps}
                 placeholder="Alert title"
                 value={liveTitle}
                 onChangeText={setLiveTitle}
               />
               <TextInput
-                style={[styles.input, styles.textarea]}
+                style={[styles.input, styles.textarea, operatorSurfaceTextInputStyle]}
+                {...operatorSurfaceTextInputProps}
                 placeholder="Alert message"
                 value={liveMessage}
                 onChangeText={setLiveMessage}
@@ -885,6 +894,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#FFF',
     marginBottom: 8,
     fontSize: 14,
+    color: '#0F172A',
   },
   textarea: { minHeight: 72, textAlignVertical: 'top' },
   btn: {

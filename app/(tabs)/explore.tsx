@@ -292,10 +292,11 @@ export default function Explore() {
             </Text>
           )
         }
-        initialNumToRender={8}
-        maxToRenderPerBatch={6}
-        windowSize={7}
-        removeClippedSubviews={Platform.OS !== 'web'}
+        initialNumToRender={Platform.OS === 'android' ? 6 : 8}
+        maxToRenderPerBatch={Platform.OS === 'android' ? 4 : 6}
+        windowSize={Platform.OS === 'android' ? 5 : 7}
+        /** Android: clipped subviews + images often causes missed taps / sluggish first paint. */
+        removeClippedSubviews={Platform.OS === 'ios'}
         renderItem={renderEventRow}
       />
     </View>

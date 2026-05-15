@@ -12,11 +12,14 @@ import {
   Platform
 } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
+import { Stack } from 'expo-router';
 
 import { getBandits, updateBandit } from '@/app/services/bandits';
 import { getEvents, updateEvent } from '@/app/services/events';
 import { RequireAppAdminGate } from '@/components/RequireAppAdminGate';
+import { useAppBackScreenOptions } from '@/hooks/useAppBackScreenOptions';
 import { Database } from '@/lib/database.types';
+import { operatorSurfaceTextInputProps, operatorSurfaceTextInputStyle } from '@/lib/operatorSurfaceTextInput';
 import { supabase } from '@/lib/supabase';
 
 type Bandit = Database['public']['Tables']['bandit']['Row'];
@@ -36,6 +39,11 @@ const AdminPageContent = () => {
   const [editModalVisible, setEditModalVisible] = useState(false);
   const [selectedItem, setSelectedItem] = useState<SearchResult | null>(null);
   const [loading, setLoading] = useState(true);
+
+  const cDeskScreenOptions = useAppBackScreenOptions({
+    title: 'CDesk',
+    fallback: '/menu',
+  });
 
   useEffect(() => {
     loadData();
@@ -131,24 +139,29 @@ const AdminPageContent = () => {
 
   if (loading) {
     return (
-      <View style={styles.loadingContainer}>
-        <Text style={styles.loadingText}>Loading...</Text>
-      </View>
+      <>
+        <Stack.Screen options={cDeskScreenOptions} />
+        <View style={styles.loadingContainer}>
+          <Text style={styles.loadingText}>Loading...</Text>
+        </View>
+      </>
     );
   }
 
   return (
-    <View style={styles.container}>
+    <>
+      <Stack.Screen options={cDeskScreenOptions} />
+      <View style={styles.container}>
       <View style={styles.header}>
         <Text style={styles.title}>Admin Panel</Text>
 
         <View style={styles.searchContainer}>
           <TextInput
-            style={styles.searchInput}
+            style={[styles.searchInput, operatorSurfaceTextInputStyle]}
+            {...operatorSurfaceTextInputProps}
             value={searchQuery}
             onChangeText={setSearchQuery}
             placeholder="Search bandits or events..."
-            placeholderTextColor="#666"
           />
         </View>
 
@@ -200,6 +213,7 @@ const AdminPageContent = () => {
         />
       )}
     </View>
+    </>
   );
 };
 
@@ -662,7 +676,8 @@ const FormField: React.FC<FormFieldProps> = ({
   <View style={styles.formField}>
     <Text style={styles.formLabel}>{label}</Text>
     <TextInput
-      style={[styles.formInput, multiline && styles.formInputMultiline]}
+      style={[styles.formInput, multiline && styles.formInputMultiline, operatorSurfaceTextInputStyle]}
+      {...operatorSurfaceTextInputProps}
       value={value || ''}
       onChangeText={onChangeText}
       multiline={multiline}
@@ -708,7 +723,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingVertical: 12,
     fontSize: 16,
-    color: '#000',
+    color: '#0F172A',
   },
   tabContainer: {
     flexDirection: 'row',
@@ -899,7 +914,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     paddingVertical: 10,
     fontSize: 16,
-    color: '#000',
+    color: '#0F172A',
     borderWidth: 1,
     borderColor: '#e1e8ed',
   },
