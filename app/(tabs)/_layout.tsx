@@ -1,5 +1,5 @@
 import { Stack, usePathname, useRouter, type Href } from 'expo-router';
-import React, { useCallback, useEffect } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import { InteractionManager, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
@@ -13,9 +13,9 @@ import {
   hasSeenOpeningIntro,
 } from '@/lib/openingIntroStorage';
 import { bootstrapMainAppSession, syncPilotHotelProfileIfNeeded } from '@/lib/pilotSession';
+import UpperTabScreens, { type UpperTabKey } from '@/components/UpperTabScreens';
 
 type LowerTabKey = 'home' | 'localFriend' | 'chat' | 'alerts' | 'notifications' | 'menu';
-type UpperTabKey = 'bandits' | 'mySpots' | 'explore';
 
 function upperTabHref(tab: UpperTabKey): '/bandits' | '/mySpots' | '/explore' {
   if (tab === 'mySpots') return '/mySpots';
@@ -96,6 +96,13 @@ export default function TabsLayout() {
   const lowerTab = getLowerTabFromPath(pathname) as LowerTabKey;
   const upperTab = getUpperTabFromPath(pathname);
   const showUpperTabs = upperTab !== null;
+  /** Instant tab highlight before pathname catches up (fixes multi-tap on Explore). */
+  const [optimisticUpperTab, setOptimisticUpperTab] = useState<UpperTabKey | null>(null);
+  const displayUpperTab = (optimisticUpperTab ?? upperTab ?? 'bandits') as UpperTabKey;
+
+  useEffect(() => {
+    setOptimisticUpperTab(null);
+  }, [pathname]);
   const tabColor = colorScheme === 'dark' ? '#0a7ea4' : '#0a7ea4';
   const inactiveColor = colorScheme === 'dark' ? '#A0A0A0' : '#777';
   const go = (
@@ -112,13 +119,18 @@ export default function TabsLayout() {
     router.navigate(path);
   };
 
-  /** Upper tabs: immediate `replace` — stack uses no animation on native for snappy switching. */
+  /**
+   * Upper tabs: `replace` with no stack animation on native. Yield one frame before
+   * navigation so the active tab underline updates and the press isn't starved on a
+   * busy JS thread (Android).
+   */
   const goUpperTab = useCallback(
     (tab: UpperTabKey) => {
-      if (upperTab === tab) return;
+      if (displayUpperTab === tab) return;
+      setOptimisticUpperTab(tab);
       router.replace(upperTabHref(tab) as Href);
     },
-    [router, upperTab],
+    [router, displayUpperTab],
   );
 
   useEffect(() => {
@@ -156,21 +168,21 @@ export default function TabsLayout() {
           <View style={[styles.upperTabs, { paddingTop: Math.max(insets.top, 8) + 6 }]}>
             <UpperTabButton
               label="Local banDits"
-              active={upperTab === 'bandits'}
+              active={displayUpperTab === 'bandits'}
               onPress={() => goUpperTab('bandits')}
               color={tabColor}
               inactiveColor={inactiveColor}
             />
             <UpperTabButton
               label="My Spots"
-              active={upperTab === 'mySpots'}
+              active={displayUpperTab === 'mySpots'}
               onPress={() => goUpperTab('mySpots')}
               color={tabColor}
               inactiveColor={inactiveColor}
             />
             <UpperTabButton
               label="Explore"
-              active={upperTab === 'explore'}
+              active={displayUpperTab === 'explore'}
               onPress={() => goUpperTab('explore')}
               color={tabColor}
               inactiveColor={inactiveColor}
@@ -179,17 +191,21 @@ export default function TabsLayout() {
         )}
 
         <View style={styles.content}>
-          <Stack
-            screenOptions={{
-              headerShown: false,
-              headerBackTitle: 'Back',
-              headerBackTitleVisible: true,
-              ...Platform.select({
-                web: { animation: 'fade' as const, animationDuration: 120 },
-                default: { animation: 'none' as const },
-              }),
-            }}
-          />
+          {showUpperTabs ? (
+            <UpperTabScreens active={displayUpperTab} />
+          ) : (
+            <Stack
+              screenOptions={{
+                headerShown: false,
+                headerBackTitle: 'Back',
+                headerBackTitleVisible: true,
+                ...Platform.select({
+                  web: { animation: 'fade' as const, animationDuration: 120 },
+                  default: { animation: 'none' as const },
+                }),
+              }}
+            />
+          )}
         </View>
 
         <MainBottomNav

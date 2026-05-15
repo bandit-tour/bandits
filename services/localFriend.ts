@@ -282,6 +282,8 @@ export async function sendPilotLiveAlert(args: {
   if (recipientIds.length === 0) {
     throw new Error('No active travelers available right now. Recipients appear after first guest interaction.');
   }
+  const c = globalThis.crypto as { randomUUID?: () => string } | undefined;
+  const liveAlertBroadcastId = c?.randomUUID?.() ?? `${Date.now()}-${Math.random().toString(16).slice(2)}`;
   const payload = recipientIds.map((uid) => ({
     user_id: uid,
     type: 'live_alert',
@@ -289,6 +291,7 @@ export async function sendPilotLiveAlert(args: {
     message,
     reference_id: operatorUserId,
     reference_type: 'pilot_live_alert',
+    live_alert_broadcast_id: liveAlertBroadcastId,
   }));
   const { error: insertError } = await supabase.from('notifications').insert(payload);
   if (insertError) throw new Error(insertError.message || 'Could not send live alert.');

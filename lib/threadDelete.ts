@@ -7,9 +7,28 @@ export function isDeletedThreadRef(referenceType: string | null | undefined): bo
   return String(referenceType || '').trim() === DELETED_REF_TYPE;
 }
 
+function isPilotCascadeBenignFailure(err: { message?: string }): boolean {
+  const m = (err.message || '').toLowerCase();
+  return (
+    m.includes('only pilot operator') ||
+    m.includes('incoming thread not found') ||
+    m.includes('not deletable')
+  );
+}
+
 export async function deleteNotificationThread(notificationId: string): Promise<void> {
   const id = String(notificationId || '').trim();
   if (!id) return;
+
+  const { error: cascadeErr } = await supabase.rpc(
+    'delete_pilot_incoming_thread_cascade',
+    { p_thread_root_id: id } as never,
+  );
+  if (!cascadeErr) return;
+
+  if (!isMissingPostgrestRpcError(cascadeErr) && !isPilotCascadeBenignFailure(cascadeErr)) {
+    throw new Error(cascadeErr.message || 'Could not delete thread.');
+  }
 
   const { error: rpcError } = await supabase.rpc('delete_notification_if_owner', { p_id: id } as never);
   if (!rpcError) return;

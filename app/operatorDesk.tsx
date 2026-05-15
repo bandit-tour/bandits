@@ -15,6 +15,7 @@ import {
 import { ScrollView as GHScrollView, Swipeable } from 'react-native-gesture-handler';
 
 import { parseAboutBanditFromAskMessage } from '@/lib/askMeMessageFormat';
+import { formatInboxSentAt } from '@/lib/inboxSentAtLabel';
 import { useAppState } from '@/contexts/AppStateContext';
 import { useAppBackScreenOptions } from '@/hooks/useAppBackScreenOptions';
 import { operatorSurfaceTextInputProps, operatorSurfaceTextInputStyle } from '@/lib/operatorSurfaceTextInput';
@@ -44,6 +45,14 @@ type NotificationRow = {
   created_at: string;
   ask_target_bandit_id?: string | null;
   ask_target_bandit_name?: string | null;
+};
+
+type LiveAlertBatchRow = {
+  broadcast_id: string;
+  title: string;
+  message: string;
+  sent_at: string;
+  recipient_count: number;
 };
 
 type ReportRow = {
@@ -157,6 +166,8 @@ export default function OperatorDeskScreen() {
   const [deskSelected, setDeskSelected] = useState<Set<string>>(new Set());
   const [reportSelectMode, setReportSelectMode] = useState(false);
   const [reportSelected, setReportSelected] = useState<Set<string>>(new Set());
+  const [liveAlertBatches, setLiveAlertBatches] = useState<LiveAlertBatchRow[]>([]);
+  const [deletingBroadcastId, setDeletingBroadcastId] = useState<string | null>(null);
 
   const pilotDeskScreenOptions = useAppBackScreenOptions({
     title: 'Pilot Desk',
@@ -172,15 +183,17 @@ export default function OperatorDeskScreen() {
     if (!allowed) {
       setIncomingRows([]);
       setReports([]);
+      setLiveAlertBatches([]);
       return;
     }
     if (!operatorId) {
       setIncomingRows([]);
+      setLiveAlertBatches([]);
       return;
     }
 
     const operatorUserId = operatorId;
-    const [{ data: notifRows }, { data: reportRows, error: reportErr }] = await Promise.all([
+    const [{ data: notifRows }, { data: reportRows, error: reportErr }, batchRpc] = await Promise.all([
       supabase
         .from('notifications')
         .select('*')
@@ -190,7 +203,22 @@ export default function OperatorDeskScreen() {
         .order('created_at', { ascending: false })
         .limit(200),
       supabase.from('scam_alerts').select('*').order('created_at', { ascending: false }).limit(100),
+      supabase.rpc('list_pilot_live_alert_broadcasts', { p_limit: 50 }),
     ]);
+    const { data: batchData, error: batchErr } = batchRpc;
+    if (!batchErr && Array.isArray(batchData)) {
+      setLiveAlertBatches(
+        (batchData as Record<string, unknown>[]).map((r) => ({
+          broadcast_id: String(r.broadcast_id ?? '').trim(),
+          title: String(r.title ?? ''),
+          message: String(r.message ?? ''),
+          sent_at: String(r.sent_at ?? ''),
+          recipient_count: Number(r.recipient_count) || 0,
+        })),
+      );
+    } else {
+      setLiveAlertBatches([]);
+    }
     const baseRows = normalizeIncomingRows((notifRows as NotificationRow[]) || []);
     const askTargetIds = Array.from(
       new Set(
@@ -293,12 +321,49 @@ export default function OperatorDeskScreen() {
       setLiveTitle('');
       setLiveMessage('');
       requestNotificationsRefresh();
+      void refreshNotifications();
+      await loadAll();
     } catch (e) {
       setFeedback(e instanceof Error ? e.message : 'Could not send live alert.');
     } finally {
       setSendingLive(false);
     }
-  }, [liveTitle, liveMessage, sendingLive]);
+  }, [liveTitle, liveMessage, sendingLive, loadAll, refreshNotifications]);
+
+  const onDeleteLiveAlertBroadcast = useCallback(
+    (batch: LiveAlertBatchRow) => {
+      if (deletingBroadcastId) return;
+      const runDelete = async () => {
+        setDeletingBroadcastId(batch.broadcast_id);
+        try {
+          const { error } = await supabase.rpc('delete_pilot_live_alert_broadcast', {
+            p_broadcast_id: batch.broadcast_id,
+          } as never);
+          if (error) throw new Error(error.message || 'Could not delete live alert.');
+          requestNotificationsRefresh();
+          void refreshNotifications();
+          await loadAll();
+        } catch (e) {
+          const msg = e instanceof Error ? e.message : 'Could not delete.';
+          if (Platform.OS === 'web' && typeof window !== 'undefined') window.alert(msg);
+          else Alert.alert('Delete failed', msg);
+          await loadAll();
+        } finally {
+          setDeletingBroadcastId(null);
+        }
+      };
+      if (Platform.OS === 'web' && typeof window !== 'undefined') {
+        const ok = window.confirm('Remove this live alert for all recipients?');
+        if (ok) void runDelete();
+        return;
+      }
+      Alert.alert('Remove live alert?', 'This removes the alert from every traveler’s Notifications list.', [
+        { text: 'Cancel', style: 'cancel' },
+        { text: 'Delete', style: 'destructive', onPress: () => void runDelete() },
+      ]);
+    },
+    [deletingBroadcastId, refreshNotifications, loadAll],
+  );
 
   const incoming = useMemo(() => normalizeIncomingRows(incomingRows), [incomingRows]);
 
@@ -563,6 +628,43 @@ export default function OperatorDeskScreen() {
               </Pressable>
               {!!feedback && <Text style={styles.feedback}>{feedback}</Text>}
             </View>
+
+            <Text style={styles.title}>Sent live alerts</Text>
+            <Text style={styles.sectionHint}>
+              Delete an alert to remove it from all travelers’ Notifications and update badge counts.
+            </Text>
+            {liveAlertBatches.length === 0 ? (
+              <Text style={styles.empty}>No sent live alerts yet.</Text>
+            ) : (
+              <View style={styles.stackGap8}>
+                {liveAlertBatches.map((b) => (
+                  <View key={b.broadcast_id} style={styles.row}>
+                    <Text style={styles.rowTitle} numberOfLines={2}>
+                      {renderSafeText(b.title, '(untitled)')}
+                    </Text>
+                    <Text style={styles.rowMsg} numberOfLines={4}>
+                      {renderSafeText(b.message)}
+                    </Text>
+                    <Text style={styles.rowMeta}>
+                      {formatInboxSentAt(b.sent_at)} · {b.recipient_count} recipient
+                      {b.recipient_count === 1 ? '' : 's'}
+                    </Text>
+                    <Pressable
+                      style={[
+                        styles.deleteChip,
+                        deletingBroadcastId === b.broadcast_id && styles.deleteChipDisabled,
+                      ]}
+                      onPress={() => onDeleteLiveAlertBroadcast(b)}
+                      disabled={deletingBroadcastId === b.broadcast_id}
+                    >
+                      <Text style={styles.deleteChipText}>
+                        {deletingBroadcastId === b.broadcast_id ? 'Deleting…' : 'Delete for everyone'}
+                      </Text>
+                    </Pressable>
+                  </View>
+                ))}
+              </View>
+            )}
 
             <Text style={styles.title}>Incoming Questions</Text>
             {incomingRows.length > 0 ? (

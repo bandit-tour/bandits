@@ -29,7 +29,26 @@ type IntroStep = 'message' | 'bottle' | 'cta';
 
 const FALLBACK_IF_NO_DURATION_MS = 4000;
 
+/** Portrait bottle asset — frame keeps this width:height so the clip is never stretched edge-to-edge. */
+const BOTTLE_FRAME_WH = 9 / 16;
+
 type IntroBottleProps = { onComplete: () => void };
+
+function useOpeningBottleFrameSize() {
+  const { width: winW, height: winH } = useWindowDimensions();
+  const w = winW || Dimensions.get('window').width;
+  const h = winH || Dimensions.get('window').height;
+  const horizontalPad = 48;
+  const maxW = Math.min(400, Math.max(260, w - horizontalPad));
+  const maxH = Math.max(220, h * 0.72);
+  let frameW = maxW;
+  let frameH = frameW / BOTTLE_FRAME_WH;
+  if (frameH > maxH) {
+    frameH = maxH;
+    frameW = frameH * BOTTLE_FRAME_WH;
+  }
+  return { frameW, frameH, winW: w, winH: h };
+}
 
 function isIOSSafariWeb(): boolean {
   if (Platform.OS !== 'web' || typeof navigator === 'undefined') return false;
@@ -40,29 +59,19 @@ function isIOSSafariWeb(): boolean {
   return isiOS && isAppleWebKit && !isOtherBrowserShell;
 }
 
-/** iPhone Safari-safe visual fallback: inline poster animation, no native video API usage. */
+/** iPhone Safari-safe visual fallback: framed poster, no native video API usage. */
 function IntroBottleInlineFallback({ onComplete }: IntroBottleProps) {
-  const { width, height } = useWindowDimensions();
-  const h = height || Dimensions.get('window').height;
+  const { frameW, frameH } = useOpeningBottleFrameSize();
   const opacity = useRef(new Animated.Value(0)).current;
-  const scale = useRef(new Animated.Value(1.04)).current;
 
   useEffect(() => {
     let done = false;
-    Animated.parallel([
-      Animated.timing(opacity, {
-        toValue: 1,
-        duration: 420,
-        easing: Easing.out(Easing.cubic),
-        useNativeDriver: true,
-      }),
-      Animated.timing(scale, {
-        toValue: 1,
-        duration: 2900,
-        easing: Easing.out(Easing.cubic),
-        useNativeDriver: true,
-      }),
-    ]).start();
+    Animated.timing(opacity, {
+      toValue: 1,
+      duration: 420,
+      easing: Easing.out(Easing.cubic),
+      useNativeDriver: true,
+    }).start();
     const id = setTimeout(() => {
       if (done) return;
       done = true;
@@ -72,34 +81,23 @@ function IntroBottleInlineFallback({ onComplete }: IntroBottleProps) {
       done = true;
       clearTimeout(id);
     };
-  }, [onComplete, opacity, scale]);
+  }, [onComplete, opacity]);
 
   return (
     <View
       testID="opening-intro-bottle-inline-fallback"
-      style={[StyleSheet.absoluteFill, { width, height: h, backgroundColor: '#0a0a0a' }]}
+      style={styles.bottleStepRoot}
       accessibilityLabel="Bottle visual inline on iPhone Safari"
       pointerEvents="none"
     >
-      <Animated.Image
-        source={BOTTLE_POSTER}
-        resizeMode="cover"
-        style={[
-          StyleSheet.absoluteFill,
-          {
-            width,
-            height: h,
-            opacity,
-            transform: [{ scale }],
-          },
-        ]}
-      />
-      <LinearGradient
-        colors={['rgba(10,10,10,0.55)', 'rgba(10,10,10,0.25)', 'rgba(10,10,10,0.6)']}
-        start={{ x: 0.5, y: 0 }}
-        end={{ x: 0.5, y: 1 }}
-        style={StyleSheet.absoluteFill}
-      />
+      <View style={[styles.bottleVideoCard, { width: frameW, height: frameH }]}>
+        <Animated.Image
+          source={BOTTLE_POSTER}
+          resizeMode="contain"
+          style={[StyleSheet.absoluteFillObject, { opacity }]}
+          accessibilityIgnoresInvertColors
+        />
+      </View>
     </View>
   );
 }
@@ -108,8 +106,7 @@ function IntroBottleInlineFallback({ onComplete }: IntroBottleProps) {
  * Bottle clip once, no loop. Completes on native `playToEnd`, or a duration-based safety timeout.
  */
 function IntroBottleVideo({ onComplete }: IntroBottleProps) {
-  const { width, height } = useWindowDimensions();
-  const h = height || Dimensions.get('window').height;
+  const { frameW, frameH } = useOpeningBottleFrameSize();
   const useInlineFallback = isIOSSafariWeb();
   const doneRef = useRef(false);
   const player = useVideoPlayer(BOTTLE_VIDEO, (p) => {
@@ -211,18 +208,20 @@ function IntroBottleVideo({ onComplete }: IntroBottleProps) {
   return (
     <View
       testID="opening-intro-bottle"
-      style={[{ width, height: h, flex: 1, backgroundColor: '#0a0a0a' }]}
+      style={styles.bottleStepRoot}
       pointerEvents="none"
       accessibilityLabel="Bottle message video; the next step appears when playback ends"
     >
-      <VideoView
-        style={[StyleSheet.absoluteFill, { width, height: h, backgroundColor: '#0a0a0a' }]}
-        player={player}
-        nativeControls={false}
-        contentFit="cover"
-        allowsFullscreen={false}
-        allowsPictureInPicture={false}
-      />
+      <View style={[styles.bottleVideoCard, { width: frameW, height: frameH }]}>
+        <VideoView
+          style={styles.bottleVideoView}
+          player={player}
+          nativeControls={false}
+          contentFit="contain"
+          allowsFullscreen={false}
+          allowsPictureInPicture={false}
+        />
+      </View>
     </View>
   );
 }
@@ -406,11 +405,7 @@ export default function OpeningIntroScreen({ onEnter, onSkip }: OpeningIntroScre
         ) : null}
 
         {step === 'bottle' ? (
-          <View
-            style={{ flex: 1, minHeight: h, backgroundColor: '#0a0a0a' }}
-            testID="opening-intro-bottle-step"
-            accessibilityLabel="Bottle video step"
-          >
+          <View style={styles.bottleStepOuter} testID="opening-intro-bottle-step" accessibilityLabel="Bottle video step">
             <IntroBottleVideo onComplete={onBottleComplete} />
           </View>
         ) : null}
@@ -423,6 +418,27 @@ export default function OpeningIntroScreen({ onEnter, onSkip }: OpeningIntroScre
 
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: '#0a0a0a' },
+  bottleStepOuter: { flex: 1, minHeight: 200, backgroundColor: '#0a0a0a' },
+  bottleStepRoot: {
+    flex: 1,
+    backgroundColor: '#0a0a0a',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 24,
+  },
+  /** Matches `LocalFriendBottleHero` card treatment (rounded frame, dark matte behind the clip). */
+  bottleVideoCard: {
+    borderRadius: 22,
+    overflow: 'hidden',
+    backgroundColor: '#0B0F18',
+    maxWidth: '100%',
+  },
+  bottleVideoView: {
+    ...StyleSheet.absoluteFillObject,
+    width: '100%',
+    height: '100%',
+    backgroundColor: '#0B0F18',
+  },
   scrollInner: { flexGrow: 1, alignItems: 'center', paddingHorizontal: 24, width: '100%', maxWidth: 520, alignSelf: 'center' },
   messageStep: { width: '100%', maxWidth: 420, alignItems: 'center' },
   messageLead: {

@@ -462,6 +462,7 @@ export type Database = {
           is_read: boolean;
           created_at: string;
           ask_target_bandit_id: string | null;
+          live_alert_broadcast_id: string | null;
         };
         Insert: {
           id?: string;
@@ -474,6 +475,7 @@ export type Database = {
           is_read?: boolean;
           created_at?: string;
           ask_target_bandit_id?: string | null;
+          live_alert_broadcast_id?: string | null;
         };
         Update: {
           id?: string;
@@ -486,6 +488,7 @@ export type Database = {
           is_read?: boolean;
           created_at?: string;
           ask_target_bandit_id?: string | null;
+          live_alert_broadcast_id?: string | null;
         };
         Relationships: [];
       };

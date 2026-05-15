@@ -10,11 +10,10 @@ import {
   useWindowDimensions,
   View,
 } from 'react-native';
-import { useFocusEffect } from '@react-navigation/native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 
 import { getBanditsWithTags, toggleBanditLike } from '@/app/services/bandits';
-import { getBanditEventCategories, getEvents } from '@/app/services/events';
+import { getBanditEventCategoriesBulk, getEvents } from '@/app/services/events';
 import BanditHeader from '@/components/BanditHeader';
 import BanditsHomeHeader from '@/components/BanditsHomeHeader';
 import EventCard from '@/components/EventCard';
@@ -23,6 +22,7 @@ import { fetchSWR, invalidateAppDataCache, readCacheStale } from '@/lib/appDataC
 import { Database } from '@/lib/database.types';
 import { getHotelEntry } from '@/lib/pilotSession';
 import { usePremiumRefreshControl } from '@/lib/mobilePullToRefresh';
+import { useTabActiveDataLoad } from '@/lib/useTabActiveDataLoad';
 import { buildEventListImagePlan, getEventDbImageCandidatesOrdered } from '@/lib/eventListImagePlan';
 import {
   enforceUniqueRecommendationImagesByEventId,
@@ -48,7 +48,11 @@ type Row = { bandit: BanditWithTags; categories: EventCategory[] };
 type EventItem = Database['public']['Tables']['event']['Row'];
 type CategoryExpand = { genre: string; events: EventItem[]; loading: boolean };
 
-export default function BanditsScreen() {
+type BanditsScreenProps = {
+  tabActive?: boolean;
+};
+
+export default function BanditsScreen({ tabActive = true }: BanditsScreenProps) {
   const router = useRouter();
   const params = useLocalSearchParams<{ focusBanditId?: string }>();
   const rawFocus = params.focusBanditId;
@@ -173,16 +177,11 @@ export default function BanditsScreen() {
         // the serialized auth lock and added latency on every tab focus.
         const data = await getBanditsWithTags();
         const list = (data || []) as BanditWithTags[];
-        const withCats = await Promise.all(
-          list.map(async (b): Promise<Row> => {
-            try {
-              const categories = await getBanditEventCategories(b.id);
-              return { bandit: b, categories };
-            } catch {
-              return { bandit: b, categories: [] };
-            }
-          }),
-        );
+        const catByBandit = await getBanditEventCategoriesBulk(list.map((b) => b.id));
+        const withCats: Row[] = list.map((b) => ({
+          bandit: b,
+          categories: catByBandit.get(b.id) ?? [],
+        }));
         return withCats;
       },
       (data) => {
@@ -210,14 +209,7 @@ export default function BanditsScreen() {
     });
   }, []);
 
-  useFocusEffect(
-    useCallback(() => {
-      const asRefresh = banditsInitialFocusDoneRef.current;
-      const handle = fetchRows(asRefresh);
-      banditsInitialFocusDoneRef.current = true;
-      return () => handle.cancel();
-    }, [fetchRows]),
-  );
+  useTabActiveDataLoad(tabActive, banditsInitialFocusDoneRef, fetchRows);
 
   const onRefresh = useCallback(async () => {
     invalidateAppDataCache(BANDITS_ROWS_CACHE_KEY);

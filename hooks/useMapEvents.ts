@@ -7,9 +7,9 @@ import {
   boundsFromMapEvents,
   eventMapCoordinates,
 } from '@/lib/mapCoordinates';
-import { resolveGooglePlaceBusinessData } from '@/lib/placePhoto';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, startTransition } from 'react';
+import { InteractionManager } from 'react-native';
 
 type Event = Database['public']['Tables']['event']['Row'];
 
@@ -19,6 +19,8 @@ export type UseMapEventsOptions = {
    * Same `getEvents` path runs on web and native — never browser-only.
    */
   banditId?: string | null;
+  /** Pre-loaded rows (Explore list cache) — skips network when provided. */
+  seedEvents?: Event[];
 };
 
 export interface MapBounds {
@@ -39,6 +41,7 @@ async function enrichEventCoordinates(event: Event): Promise<Event> {
   if (!placeId) return event;
 
   try {
+    const { resolveGooglePlaceBusinessData } = await import('@/lib/placePhoto');
     const resolved = await resolveGooglePlaceBusinessData({
       placeId,
       name: event.name ?? '',
@@ -60,14 +63,17 @@ async function enrichEventCoordinates(event: Event): Promise<Event> {
   return event;
 }
 
+/** Cap Google backfills so opening the map never fires dozens of network calls at once. */
+const MAX_MAP_COORD_BACKFILLS = 8;
+const MAP_COORD_BACKFILL_CHUNK = 2;
+
 async function enrichEventsForMap(events: Event[]): Promise<Event[]> {
-  const needsBackfill = events.filter((event) => !eventMapCoordinates(event));
+  const needsBackfill = events.filter((event) => !eventMapCoordinates(event)).slice(0, MAX_MAP_COORD_BACKFILLS);
   if (needsBackfill.length === 0) return events;
 
   const backfilledById = new Map<string, Event>();
-  const chunkSize = 4;
-  for (let i = 0; i < needsBackfill.length; i += chunkSize) {
-    const chunk = needsBackfill.slice(i, i + chunkSize);
+  for (let i = 0; i < needsBackfill.length; i += MAP_COORD_BACKFILL_CHUNK) {
+    const chunk = needsBackfill.slice(i, i + MAP_COORD_BACKFILL_CHUNK);
     const results = await Promise.all(chunk.map((event) => enrichEventCoordinates(event)));
     for (const row of results) {
       backfilledById.set(row.id, row);
@@ -97,7 +103,11 @@ export function useMapEvents(
 
   const { selectedCity } = useCity();
   const router = useRouter();
-  const seedEvents = readExploreMapSeedEvents(selectedCity ?? undefined, effectiveBanditId);
+  const seedFromProp = options?.seedEvents;
+  const seedEvents =
+    seedFromProp && seedFromProp.length > 0
+      ? seedFromProp
+      : readExploreMapSeedEvents(selectedCity ?? undefined, effectiveBanditId);
   const [events, setEvents] = useState<Event[]>(seedEvents);
   const [loading, setLoading] = useState(seedEvents.length === 0);
   const [error, setError] = useState<string | null>(null);
@@ -115,34 +125,45 @@ export function useMapEvents(
         filters.city = selectedCity.trim();
       }
 
-      const load = getEvents(filters);
-      const timeoutMs = 28000;
-      const allEventsData = await Promise.race([
-        load,
-        new Promise<never>((_, reject) =>
-          setTimeout(
-            () => reject(new Error('Could not load places in time. Check your connection and try again.')),
-            timeoutMs,
-          ),
-        ),
-      ]);
+      const allEventsData = await getEvents(filters);
 
       setEvents(allEventsData);
       hasPaintedEventsRef.current = true;
       setLoading(false);
-      void enrichEventsForMap(allEventsData).then((enriched) => {
-        setEvents(enriched);
+
+      /** Defer place lookups until after transitions / list paint — keeps map screen responsive. */
+      void InteractionManager.runAfterInteractions(() => {
+        void enrichEventsForMap(allEventsData).then((enriched) => {
+          startTransition(() => {
+            setEvents(enriched);
+          });
+        });
       });
     } catch (err) {
       console.error('Error fetching events:', err);
-      setError(err instanceof Error ? err.message : 'Failed to fetch events');
+      if (hasPaintedEventsRef.current || seedEvents.length > 0) {
+        setError(null);
+      } else {
+        setError(err instanceof Error ? err.message : 'Failed to fetch events');
+      }
       setLoading(false);
     }
-  }, [effectiveBanditId, selectedCity]);
+  }, [effectiveBanditId, selectedCity, seedEvents.length]);
+
+  const seedSig = useMemo(
+    () => (seedFromProp?.length ? `${seedFromProp.length}:${seedFromProp[0]?.id}:${seedFromProp[seedFromProp.length - 1]?.id}` : ''),
+    [seedFromProp],
+  );
 
   useEffect(() => {
+    if (seedFromProp && seedFromProp.length > 0) {
+      setEvents(seedFromProp);
+      hasPaintedEventsRef.current = true;
+      setLoading(false);
+      return;
+    }
     void fetchEvents();
-  }, [fetchEvents]);
+  }, [fetchEvents, seedFromProp, seedSig]);
 
   const calculateOptimalMapBounds = (initialRegion: {
     latitude: number;

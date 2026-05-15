@@ -1,4 +1,3 @@
-import { useFocusEffect } from '@react-navigation/native';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Alert, Pressable, StyleSheet, Text, View } from 'react-native';
 
@@ -7,6 +6,7 @@ import EventCardSkeleton from '@/components/EventCardSkeleton';
 import EventList from '@/components/EventList';
 import { useCity } from '@/contexts/CityContext';
 import { fetchSWR, invalidateAppDataCache, readCacheStale } from '@/lib/appDataCache';
+import { useTabActiveDataLoad } from '@/lib/useTabActiveDataLoad';
 import { Database } from '@/lib/database.types';
 
 type Event = Database['public']['Tables']['event']['Row'];
@@ -16,7 +16,11 @@ const LIKED_EVENTS_TTL_MS = 60 * 1000;
 
 
 
-export default function MySpotsScreen() {
+type MySpotsScreenProps = {
+  tabActive?: boolean;
+};
+
+export default function MySpotsScreen({ tabActive = true }: MySpotsScreenProps) {
   const mySpotsInitialFocusDoneRef = useRef(false);
   /** Skip one city effect tick after initial load completes (avoid double-fetch vs first focus load). */
   const skipCityRefetchOnceRef = useRef(true);
@@ -66,12 +70,7 @@ export default function MySpotsScreen() {
     return handle;
   }, []);
 
-  useFocusEffect(
-    React.useCallback(() => {
-      const handle = loadLikedEvents(mySpotsInitialFocusDoneRef.current);
-      return () => handle.cancel();
-    }, [loadLikedEvents]),
-  );
+  useTabActiveDataLoad(tabActive, mySpotsInitialFocusDoneRef, loadLikedEvents);
 
   /** City filter changes while mounted no longer require a refetch — filtering is now client-side. */
   useEffect(() => {

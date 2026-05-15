@@ -148,6 +148,8 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
   const refreshNotificationsChainRef = useRef<Promise<void>>(Promise.resolve());
   const refreshNotificationsQueuedRef = useRef(false);
   const refreshNotificationsFnRef = useRef<() => Promise<void>>(async () => {});
+  const notifRealtimeBumpTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const notifRealtimeChannelRef = useRef<ReturnType<typeof supabase.channel> | null>(null);
 
   const authUserInFlightRef = useRef<Promise<AuthUser | null> | null>(null);
   const lastStableUserRef = useRef<AuthUser | null>(null);
@@ -316,6 +318,51 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
     });
     return () => sub.remove();
   }, []);
+
+  /** Push badge + inbox list when server deletes or inserts rows for this user (e.g. live alert removed from Pilot Desk). */
+  useEffect(() => {
+    let cancelled = false;
+    void (async () => {
+      const user = await getAuthUserSerialized();
+      if (!user?.id || cancelled) return;
+      const uid = user.id;
+      if (notifRealtimeChannelRef.current) {
+        void supabase.removeChannel(notifRealtimeChannelRef.current);
+        notifRealtimeChannelRef.current = null;
+      }
+      const bump = () => {
+        if (notifRealtimeBumpTimerRef.current) clearTimeout(notifRealtimeBumpTimerRef.current);
+        notifRealtimeBumpTimerRef.current = setTimeout(() => {
+          notifRealtimeBumpTimerRef.current = null;
+          DeviceEventEmitter.emit(BANDITS_NOTIFICATIONS_REFRESH);
+        }, 280);
+      };
+      const channel = supabase
+        .channel(`notifications-user-${uid}`)
+        .on(
+          'postgres_changes',
+          { event: '*', schema: 'public', table: 'notifications', filter: `user_id=eq.${uid}` },
+          bump,
+        )
+        .subscribe();
+      if (cancelled) {
+        void supabase.removeChannel(channel);
+        return;
+      }
+      notifRealtimeChannelRef.current = channel;
+    })();
+    return () => {
+      cancelled = true;
+      if (notifRealtimeBumpTimerRef.current) {
+        clearTimeout(notifRealtimeBumpTimerRef.current);
+        notifRealtimeBumpTimerRef.current = null;
+      }
+      if (notifRealtimeChannelRef.current) {
+        void supabase.removeChannel(notifRealtimeChannelRef.current);
+        notifRealtimeChannelRef.current = null;
+      }
+    };
+  }, [getAuthUserSerialized]);
 
   useEffect(() => {
     void refreshIdentity();

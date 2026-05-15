@@ -34,6 +34,8 @@ import { getNotificationsBackendStatus } from '@/services/localFriend';
 import { getOperatorUserId } from '@/lib/operatorConfig';
 import { trackEvent } from '@/lib/analytics';
 import { getDismissedNotificationIds } from '@/lib/dismissedThreads';
+import { formatInboxSentAt } from '@/lib/inboxSentAtLabel';
+import { BANDITS_NOTIFICATIONS_REFRESH } from '@/lib/notificationEvents';
 import { isDeletedThreadRef } from '@/lib/threadDelete';
 
 type NotificationRow = {
@@ -46,6 +48,7 @@ type NotificationRow = {
   reference_type: string | null;
   is_read: boolean;
   created_at: string;
+  live_alert_broadcast_id?: string | null;
 };
 
 type InboxListItem = {
@@ -125,31 +128,6 @@ function dedupeAskMeGuestNotifications(rows: NotificationRow[]): {
   return { rows: [...rest, ...kept], supersededIds };
 }
 
-function formatTimestamp(iso: string): string {
-  const d = new Date(iso);
-  if (Number.isNaN(d.getTime())) return iso;
-  const now = new Date();
-  const sameDay =
-    d.getFullYear() === now.getFullYear() &&
-    d.getMonth() === now.getMonth() &&
-    d.getDate() === now.getDate();
-  if (sameDay) {
-    return `Today · ${d.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' })}`;
-  }
-  const yesterday = new Date(now);
-  yesterday.setDate(yesterday.getDate() - 1);
-  const ySame =
-    d.getFullYear() === yesterday.getFullYear() &&
-    d.getMonth() === yesterday.getMonth() &&
-    d.getDate() === yesterday.getDate();
-  if (ySame) return 'Yesterday';
-  return d.toLocaleDateString(undefined, {
-    weekday: 'short',
-    month: 'short',
-    day: 'numeric',
-  });
-}
-
 function banditNameFromNotification(n: NotificationRow): string {
   if (n.reference_type === 'nearby_route') return 'Around You';
   const t = n.title?.trim() || '';
@@ -186,7 +164,7 @@ function notificationToInboxItem(n: NotificationRow, fromServer = true): InboxLi
     id: n.id,
     banditName: banditNameFromNotification(n),
     preview: previewBody || n.title || 'New update',
-    timestampLabel: formatTimestamp(n.created_at),
+    timestampLabel: formatInboxSentAt(n.created_at),
     sortKey: new Date(n.created_at).getTime(),
     fromServer,
     notification: n,
@@ -408,6 +386,21 @@ export default function NotificationsScreen() {
     }, [loadInbox]),
   );
 
+  useEffect(() => {
+    let t: ReturnType<typeof setTimeout> | null = null;
+    const sub = DeviceEventEmitter.addListener(BANDITS_NOTIFICATIONS_REFRESH, () => {
+      if (t) clearTimeout(t);
+      t = setTimeout(() => {
+        t = null;
+        void loadInbox('refresh');
+      }, 350);
+    });
+    return () => {
+      sub.remove();
+      if (t) clearTimeout(t);
+    };
+  }, [loadInbox]);
+
   const sections = useMemo(() => {
     const nearby = rows.filter((r) => r.notification.reference_type === 'nearby_route');
     const rest = rows.filter((r) => r.notification.reference_type !== 'nearby_route');
@@ -474,17 +467,25 @@ export default function NotificationsScreen() {
   );
 
   const renderItem = useCallback(
-    ({ item }: { item: InboxListItem }) => (
-      <Pressable style={styles.card} onPress={() => openItem(item)}>
-        <View style={styles.cardTop}>
-          <Text style={styles.banditName}>{item.banditName}</Text>
-          <Text style={styles.time}>{item.timestampLabel}</Text>
-        </View>
-        <Text style={styles.preview} numberOfLines={2} ellipsizeMode="tail">
-          {item.preview}
-        </Text>
-      </Pressable>
-    ),
+    ({ item }: { item: InboxListItem }) => {
+      const isLive = item.notification.type === 'live_alert';
+      return (
+        <Pressable style={styles.card} onPress={() => openItem(item)}>
+          <View style={styles.cardTop}>
+            <Text style={styles.banditName}>{item.banditName}</Text>
+            <Text style={styles.time}>{item.timestampLabel}</Text>
+          </View>
+          {isLive && item.notification.title?.trim() ? (
+            <Text style={styles.liveTitle} numberOfLines={2}>
+              {item.notification.title.trim()}
+            </Text>
+          ) : null}
+          <Text style={styles.preview} numberOfLines={isLive ? 5 : 2} ellipsizeMode="tail">
+            {isLive ? item.notification.message?.trim() || item.preview : item.preview}
+          </Text>
+        </Pressable>
+      );
+    },
     [openItem],
   );
 
@@ -583,6 +584,12 @@ const styles = StyleSheet.create({
     color: '#777',
     fontWeight: '600',
     flexShrink: 0,
+  },
+  liveTitle: {
+    fontSize: 15,
+    fontWeight: '800',
+    color: '#111',
+    marginBottom: 6,
   },
   preview: {
     fontSize: 14,

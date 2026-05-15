@@ -7,7 +7,7 @@ import { fetchSWR, readCacheStale, seedAppDataCache } from '@/lib/appDataCache';
 type Event = Database['public']['Tables']['event']['Row'];
 
 const DISK_KEY = '@bandits_explore_events_v1';
-const EXPLORE_TTL_MS = 90 * 1000;
+const EXPLORE_TTL_MS = 5 * 60 * 1000;
 /** Disk snapshot survives process kill — warm first Explore paint on cold iOS/Android launch. */
 const DISK_TTL_MS = 24 * 60 * 60 * 1000;
 

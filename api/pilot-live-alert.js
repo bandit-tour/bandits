@@ -1,3 +1,4 @@
+const { randomUUID } = require('crypto');
 const { createClient } = require('@supabase/supabase-js');
 
 const DEFAULT_OPERATOR_USER_ID = 'e6d8cb02-6f1a-40c0-96c4-b96961878407';
@@ -83,6 +84,7 @@ module.exports = async function handler(req, res) {
       .json({ error: 'No active travelers available right now. Recipients appear after first guest interaction.' });
   }
 
+  const liveAlertBroadcastId = randomUUID();
   const payload = recipientIds.map((uid) => ({
     user_id: uid,
     type: 'live_alert',
@@ -90,6 +92,7 @@ module.exports = async function handler(req, res) {
     message,
     reference_id: operatorUserId,
     reference_type: 'pilot_live_alert',
+    live_alert_broadcast_id: liveAlertBroadcastId,
   }));
 
   const { error: insertError } = await supabase.from('notifications').insert(payload);

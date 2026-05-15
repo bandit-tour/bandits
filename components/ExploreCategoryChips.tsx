@@ -11,7 +11,7 @@ type Props = {
   onSelect: (chip: ExploreCategoryChip) => void;
 };
 
-export default function ExploreCategoryChips({ selected, onSelect }: Props) {
+function ExploreCategoryChipsInner({ selected, onSelect }: Props) {
   return (
     <View style={styles.wrap}>
       <ScrollView
@@ -82,3 +82,5 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
   },
 });
+
+export default React.memo(ExploreCategoryChipsInner);

@@ -1,8 +1,13 @@
+import React from 'react';
 import { Platform } from 'react-native';
 
 // Import platform-specific components
 import PlatformMapViewNative from './LeafletMapView.native';
 import PlatformMapViewWeb from './LeafletMapView.web';
+
+import type { Database } from '@/lib/database.types';
+
+type EventRow = Database['public']['Tables']['event']['Row'];
 
 interface MapViewProps {
   initialRegion: {
@@ -17,6 +22,8 @@ interface MapViewProps {
   children?: React.ReactNode;
   miniMode?: boolean;
   banditId?: string;
+  /** Rows already loaded by Explore — avoids duplicate fetch / timeout. */
+  seedEvents?: EventRow[];
 }
 
 // Export the appropriate component based on platform

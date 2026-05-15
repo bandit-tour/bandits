@@ -388,44 +388,82 @@ export async function getUserLikedEventIds(): Promise<Set<string>> {
   return new Set(data?.map((item) => item.event_id) || []);
 } 
 
-// Get event categories/genres count for a specific bandit
-export async function getBanditEventCategories(banditId: string): Promise<{ genre: 'Food' | 'Culture' | 'Nightlife' | 'Shopping' | 'Coffee'; count: number }[]> {
-  const { data, error } = await supabase
-    .from('bandit_event')
-    .select(`
-      event:event(
-        genre
-      )
-    `)
-    .eq('bandit_id', banditId);
+type BanditCategoryRow = { genre: 'Food' | 'Culture' | 'Nightlife' | 'Shopping' | 'Coffee'; count: number };
 
-  if (error) {
-    if (isAuthOrMissingError(error)) {
-      return [];
+function aggregateGenreCounts(rows: { bandit_id?: string; event?: { genre?: string } | null }[] | null): Map<
+  string,
+  Map<string, number>
+> {
+  const byBandit = new Map<string, Map<string, number>>();
+  rows?.forEach((item: any) => {
+    const bid = String(item?.bandit_id || '').trim();
+    if (!bid) return;
+    const genre = normalizeGenre(item?.event?.genre);
+    if (!genre) return;
+    let m = byBandit.get(bid);
+    if (!m) {
+      m = new Map();
+      byBandit.set(bid, m);
     }
-    console.error('Error fetching bandit event categories:', error);
-    throw error;
-  }
-
-  // Group by genre and count using Map for better performance
-  const genreCounts = new Map<string, number>();
-
-  data?.forEach((item: any) => {
-    const genre = normalizeGenre(item.event?.genre);
-    if (genre) {
-      genreCounts.set(genre, (genreCounts.get(genre) || 0) + 1);
-    }
+    m.set(genre, (m.get(genre) || 0) + 1);
   });
+  return byBandit;
+}
 
-  // Convert to array and sort by count (descending)
-  const result = Array.from(genreCounts.entries())
+function genreCountsMapToSortedArray(genreCounts: Map<string, number>): BanditCategoryRow[] {
+  return Array.from(genreCounts.entries())
     .map(([genre, count]) => ({
-      genre: genre as 'Food' | 'Culture' | 'Nightlife' | 'Shopping' | 'Coffee',
-      count
+      genre: genre as BanditCategoryRow['genre'],
+      count,
     }))
     .sort((a, b) => b.count - a.count);
+}
 
-  return result;
+/** One round-trip for many bandits (avoids N sequential `bandit_event` queries on Local banDits). */
+export async function getBanditEventCategoriesBulk(banditIds: string[]): Promise<Map<string, BanditCategoryRow[]>> {
+  const out = new Map<string, BanditCategoryRow[]>();
+  const unique = [...new Set(banditIds.map((id) => String(id || '').trim()).filter(Boolean))];
+  for (const id of unique) out.set(id, []);
+
+  if (unique.length === 0) return out;
+
+  const CHUNK = 80;
+  for (let i = 0; i < unique.length; i += CHUNK) {
+    const slice = unique.slice(i, i + CHUNK);
+    const { data, error } = await supabase
+      .from('bandit_event')
+      .select(
+        `
+        bandit_id,
+        event:event(
+          genre
+        )
+      `,
+      )
+      .in('bandit_id', slice);
+
+    if (error) {
+      if (isAuthOrMissingError(error)) {
+        continue;
+      }
+      console.error('Error fetching bandit event categories (bulk):', error);
+      throw error;
+    }
+
+    const grouped = aggregateGenreCounts(data as any[] | null);
+    for (const bid of slice) {
+      const counts = grouped.get(bid);
+      out.set(bid, counts ? genreCountsMapToSortedArray(counts) : []);
+    }
+  }
+
+  return out;
+}
+
+// Get event categories/genres count for a specific bandit
+export async function getBanditEventCategories(banditId: string): Promise<BanditCategoryRow[]> {
+  const m = await getBanditEventCategoriesBulk([banditId]);
+  return m.get(String(banditId || '').trim()) ?? [];
 } 
 
 // Get personal tip for a specific event from a specific bandit
