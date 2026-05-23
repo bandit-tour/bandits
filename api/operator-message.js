@@ -136,5 +136,17 @@ module.exports = async function handler(req, res) {
     return res.status(500).json({ error: guestError.message || 'Could not create traveler notification' });
   }
 
+  if (kind === 'local_friend') {
+    const { error: oceanErr } = await admin.rpc('enqueue_local_friend_ocean_float', {
+      p_thread_root_id: threadRootId,
+      p_sender_user_id: travelerId,
+      p_message_body: message,
+      p_sender_persona_name: title,
+    });
+    if (oceanErr) {
+      return res.status(500).json({ error: oceanErr.message || 'Could not enqueue floating message' });
+    }
+  }
+
   return res.status(200).json({ ok: true, threadRootId });
 };

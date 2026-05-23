@@ -20,7 +20,17 @@ import {
   bodyAfterAskMeAboutLine,
   parseAboutBanditFromAskMessage,
 } from '@/lib/askMeMessageFormat';
-import { firstBubbleBodyForType, isSignalBottleInboxType } from '@/lib/bottleThreadText';
+import {
+  firstBubbleBodyForType,
+  isLocalFriendOceanBottleType,
+  isSignalBottleInboxType,
+} from '@/lib/bottleThreadText';
+import {
+  fetchOceanFloatMeta,
+  fetchOceanPeerMessages,
+  revealLocalFriendOceanFloat,
+  sendLocalFriendOceanPeerMessage,
+} from '@/lib/localFriendOcean';
 import { trackEvent } from '@/lib/analytics';
 import { resolveCanonicalSignalThreadByDelivery } from '@/lib/canonicalSignalThread';
 import { type PilotThreadIdentity, fetchPilotThreadIdentity } from '@/lib/pilotThreadIdentity';
@@ -107,6 +117,9 @@ export default function ChatScreen() {
   /** When DB row is missing, lock UI from incoming notification title (local_friend / ask). */
   const [deskPersonaLock, setDeskPersonaLock] = useState('');
   const [refreshing, setRefreshing] = useState(false);
+  const [oceanFloatId, setOceanFloatId] = useState<string | null>(null);
+  const [oceanRevealHidden, setOceanRevealHidden] = useState(false);
+  const [oceanRevealing, setOceanRevealing] = useState(false);
   const listRef = useRef<FlatList<ChatMessage>>(null);
   const firstScrollDoneRef = useRef(false);
 
@@ -129,6 +142,11 @@ export default function ChatScreen() {
     }
     if (nType === 'local_friend') {
       return 'Local Friend';
+    }
+    if (isLocalFriendOceanBottleType(nType)) {
+      const t = typeof notificationTitle === 'string' ? notificationTitle.trim() : '';
+      if (t && !/^message in a bottle$/i.test(t)) return t;
+      return 'Message in a bottle';
     }
     const t = typeof notificationTitle === 'string' ? notificationTitle.trim() : '';
     if (t) return t;
@@ -182,7 +200,7 @@ export default function ChatScreen() {
       return;
     }
 
-    const body = isSignalBottleInboxType(nType)
+    const body = isSignalBottleInboxType(nType) || isLocalFriendOceanBottleType(nType)
       ? firstBubbleBodyForType(nType, msg, title)
       : nType === 'local_friend'
         ? (msg || [title, msg].filter(Boolean).join('\n\n').trim())
@@ -278,6 +296,13 @@ export default function ChatScreen() {
         const effectiveType = nType || String(anchor?.type || '').trim();
         const refFromAnchor = String(refId || anchor?.reference_id || '').trim();
         const anchorRefType = String(anchor?.reference_type || '').trim();
+        const isOceanThread = isLocalFriendOceanBottleType(effectiveType) && refFromAnchor.length >= 32;
+        if (isOceanThread) {
+          setOceanFloatId(refFromAnchor);
+        } else {
+          setOceanFloatId(null);
+          setOceanRevealHidden(false);
+        }
         /**
          * Same account can act as traveler and operator; guest Ask echo threads must stay on traveler-side UI.
          */
@@ -405,6 +430,48 @@ export default function ChatScreen() {
               },
               () => undefined,
             );
+        }
+
+        if (isOceanThread && user && refFromAnchor) {
+          const meta = await fetchOceanFloatMeta(refFromAnchor);
+          const peerRows = await fetchOceanPeerMessages(refFromAnchor);
+          const hidden = meta?.reveal_status === 'hidden';
+          const isReceiver = meta?.claimed_by_user_id === user.id;
+          const isSender = meta?.sender_user_id === user.id;
+          setOceanRevealHidden(!!hidden && !!isReceiver);
+          if (meta?.sender_persona_name) {
+            if (isSender || meta.reveal_status === 'revealed') {
+              setDeskPersonaLock(meta.sender_persona_name.trim());
+            } else {
+              setDeskPersonaLock('');
+            }
+          }
+          const openBody = (meta?.message_body || '').trim();
+          const thread: ChatMessage[] = [];
+          if (openBody) {
+            thread.push({
+              id: `ocean-open-${refFromAnchor}`,
+              role: 'bandit',
+              body: openBody,
+              sentAt: new Date().toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' }),
+            });
+          }
+          for (const row of peerRows) {
+            const isSelf = row.author_user_id === user.id;
+            thread.push({
+              id: `ocean-${row.id}`,
+              role: isSelf ? 'user' : 'bandit',
+              body: row.body,
+              sentAt: new Date(row.created_at).toLocaleTimeString(undefined, {
+                hour: 'numeric',
+                minute: '2-digit',
+              }),
+            });
+          }
+          setMessages(thread);
+          setRequesterUserId(null);
+          setOperatorMode(false);
+          return;
         }
 
         if ((!operatorNav || viewAsGuest) && user && nid) {
@@ -640,10 +707,49 @@ export default function ChatScreen() {
 
   const threadRefreshControl = usePremiumRefreshControl(refreshing, onRefreshThread);
 
+  const onRevealOceanSender = useCallback(() => {
+    const fid = String(oceanFloatId || '').trim();
+    if (!fid || oceanRevealing) return;
+    void (async () => {
+      setOceanRevealing(true);
+      try {
+        const result = await revealLocalFriendOceanFloat(fid);
+        if (result.senderPersonaName) {
+          setDeskPersonaLock(result.senderPersonaName.trim());
+        }
+        setOceanRevealHidden(false);
+        requestNotificationsRefresh();
+        await loadThread(true);
+      } catch (e) {
+        Alert.alert('Could not reveal', e instanceof Error ? e.message : 'Try again.');
+      } finally {
+        setOceanRevealing(false);
+      }
+    })();
+  }, [loadThread, oceanFloatId, oceanRevealing]);
+
   const send = useCallback(() => {
     const t = draft.trim();
     if (!t) return;
     void (async () => {
+      const fid = String(oceanFloatId || '').trim();
+      if (fid && !operatorMode) {
+        try {
+          await sendLocalFriendOceanPeerMessage(fid, t);
+          requestNotificationsRefresh();
+          const now = new Date();
+          const sentAt = now.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' });
+          setMessages((prev) => [
+            ...prev,
+            { id: `u-${now.getTime()}`, role: 'user', body: t, sentAt },
+          ]);
+          setDraft('');
+          setTimeout(() => listRef.current?.scrollToEnd({ animated: true }), 80);
+        } catch (e) {
+          Alert.alert('Send failed', e instanceof Error ? e.message : 'Try again.');
+        }
+        return;
+      }
       if (operatorMode && requesterUserId && notificationId) {
         /** `operator_reply` matches legacy RLS (migration 025 adds granular types). */
         const replyReferenceType = 'operator_reply';
@@ -690,6 +796,7 @@ export default function ChatScreen() {
     replyAsBandit,
     notificationType,
     personaBarLock,
+    oceanFloatId,
   ]);
 
   const renderItem = useCallback(({ item }: { item: ChatMessage }) => {
@@ -748,6 +855,22 @@ export default function ChatScreen() {
             ListEmptyComponent={null}
           />
         )}
+        {oceanRevealHidden && !operatorMode ? (
+          <View style={styles.revealBar}>
+            <Pressable
+              style={[styles.revealBtn, oceanRevealing && styles.revealBtnDisabled]}
+              onPress={onRevealOceanSender}
+              disabled={oceanRevealing}
+              testID="chat-who-sent-this"
+            >
+              {oceanRevealing ? (
+                <ActivityIndicator color="#111" />
+              ) : (
+                <Text style={styles.revealBtnText}>Who sent this?</Text>
+              )}
+            </Pressable>
+          </View>
+        ) : null}
         {operatorMode && (
           <View style={styles.operatorBar}>
             {personaBarLock ? (
@@ -879,6 +1002,22 @@ const styles = StyleSheet.create({
     backgroundColor: '#FFF',
     gap: 8,
   },
+  revealBar: {
+    paddingHorizontal: 14,
+    paddingTop: 10,
+    paddingBottom: 4,
+    backgroundColor: '#FFF',
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: '#E4E4E4',
+  },
+  revealBtn: {
+    backgroundColor: '#111',
+    borderRadius: 12,
+    paddingVertical: 12,
+    alignItems: 'center',
+  },
+  revealBtnDisabled: { opacity: 0.6 },
+  revealBtnText: { color: '#FFF', fontSize: 15, fontWeight: '700' },
   operatorBar: {
     paddingHorizontal: 12,
     paddingTop: 8,

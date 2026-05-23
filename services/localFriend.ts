@@ -6,6 +6,7 @@ import {
 import { ensureAnonymousSession } from '@/lib/pilotSession';
 import { insertGuestEchoViaApi } from '@/lib/guestNotificationEchoApi';
 import { requestNotificationsRefresh } from '@/lib/notificationEvents';
+import { enqueueLocalFriendOceanFloat } from '@/lib/localFriendOcean';
 import { fetchSenderBanditIdentity } from '@/lib/signalDelivery';
 import { supabase } from '@/lib/supabase';
 import { trackEvent } from '@/lib/analytics';
@@ -207,6 +208,13 @@ export async function sendLocalFriendMessage(message: string): Promise<void> {
       throw userFacingMessagingError(guestEchoError);
     }
   }
+
+  void enqueueLocalFriendOceanFloat({
+    threadRootId: rootId,
+    senderUserId: user.id,
+    messageBody: trimmed,
+    senderPersonaName: personaTitle,
+  }).catch(() => undefined);
 
   requestNotificationsRefresh();
 

@@ -33,9 +33,12 @@ import { getNearbyStoredNotifications, type NearbyInboxEntry } from '@/lib/nearb
 import { getNotificationsBackendStatus } from '@/services/localFriend';
 import { getOperatorUserId } from '@/lib/operatorConfig';
 import { trackEvent } from '@/lib/analytics';
+import { perfMark, perfStart, perfTraceNetwork } from '@/lib/perfTiming';
 import { getDismissedNotificationIds } from '@/lib/dismissedThreads';
 import { formatInboxSentAt } from '@/lib/inboxSentAtLabel';
 import { BANDITS_NOTIFICATIONS_REFRESH } from '@/lib/notificationEvents';
+import { isLocalFriendOceanClaimRef, isLocalFriendBottleInboxType } from '@/lib/localFriendOcean';
+import { inboxPreviewForType } from '@/lib/bottleThreadText';
 import { isDeletedThreadRef } from '@/lib/threadDelete';
 
 type NotificationRow = {
@@ -144,6 +147,10 @@ function banditNameFromNotification(n: NotificationRow): string {
   if (n.type === 'local_friend' && t.length > 0 && t.length < 64) {
     return `Local Friend · ${t}`;
   }
+  if (isLocalFriendBottleInboxType(n.type)) {
+    if (t.length > 0 && t.length < 64 && !/^message in a bottle$/i.test(t)) return t;
+    return 'Message in a bottle';
+  }
   const fromReply = /^reply\s+from\s+(.+)/i.exec(t);
   if (fromReply) return fromReply[1].trim();
   const localFriend = /local friend/i.test(t) ? 'Local Friend' : '';
@@ -159,7 +166,7 @@ function notificationToInboxItem(n: NotificationRow, fromServer = true): InboxLi
       ? raw
       : n.type === 'bandit_question' && raw
         ? bodyAfterAskMeAboutLine(raw)
-        : raw;
+        : inboxPreviewForType(n.type, raw, n.title || '');
   return {
     id: n.id,
     banditName: banditNameFromNotification(n),
@@ -263,11 +270,15 @@ export default function NotificationsScreen() {
   }, [refreshDemoExtras]);
 
   const loadInbox = useCallback(async (phase: 'initial' | 'refresh') => {
+    const endLoad = perfStart(`notifications_load:${phase}`, phase === 'initial' ? 'render' : 'network');
     try {
       if (phase === 'initial') setLoading(true);
       else setRefreshing(true);
+      perfMark(`notifications_load:${phase}:start`, 'network');
       await ensureAnonymousSession().catch(() => undefined);
-      const status = await getNotificationsBackendStatus();
+      const status = await perfTraceNetwork('notifications_backend_status', () =>
+        getNotificationsBackendStatus(),
+      );
       if (!status.enabled) {
         setServerItems([]);
         await refreshNotifications();
@@ -282,11 +293,13 @@ export default function NotificationsScreen() {
         await refreshNotifications();
         return;
       }
-      const { data, error: qError } = await supabase
-        .from('notifications')
-        .select('*')
-        .eq('user_id', user.id)
-        .order('created_at', { ascending: false });
+      const { data, error: qError } = await perfTraceNetwork('notifications_query', async () =>
+        supabase
+          .from('notifications')
+          .select('*')
+          .eq('user_id', user.id)
+          .order('created_at', { ascending: false }),
+      );
 
       if (qError) {
         throw new Error(qError.message || 'Could not load notifications right now.');
@@ -336,6 +349,7 @@ export default function NotificationsScreen() {
 
       const rows = displayRows.map((n) => notificationToInboxItem(n));
       setServerItems(rows);
+      perfMark(`notifications_load:${phase}:rows_ready`, 'render', { count: rows.length });
       await refreshNotifications();
       unreadRepliesBeforeRead.forEach((n) => {
         if (n.reference_type === 'operator_reply_local_friend') {
@@ -359,6 +373,7 @@ export default function NotificationsScreen() {
       if (phase === 'initial') setLoading(false);
       else setRefreshing(false);
       inboxInitialFocusDoneRef.current = true;
+      endLoad({ phase });
     }
   }, [refreshNotifications]);
 
@@ -381,6 +396,7 @@ export default function NotificationsScreen() {
 
   useFocusEffect(
     useCallback(() => {
+      perfMark('notifications_screen_focus', 'navigation');
       const phase = inboxInitialFocusDoneRef.current ? 'refresh' : 'initial';
       void loadInbox(phase);
     }, [loadInbox]),
@@ -445,10 +461,17 @@ export default function NotificationsScreen() {
       const rt = String(n.reference_type || '').trim();
       const isOperatorAskMe = t === 'bandit_question' && rt === 'bandit_question_request';
       const isOperatorLocalFriend = t === 'local_friend' && rt === 'local_friend_request';
+      const isOceanBottle =
+        isLocalFriendBottleInboxType(t) && (isLocalFriendOceanClaimRef(rt) || rt === 'local_friend_ocean_peer');
 
-      if (isOperatorAskMe || isOperatorLocalFriend) {
+      if (isOperatorAskMe || isOperatorLocalFriend || isOceanBottle) {
         const aboutBandit = isOperatorAskMe ? parseAboutBanditFromAskMessage(n.message || '') : null;
-        const banditNameParam = isOperatorAskMe ? aboutBandit || 'Ask' : 'Local Friend';
+        let banditNameParam = isOperatorAskMe ? aboutBandit || 'Ask' : 'Local Friend';
+        if (isOceanBottle) {
+          const oceanTitle = String(n.title || '').trim();
+          banditNameParam =
+            oceanTitle && !/^message in a bottle$/i.test(oceanTitle) ? oceanTitle : 'Message in a bottle';
+        }
         router.push({
           pathname: '/chat',
           params: {
@@ -493,33 +516,30 @@ export default function NotificationsScreen() {
     <>
       <Stack.Screen options={{ headerShown: true, title: 'Notifications', headerBackTitle: 'Back' }} />
       <View style={[styles.container, isDesktopWeb && styles.containerDesktop]}>
-        {loading ? (
-          <View style={styles.center}>
-            <ActivityIndicator size="large" />
-          </View>
-        ) : rows.length === 0 ? (
-          <ScrollView
-            style={{ flex: 1 }}
-            contentContainerStyle={styles.center}
-            refreshControl={inboxRefreshControl}
-          >
-            <Text style={styles.emptyHeading}>No notifications yet</Text>
-          </ScrollView>
-        ) : (
-          <SectionList
-            sections={sections}
-            keyExtractor={(item) => item.id}
-            renderItem={renderItem}
-            renderSectionHeader={({ section }) =>
-              section.title ? <Text style={styles.sectionHeader}>{section.title}</Text> : null
-            }
-            SectionSeparatorComponent={() => <View style={{ height: 4 }} />}
-            contentContainerStyle={styles.list}
-            ItemSeparatorComponent={() => <View style={{ height: 10 }} />}
-            stickySectionHeadersEnabled={false}
-            refreshControl={inboxRefreshControl}
-          />
-        )}
+        <SectionList
+          sections={sections}
+          keyExtractor={(item) => item.id}
+          renderItem={renderItem}
+          renderSectionHeader={({ section }) =>
+            section.title ? <Text style={styles.sectionHeader}>{section.title}</Text> : null
+          }
+          SectionSeparatorComponent={() => <View style={{ height: 4 }} />}
+          contentContainerStyle={styles.list}
+          ItemSeparatorComponent={() => <View style={{ height: 10 }} />}
+          stickySectionHeadersEnabled={false}
+          refreshControl={inboxRefreshControl}
+          ListEmptyComponent={
+            loading ? (
+              <View style={styles.center}>
+                <ActivityIndicator size="large" color="#0a7ea4" />
+              </View>
+            ) : (
+              <View style={styles.center}>
+                <Text style={styles.emptyHeading}>No notifications yet</Text>
+              </View>
+            )
+          }
+        />
       </View>
     </>
   );
