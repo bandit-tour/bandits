@@ -13,6 +13,26 @@
   ],
   "rewrites": [
     {
+      "source": "/api/local-friend-ocean-claim",
+      "destination": "/api/local-friend-ocean?action=claim"
+    },
+    {
+      "source": "/api/local-friend-ocean-reply",
+      "destination": "/api/local-friend-ocean?action=reply"
+    },
+    {
+      "source": "/api/local-friend-ocean-reveal",
+      "destination": "/api/local-friend-ocean?action=reveal"
+    },
+    {
+      "source": "/api/push-register",
+      "destination": "/api/push?action=register"
+    },
+    {
+      "source": "/api/push-notify-event",
+      "destination": "/api/push?action=notify"
+    },
+    {
       "source": "/hotel/:path*",
       "destination": "/index.html"
     },

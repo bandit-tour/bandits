@@ -37,9 +37,16 @@ import { perfMark, perfStart, perfTraceNetwork } from '@/lib/perfTiming';
 import { getDismissedNotificationIds } from '@/lib/dismissedThreads';
 import { formatInboxSentAt } from '@/lib/inboxSentAtLabel';
 import { BANDITS_NOTIFICATIONS_REFRESH } from '@/lib/notificationEvents';
-import { isLocalFriendOceanClaimRef, isLocalFriendBottleInboxType } from '@/lib/localFriendOcean';
+import {
+  isLocalFriendBottleInboxType,
+  isLocalFriendOceanClaimRef,
+  isLocalFriendOceanFoundRef,
+} from '@/lib/localFriendOcean';
+import { OCEAN_THREAD_REPLY_REF } from '@/lib/oceanBottleChat';
 import { inboxPreviewForType } from '@/lib/bottleThreadText';
 import { isDeletedThreadRef } from '@/lib/threadDelete';
+import { markInboxSurfaceOpened } from '@/lib/osAppBadge';
+import { syncOsAppIconBadge } from '@/lib/pushNotifications';
 
 type NotificationRow = {
   id: string;
@@ -220,7 +227,7 @@ export default function NotificationsScreen() {
   const router = useRouter();
   const { width } = useWindowDimensions();
   const isDesktopWeb = Platform.OS === 'web' && width >= 1024;
-  const { refreshNotifications, markNotificationRead } = useAppState();
+  const { refreshNotifications, markNotificationRead, unreadCount, chatUnreadCount } = useAppState();
   const inboxInitialFocusDoneRef = useRef(false);
   const [loading, setLoading] = useState(true);
   const [serverItems, setServerItems] = useState<InboxListItem[]>([]);
@@ -399,7 +406,10 @@ export default function NotificationsScreen() {
       perfMark('notifications_screen_focus', 'navigation');
       const phase = inboxInitialFocusDoneRef.current ? 'refresh' : 'initial';
       void loadInbox(phase);
-    }, [loadInbox]),
+      void markInboxSurfaceOpened(unreadCount).then(() =>
+        syncOsAppIconBadge(unreadCount, chatUnreadCount),
+      );
+    }, [loadInbox, unreadCount, chatUnreadCount]),
   );
 
   useEffect(() => {
@@ -461,13 +471,23 @@ export default function NotificationsScreen() {
       const rt = String(n.reference_type || '').trim();
       const isOperatorAskMe = t === 'bandit_question' && rt === 'bandit_question_request';
       const isOperatorLocalFriend = t === 'local_friend' && rt === 'local_friend_request';
-      const isOceanBottle =
-        isLocalFriendBottleInboxType(t) && (isLocalFriendOceanClaimRef(rt) || rt === 'local_friend_ocean_peer');
+      const floatRef = String(n.reference_id || '').trim();
+      const isOceanFoundOnly = isLocalFriendBottleInboxType(t) && isLocalFriendOceanFoundRef(rt);
+      const isOceanActiveChat =
+        floatRef.length >= 32 &&
+        (isLocalFriendOceanClaimRef(rt) ||
+          rt === 'local_friend_ocean_peer' ||
+          (t === 'bandit_reply' && rt === OCEAN_THREAD_REPLY_REF));
 
-      if (isOperatorAskMe || isOperatorLocalFriend || isOceanBottle) {
+      /** Sender “Someone found your bottle” — informational only until the guest replies. */
+      if (isOceanFoundOnly) {
+        return;
+      }
+
+      if (isOperatorAskMe || isOperatorLocalFriend || isOceanActiveChat) {
         const aboutBandit = isOperatorAskMe ? parseAboutBanditFromAskMessage(n.message || '') : null;
         let banditNameParam = isOperatorAskMe ? aboutBandit || 'Ask' : 'Local Friend';
-        if (isOceanBottle) {
+        if (isOceanActiveChat) {
           const oceanTitle = String(n.title || '').trim();
           banditNameParam =
             oceanTitle && !/^message in a bottle$/i.test(oceanTitle) ? oceanTitle : 'Message in a bottle';
@@ -477,9 +497,9 @@ export default function NotificationsScreen() {
           params: {
             banditName: banditNameParam,
             notificationId: n.id,
-            notificationType: n.type,
-            referenceId: n.reference_id ?? '',
-            referenceType: n.reference_type ?? '',
+            notificationType: isOceanActiveChat ? 'local_friend_bottle' : n.type,
+            referenceId: floatRef,
+            referenceType: isOceanActiveChat ? 'local_friend_ocean_claim' : (n.reference_type ?? ''),
             notificationTitle: n.title ?? '',
             notificationMessage: n.message ?? '',
           },

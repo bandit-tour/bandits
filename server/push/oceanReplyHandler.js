@@ -1,4 +1,7 @@
 const { createClient } = require('@supabase/supabase-js');
+const { dispatchExpoPushToUser } = require('./expoPushDispatch');
+
+const OCEAN_THREAD_REPLY_REF = 'local_friend_ocean_thread';
 
 function setCors(res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
@@ -14,7 +17,7 @@ function validUuid(value) {
   );
 }
 
-module.exports = async function handler(req, res) {
+module.exports = async function oceanReplyHandler(req, res) {
   setCors(res);
   if (req.method === 'OPTIONS') return res.status(204).end();
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
@@ -60,7 +63,7 @@ module.exports = async function handler(req, res) {
 
   const { data: floatRow, error: floatErr } = await admin
     .from('local_friend_ocean_float')
-    .select('id, sender_user_id, claimed_by_user_id, status, sender_persona_name')
+    .select('id, sender_user_id, claimed_by_user_id, status, sender_persona_name, claim_notification_id')
     .eq('id', floatId)
     .maybeSingle();
 
@@ -80,11 +83,36 @@ module.exports = async function handler(req, res) {
     return res.status(403).json({ error: 'Not a participant' });
   }
 
-  const recipientId = authorId === senderId ? receiverId : senderId;
-  const authorLabel =
-    authorId === senderId
-      ? String(floatRow.sender_persona_name || 'Traveler').trim() || 'Traveler'
-      : 'Traveler';
+  const { count: guestMsgCount } = await admin
+    .from('local_friend_ocean_message')
+    .select('id', { count: 'exact', head: true })
+    .eq('ocean_float_id', floatId)
+    .eq('author_user_id', receiverId);
+
+  const guestHasReplied = (guestMsgCount || 0) > 0;
+  const isSender = authorId === senderId;
+  const isGuest = authorId === receiverId;
+
+  if (isSender && !guestHasReplied) {
+    return res.status(403).json({
+      error: 'Waiting for the guest to reply first',
+      code: 'guest_must_reply_first',
+    });
+  }
+
+  const recipientId = isSender ? receiverId : senderId;
+  const isFirstGuestReply = isGuest && (guestMsgCount || 0) === 0;
+  const authorLabel = isSender
+    ? String(floatRow.sender_persona_name || 'Traveler').trim() || 'Traveler'
+    : 'Traveler';
+  const pushTitle =
+    isFirstGuestReply && recipientId === senderId
+      ? 'Someone replied to your bottle'
+      : authorLabel;
+  const pushBody =
+    isFirstGuestReply && recipientId === senderId
+      ? message || 'Open Chat to continue the conversation.'
+      : message;
 
   const { error: msgErr } = await admin.from('local_friend_ocean_message').insert({
     ocean_float_id: floatId,
@@ -97,16 +125,44 @@ module.exports = async function handler(req, res) {
 
   const { error: notifErr } = await admin.from('notifications').insert({
     user_id: recipientId,
-    type: 'local_friend_bottle',
+    type: 'bandit_reply',
     title: authorLabel,
     message,
     reference_id: floatId,
-    reference_type: 'local_friend_ocean_peer',
+    reference_type: OCEAN_THREAD_REPLY_REF,
     is_read: false,
   });
   if (notifErr) {
     return res.status(500).json({ error: notifErr.message || 'Could not notify recipient' });
   }
 
-  return res.status(200).json({ ok: true });
+  void dispatchExpoPushToUser(admin, {
+    userId: recipientId,
+    title: pushTitle,
+    body: pushBody,
+    channelId: 'messages',
+    data: {
+      surface: 'chat',
+      kind: isFirstGuestReply ? 'guest_replied' : 'chat_message',
+      referenceType: OCEAN_THREAD_REPLY_REF,
+      referenceId: floatId,
+      floatId,
+      notificationTitle: pushTitle,
+    },
+  }).catch((e) => console.warn('[ocean-reply] push:', e?.message || e));
+
+  const { error: mirrorErr } = await admin.from('notifications').insert({
+    user_id: authorId,
+    type: 'bandit_reply',
+    title: 'You',
+    message,
+    reference_id: floatId,
+    reference_type: OCEAN_THREAD_REPLY_REF,
+    is_read: true,
+  });
+  if (mirrorErr) {
+    console.warn('[ocean-reply] author mirror insert:', mirrorErr.message);
+  }
+
+  return res.status(200).json({ ok: true, chat_activated: true });
 };

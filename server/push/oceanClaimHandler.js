@@ -1,4 +1,5 @@
 const { createClient } = require('@supabase/supabase-js');
+const { dispatchPushForNotificationInsert } = require('./expoPushDispatch');
 
 function setCors(res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
@@ -23,7 +24,87 @@ function adminClient() {
   });
 }
 
-module.exports = async function handler(req, res) {
+const SIGNAL_BANK_LINES = [
+  'Trust the street with no sign.',
+  'Some nights begin after midnight.',
+  'Follow music, not maps.',
+  'Cities reward curiosity.',
+  'Arrive hungry for the wrong turn.',
+  'Listen for laughter behind closed doors.',
+  'Walk until the crowd thins.',
+  'Borrow courage from strangers.',
+  'Rain makes the city honest.',
+  'Your feet already decided.',
+];
+
+function stableStringHash(seed) {
+  let h = 2166136261;
+  for (let i = 0; i < seed.length; i++) {
+    h ^= seed.charCodeAt(i);
+    h = Math.imul(h, 16777619);
+  }
+  return Math.abs(h);
+}
+
+function pickIndexFromSeed(seed, n) {
+  if (n <= 0) return 0;
+  return stableStringHash(seed) % n;
+}
+
+function banditDisplayName(row) {
+  const first = String(row.name || '').trim();
+  const last = String(row.family_name || '').trim();
+  return [first, last].filter(Boolean).join(' ') || 'A local banDit';
+}
+
+function firstWhyFollowLine(whyFollow) {
+  const wf = String(whyFollow || '').trim();
+  if (!wf) return '';
+  const line = wf
+    .split('\n')
+    .map((l) => l.trim().replace(/^•\s*/, ''))
+    .find(Boolean);
+  return line || '';
+}
+
+function momentBodyFromBandit(row) {
+  const desc = String(row.description || '').trim();
+  if (desc.length >= 12) return desc;
+  const why = firstWhyFollowLine(row.why_follow);
+  if (why.length >= 12) return why;
+  const city = String(row.city || 'Athens').trim() || 'Athens';
+  const name = String(row.name || 'A local banDit').trim();
+  return `${name} is out in ${city} — follow the city rhythm they trust.`;
+}
+
+async function pickBanditMomentForBottle(admin, receiverId) {
+  const seed = `${receiverId}:${new Date().toISOString().slice(0, 10)}`;
+  const { data, error } = await admin
+    .from('bandit')
+    .select('id, name, family_name, city, description, why_follow')
+    .order('created_at', { ascending: true });
+  if (!error && data?.length) {
+    const pool = data
+      .map((row) => ({
+        banditId: String(row.id),
+        banditName: banditDisplayName(row),
+        body: momentBodyFromBandit(row),
+      }))
+      .filter((m) => m.body.trim().length >= 8);
+    if (pool.length) {
+      const pick = pool[pickIndexFromSeed(seed, pool.length)] ?? pool[0];
+      return pick;
+    }
+  }
+  const idx = pickIndexFromSeed(`signal-bank:${seed}`, SIGNAL_BANK_LINES.length);
+  return {
+    banditId: '',
+    banditName: 'Athens',
+    body: SIGNAL_BANK_LINES[idx] ?? SIGNAL_BANK_LINES[0],
+  };
+}
+
+module.exports = async function oceanClaimHandler(req, res) {
   setCors(res);
   if (req.method === 'OPTIONS') return res.status(204).end();
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
@@ -62,7 +143,14 @@ module.exports = async function handler(req, res) {
 
   const vRow = floats?.[0];
   if (!vRow?.id) {
-    return res.status(200).json({ ok: false, reason: 'no_floating_message' });
+    const moment = await pickBanditMomentForBottle(admin, receiverId);
+    return res.status(200).json({
+      ok: true,
+      source: 'bandit_moment',
+      message: moment.body,
+      bandit_id: moment.banditId || null,
+      bandit_name: moment.banditName,
+    });
   }
 
   const notifId = crypto.randomUUID();
@@ -98,6 +186,24 @@ module.exports = async function handler(req, res) {
     return res.status(500).json({ error: senderNotifErr.message || 'Could not notify sender' });
   }
 
+  void dispatchPushForNotificationInsert(admin, receiverId, {
+    type: 'local_friend_bottle',
+    title: 'Message in a bottle',
+    message: vRow.message_body,
+    reference_id: floatId,
+    reference_type: 'local_friend_ocean_claim',
+    is_read: false,
+  }).catch((e) => console.warn('[ocean-claim] guest push:', e?.message || e));
+
+  void dispatchPushForNotificationInsert(admin, vRow.sender_user_id, {
+    type: 'local_friend_bottle',
+    title: 'Someone found your bottle',
+    message: String(vRow.message_body || '').slice(0, 500),
+    reference_id: floatId,
+    reference_type: 'local_friend_ocean_found',
+    is_read: false,
+  }).catch((e) => console.warn('[ocean-claim] sender push:', e?.message || e));
+
   const { error: updateErr } = await admin
     .from('local_friend_ocean_float')
     .update({
@@ -117,6 +223,7 @@ module.exports = async function handler(req, res) {
 
   return res.status(200).json({
     ok: true,
+    source: 'local_friend',
     float_id: floatId,
     message: vRow.message_body,
     notification_id: notifId,

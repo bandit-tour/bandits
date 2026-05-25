@@ -1,4 +1,5 @@
 const { createClient } = require('@supabase/supabase-js');
+const { dispatchPushForNotificationInsert } = require('../server/push/expoPushDispatch');
 
 const DEFAULT_OPERATOR_USER_ID = 'e6d8cb02-6f1a-40c0-96c4-b96961878407';
 
@@ -135,6 +136,10 @@ module.exports = async function handler(req, res) {
   if (guestError) {
     return res.status(500).json({ error: guestError.message || 'Could not create traveler notification' });
   }
+
+  void dispatchPushForNotificationInsert(admin, operatorUserId, operatorRow).catch((e) =>
+    console.warn('[operator-message] operator push:', e?.message || e),
+  );
 
   if (kind === 'local_friend') {
     const { error: oceanErr } = await admin.rpc('enqueue_local_friend_ocean_float', {

@@ -5,6 +5,7 @@
   "scripts": {
     "postinstall": "node scripts/patch-expo-win-externals.cjs && node scripts/patch-react-navigation-weakref.cjs",
     "start": "node scripts/start-expo-lan.cjs",
+    "start:tunnel": "node scripts/start-expo-tunnel.cjs",
     "reset-project": "node ./scripts/reset-project.js",
     "upload-event-images": "node ./scripts/upload-event-images.js",
     "enrich-athens-guide": "node ./scripts/build-athens-enrichment.cjs",
@@ -19,6 +20,8 @@
     "verify:pilot-row-8": "node scripts/pilot-flows-runtime.mjs --row-8-only",
     "capture:aluma": "node scripts/capture-aluma-screens.mjs",
     "eas:sync-env": "node scripts/sync-eas-env.cjs",
+    "embed:leaflet": "node scripts/embed-leaflet-assets.cjs",
+    "eas:preview:all": "eas build --profile preview --platform all --non-interactive",
     "deploy": "npm run build && npx netlify-cli deploy  --dir=dist",
     "deploy-prod": "npm run build && npx netlify-cli deploy  --prod --dir=dist",
     "build": "npx expo export --platform web && node scripts/prepare-pwa.js && npx workbox-cli generateSW workbox-config.js && node scripts/inject-sw.js && node scripts/mirror-hotel-index.cjs",
@@ -30,7 +33,10 @@
     "audit:recommendation-places": "node scripts/audit-recommendation-place-health.mjs",
     "audit:batch3-qa-names": "node scripts/audit-batch3-qa-names.mjs",
     "verify:authentic-venue-images": "node scripts/verify-authentic-venue-images.mjs",
-    "db:fix-mojibake": "node scripts/db-fix-mojibake-globally.mjs"
+    "db:fix-mojibake": "node scripts/db-fix-mojibake-globally.mjs",
+    "db:apply-push-tokens": "node scripts/apply-migration-064-via-api.mjs",
+    "db:apply-push-tokens:pg": "node scripts/apply-migration-064-pg.mjs",
+    "verify:push-production": "node scripts/verify-push-production-e2e.mjs"
   },
   "dependencies": {
     "@expo/vector-icons": "^15.0.3",
@@ -50,6 +56,7 @@
     "expo-constants": "~18.0.13",
     "expo-crypto": "~15.0.8",
     "expo-dev-client": "~6.0.20",
+    "expo-device": "~8.0.10",
     "expo-file-system": "~19.0.21",
     "expo-font": "~14.0.11",
     "expo-haptics": "~15.0.8",
@@ -58,6 +65,7 @@
     "expo-linear-gradient": "~15.0.8",
     "expo-linking": "~8.0.11",
     "expo-location": "~19.0.8",
+    "expo-notifications": "~0.32.17",
     "expo-router": "~6.0.23",
     "expo-screen-orientation": "~9.0.8",
     "expo-splash-screen": "~31.0.13",
@@ -82,7 +90,9 @@
     "react-native-webview": "13.15.0"
   },
   "devDependencies": {
+    "@expo/ngrok": "^4.1.3",
     "@types/react": "~19.1.10",
+    "pg": "^8.21.0",
     "playwright": "^1.49.1",
     "typescript": "~5.9.2"
   },

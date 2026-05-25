@@ -78,27 +78,56 @@ async function main() {
     await guestB.goto(`${base}/bottle`, { waitUntil: 'domcontentloaded', timeout: 120000 });
     await guestB.waitForTimeout(8000);
     const bottleBody = (await guestB.textContent('body')) || '';
-    result.steps.bottleShowsMessage =
-      bottleBody.includes(tag) || /note drifted ashore/i.test(bottleBody);
-    await shot(guestB, '01-bottle-message.png');
+    result.steps.bottlePlayIntro =
+      /message in a bottle has arrived/i.test(bottleBody) &&
+      (bottleBody.includes(tag) || /Someone sent this into the city/i.test(bottleBody));
+    result.steps.whoSentOnScanPage = /Who sent this\?/i.test(bottleBody);
+    await shot(guestB, '01-bottle-hook.png');
 
-    result.steps.whoSentVisible = (await guestB.getByTestId('bottle-who-sent-this').count()) > 0;
-    if (result.steps.whoSentVisible) {
-      await guestB.getByTestId('bottle-who-sent-this').click({ timeout: 15000 });
-      await guestB.waitForTimeout(4000);
-      await shot(guestB, '02-chat-before-reveal.png');
+    const flipBtn = guestB.getByRole('button', { name: /^Flip$/i });
+    if (await flipBtn.count()) {
+      await flipBtn.click({ timeout: 15000 });
+      await guestB.waitForTimeout(2000);
     }
+    result.steps.bottleGiftSide = /YOUR ARRIVAL GIFT|Show this at reception/i.test(
+      (await guestB.textContent('body')) || '',
+    );
+    await shot(guestB, '02-bottle-gift.png');
+
+    const exploreBtn = guestB.getByRole('button', { name: /Explore the City/i });
+    if (await exploreBtn.count()) {
+      await exploreBtn.click({ timeout: 15000 });
+      await guestB.waitForTimeout(3500);
+    }
+    await shot(guestB, '03-after-explore-city.png');
+
+    await guestB.goto(`${base}/notifications`, { waitUntil: 'domcontentloaded', timeout: 120000 });
+    await guestB.waitForTimeout(4000);
+    const notifBody = (await guestB.textContent('body')) || '';
+    result.steps.inboxHasBottle =
+      /message in a bottle|bottle/i.test(notifBody) && (notifBody.includes(tag) || /city/i.test(notifBody));
+    await shot(guestB, '04-notifications.png');
+
+    const notifRow = guestB.getByText(new RegExp(tag.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i')).first();
+    if (await notifRow.count()) {
+      await notifRow.click({ timeout: 15000 });
+      await guestB.waitForTimeout(4000);
+    } else {
+      const anyBottle = guestB.getByText(/message in a bottle/i).first();
+      if (await anyBottle.count()) await anyBottle.click({ timeout: 15000 });
+      await guestB.waitForTimeout(4000);
+    }
+    await shot(guestB, '05-chat-before-reveal.png');
 
     const chatBody = (await guestB.textContent('body')) || '';
     result.steps.chatOpened =
-      (await guestB.getByTestId('chat-thread-list').count()) > 0 ||
-      /Write a message/i.test(chatBody);
+      (await guestB.getByTestId('chat-thread-list').count()) > 0 || /Write a message/i.test(chatBody);
 
     const revealBtn = guestB.getByTestId('chat-who-sent-this');
     if (await revealBtn.count()) {
       await revealBtn.click({ timeout: 10000 });
       await guestB.waitForTimeout(3000);
-      await shot(guestB, '03-after-reveal.png');
+      await shot(guestB, '06-after-reveal.png');
     }
     const afterReveal = (await guestB.textContent('body')) || '';
     result.steps.senderRevealed =
@@ -109,7 +138,7 @@ async function main() {
     await composer.fill(`${tag} reply from guest B`);
     await guestB.getByText('Send', { exact: true }).click();
     await guestB.waitForTimeout(3000);
-    await shot(guestB, '04-after-reply.png');
+    await shot(guestB, '07-after-reply.png');
     const afterReply = (await guestB.textContent('body')) || '';
     result.steps.guestBReplyVisible = afterReply.includes('reply from guest B');
 

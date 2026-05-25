@@ -3,21 +3,13 @@
  * Usage: node scripts/verify-local-friend-ocean.mjs
  */
 import { createClient } from '@supabase/supabase-js';
-import { existsSync, readFileSync } from 'node:fs';
+import { config as loadEnv } from 'dotenv';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-const __dirname = dirname(fileURLToPath(import.meta.url));
-const root = join(__dirname, '..');
-for (const name of ['.env', '.env.local']) {
-  const envPath = join(root, name);
-  if (!existsSync(envPath)) continue;
-  for (const line of readFileSync(envPath, 'utf8').split('\n')) {
-    if (line.startsWith('#') || !line.trim()) continue;
-    const m = line.match(/^([A-Z0-9_]+)=(.*)$/);
-    if (m) process.env[m[1]] = m[2].trim();
-  }
-}
+const root = join(dirname(fileURLToPath(import.meta.url)), '..');
+loadEnv({ path: join(root, '.env') });
+loadEnv({ path: join(root, '.env.local'), override: true });
 
 const url = process.env.EXPO_PUBLIC_SUPABASE_URL;
 const anonKey = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY;
@@ -130,7 +122,7 @@ async function main() {
   receiverId = rAuth.user.id;
   const rToken = rAuth.session.access_token;
 
-  const claimRes = await fetch(`${apiBase}/api/local-friend-ocean-claim`, {
+  const claimRes = await fetch(`${apiBase}/api/local-friend-ocean?action=claim`, {
     method: 'POST',
     headers: { Authorization: `Bearer ${rToken}` },
   });
@@ -159,7 +151,7 @@ async function main() {
   report.data.receiverNotif =
     !!receiverNotif?.id && String(receiverNotif.message || '').includes(tag);
 
-  const revealRes = await fetch(`${apiBase}/api/local-friend-ocean-reveal`, {
+  const revealRes = await fetch(`${apiBase}/api/local-friend-ocean?action=reveal`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${rToken}` },
     body: JSON.stringify({ floatId }),
@@ -175,7 +167,7 @@ async function main() {
     .maybeSingle();
   report.data.revealOk = report.data.revealOk && floatAfter?.reveal_status === 'revealed';
 
-  const replyRes = await fetch(`${apiBase}/api/local-friend-ocean-reply`, {
+  const replyRes = await fetch(`${apiBase}/api/local-friend-ocean?action=reply`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${rToken}` },
     body: JSON.stringify({ floatId, message: `${tag} peer reply` }),
@@ -195,13 +187,14 @@ async function main() {
     .from('notifications')
     .select('id, reference_type, message')
     .eq('user_id', senderId)
-    .eq('reference_type', 'local_friend_ocean_peer')
+    .eq('reference_type', 'local_friend_ocean_thread')
     .eq('reference_id', floatId)
+    .eq('is_read', false)
     .maybeSingle();
   report.data.senderPeerNotif =
     !!senderPeerNotif?.id && String(senderPeerNotif.message || '').includes('peer reply');
 
-  const senderReplyRes = await fetch(`${apiBase}/api/local-friend-ocean-reply`, {
+  const senderReplyRes = await fetch(`${apiBase}/api/local-friend-ocean?action=reply`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${sToken}` },
     body: JSON.stringify({ floatId, message: `${tag} sender continues in chat` }),

@@ -17,6 +17,9 @@ import { getDismissedNotificationIds } from '@/lib/dismissedThreads';
 import { isSyntheticDisplayName, normalizeDisplayName } from '@/lib/displayName';
 import { getOperatorUserId } from '@/lib/operatorConfig';
 import { supabase } from '@/lib/supabase';
+import { loadChatTabUnreadCount } from '@/lib/chatThreads';
+import { clearOsSurfaceAcks } from '@/lib/osAppBadge';
+import { syncOsAppIconBadge, unregisterPushToken } from '@/lib/pushNotifications';
 import { isDeletedThreadRef } from '@/lib/threadDelete';
 
 type NotificationLite = {
@@ -52,6 +55,8 @@ function toAuthUser(user: any): AuthUser {
 type AppStateContextType = {
   /** Active notification rows for the signed-in user (inbox tab badge). */
   unreadCount: number;
+  /** Unread messages across Chat-tab conversation threads. */
+  chatUnreadCount: number;
   notificationsVersion: number;
   activeIdentity: ActiveIdentity | null;
   signalThreads: Record<string, CanonicalSignalThread>;
@@ -142,6 +147,7 @@ async function loadInboxTabBadgeCount(userId: string): Promise<number> {
 
 export function AppStateProvider({ children }: { children: ReactNode }) {
   const [unreadCount, setUnreadCount] = useState(0);
+  const [chatUnreadCount, setChatUnreadCount] = useState(0);
   const [notificationsVersion, setNotificationsVersion] = useState(0);
   const [activeIdentity, setActiveIdentity] = useState<ActiveIdentity | null>(null);
   const [signalThreads, setSignalThreads] = useState<Record<string, CanonicalSignalThread>>({});
@@ -154,6 +160,7 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
   const authUserInFlightRef = useRef<Promise<AuthUser | null> | null>(null);
   const lastStableUserRef = useRef<AuthUser | null>(null);
   const lastUnreadCountRef = useRef<number | null>(null);
+  const lastChatUnreadCountRef = useRef<number | null>(null);
 
   const getAuthUserSerialized = useCallback(async (): Promise<AuthUser | null> => {
     if (!authUserInFlightRef.current) {
@@ -249,11 +256,18 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
           setUnreadCount(0);
           return;
         }
-        const count = await loadInboxTabBadgeCount(user.id);
+        const [count, chatCount] = await Promise.all([
+          loadInboxTabBadgeCount(user.id),
+          loadChatTabUnreadCount(user.id),
+        ]);
         if (lastUnreadCountRef.current !== count) {
           lastUnreadCountRef.current = count;
           setUnreadCount(count);
           setNotificationsVersion((v) => v + 1);
+        }
+        if (lastChatUnreadCountRef.current !== chatCount) {
+          lastChatUnreadCountRef.current = chatCount;
+          setChatUnreadCount(chatCount);
         }
       });
     return refreshNotificationsChainRef.current;
@@ -381,7 +395,11 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
         lastUnreadCountRef.current = null;
         setActiveIdentity(null);
         setUnreadCount(0);
+        setChatUnreadCount(0);
         setSignalThreads({});
+        void clearOsSurfaceAcks();
+        void unregisterPushToken();
+        void syncOsAppIconBadge(0, 0);
       }
       void refreshIdentity();
       void refreshNotifications();
@@ -396,6 +414,7 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
   const value = useMemo<AppStateContextType>(
     () => ({
       unreadCount,
+      chatUnreadCount,
       notificationsVersion,
       activeIdentity,
       signalThreads,
@@ -408,6 +427,7 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
     }),
     [
       unreadCount,
+      chatUnreadCount,
       notificationsVersion,
       activeIdentity,
       signalThreads,

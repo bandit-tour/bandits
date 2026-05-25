@@ -11,14 +11,15 @@
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.yuvaldafni.bandits",
-      "buildNumber": "21",
+      "buildNumber": "25",
       "associatedDomains": [
         "applinks:bandits-two.vercel.app",
         "applinks:bandit-tours.vercel.app"
       ],
       "infoPlist": {
         "ITSAppUsesNonExemptEncryption": false,
-        "NSLocationWhenInUseUsageDescription": "bandiTour uses your location while the app is open to suggest nearby places, events, and safety alerts—only when you are close."
+        "NSLocationWhenInUseUsageDescription": "bandiTour uses your location while the app is open to suggest nearby places, events, and safety alerts—only when you are close.",
+        "UIBackgroundModes": ["remote-notification"]
       },
       "config": {
         "googleMapsApiKey": "AIzaSyBfv6k8wNTEtWYL6iKTw1O3XC0vf_CS7Xg"
@@ -71,7 +72,7 @@
           ]
         }
       ],
-      "versionCode": 9
+      "versionCode": 12
     },
     "web": {
       "bundler": "metro",
@@ -89,6 +90,15 @@
       "orientation": "portrait"
     },
     "plugins": [
+      [
+        "expo-notifications",
+        {
+          "icon": "./assets/images/play_athens_bg.png",
+          "color": "#E85D04",
+          "defaultChannel": "messages",
+          "sounds": []
+        }
+      ],
       [
         "expo-location",
         {

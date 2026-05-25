@@ -25,6 +25,10 @@ export type OceanFloatClaimResult = {
   floatId?: string;
   message?: string;
   notificationId?: string;
+  /** `bandit_moment` when ocean queue was empty and a profile moment was returned instead. */
+  source?: 'local_friend' | 'bandit_moment';
+  banditId?: string;
+  banditName?: string;
 };
 
 export type OceanFloatRevealResult = {
@@ -116,6 +120,20 @@ export async function claimLocalFriendOceanFloat(): Promise<OceanFloatClaimResul
           ? String(j.notification_id)
           : j.notificationId != null
             ? String(j.notificationId)
+            : undefined,
+      source:
+        j.source === 'bandit_moment' || j.source === 'local_friend'
+          ? (j.source as 'local_friend' | 'bandit_moment')
+          : j.ok
+            ? 'local_friend'
+            : undefined,
+      banditId:
+        j.bandit_id != null ? String(j.bandit_id) : j.banditId != null ? String(j.banditId) : undefined,
+      banditName:
+        j.bandit_name != null
+          ? String(j.bandit_name)
+          : j.banditName != null
+            ? String(j.banditName)
             : undefined,
     };
   } catch (apiErr) {
@@ -253,5 +271,13 @@ export function isLocalFriendBottleInboxType(type: string | null | undefined): b
 
 export function isLocalFriendOceanClaimRef(refType: string | null | undefined): boolean {
   const rt = String(refType || '').trim();
-  return rt === 'local_friend_ocean_claim' || rt === 'local_friend_ocean_found';
+  return (
+    rt === 'local_friend_ocean_claim' ||
+    rt === 'local_friend_ocean_peer' ||
+    rt === 'local_friend_ocean_thread'
+  );
+}
+
+export function isLocalFriendOceanFoundRef(refType: string | null | undefined): boolean {
+  return String(refType || '').trim() === 'local_friend_ocean_found';
 }

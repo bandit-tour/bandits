@@ -1,4 +1,4 @@
-import { useNavigation } from '@react-navigation/native';
+import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
 import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import {
@@ -25,18 +25,23 @@ import {
   isLocalFriendOceanBottleType,
   isSignalBottleInboxType,
 } from '@/lib/bottleThreadText';
+import { revealLocalFriendOceanFloat } from '@/lib/localFriendOcean';
 import {
-  fetchOceanFloatMeta,
-  fetchOceanPeerMessages,
-  revealLocalFriendOceanFloat,
-  sendLocalFriendOceanPeerMessage,
-} from '@/lib/localFriendOcean';
+  fetchOceanThreadMeta,
+  loadOceanThreadLines,
+  OCEAN_THREAD_REPLY_REF,
+  sendOceanThreadMessage,
+  userMayComposeOceanThread,
+} from '@/lib/oceanBottleChat';
 import { trackEvent } from '@/lib/analytics';
 import { resolveCanonicalSignalThreadByDelivery } from '@/lib/canonicalSignalThread';
 import { type PilotThreadIdentity, fetchPilotThreadIdentity } from '@/lib/pilotThreadIdentity';
 import { fetchSignalLineForDelivery } from '@/lib/signalDelivery';
 import { addDismissedNotificationId } from '@/lib/dismissedThreads';
 import { BANDITS_NOTIFICATIONS_REFRESH, requestNotificationsRefresh } from '@/lib/notificationEvents';
+import { requestPushForRecipient } from '@/lib/pushClient';
+import { markChatSurfaceOpened } from '@/lib/osAppBadge';
+import { syncOsAppIconBadge } from '@/lib/pushNotifications';
 import { syncLatestArrivalNotificationMessageFromDelivery } from '@/lib/syncArrivalNotification';
 import { supabase } from '@/lib/supabase';
 import { deleteNotificationThread } from '@/lib/threadDelete';
@@ -70,7 +75,7 @@ export default function ChatScreen() {
   const insets = useSafeAreaInsets();
   const navigation = useNavigation();
   const router = useRouter();
-  const { refreshNotifications } = useAppState();
+  const { refreshNotifications, unreadCount, chatUnreadCount } = useAppState();
   const {
     banditName: rawName,
     notificationId: rawNotificationId,
@@ -120,6 +125,8 @@ export default function ChatScreen() {
   const [oceanFloatId, setOceanFloatId] = useState<string | null>(null);
   const [oceanRevealHidden, setOceanRevealHidden] = useState(false);
   const [oceanRevealing, setOceanRevealing] = useState(false);
+  const [oceanComposeAllowed, setOceanComposeAllowed] = useState(true);
+  const [oceanWaitingForGuest, setOceanWaitingForGuest] = useState(false);
   const listRef = useRef<FlatList<ChatMessage>>(null);
   const firstScrollDoneRef = useRef(false);
 
@@ -237,6 +244,14 @@ export default function ChatScreen() {
     });
   }, [notificationId, banditName]);
 
+  useFocusEffect(
+    useCallback(() => {
+      void markChatSurfaceOpened(chatUnreadCount).then(() =>
+        syncOsAppIconBadge(unreadCount, chatUnreadCount),
+      );
+    }, [unreadCount, chatUnreadCount]),
+  );
+
   const loadThread = useCallback(
     async (silent?: boolean) => {
       try {
@@ -296,12 +311,18 @@ export default function ChatScreen() {
         const effectiveType = nType || String(anchor?.type || '').trim();
         const refFromAnchor = String(refId || anchor?.reference_id || '').trim();
         const anchorRefType = String(anchor?.reference_type || '').trim();
-        const isOceanThread = isLocalFriendOceanBottleType(effectiveType) && refFromAnchor.length >= 32;
+        const isOceanThread =
+          refFromAnchor.length >= 32 &&
+          (isLocalFriendOceanBottleType(effectiveType) ||
+            (effectiveType === 'bandit_reply' &&
+              (anchorRefType === OCEAN_THREAD_REPLY_REF || routeRefType === OCEAN_THREAD_REPLY_REF)));
         if (isOceanThread) {
           setOceanFloatId(refFromAnchor);
         } else {
           setOceanFloatId(null);
           setOceanRevealHidden(false);
+          setOceanComposeAllowed(true);
+          setOceanWaitingForGuest(false);
         }
         /**
          * Same account can act as traveler and operator; guest Ask echo threads must stay on traveler-side UI.
@@ -433,20 +454,22 @@ export default function ChatScreen() {
         }
 
         if (isOceanThread && user && refFromAnchor) {
-          const meta = await fetchOceanFloatMeta(refFromAnchor);
-          const peerRows = await fetchOceanPeerMessages(refFromAnchor);
-          const hidden = meta?.reveal_status === 'hidden';
-          const isReceiver = meta?.claimed_by_user_id === user.id;
-          const isSender = meta?.sender_user_id === user.id;
+          const meta = await fetchOceanThreadMeta(refFromAnchor, user.id);
+          const lines = await loadOceanThreadLines(refFromAnchor, user.id);
+          const hidden = meta?.revealStatus === 'hidden';
+          const isReceiver = meta?.role === 'guest_claimer';
+          const isSender = meta?.role === 'sender';
           setOceanRevealHidden(!!hidden && !!isReceiver);
-          if (meta?.sender_persona_name) {
-            if (isSender || meta.reveal_status === 'revealed') {
-              setDeskPersonaLock(meta.sender_persona_name.trim());
+          setOceanComposeAllowed(userMayComposeOceanThread(meta));
+          setOceanWaitingForGuest(!!isSender && !meta?.guestHasReplied);
+          if (meta?.senderPersonaName) {
+            if (isSender || meta?.revealStatus === 'revealed') {
+              setDeskPersonaLock(meta.senderPersonaName.trim());
             } else {
               setDeskPersonaLock('');
             }
           }
-          const openBody = (meta?.message_body || '').trim();
+          const openBody = (meta?.messageBody || '').trim();
           const thread: ChatMessage[] = [];
           if (openBody) {
             thread.push({
@@ -456,13 +479,12 @@ export default function ChatScreen() {
               sentAt: new Date().toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' }),
             });
           }
-          for (const row of peerRows) {
-            const isSelf = row.author_user_id === user.id;
+          for (const row of lines) {
             thread.push({
               id: `ocean-${row.id}`,
-              role: isSelf ? 'user' : 'bandit',
+              role: row.isSelf ? 'user' : 'bandit',
               body: row.body,
-              sentAt: new Date(row.created_at).toLocaleTimeString(undefined, {
+              sentAt: new Date(row.createdAt).toLocaleTimeString(undefined, {
                 hour: 'numeric',
                 minute: '2-digit',
               }),
@@ -734,9 +756,17 @@ export default function ChatScreen() {
     void (async () => {
       const fid = String(oceanFloatId || '').trim();
       if (fid && !operatorMode) {
+        if (!oceanComposeAllowed) {
+          Alert.alert(
+            oceanWaitingForGuest ? 'Waiting for a reply' : 'Not available',
+            oceanWaitingForGuest
+              ? 'The guest finds your bottle first. You can reply after they send a message.'
+              : 'This conversation is not open for messages yet.',
+          );
+          return;
+        }
         try {
-          await sendLocalFriendOceanPeerMessage(fid, t);
-          requestNotificationsRefresh();
+          await sendOceanThreadMessage(fid, t);
           const now = new Date();
           const sentAt = now.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' });
           setMessages((prev) => [
@@ -744,7 +774,10 @@ export default function ChatScreen() {
             { id: `u-${now.getTime()}`, role: 'user', body: t, sentAt },
           ]);
           setDraft('');
+          setOceanWaitingForGuest(false);
+          setOceanComposeAllowed(true);
           setTimeout(() => listRef.current?.scrollToEnd({ animated: true }), 80);
+          void loadThread(true);
         } catch (e) {
           Alert.alert('Send failed', e instanceof Error ? e.message : 'Try again.');
         }
@@ -763,6 +796,15 @@ export default function ChatScreen() {
           reference_type: replyReferenceType,
         });
         if (error) return;
+        void requestPushForRecipient({
+          recipientUserId: requesterUserId,
+          referenceId: notificationId,
+          referenceType: replyReferenceType,
+          title: personaTitle,
+          body: t,
+          surface: 'chat',
+          kind: 'chat_message',
+        });
         const now = new Date();
         const sentAt = now.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' });
         const next: ChatMessage = {
@@ -797,6 +839,9 @@ export default function ChatScreen() {
     notificationType,
     personaBarLock,
     oceanFloatId,
+    oceanComposeAllowed,
+    oceanWaitingForGuest,
+    loadThread,
   ]);
 
   const renderItem = useCallback(({ item }: { item: ChatMessage }) => {
@@ -871,6 +916,13 @@ export default function ChatScreen() {
             </Pressable>
           </View>
         ) : null}
+        {oceanWaitingForGuest && !operatorMode ? (
+          <View style={styles.waitingBar}>
+            <Text style={styles.waitingBarText}>
+              Someone found your bottle. You can reply after they send the first message.
+            </Text>
+          </View>
+        ) : null}
         {operatorMode && (
           <View style={styles.operatorBar}>
             {personaBarLock ? (
@@ -907,14 +959,17 @@ export default function ChatScreen() {
             onChangeText={setDraft}
             multiline
             maxLength={2000}
-            editable
+            editable={oceanComposeAllowed}
           />
           <Pressable
             testID="chat-send-button"
-            accessibilityState={{ disabled: !draft.trim() }}
-            style={[styles.sendBtn, !draft.trim() && styles.sendBtnDisabled]}
+            accessibilityState={{ disabled: !draft.trim() || !oceanComposeAllowed }}
+            style={[
+              styles.sendBtn,
+              (!draft.trim() || !oceanComposeAllowed) && styles.sendBtnDisabled,
+            ]}
             onPress={send}
-            disabled={!draft.trim()}
+            disabled={!draft.trim() || !oceanComposeAllowed}
           >
             <Text style={styles.sendBtnText}>Send</Text>
           </Pressable>
@@ -1018,6 +1073,20 @@ const styles = StyleSheet.create({
   },
   revealBtnDisabled: { opacity: 0.6 },
   revealBtnText: { color: '#FFF', fontSize: 15, fontWeight: '700' },
+  waitingBar: {
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    backgroundColor: '#FFF8E8',
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: '#E4E4E4',
+  },
+  waitingBarText: {
+    fontSize: 13,
+    lineHeight: 19,
+    color: '#5C4A32',
+    textAlign: 'center',
+    fontWeight: '600',
+  },
   operatorBar: {
     paddingHorizontal: 12,
     paddingTop: 8,
