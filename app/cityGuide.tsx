@@ -27,6 +27,7 @@ import {
 import { pickCityGuideHeroUriByEventId } from '@/lib/eventVenueGallery';
 import { buildUserFacingVenueFallbackImage, claimVerifiedHeroPhotoUrl } from '@/lib/recommendationImages';
 import { repairDisplayText } from '@/lib/repairTextEncoding';
+import { navigateAppBack } from '@/lib/appNavigation';
 
 type Bandit = Database['public']['Tables']['bandit']['Row'];
 type Event = Database['public']['Tables']['event']['Row'];
@@ -343,9 +344,8 @@ export default function CityGuideScreen() {
 
   const exitCityGuide = useCallback(() => {
     const bid = String(banditIdParam ?? effectiveBanditId ?? bandit?.id ?? '').trim();
-    if (router.canGoBack()) router.back();
-    else if (bid) router.replace(`/bandit/${bid}` as never);
-    else router.replace('/bandits' as never);
+    const fallback = (bid ? `/bandit/${bid}` : '/bandits') as import('expo-router').Href;
+    navigateAppBack(router, fallback);
   }, [router, banditIdParam, effectiveBanditId, bandit?.id]);
 
   const cityGuideHeaderOptions = useMemo(

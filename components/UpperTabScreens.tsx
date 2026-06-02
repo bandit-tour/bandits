@@ -1,47 +1,92 @@
-import React from 'react';
-import { StyleSheet, View } from 'react-native';
+import React, { Suspense, useEffect, useMemo, useState } from 'react';
+import { ActivityIndicator, Platform, StyleSheet, View } from 'react-native';
 
-import BanditsScreen from '@/app/(tabs)/bandits';
-import ExploreScreen from '@/app/(tabs)/explore';
-import MySpotsScreen from '@/app/(tabs)/mySpots';
-
-export type UpperTabKey = 'bandits' | 'mySpots' | 'explore';
+import { BanditsScreen } from '@/app/(tabs)/bandits';
+import { ExploreScreen } from '@/app/(tabs)/explore';
+import type { UpperTabKey } from '@/lib/upperTab';
 
 type Props = {
   active: UpperTabKey;
 };
 
+const MySpotsLazy = React.lazy(() =>
+  import('@/app/(tabs)/mySpots').then((m) => ({ default: m.MySpotsScreen })),
+);
+function TabPaneFallback() {
+  return (
+    <View style={styles.fallback}>
+      <ActivityIndicator size="small" color="#0a7ea4" />
+    </View>
+  );
+}
+
 /**
- * Keeps Local banDits / My Spots / Explore mounted so switching upper tabs does not
- * tear down FlatLists, images, or the Explore map WebView.
+ * Instant upper-tab switch (no stack transition). Stack routes stay in sync via router.replace
+ * but render null while this overlay is enabled.
+ *
+ * iOS: mount only the active pane (memory). Android/web: keep visited panes mounted;
+ * inactive tabs use tabActive=false so Explore/WebView do not run while hidden.
  */
 export default function UpperTabScreens({ active }: Props) {
+  /** iOS: single active pane only. Android/web: keep visited panes (inactive tabs render lightweight shells). */
+  const iosSinglePane = Platform.OS === 'ios';
+  const [visited, setVisited] = useState<Set<UpperTabKey>>(() => new Set(['bandits']));
+
+  const tabsToMount = useMemo(() => {
+    if (iosSinglePane) return new Set<UpperTabKey>([active]);
+    const next = new Set(visited);
+    next.add(active);
+    return next;
+  }, [active, iosSinglePane, visited]);
+
+  useEffect(() => {
+    if (iosSinglePane) return;
+    setVisited((prev) => {
+      if (prev.has(active)) return prev;
+      const next = new Set(prev);
+      next.add(active);
+      return next;
+    });
+  }, [active, iosSinglePane]);
+
+  const mountBandits = tabsToMount.has('bandits');
+  const mountMySpots = tabsToMount.has('mySpots');
+  const mountExplore = tabsToMount.has('explore');
+
   return (
     <View style={styles.host}>
-      <View
-        style={[styles.pane, active === 'bandits' ? styles.paneVisible : styles.paneHidden]}
-        pointerEvents={active === 'bandits' ? 'auto' : 'none'}
-      >
-        <BanditsScreen tabActive={active === 'bandits'} />
-      </View>
-      <View
-        style={[styles.pane, active === 'mySpots' ? styles.paneVisible : styles.paneHidden]}
-        pointerEvents={active === 'mySpots' ? 'auto' : 'none'}
-      >
-        <MySpotsScreen tabActive={active === 'mySpots'} />
-      </View>
-      <View
-        style={[styles.pane, active === 'explore' ? styles.paneVisible : styles.paneHidden]}
-        pointerEvents={active === 'explore' ? 'auto' : 'none'}
-      >
-        <ExploreScreen tabActive={active === 'explore'} />
-      </View>
+      {mountBandits ? (
+        <View
+          style={[styles.pane, active === 'bandits' ? styles.paneVisible : styles.paneHidden]}
+          pointerEvents={active === 'bandits' ? 'auto' : 'none'}
+        >
+          <BanditsScreen tabActive={active === 'bandits'} />
+        </View>
+      ) : null}
+      {mountMySpots ? (
+        <View
+          style={[styles.pane, active === 'mySpots' ? styles.paneVisible : styles.paneHidden]}
+          pointerEvents={active === 'mySpots' ? 'auto' : 'none'}
+        >
+          <Suspense fallback={<TabPaneFallback />}>
+            <MySpotsLazy tabActive={active === 'mySpots'} />
+          </Suspense>
+        </View>
+      ) : null}
+      {mountExplore ? (
+        <View
+          style={[styles.pane, active === 'explore' ? styles.paneVisible : styles.paneHidden]}
+          pointerEvents={active === 'explore' ? 'auto' : 'none'}
+        >
+          <ExploreScreen tabActive={active === 'explore'} />
+        </View>
+      ) : null}
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  host: { flex: 1 },
+  host: { flex: 1, backgroundColor: '#FFFFFF' },
   pane: {
     ...StyleSheet.absoluteFillObject,
     backgroundColor: '#FFFFFF',
@@ -53,5 +98,12 @@ const styles = StyleSheet.create({
   paneHidden: {
     opacity: 0,
     zIndex: 0,
+    pointerEvents: 'none',
+  },
+  fallback: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#FFFFFF',
   },
 });

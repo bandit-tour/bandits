@@ -1,12 +1,14 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Alert, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Alert, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { getUserLikedEvents, toggleEventLike } from '@/app/services/events';
 import EventCardSkeleton from '@/components/EventCardSkeleton';
 import EventList from '@/components/EventList';
 import { useCity } from '@/contexts/CityContext';
 import { fetchSWR, invalidateAppDataCache, readCacheStale } from '@/lib/appDataCache';
+import { useUpperTabHost } from '@/contexts/UpperTabHostContext';
 import { useTabActiveDataLoad } from '@/lib/useTabActiveDataLoad';
+import { useScreenFocused } from '@/lib/useScreenFocused';
 import { Database } from '@/lib/database.types';
 
 type Event = Database['public']['Tables']['event']['Row'];
@@ -16,11 +18,15 @@ const LIKED_EVENTS_TTL_MS = 60 * 1000;
 
 
 
+const MY_SPOTS_WEB_IMAGE_HEIGHT = 220;
+
 type MySpotsScreenProps = {
   tabActive?: boolean;
 };
 
-export default function MySpotsScreen({ tabActive = true }: MySpotsScreenProps) {
+export function MySpotsScreen({ tabActive }: MySpotsScreenProps = {}) {
+  const navFocused = useScreenFocused();
+  const screenActive = tabActive ?? navFocused;
   const mySpotsInitialFocusDoneRef = useRef(false);
   /** Skip one city effect tick after initial load completes (avoid double-fetch vs first focus load). */
   const skipCityRefetchOnceRef = useRef(true);
@@ -70,7 +76,7 @@ export default function MySpotsScreen({ tabActive = true }: MySpotsScreenProps) 
     return handle;
   }, []);
 
-  useTabActiveDataLoad(tabActive, mySpotsInitialFocusDoneRef, loadLikedEvents);
+  useTabActiveDataLoad(screenActive, mySpotsInitialFocusDoneRef, loadLikedEvents);
 
   /** City filter changes while mounted no longer require a refetch — filtering is now client-side. */
   useEffect(() => {
@@ -98,6 +104,10 @@ export default function MySpotsScreen({ tabActive = true }: MySpotsScreenProps) 
       Alert.alert('Error', 'Failed to remove like');
     }
   }, []);
+
+  if (!screenActive) {
+    return <View style={styles.mainContainer} />;
+  }
 
   if (!loadedOnce) {
     return (
@@ -131,10 +141,12 @@ export default function MySpotsScreen({ tabActive = true }: MySpotsScreenProps) 
         likedEventIds={likedEventIds}
         emptyMessage="No liked events yet"
         variant="vertical"
-        showRecommendations={true}
+        showRecommendations={false}
         buttonType="remove"
         buttonText="Remove"
+        imageHeight={Platform.OS === 'web' ? MY_SPOTS_WEB_IMAGE_HEIGHT : undefined}
         scrollViewStyle={styles.scrollView}
+        contentContainerStyle={Platform.OS === 'web' ? styles.webListContent : undefined}
         refreshing={refreshing}
         onRefresh={onRefresh}
       />
@@ -187,6 +199,13 @@ const styles = StyleSheet.create({
   },
   scrollView: {
     flex: 1,
+    ...(Platform.OS === 'web'
+      ? { maxWidth: 720, width: '100%', alignSelf: 'center' as const }
+      : {}),
+  },
+  webListContent: {
+    flexGrow: 0,
+    paddingBottom: 24,
   },
   container: {
     flex: 1,
@@ -201,4 +220,10 @@ const styles = StyleSheet.create({
     color: '#666',
     marginTop: 20,
   },
-}); 
+});
+
+export default function MySpotsTabRoute() {
+  const { enabled } = useUpperTabHost();
+  if (enabled) return null;
+  return <MySpotsScreen />;
+}

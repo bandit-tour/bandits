@@ -1,102 +1,61 @@
 import { Stack, usePathname, useRouter, type Href } from 'expo-router';
 import React, { useCallback, useEffect, useState } from 'react';
-import { InteractionManager, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import MainBottomNav from '@/components/MainBottomNav';
 import NearbyContextRunner from '@/components/NearbyContextRunner';
+import UpperTabScreens from '@/components/UpperTabScreens';
 import { useColorScheme } from '@/hooks/useColorScheme';
 import { useAppState } from '@/contexts/AppStateContext';
 import { useCity } from '@/contexts/CityContext';
+import { UpperTabHostProvider } from '@/contexts/UpperTabHostContext';
 import { preloadExploreEvents, bootstrapExploreEventsCache } from '@/lib/exploreEventsCache';
 import {
   hasSeenOpeningIntro,
 } from '@/lib/openingIntroStorage';
+import {
+  getLowerTabFromPath,
+  getUpperTabFromPath,
+  navigateLowerTab,
+  navigateUpperTab,
+  type LowerTabKey,
+} from '@/lib/appNavigation';
 import { bootstrapMainAppSession, syncPilotHotelProfileIfNeeded } from '@/lib/pilotSession';
-import UpperTabScreens, { type UpperTabKey } from '@/components/UpperTabScreens';
+import { perfMark, perfStart, perfTraceNavigationPress } from '@/lib/perfTiming';
+import type { UpperTabKey } from '@/lib/upperTab';
 
-type LowerTabKey = 'home' | 'localFriend' | 'chat' | 'alerts' | 'notifications' | 'menu';
-
-function upperTabHref(tab: UpperTabKey): '/bandits' | '/mySpots' | '/explore' {
-  if (tab === 'mySpots') return '/mySpots';
-  if (tab === 'explore') return '/explore';
-  return '/bandits';
-}
-
-function getLowerTabFromPath(pathname: string | null): LowerTabKey {
-  if (!pathname) return 'home';
-  /**
-   * Bottom-nav "Chat" = traveler-to-traveler community (the /community surface).
-   * /chat is the operator thread-reply route opened from Pilot Desk + Notifications;
-   * it must NOT highlight the Chat tab (operators are doing operational work, not socializing).
-   */
-  if (pathname.includes('/community')) return 'chat';
-  if (pathname.includes('/alerts') || pathname.includes('/scam-alerts')) return 'alerts';
-  if (pathname.includes('/notifications') || pathname.includes('/inbox')) return 'notifications';
-  if (pathname.includes('/localFriend')) return 'localFriend';
-  if (pathname.includes('/menu')) return 'menu';
-  /** Menu stack: avoid showing Home active while on Profile / Following / Settings (cross-flow confusion). */
-  if (pathname.includes('/profile') || pathname.includes('/settings') || pathname.includes('/following')) {
-    return 'menu';
-  }
-  return 'home';
-}
-
-function getUpperTabFromPath(pathname: string | null): UpperTabKey | null {
-  if (!pathname) return 'bandits';
-  if (
-    pathname.includes('/chat') ||
-    pathname.includes('/community') ||
-    pathname.includes('/alerts') ||
-    pathname.includes('/scam-alerts') ||
-    pathname.includes('/notifications') ||
-    pathname.includes('/inbox') ||
-    pathname.includes('/menu') ||
-    pathname.includes('/localFriend') ||
-    pathname.includes('/profile') ||
-    pathname.includes('/settings') ||
-    pathname.includes('/following')
-  ) {
-    return null;
-  }
-  if (pathname.includes('/mySpots')) return 'mySpots';
-  if (pathname.includes('/explore')) return 'explore';
-  if (pathname.includes('/bandits')) return 'bandits';
-  return 'bandits';
-}
+export type { UpperTabKey } from '@/lib/upperTab';
 
 export default function TabsLayout() {
   const pathname = usePathname();
   const router = useRouter();
   const colorScheme = useColorScheme();
   const insets = useSafeAreaInsets();
-  const { unreadCount } = useAppState();
+  const { unreadCount, chatUnreadCount } = useAppState();
   const { selectedCity } = useCity();
 
-  /** Warm Explore cache after transitions idle — keeps upper-tab taps responsive. */
+  /** Warm Explore cache off the critical path (longer delay on Android — avoids JS stalls). */
   useEffect(() => {
-    const task = InteractionManager.runAfterInteractions(() => {
-      requestAnimationFrame(() => {
-        void bootstrapExploreEventsCache(selectedCity || undefined);
-      });
-    });
-    return () => task.cancel();
+    const delay = Platform.OS === 'android' ? 4000 : 1200;
+    const timer = setTimeout(() => {
+      void bootstrapExploreEventsCache(selectedCity || undefined);
+    }, delay);
+    return () => clearTimeout(timer);
   }, [selectedCity]);
 
   useEffect(() => {
     if (!selectedCity) return;
-    const task = InteractionManager.runAfterInteractions(() => {
-      requestAnimationFrame(() => {
-        preloadExploreEvents(selectedCity);
-      });
-    });
-    return () => task.cancel();
+    const delay = Platform.OS === 'android' ? 6000 : 1800;
+    const timer = setTimeout(() => {
+      preloadExploreEvents(selectedCity);
+    }, delay);
+    return () => clearTimeout(timer);
   }, [selectedCity]);
 
   const lowerTab = getLowerTabFromPath(pathname) as LowerTabKey;
   const upperTab = getUpperTabFromPath(pathname);
   const showUpperTabs = upperTab !== null;
-  /** Instant tab highlight before pathname catches up (fixes multi-tap on Explore). */
   const [optimisticUpperTab, setOptimisticUpperTab] = useState<UpperTabKey | null>(null);
   const displayUpperTab = (optimisticUpperTab ?? upperTab ?? 'bandits') as UpperTabKey;
 
@@ -105,40 +64,62 @@ export default function TabsLayout() {
   }, [pathname]);
   const tabColor = colorScheme === 'dark' ? '#0a7ea4' : '#0a7ea4';
   const inactiveColor = colorScheme === 'dark' ? '#A0A0A0' : '#777';
-  const go = (
-    path:
-      | '/bandits'
-      | '/mySpots'
-      | '/explore'
-      | '/localFriend'
-      | '/community'
-      | '/alerts'
-      | '/notifications'
-      | '/menu',
-  ) => {
-    router.navigate(path);
-  };
+  /** Replace (not push) so the tab stack cannot grow and freeze navigation. */
+  const goLowerTab = useCallback(
+    (
+      path:
+        | '/bandits'
+        | '/mySpots'
+        | '/explore'
+        | '/localFriend'
+        | '/community'
+        | '/alerts'
+        | '/notifications'
+        | '/menu',
+      tab: LowerTabKey,
+    ) => {
+      perfTraceNavigationPress(`tab_lower:${tab}`, () => {
+        if (tab === 'home') {
+          setOptimisticUpperTab('bandits');
+        }
+        navigateLowerTab(router, path, tab, lowerTab);
+      });
+    },
+    [lowerTab, router],
+  );
 
-  /**
-   * Upper tabs: `replace` with no stack animation on native. Yield one frame before
-   * navigation so the active tab underline updates and the press isn't starved on a
-   * busy JS thread (Android).
-   */
   const goUpperTab = useCallback(
     (tab: UpperTabKey) => {
-      if (displayUpperTab === tab) return;
-      setOptimisticUpperTab(tab);
-      router.replace(upperTabHref(tab) as Href);
+      perfTraceNavigationPress(`tab_upper:${tab}`, () => {
+        setOptimisticUpperTab(tab);
+        navigateUpperTab(router, tab);
+      });
     },
-    [router, displayUpperTab],
+    [router],
   );
 
   useEffect(() => {
+    perfMark('tabs_layout_mounted', 'launch');
+    const end = perfStart('bootstrap_main_session', 'launch');
     void (async () => {
-      /** Waits for persisted email sessions to hydrate before anon — avoids wiping operator login on web. */
-      await bootstrapMainAppSession();
-      await syncPilotHotelProfileIfNeeded();
+      try {
+        /** Waits for persisted email sessions to hydrate before anon — avoids wiping operator login on web. */
+        await bootstrapMainAppSession();
+        await syncPilotHotelProfileIfNeeded();
+      } finally {
+        end();
+      }
     })();
+  }, []);
+
+  /** Warm upper-tab modules off the critical path so first tap is instant. */
+  useEffect(() => {
+    const delay = Platform.OS === 'android' ? 2000 : 2500;
+    const timer = setTimeout(() => {
+      void import('@/app/(tabs)/explore');
+      void import('@/app/(tabs)/mySpots');
+    }, delay);
+    return () => clearTimeout(timer);
   }, []);
 
   // Keep tabs routes stable on web; avoid intermediate blank shell during intro redirects.
@@ -163,6 +144,7 @@ export default function TabsLayout() {
   return (
     <>
       <NearbyContextRunner />
+      <UpperTabHostProvider enabled={showUpperTabs} active={displayUpperTab}>
       <View style={styles.container}>
         {showUpperTabs && (
           <View style={[styles.upperTabs, { paddingTop: Math.max(insets.top, 8) + 6 }]}>
@@ -190,35 +172,42 @@ export default function TabsLayout() {
           </View>
         )}
 
-        <View style={styles.content}>
+        <View style={styles.content} collapsable={false}>
+          <Stack
+            screenOptions={{
+              headerShown: false,
+              headerBackTitle: 'Back',
+              headerBackTitleVisible: true,
+              freezeOnBlur: true,
+              contentStyle: { backgroundColor: '#FFFFFF' },
+              ...Platform.select({
+                web: { animation: 'fade' as const, animationDuration: 120 },
+                default: { animation: 'none' as const },
+              }),
+            }}
+          />
           {showUpperTabs ? (
-            <UpperTabScreens active={displayUpperTab} />
-          ) : (
-            <Stack
-              screenOptions={{
-                headerShown: false,
-                headerBackTitle: 'Back',
-                headerBackTitleVisible: true,
-                ...Platform.select({
-                  web: { animation: 'fade' as const, animationDuration: 120 },
-                  default: { animation: 'none' as const },
-                }),
-              }}
-            />
-          )}
+            <View style={styles.upperTabOverlay} pointerEvents="box-none">
+              <UpperTabScreens active={displayUpperTab} />
+            </View>
+          ) : null}
         </View>
 
-        <MainBottomNav
-          activeTab={lowerTab}
-          onHome={() => go('/bandits')}
-          onLocalFriend={() => go('/localFriend')}
-          onChat={() => go('/community')}
-          onAlerts={() => go('/alerts')}
-          onNotifications={() => go('/notifications')}
-          onMenu={() => go('/menu')}
-          inboxBadgeCount={unreadCount}
-        />
+        <View style={styles.bottomNavBar} collapsable={false}>
+          <MainBottomNav
+            activeTab={lowerTab}
+            onHome={() => goLowerTab('/bandits', 'home')}
+            onLocalFriend={() => goLowerTab('/localFriend', 'localFriend')}
+            onChat={() => goLowerTab('/community', 'chat')}
+            onAlerts={() => goLowerTab('/alerts', 'alerts')}
+            onNotifications={() => goLowerTab('/notifications', 'notifications')}
+            onMenu={() => goLowerTab('/menu', 'menu')}
+            inboxBadgeCount={unreadCount}
+            chatBadgeCount={chatUnreadCount}
+          />
+        </View>
       </View>
+      </UpperTabHostProvider>
     </>
   );
 }
@@ -239,7 +228,9 @@ function UpperTabButton({
   return (
     <Pressable
       onPress={onPress}
-      hitSlop={{ top: 8, bottom: 8, left: 4, right: 4 }}
+      delayPressIn={0}
+      hitSlop={{ top: 10, bottom: 10, left: 6, right: 6 }}
+      android_ripple={{ color: 'rgba(10, 126, 164, 0.15)', borderless: false }}
       style={styles.upperTabButton}
       accessibilityRole="tab"
       accessibilityState={{ selected: active }}
@@ -260,7 +251,19 @@ const styles = StyleSheet.create({
     ...Platform.select({ web: { minHeight: '100vh' as const }, default: {} }),
   },
   container: { flex: 1, backgroundColor: '#FFFFFF' },
-  content: { flex: 1 },
+  content: { flex: 1, minHeight: 0, overflow: 'hidden' },
+  /** Flex sibling (not absolute) — iOS native stack must not cover the tab bar touch target. */
+  bottomNavBar: {
+    width: '100%',
+    backgroundColor: '#FFFFFF',
+    zIndex: 100,
+    ...Platform.select({ android: { elevation: 24 }, default: {} }),
+  },
+  upperTabOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    zIndex: 10,
+    backgroundColor: '#FFFFFF',
+  },
   upperTabs: {
     flexDirection: 'row',
     justifyContent: 'space-around',
@@ -269,8 +272,8 @@ const styles = StyleSheet.create({
     borderBottomWidth: StyleSheet.hairlineWidth,
     borderBottomColor: '#e5e5e5',
     backgroundColor: '#FFFFFF',
-    zIndex: 20,
-    ...Platform.select({ android: { elevation: 8 }, default: {} }),
+    zIndex: 50,
+    ...Platform.select({ android: { elevation: 12 }, default: {} }),
   },
   upperTabButton: {
     alignItems: 'center',

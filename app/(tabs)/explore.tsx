@@ -1,7 +1,12 @@
-import { getEvents, toggleEventLike } from '@/app/services/events';
+import {
+  getEventBanditRecommendationsBulk,
+  getEvents,
+  getUserLikedEvents,
+  toggleEventLike,
+  type EventBanditRecommendation,
+} from '@/app/services/events';
 import EventCard from '@/components/EventCard';
 import ExploreCategoryChips from '@/components/ExploreCategoryChips';
-import ExploreMapPanel from '@/components/ExploreMapPanel';
 import { useCity } from '@/contexts/CityContext';
 import { exploreEventsCacheKey, hydrateExploreEventsFromDisk, persistExploreEventsSnapshot } from '@/lib/exploreEventsCache';
 import { fetchSWR, readCacheStale } from '@/lib/appDataCache';
@@ -11,13 +16,17 @@ import {
   filterEventsByExploreCategory,
   type ExploreCategoryChip,
 } from '@/lib/exploreCategoryFilter';
+import { useUpperTabHost } from '@/contexts/UpperTabHostContext';
 import { useTabActiveDataLoad } from '@/lib/useTabActiveDataLoad';
+import { useScreenFocused } from '@/lib/useScreenFocused';
 import { usePremiumRefreshControl } from '@/lib/mobilePullToRefresh';
+import { perfDumpSummary, perfMark, perfStart } from '@/lib/perfTiming';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import React, { Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   FlatList,
+  InteractionManager,
   Platform,
   Pressable,
   ScrollView,
@@ -32,6 +41,8 @@ type Event = Database['public']['Tables']['event']['Row'];
 
 const EXPLORE_CACHE_TTL_MS = 5 * 60 * 1000;
 
+const ExploreMapPanelLazy = React.lazy(() => import('@/components/ExploreMapPanel'));
+
 type ExploreRowProps = {
   item: Event;
   columns: number;
@@ -39,6 +50,8 @@ type ExploreRowProps = {
   isLiked: boolean;
   onLike: () => void;
   onPressSpot: () => void;
+  recommendingBandits?: EventBanditRecommendation[];
+  onBanditPress: (banditId: string) => void;
 };
 
 const ExploreEventRow = React.memo(function ExploreEventRow({
@@ -48,6 +61,8 @@ const ExploreEventRow = React.memo(function ExploreEventRow({
   isLiked,
   onLike,
   onPressSpot,
+  recommendingBandits,
+  onBanditPress,
 }: ExploreRowProps) {
   return (
     <View style={[styles.cardWrap, columns > 1 && styles.cardWrapMulti]}>
@@ -57,20 +72,42 @@ const ExploreEventRow = React.memo(function ExploreEventRow({
         isLiked={isLiked}
         variant="horizontal"
         fillHorizontalCell
-        showRecommendations={false}
+        showRecommendations
+        skipGooglePhotoFetch
+        splitTouchTargets={Platform.OS === 'android'}
+        preloadedRecommendingBandits={recommendingBandits}
+        onBanditPress={onBanditPress}
         banditId={banditId}
         onPress={onPressSpot}
       />
     </View>
   );
+}, (prev, next) => {
+  const prevB = prev.recommendingBandits;
+  const nextB = next.recommendingBandits;
+  const banditsEqual =
+    prevB === nextB ||
+    (prevB === undefined && nextB === undefined) ||
+    (prevB !== undefined &&
+      nextB !== undefined &&
+      prevB.length === nextB.length &&
+      prevB.every((b, i) => b.id === nextB[i]?.id));
+  return (
+    prev.item.id === next.item.id &&
+    prev.isLiked === next.isLiked &&
+    prev.columns === next.columns &&
+    prev.banditId === next.banditId &&
+    banditsEqual
+  );
 });
 
 type ExploreScreenProps = {
-  /** When false, screen stays mounted but skips network refresh (persistent upper tabs). */
   tabActive?: boolean;
 };
 
-export default function Explore({ tabActive = true }: ExploreScreenProps) {
+export function ExploreScreen({ tabActive }: ExploreScreenProps = {}) {
+  const navFocused = useScreenFocused();
+  const screenActive = tabActive ?? navFocused;
   const router = useRouter();
   const { width } = useWindowDimensions();
   const insets = useSafeAreaInsets();
@@ -90,6 +127,8 @@ export default function Explore({ tabActive = true }: ExploreScreenProps) {
 
   const [events, setEvents] = useState<Event[]>(() => readCacheStale<Event[]>(exploreCacheKey) ?? []);
   const [likedEventIds, setLikedEventIds] = useState<Set<string>>(new Set());
+  const likedEventIdsRef = useRef(likedEventIds);
+  likedEventIdsRef.current = likedEventIds;
   const [likesEpoch, setLikesEpoch] = useState(0);
   const [refreshing, setRefreshing] = useState(false);
   const [backgroundLoading, setBackgroundLoading] = useState(
@@ -113,6 +152,11 @@ export default function Explore({ tabActive = true }: ExploreScreenProps) {
     if (openMapParam === 'map') setViewMode('map');
   }, [openMapParam]);
 
+  const [banditsByEventId, setBanditsByEventId] = useState<Map<string, EventBanditRecommendation[]>>(
+    () => new Map(),
+  );
+  const [banditsBulkLoaded, setBanditsBulkLoaded] = useState(false);
+
   const listBottomPad = useMemo(
     () => 72 + (Platform.OS === 'android' ? Math.max(insets.bottom, 12) : Math.max(insets.bottom, 8)) + 16,
     [insets.bottom],
@@ -121,14 +165,17 @@ export default function Explore({ tabActive = true }: ExploreScreenProps) {
   useEffect(() => {
     if (diskHydratedRef.current) return;
     diskHydratedRef.current = true;
-    void (async () => {
-      await hydrateExploreEventsFromDisk();
-      const stale = readCacheStale<Event[]>(exploreCacheKey);
-      if (stale?.length) {
-        setEvents(stale);
-        setBackgroundLoading(false);
-      }
-    })();
+    const timer = setTimeout(() => {
+      void (async () => {
+        await hydrateExploreEventsFromDisk();
+        const stale = readCacheStale<Event[]>(exploreCacheKey);
+        if (stale?.length) {
+          setEvents(stale);
+          setBackgroundLoading(false);
+        }
+      })();
+    }, 0);
+    return () => clearTimeout(timer);
   }, [exploreCacheKey]);
 
   useEffect(() => {
@@ -194,10 +241,43 @@ export default function Explore({ tabActive = true }: ExploreScreenProps) {
     runExploreFetch(true);
   }, [exploreFilterSig, runExploreFetch]);
 
-  useTabActiveDataLoad(tabActive, exploreInitialLoadDoneRef, runExploreFetch);
+  useTabActiveDataLoad(screenActive, exploreInitialLoadDoneRef, runExploreFetch);
+
+  useEffect(() => {
+    if (!screenActive) return;
+    let cancelled = false;
+    void getUserLikedEvents()
+      .then((liked) => {
+        if (cancelled) return;
+        setLikedEventIds(new Set(liked.map((e) => e.id)));
+        setLikesEpoch((n) => n + 1);
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [screenActive]);
+
+  useEffect(() => {
+    if (viewMode === 'map') {
+      void import('@/components/ExploreMapPanel');
+    }
+  }, [viewMode]);
+
+  useEffect(() => {
+    if (!screenActive) return;
+    perfMark('explore_screen_active', 'render');
+    const t = setTimeout(() => perfDumpSummary(), 800);
+    return () => clearTimeout(t);
+  }, [screenActive]);
+
+  useEffect(() => {
+    if (!screenActive || events.length === 0) return;
+    perfMark('explore_events_painted', 'render', { count: events.length });
+  }, [screenActive, events.length]);
 
   const toggleLike = useCallback(async (eventId: string) => {
-    const currentlyLiked = likedEventIds.has(eventId);
+    const currentlyLiked = likedEventIdsRef.current.has(eventId);
     setLikedEventIds((prev) => {
       const next = new Set(prev);
       if (currentlyLiked) next.delete(eventId);
@@ -216,7 +296,7 @@ export default function Explore({ tabActive = true }: ExploreScreenProps) {
       });
       setLikesEpoch((n) => n + 1);
     }
-  }, [likedEventIds]);
+  }, []);
 
   const onPullRefresh = useCallback(async () => {
     const { invalidateAppDataCache } = await import('@/lib/appDataCache');
@@ -236,6 +316,54 @@ export default function Explore({ tabActive = true }: ExploreScreenProps) {
   const filteredEvents = useMemo(
     () => filterEventsByExploreCategory(events, categoryChip),
     [events, categoryChip],
+  );
+
+  useEffect(() => {
+    if (viewMode !== 'map') return;
+    perfMark('explore_map_mode_opened', 'map', { eventCount: filteredEvents.length });
+  }, [viewMode, filteredEvents.length]);
+
+  const filteredEventIdsKey = useMemo(
+    () => filteredEvents.map((e) => e.id).join(','),
+    [filteredEvents],
+  );
+
+  useEffect(() => {
+    if (!screenActive || !filteredEventIdsKey) {
+      setBanditsByEventId(new Map());
+      setBanditsBulkLoaded(false);
+      return;
+    }
+    let cancelled = false;
+    setBanditsBulkLoaded(false);
+    const ids = filteredEventIdsKey.split(',').filter(Boolean);
+    const load = () => {
+      void getEventBanditRecommendationsBulk(ids)
+        .then((map) => {
+          if (!cancelled) {
+            setBanditsByEventId(map);
+            setBanditsBulkLoaded(true);
+          }
+        })
+        .catch(() => {
+          if (!cancelled) setBanditsBulkLoaded(true);
+        });
+    };
+    const handle =
+      Platform.OS === 'android'
+        ? InteractionManager.runAfterInteractions(load)
+        : (load(), undefined);
+    return () => {
+      cancelled = true;
+      handle?.cancel?.();
+    };
+  }, [screenActive, filteredEventIdsKey]);
+
+  const handleBanditPress = useCallback(
+    (id: string) => {
+      router.push(`/bandit/${encodeURIComponent(id)}` as any);
+    },
+    [router],
   );
 
   const goBackToBanditHome = useCallback(() => {
@@ -263,13 +391,21 @@ export default function Explore({ tabActive = true }: ExploreScreenProps) {
         isLiked={likedEventIds.has(item.id)}
         onLike={() => void toggleLike(item.id)}
         onPressSpot={() => handleNavigateToSpot(item.id)}
+        recommendingBandits={
+          banditsBulkLoaded ? banditsByEventId.get(item.id) ?? [] : undefined
+        }
+        onBanditPress={handleBanditPress}
       />
     ),
-    [columns, likedEventIds, banditId, toggleLike, handleNavigateToSpot],
+    [columns, likesEpoch, banditId, banditsBulkLoaded, banditsByEventId, toggleLike, handleNavigateToSpot, handleBanditPress],
   );
 
   const toggleViewMode = useCallback(() => {
-    setViewMode((m) => (m === 'list' ? 'map' : 'list'));
+    setViewMode((m) => {
+      const next = m === 'list' ? 'map' : 'list';
+      perfMark(`explore_toggle_view:${next}`, 'navigation');
+      return next;
+    });
   }, []);
 
   if (error && events.length === 0 && !backgroundLoading) {
@@ -283,6 +419,11 @@ export default function Explore({ tabActive = true }: ExploreScreenProps) {
         <Text style={styles.errorHint}>Pull down to retry.</Text>
       </ScrollView>
     );
+  }
+
+  /** Inactive overlay panes must not mount FlatList/WebView (steals JS from navigation). */
+  if (!screenActive) {
+    return <View style={styles.container} />;
   }
 
   return (
@@ -302,6 +443,7 @@ export default function Explore({ tabActive = true }: ExploreScreenProps) {
           <Pressable
             style={[styles.mapBtn, viewMode === 'map' && styles.mapBtnActive]}
             onPress={toggleViewMode}
+            delayPressIn={0}
             hitSlop={8}
           >
             <Text style={[styles.mapBtnText, viewMode === 'map' && styles.mapBtnTextActive]}>
@@ -316,14 +458,11 @@ export default function Explore({ tabActive = true }: ExploreScreenProps) {
       <ExploreCategoryChips selected={categoryChip} onSelect={setCategoryChip} />
 
       <View style={styles.body}>
-        <View
-          style={[styles.pane, viewMode === 'list' ? styles.paneVisible : styles.paneHidden]}
-          pointerEvents={viewMode === 'list' ? 'auto' : 'none'}
-        >
+        {viewMode === 'list' ? (
           <FlatList
             style={styles.listFlex}
             data={filteredEvents}
-            extraData={{ categoryChip, likesEpoch }}
+            extraData={{ categoryChip, likesEpoch, banditsBulkLoaded, banditsByEventId }}
             keyExtractor={keyExtractor}
             numColumns={columns}
             refreshControl={exploreRefreshControl}
@@ -340,28 +479,35 @@ export default function Explore({ tabActive = true }: ExploreScreenProps) {
                 </Text>
               )
             }
-            initialNumToRender={Platform.OS === 'web' ? 8 : 5}
-            maxToRenderPerBatch={4}
-            windowSize={5}
-            updateCellsBatchingPeriod={50}
-            removeClippedSubviews={false}
+            initialNumToRender={Platform.OS === 'web' ? 8 : Platform.OS === 'android' ? 4 : 5}
+            maxToRenderPerBatch={Platform.OS === 'android' ? 3 : 4}
+            windowSize={Platform.OS === 'android' ? 4 : 5}
+            updateCellsBatchingPeriod={Platform.OS === 'android' ? 80 : 50}
+            removeClippedSubviews={Platform.OS === 'android'}
             renderItem={renderEventRow}
           />
-        </View>
-
-        {tabActive && viewMode === 'map' ? (
-          <View style={[styles.pane, styles.paneVisible]} pointerEvents="auto">
-            <ExploreMapPanel
+        ) : (
+          <Suspense
+            fallback={
+              <View style={styles.mapLoading}>
+                <ActivityIndicator size="large" color="#0a7ea4" />
+              </View>
+            }
+          >
+            <ExploreMapPanelLazy
               events={filteredEvents}
               banditId={banditId}
               onOpenSpot={handleNavigateToSpot}
+              onBanditPress={handleBanditPress}
+              banditsByEventId={banditsByEventId}
+              banditsBulkLoaded={banditsBulkLoaded}
               listBottomPad={Math.max(insets.bottom, 8)}
               isLiked={(eventId) => likedEventIds.has(eventId)}
               onLike={(eventId) => void toggleLike(eventId)}
               visible
             />
-          </View>
-        ) : null}
+          </Suspense>
+        )}
       </View>
     </View>
   );
@@ -375,13 +521,7 @@ const styles = StyleSheet.create({
     maxWidth: '100%',
     overflow: 'hidden',
   },
-  body: { flex: 1 },
-  pane: {
-    ...StyleSheet.absoluteFillObject,
-    backgroundColor: '#FFFFFF',
-  },
-  paneVisible: { opacity: 1, zIndex: 1 },
-  paneHidden: { opacity: 0, zIndex: 0 },
+  body: { flex: 1, minHeight: 0 },
   listFlex: {
     flex: 1,
     width: '100%',
@@ -444,6 +584,12 @@ const styles = StyleSheet.create({
   mapBtnTextActive: {
     color: '#FFF',
   },
+  mapLoading: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    minHeight: 200,
+  },
   gridContent: {
     paddingHorizontal: 12,
     paddingBottom: 108,
@@ -495,3 +641,9 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
 });
+
+export default function ExploreTabRoute() {
+  const { enabled } = useUpperTabHost();
+  if (enabled) return null;
+  return <ExploreScreen />;
+}

@@ -22,7 +22,9 @@ import { fetchSWR, invalidateAppDataCache, readCacheStale } from '@/lib/appDataC
 import { Database } from '@/lib/database.types';
 import { getHotelEntry } from '@/lib/pilotSession';
 import { usePremiumRefreshControl } from '@/lib/mobilePullToRefresh';
+import { useUpperTabHost } from '@/contexts/UpperTabHostContext';
 import { useTabActiveDataLoad } from '@/lib/useTabActiveDataLoad';
+import { useScreenFocused } from '@/lib/useScreenFocused';
 import { buildEventListImagePlan, getEventDbImageCandidatesOrdered } from '@/lib/eventListImagePlan';
 import {
   enforceUniqueRecommendationImagesByEventId,
@@ -52,7 +54,9 @@ type BanditsScreenProps = {
   tabActive?: boolean;
 };
 
-export default function BanditsScreen({ tabActive = true }: BanditsScreenProps) {
+export function BanditsScreen({ tabActive }: BanditsScreenProps = {}) {
+  const navFocused = useScreenFocused();
+  const screenActive = tabActive ?? navFocused;
   const router = useRouter();
   const params = useLocalSearchParams<{ focusBanditId?: string }>();
   const rawFocus = params.focusBanditId;
@@ -209,7 +213,7 @@ export default function BanditsScreen({ tabActive = true }: BanditsScreenProps) 
     });
   }, []);
 
-  useTabActiveDataLoad(tabActive, banditsInitialFocusDoneRef, fetchRows);
+  useTabActiveDataLoad(screenActive, banditsInitialFocusDoneRef, fetchRows);
 
   const onRefresh = useCallback(async () => {
     invalidateAppDataCache(BANDITS_ROWS_CACHE_KEY);
@@ -299,6 +303,10 @@ export default function BanditsScreen({ tabActive = true }: BanditsScreenProps) 
     () => <BanditsHomeHeader hotelSlug={hotelSlug} loadingContext={false} />,
     [hotelSlug],
   );
+
+  if (!screenActive) {
+    return <View style={styles.screen} />;
+  }
 
   /** First-ever load: skeleton placeholders so users see structure instead of a blank spinner. */
   if (!loadedOnce) {
@@ -572,3 +580,9 @@ const styles = StyleSheet.create({
     width: '48.8%',
   },
 });
+
+export default function BanditsTabRoute() {
+  const { enabled } = useUpperTabHost();
+  if (enabled) return null;
+  return <BanditsScreen />;
+}

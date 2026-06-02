@@ -1,5 +1,5 @@
 import React from 'react';
-import { Platform, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { IconSymbol } from '@/components/ui/IconSymbol';
@@ -41,6 +41,7 @@ export default function MainBottomNav({
 
   return (
     <View
+      pointerEvents="auto"
       style={[
         styles.container,
         {
@@ -107,7 +108,15 @@ interface NavButtonProps {
 
 function NavButton({ label, iconName, color, onPress, badgeCount = 0 }: NavButtonProps) {
   return (
-    <TouchableOpacity style={styles.button} onPress={onPress}>
+    <Pressable
+      style={styles.button}
+      onPress={onPress}
+      delayPressIn={0}
+      hitSlop={{ top: 6, bottom: 6, left: 2, right: 2 }}
+      android_ripple={{ color: 'rgba(10, 126, 164, 0.12)', borderless: false }}
+      accessibilityRole="button"
+      accessibilityLabel={label}
+    >
       <View style={styles.iconWrapper}>
         <IconSymbol name={iconName as any} size={24} color={color} />
         {badgeCount > 0 && (
@@ -119,7 +128,7 @@ function NavButton({ label, iconName, color, onPress, badgeCount = 0 }: NavButto
         )}
       </View>
       <Text style={[styles.buttonText, { color }]}>{label}</Text>
-    </TouchableOpacity>
+    </Pressable>
   );
 }
 
@@ -132,6 +141,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 4,
     borderTopWidth: 1,
     minHeight: 64,
+    width: '100%',
   },
   button: {
     flex: 1,
