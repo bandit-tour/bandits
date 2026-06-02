@@ -47,6 +47,8 @@ import { inboxPreviewForType } from '@/lib/bottleThreadText';
 import { isDeletedThreadRef } from '@/lib/threadDelete';
 import { markInboxSurfaceOpened } from '@/lib/osAppBadge';
 import { syncOsAppIconBadge } from '@/lib/pushNotifications';
+import { useAppBackScreenOptions } from '@/hooks/useAppBackScreenOptions';
+import { APP_HOME_HREF } from '@/lib/appNavigation';
 
 type NotificationRow = {
   id: string;
@@ -225,6 +227,10 @@ async function markNotificationsReadByIds(ids: string[]): Promise<void> {
 
 export default function NotificationsScreen() {
   const router = useRouter();
+  const notificationsScreenOptions = useAppBackScreenOptions({
+    title: 'Notifications',
+    fallback: APP_HOME_HREF,
+  });
   const { width } = useWindowDimensions();
   const isDesktopWeb = Platform.OS === 'web' && width >= 1024;
   const { refreshNotifications, markNotificationRead, unreadCount, chatUnreadCount } = useAppState();
@@ -534,7 +540,7 @@ export default function NotificationsScreen() {
 
   return (
     <>
-      <Stack.Screen options={{ headerShown: true, title: 'Notifications', headerBackTitle: 'Back' }} />
+      <Stack.Screen options={notificationsScreenOptions} />
       <View style={[styles.container, isDesktopWeb && styles.containerDesktop]}>
         <SectionList
           sections={sections}

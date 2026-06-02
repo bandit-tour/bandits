@@ -16,8 +16,10 @@ import { Stack } from 'expo-router';
 
 import { getBandits, updateBandit } from '@/app/services/bandits';
 import { getEvents, updateEvent } from '@/app/services/events';
+import OperatorQuickNav from '@/components/OperatorQuickNav';
 import { RequireAppAdminGate } from '@/components/RequireAppAdminGate';
 import { useAppBackScreenOptions } from '@/hooks/useAppBackScreenOptions';
+import { PLAY_MENU_HREF } from '@/lib/appNavigation';
 import { Database } from '@/lib/database.types';
 import { operatorSurfaceTextInputProps, operatorSurfaceTextInputStyle } from '@/lib/operatorSurfaceTextInput';
 import { supabase } from '@/lib/supabase';
@@ -42,7 +44,7 @@ const AdminPageContent = () => {
 
   const cDeskScreenOptions = useAppBackScreenOptions({
     title: 'CDesk',
-    fallback: '/menu',
+    fallback: PLAY_MENU_HREF,
   });
 
   useEffect(() => {
@@ -152,6 +154,7 @@ const AdminPageContent = () => {
     <>
       <Stack.Screen options={cDeskScreenOptions} />
       <View style={styles.container}>
+      <OperatorQuickNav />
       <View style={styles.header}>
         <Text style={styles.title}>Admin Panel</Text>
 

@@ -42,6 +42,8 @@ import { BANDITS_NOTIFICATIONS_REFRESH, requestNotificationsRefresh } from '@/li
 import { requestPushForRecipient } from '@/lib/pushClient';
 import { markChatSurfaceOpened } from '@/lib/osAppBadge';
 import { syncOsAppIconBadge } from '@/lib/pushNotifications';
+import { useAppBackScreenOptions } from '@/hooks/useAppBackScreenOptions';
+import { APP_HOME_HREF } from '@/lib/appNavigation';
 import { syncLatestArrivalNotificationMessageFromDelivery } from '@/lib/syncArrivalNotification';
 import { supabase } from '@/lib/supabase';
 import { deleteNotificationThread } from '@/lib/threadDelete';
@@ -169,6 +171,11 @@ export default function ChatScreen() {
 
   const personaBarLock =
     threadIdentity?.sender_persona_display_name?.trim() || deskPersonaLock.trim() || '';
+
+  const chatScreenOptions = useAppBackScreenOptions({
+    title: canUseChat ? displayPersona : 'Chat',
+    fallback: APP_HOME_HREF,
+  });
 
   useLayoutEffect(() => {
     firstScrollDoneRef.current = false;
@@ -865,7 +872,7 @@ export default function ChatScreen() {
   if (!canUseChat) {
     return (
       <>
-        <Stack.Screen options={{ headerShown: true, title: 'Chat', headerBackTitle: 'Back' }} />
+        <Stack.Screen options={chatScreenOptions} />
         <View style={[styles.flex, { backgroundColor: '#F0F2F5' }]} />
       </>
     );
@@ -873,7 +880,7 @@ export default function ChatScreen() {
 
   return (
     <>
-      <Stack.Screen options={{ headerShown: true, title: displayPersona, headerBackTitle: 'Back' }} />
+      <Stack.Screen options={chatScreenOptions} />
       <KeyboardAvoidingView
         style={styles.flex}
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}

@@ -22,6 +22,8 @@ import { BANDITS_NOTIFICATIONS_REFRESH } from '@/lib/notificationEvents';
 import { DeviceEventEmitter } from 'react-native';
 import { markChatSurfaceOpened } from '@/lib/osAppBadge';
 import { syncOsAppIconBadge } from '@/lib/pushNotifications';
+import { useAppBackScreenOptions } from '@/hooks/useAppBackScreenOptions';
+import { APP_HOME_HREF } from '@/lib/appNavigation';
 
 /**
  * Bottom Chat tab — unified conversation threads (same /chat route as Notifications deep links).
@@ -29,6 +31,10 @@ import { syncOsAppIconBadge } from '@/lib/pushNotifications';
 export default function CommunityScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
+  const communityScreenOptions = useAppBackScreenOptions({
+    title: 'Chat',
+    fallback: APP_HOME_HREF,
+  });
   const { refreshNotifications, markNotificationRead, unreadCount, chatUnreadCount } = useAppState();
   const [threads, setThreads] = useState<ChatThreadSummary[]>([]);
   const [loading, setLoading] = useState(true);
@@ -101,7 +107,7 @@ export default function CommunityScreen() {
 
   return (
     <>
-      <Stack.Screen options={{ headerShown: true, title: 'Chat', headerBackTitle: 'Back' }} />
+      <Stack.Screen options={communityScreenOptions} />
       <View style={[styles.container, { paddingBottom: Math.max(insets.bottom, 8) }]}>
         {loading ? (
           <View style={styles.center}>

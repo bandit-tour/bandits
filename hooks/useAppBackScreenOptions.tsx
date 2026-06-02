@@ -1,19 +1,22 @@
 import { HeaderBackButton } from '@react-navigation/elements';
+import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationOptions } from '@react-navigation/native-stack';
 import { useRouter, type Href } from 'expo-router';
 import { useCallback, useMemo } from 'react';
-import { Platform } from 'react-native';
+import { BackHandler, Platform } from 'react-native';
 
-/** Reliable back: never show the parent route name "(tabs)" on iOS. */
+import { navigateAppBack } from '@/lib/appNavigation';
+import { perfTraceNavigationPress } from '@/lib/perfTiming';
+
+/** Reliable back: stack history first, then expo-router, then safe fallback. */
 export function useAppBackNavigation(fallback: Href): () => void {
   const router = useRouter();
+  const navigation = useNavigation();
   return useCallback(() => {
-    if (router.canGoBack()) {
-      router.back();
-      return;
-    }
-    router.replace(fallback);
-  }, [router, fallback]);
+    perfTraceNavigationPress('back', () => {
+      navigateAppBack(router, fallback, navigation);
+    });
+  }, [navigation, router, fallback]);
 }
 
 type AppBackScreenOptionsArgs = {
@@ -35,6 +38,17 @@ export function useAppBackScreenOptions({
 }: AppBackScreenOptionsArgs): NativeStackNavigationOptions {
   const handleBack = useAppBackNavigation(fallback);
 
+  useFocusEffect(
+    useCallback(() => {
+      if (Platform.OS !== 'android') return undefined;
+      const sub = BackHandler.addEventListener('hardwareBackPress', () => {
+        handleBack();
+        return true;
+      });
+      return () => sub.remove();
+    }, [handleBack]),
+  );
+
   return useMemo(
     () => ({
       headerShown,
@@ -44,11 +58,13 @@ export function useAppBackScreenOptions({
       headerBackVisible: false,
       headerStyle,
       headerTintColor,
-      headerLeft: (props) => (
+      headerLeft: () => (
         <HeaderBackButton
-          {...props}
+          canGoBack
+          disabled={false}
           label="Back"
           labelVisible={Platform.OS === 'ios'}
+          tintColor={headerTintColor ?? '#0a7ea4'}
           onPress={handleBack}
         />
       ),

@@ -1,4 +1,3 @@
-import * as ImagePicker from 'expo-image-picker';
 import { Image as ExpoImage } from 'expo-image';
 import { useFocusEffect } from '@react-navigation/native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -22,6 +21,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { readGuestProfileLocal, writeGuestProfileLocal } from '@/lib/guestProfileLocal';
 import { getHotelWhiteLabelOrDefault } from '@/lib/hotelWhiteLabel';
 import { usePremiumRefreshControl } from '@/lib/mobilePullToRefresh';
+import { navigateAppBack, PLAY_MENU_HREF } from '@/lib/appNavigation';
 import { ensureAnonymousSession, getHotelEntry, syncPilotHotelProfileIfNeeded } from '@/lib/pilotSession';
 import { supabase } from '@/lib/supabase';
 import {
@@ -217,11 +217,7 @@ function ProfileInspirationStrip() {
 function ProfileBackHeaderButton() {
   const router = useRouter();
   const onBack = useCallback(() => {
-    if (router.canGoBack()) {
-      router.back();
-    } else {
-      router.replace('/menu' as never);
-    }
+    navigateAppBack(router, PLAY_MENU_HREF);
   }, [router]);
   return (
     <Pressable
@@ -468,10 +464,6 @@ export default function ProfileScreen() {
     [load],
   );
 
-  useEffect(() => {
-    void load();
-  }, [load]);
-
   useFocusEffect(
     useCallback(() => {
       void load();
@@ -479,6 +471,7 @@ export default function ProfileScreen() {
   );
 
   const uploadAvatarFromPicker = async (fromCamera: boolean) => {
+    const ImagePicker = await import('expo-image-picker');
     await ensureAnonymousSession();
     await ensureClientSessionForStorage();
     await syncPilotHotelProfileIfNeeded();

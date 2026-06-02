@@ -22,6 +22,8 @@ import { fetchSWR, invalidateAppDataCache, readCacheStale } from '@/lib/appDataC
 import { Database } from '@/lib/database.types';
 import { buildEventListImagePlan } from '@/lib/eventListImagePlan';
 import { usePremiumRefreshControl } from '@/lib/mobilePullToRefresh';
+import { useAppBackScreenOptions } from '@/hooks/useAppBackScreenOptions';
+import { APP_HOME_HREF } from '@/lib/appNavigation';
 import {
   enforceUniqueRecommendationImagesByEventId,
   resolveStrictRecommendationImagesByEventId,
@@ -47,6 +49,10 @@ type EventItem = Database['public']['Tables']['event']['Row'];
 type CategoryExpand = { genre: string; events: EventItem[]; loading: boolean };
 
 export default function FollowingScreen() {
+  const followingScreenOptions = useAppBackScreenOptions({
+    title: 'Following',
+    fallback: APP_HOME_HREF,
+  });
   const { width } = useWindowDimensions();
   const isDesktopWeb = Platform.OS === 'web' && width >= 1100;
   const followingInitialFocusDoneRef = useRef(false);
@@ -194,7 +200,7 @@ export default function FollowingScreen() {
   if (!loadedOnce) {
     return (
       <>
-        <Stack.Screen options={{ headerShown: true, title: 'Following', headerBackTitle: 'Back' }} />
+        <Stack.Screen options={followingScreenOptions} />
         <View style={[styles.listContent, { gap: 12 }]}>
           {[0, 1, 2].map((i) => (
             <EventCardSkeleton key={i} />
@@ -206,7 +212,7 @@ export default function FollowingScreen() {
 
   return (
     <>
-      <Stack.Screen options={{ headerShown: true, title: 'Following', headerBackTitle: 'Back' }} />
+      <Stack.Screen options={followingScreenOptions} />
       <FlatList
         data={rows}
         extraData={listExpandExtra}

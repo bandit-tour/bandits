@@ -17,7 +17,9 @@ import { ScrollView as GHScrollView, Swipeable } from 'react-native-gesture-hand
 import { parseAboutBanditFromAskMessage } from '@/lib/askMeMessageFormat';
 import { formatInboxSentAt } from '@/lib/inboxSentAtLabel';
 import { useAppState } from '@/contexts/AppStateContext';
+import OperatorQuickNav from '@/components/OperatorQuickNav';
 import { useAppBackScreenOptions } from '@/hooks/useAppBackScreenOptions';
+import { PLAY_MENU_HREF } from '@/lib/appNavigation';
 import { operatorSurfaceTextInputProps, operatorSurfaceTextInputStyle } from '@/lib/operatorSurfaceTextInput';
 import { resolvePilotDeskAccess } from '@/lib/pilotDeskGate';
 import { usePremiumRefreshControl } from '@/lib/mobilePullToRefresh';
@@ -32,6 +34,7 @@ import {
   pilotVerifyScamAlert,
 } from '@/services/pilotScamAlertModeration';
 import { sendPilotLiveAlert } from '@/services/localFriend';
+import { perfMark, perfStart, perfTraceNetwork } from '@/lib/perfTiming';
 
 type NotificationRow = {
   id: string;
@@ -171,40 +174,49 @@ export default function OperatorDeskScreen() {
 
   const pilotDeskScreenOptions = useAppBackScreenOptions({
     title: 'Pilot Desk',
-    fallback: '/menu',
+    fallback: PLAY_MENU_HREF,
   });
 
   const loadAll = useCallback(async () => {
-    const { operatorId, user, showPilotDesk } = await resolvePilotDeskAccess();
-    /** Pilot Desk: owner email only (blonje@gmail.com) — same rule as Guest Menu. */
-    const allowed = showPilotDesk;
-    setIsOperator(allowed);
-    setDeskOperatorId(allowed ? operatorId : null);
-    if (!allowed) {
-      setIncomingRows([]);
-      setReports([]);
-      setLiveAlertBatches([]);
-      return;
-    }
-    if (!operatorId) {
-      setIncomingRows([]);
-      setLiveAlertBatches([]);
-      return;
-    }
+    const endLoad = perfStart('pilot_desk_load', 'network');
+    try {
+      perfMark('pilot_desk_load:start', 'network');
+      const { operatorId, showPilotDesk } = await perfTraceNetwork('pilot_desk_access', () =>
+        resolvePilotDeskAccess(),
+      );
+      /** Pilot Desk: owner email only (blonje@gmail.com) — same rule as Guest Menu. */
+      const allowed = showPilotDesk;
+      setIsOperator(allowed);
+      setDeskOperatorId(allowed ? operatorId : null);
+      if (!allowed) {
+        setIncomingRows([]);
+        setReports([]);
+        setLiveAlertBatches([]);
+        return;
+      }
+      if (!operatorId) {
+        setIncomingRows([]);
+        setLiveAlertBatches([]);
+        return;
+      }
 
-    const operatorUserId = operatorId;
-    const [{ data: notifRows }, { data: reportRows, error: reportErr }, batchRpc] = await Promise.all([
-      supabase
-        .from('notifications')
-        .select('*')
-        .eq('user_id', operatorUserId)
-        .in('type', ['local_friend', 'bandit_question'])
-        .in('reference_type', ['local_friend_request', 'bandit_question_request'])
-        .order('created_at', { ascending: false })
-        .limit(200),
-      supabase.from('scam_alerts').select('*').order('created_at', { ascending: false }).limit(100),
-      supabase.rpc('list_pilot_live_alert_broadcasts', { p_limit: 50 }),
-    ]);
+      const operatorUserId = operatorId;
+    const [{ data: notifRows }, { data: reportRows, error: reportErr }, batchRpc] = await perfTraceNetwork(
+      'pilot_desk_parallel_fetch',
+      () =>
+        Promise.all([
+          supabase
+            .from('notifications')
+            .select('*')
+            .eq('user_id', operatorUserId)
+            .in('type', ['local_friend', 'bandit_question'])
+            .in('reference_type', ['local_friend_request', 'bandit_question_request'])
+            .order('created_at', { ascending: false })
+            .limit(200),
+          supabase.from('scam_alerts').select('*').order('created_at', { ascending: false }).limit(100),
+          supabase.rpc('list_pilot_live_alert_broadcasts', { p_limit: 50 }),
+        ]),
+    );
     const { data: batchData, error: batchErr } = batchRpc;
     if (!batchErr && Array.isArray(batchData)) {
       setLiveAlertBatches(
@@ -251,10 +263,18 @@ export default function OperatorDeskScreen() {
       const list = (reportRows as Record<string, unknown>[]) || [];
       setReports(list.map((r) => normalizeReportRow(r)));
     }
+      perfMark('pilot_desk_load:done', 'render', {
+        incoming: baseRows.length,
+        reports: reportErr ? 0 : ((reportRows as unknown[]) || []).length,
+      });
+    } finally {
+      endLoad();
+    }
   }, []);
 
   React.useEffect(() => {
     let active = true;
+    perfMark('pilot_desk_screen_mount', 'navigation');
     (async () => {
       try {
         await loadAll();
@@ -269,6 +289,7 @@ export default function OperatorDeskScreen() {
 
   useFocusEffect(
     React.useCallback(() => {
+      perfMark('pilot_desk_screen_focus', 'navigation');
       if (loading || !isOperator) return undefined;
       const id = setInterval(() => {
         void loadAll();
@@ -588,20 +609,15 @@ export default function OperatorDeskScreen() {
         nestedScrollEnabled
         keyboardShouldPersistTaps="handled"
       >
+        <OperatorQuickNav />
         {loading ? (
-          <View style={styles.center}>
-            <ActivityIndicator size="large" />
+          <View style={styles.inlineLoading}>
+            <ActivityIndicator size="small" color="#0a7ea4" />
+            <Text style={styles.inlineLoadingText}>Loading Pilot Desk…</Text>
           </View>
-        ) : (
+        ) : null}
+        {!loading ? (
           <>
-            <View style={styles.quickNavRow}>
-              <Pressable style={styles.quickNavBtn} onPress={() => router.replace('/menu')}>
-                <Text style={styles.quickNavBtnText}>Back to Menu</Text>
-              </Pressable>
-              <Pressable style={styles.quickNavBtn} onPress={() => router.replace('/bandits')}>
-                <Text style={styles.quickNavBtnText}>Go Home</Text>
-              </Pressable>
-            </View>
             <Text style={styles.title}>Live Alerts</Text>
             <View style={styles.card}>
               <TextInput
@@ -945,7 +961,7 @@ export default function OperatorDeskScreen() {
               </View>
             )}
           </>
-        )}
+        ) : null}
       </GHScrollView>
     </>
   );
@@ -955,6 +971,14 @@ const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#FFF' },
   content: { padding: 16, paddingBottom: 48 },
   center: { flex: 1, minHeight: 220, alignItems: 'center', justifyContent: 'center' },
+  inlineLoading: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    paddingVertical: 12,
+    marginBottom: 8,
+  },
+  inlineLoadingText: { fontSize: 14, color: '#666', fontWeight: '600' },
   title: { fontSize: 18, fontWeight: '800', color: '#111', marginBottom: 10, marginTop: 4 },
   subtitle: { fontSize: 13, color: '#666', textAlign: 'center', lineHeight: 18 },
   quickNavRow: {

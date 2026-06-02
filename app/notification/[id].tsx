@@ -2,6 +2,9 @@ import { Stack, useLocalSearchParams } from 'expo-router';
 import React, { useMemo } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 
+import { useAppBackScreenOptions } from '@/hooks/useAppBackScreenOptions';
+import { APP_HOME_HREF } from '@/lib/appNavigation';
+
 function formatDateTime(iso?: string): string {
   const v = String(iso || '').trim();
   if (!v) return '';
@@ -17,6 +20,10 @@ function formatDateTime(iso?: string): string {
 }
 
 export default function NotificationDetailScreen() {
+  const screenOptions = useAppBackScreenOptions({
+    title: 'Notification',
+    fallback: APP_HOME_HREF,
+  });
   const { title, message, createdAt } = useLocalSearchParams<{
     title?: string;
     message?: string;
@@ -40,7 +47,7 @@ export default function NotificationDetailScreen() {
 
   return (
     <>
-      <Stack.Screen options={{ headerShown: true, title: 'Notification', headerBackTitle: 'Back' }} />
+      <Stack.Screen options={screenOptions} />
       <View style={styles.container}>
         <View style={styles.card}>
           <Text style={styles.typePill}>Live Alert</Text>

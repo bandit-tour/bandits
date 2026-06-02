@@ -20,9 +20,15 @@ import { usePremiumRefreshControl } from '@/lib/mobilePullToRefresh';
 import { useKeyboardBottomInset } from '@/lib/useKeyboardBottomInset';
 import { LOCAL_FRIEND_SUCCESS_MESSAGE, userFacingMessagingError } from '@/lib/userFacingMessagingError';
 import { getNotificationsBackendStatus, sendLocalFriendMessage } from '@/services/localFriend';
+import { useAppBackScreenOptions } from '@/hooks/useAppBackScreenOptions';
+import { APP_HOME_HREF } from '@/lib/appNavigation';
 
 export default function LocalFriendScreen() {
   const router = useRouter();
+  const localFriendScreenOptions = useAppBackScreenOptions({
+    title: 'Local Friend',
+    fallback: APP_HOME_HREF,
+  });
   const { width } = useWindowDimensions();
   const isDesktopWeb = Platform.OS === 'web' && width >= 1024;
   const insets = useSafeAreaInsets();
@@ -99,7 +105,7 @@ export default function LocalFriendScreen() {
 
   return (
     <>
-      <Stack.Screen options={{ headerShown: true, title: 'Local Friend', headerBackTitle: 'Back' }} />
+      <Stack.Screen options={localFriendScreenOptions} />
       <BottleSubmitVideo visible={bottleOpen} onFinished={onBottleVideoFinished} />
       <View style={styles.screenRoot}>
         <ScrollView
