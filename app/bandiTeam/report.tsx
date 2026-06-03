@@ -3,7 +3,6 @@
  * Does not show the alerts list (avoids routing loops).
  */
 import { Stack, useRouter } from 'expo-router';
-import * as ImagePicker from 'expo-image-picker';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
@@ -24,6 +23,7 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { BottleSubmitVideo } from '@/components/BottleSubmitVideo';
+import AppEscapeNav from '@/components/AppEscapeNav';
 import { useAppBackScreenOptions } from '@/hooks/useAppBackScreenOptions';
 import { getUniqueCities } from '@/app/services/bandits';
 import { getUniqueNeighborhoods } from '@/app/services/events';
@@ -117,6 +117,7 @@ export default function BandiTeamReportScreen() {
   const screenOptions = useAppBackScreenOptions({
     title: 'Report Alert',
     fallback: '/bandiTeam',
+    escapeShortcuts: true,
   });
   const { width } = useWindowDimensions();
   const isDesktopWeb = Platform.OS === 'web' && width >= 1100;
@@ -246,6 +247,7 @@ export default function BandiTeamReportScreen() {
 
   const pickImage = async () => {
     setError(null);
+    const ImagePicker = await import('expo-image-picker');
     const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
     if (!perm.granted) {
       setError('Photo library permission is required to attach an image.');
@@ -339,6 +341,7 @@ export default function BandiTeamReportScreen() {
           refreshControl={reportListRefresh}
         >
           <View style={styles.inner}>
+            <AppEscapeNav compact />
             <Text style={styles.screenTitle}>Report a scam alert</Text>
             <Text style={styles.screenSubtitle}>
               We treat every report seriously. It is reviewed in confidence, and you help protect other travelers.

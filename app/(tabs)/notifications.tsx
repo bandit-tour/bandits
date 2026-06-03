@@ -3,16 +3,18 @@ import { useFocusEffect } from '@react-navigation/native';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
+  Alert,
   DeviceEventEmitter,
   Platform,
+  Pressable,
   ScrollView,
   SectionList,
-  Pressable,
   StyleSheet,
   Text,
   useWindowDimensions,
   View,
 } from 'react-native';
+import { Swipeable } from 'react-native-gesture-handler';
 
 import {
   BANDIT_QUESTION_GUEST_ECHO_REF,
@@ -36,6 +38,7 @@ import { trackEvent } from '@/lib/analytics';
 import { perfMark, perfStart, perfTraceNetwork } from '@/lib/perfTiming';
 import { getDismissedNotificationIds } from '@/lib/dismissedThreads';
 import { formatInboxSentAt } from '@/lib/inboxSentAtLabel';
+import { dismissInboxNotifications } from '@/lib/inboxNotificationManage';
 import { BANDITS_NOTIFICATIONS_REFRESH } from '@/lib/notificationEvents';
 import {
   isLocalFriendBottleInboxType,
@@ -227,10 +230,6 @@ async function markNotificationsReadByIds(ids: string[]): Promise<void> {
 
 export default function NotificationsScreen() {
   const router = useRouter();
-  const notificationsScreenOptions = useAppBackScreenOptions({
-    title: 'Notifications',
-    fallback: APP_HOME_HREF,
-  });
   const { width } = useWindowDimensions();
   const isDesktopWeb = Platform.OS === 'web' && width >= 1024;
   const { refreshNotifications, markNotificationRead, unreadCount, chatUnreadCount } = useAppState();
@@ -240,6 +239,52 @@ export default function NotificationsScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [demoExtras, setDemoExtras] = useState<InboxListItem[]>([]);
   const [nearbyExtras, setNearbyExtras] = useState<InboxListItem[]>([]);
+  const [selectMode, setSelectMode] = useState(false);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(() => new Set());
+  const [bulkWorking, setBulkWorking] = useState(false);
+
+  const removeFromLocalState = useCallback((ids: Iterable<string>) => {
+    const idSet = new Set([...ids].map((id) => String(id || '').trim()).filter(Boolean));
+    if (idSet.size === 0) return;
+    setServerItems((prev) => prev.filter((row) => !idSet.has(row.id)));
+    setDemoExtras((prev) => prev.filter((row) => !idSet.has(row.id)));
+    setNearbyExtras((prev) => prev.filter((row) => !idSet.has(row.id)));
+  }, []);
+
+  const deleteInboxItems = useCallback(
+    async (items: InboxListItem[]) => {
+      if (items.length === 0) return;
+      const ids = items.map((item) => item.id);
+      removeFromLocalState(ids);
+      await dismissInboxNotifications(
+        items.map((item) => ({
+          id: item.id,
+          fromServer: item.fromServer,
+          referenceType: item.notification.reference_type,
+          wasUnread: item.fromServer && !item.notification.is_read,
+        })),
+      );
+      await refreshNotifications();
+      DeviceEventEmitter.emit(BANDITS_NOTIFICATIONS_REFRESH);
+    },
+    [refreshNotifications, removeFromLocalState],
+  );
+
+  const deleteInboxItem = useCallback(
+    async (item: InboxListItem) => {
+      await deleteInboxItems([item]);
+    },
+    [deleteInboxItems],
+  );
+
+  const toggleSelected = useCallback((id: string) => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }, []);
 
   const refreshNearbyExtras = useCallback(async () => {
     const stored = await getNearbyStoredNotifications();
@@ -407,6 +452,169 @@ export default function NotificationsScreen() {
     return [...byId.values()].sort((a, b) => b.sortKey - a.sortKey);
   }, [serverItems, demoExtras, nearbyExtras]);
 
+  const markAllVisibleRead = useCallback(async () => {
+    if (bulkWorking) return;
+    setBulkWorking(true);
+    try {
+      const unreadServer = serverItems.filter((row) => row.fromServer && !row.notification.is_read);
+      const ids = unreadServer.map((row) => row.id);
+      if (ids.length > 0) {
+        setServerItems((prev) =>
+          prev.map((row) =>
+            row.fromServer && !row.notification.is_read
+              ? { ...row, notification: { ...row.notification, is_read: true } }
+              : row,
+          ),
+        );
+        await markNotificationsReadByIds(ids);
+        await refreshNotifications();
+      }
+    } finally {
+      setBulkWorking(false);
+    }
+  }, [bulkWorking, refreshNotifications, serverItems]);
+
+  const clearAllVisible = useCallback(() => {
+    if (bulkWorking || rows.length === 0) return;
+    Alert.alert(
+      'Clear all notifications?',
+      'This removes every item from your inbox on this device.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Clear all',
+          style: 'destructive',
+          onPress: () => {
+            void (async () => {
+              setBulkWorking(true);
+              try {
+                const snapshot = rows;
+                setSelectMode(false);
+                setSelectedIds(new Set());
+                removeFromLocalState(snapshot.map((row) => row.id));
+                await dismissInboxNotifications(
+                  snapshot.map((item) => ({
+                    id: item.id,
+                    fromServer: item.fromServer,
+                    referenceType: item.notification.reference_type,
+                  })),
+                );
+                await refreshNotifications();
+                DeviceEventEmitter.emit(BANDITS_NOTIFICATIONS_REFRESH);
+              } finally {
+                setBulkWorking(false);
+              }
+            })();
+          },
+        },
+      ],
+    );
+  }, [bulkWorking, removeFromLocalState, refreshNotifications, rows]);
+
+  const deleteSelected = useCallback(() => {
+    if (bulkWorking || selectedIds.size === 0) return;
+    const targets = rows.filter((row) => selectedIds.has(row.id));
+    void (async () => {
+      setBulkWorking(true);
+      try {
+        await deleteInboxItems(targets);
+        setSelectMode(false);
+        setSelectedIds(new Set());
+      } finally {
+        setBulkWorking(false);
+      }
+    })();
+  }, [bulkWorking, deleteInboxItems, rows, selectedIds]);
+
+  const inboxHeaderRight = useCallback(
+    () => (
+      <View style={styles.headerActions}>
+        {selectMode ? (
+          <>
+            <Pressable
+              onPress={deleteSelected}
+              disabled={selectedIds.size === 0 || bulkWorking}
+              hitSlop={6}
+              accessibilityRole="button"
+              accessibilityLabel="Delete selected notifications"
+            >
+              <Text
+                style={[
+                  styles.headerActionText,
+                  (selectedIds.size === 0 || bulkWorking) && styles.headerActionTextDisabled,
+                ]}
+              >
+                Delete{selectedIds.size > 0 ? ` (${selectedIds.size})` : ''}
+              </Text>
+            </Pressable>
+            <Pressable
+              onPress={() => {
+                setSelectMode(false);
+                setSelectedIds(new Set());
+              }}
+              hitSlop={6}
+              accessibilityRole="button"
+              accessibilityLabel="Done selecting"
+            >
+              <Text style={styles.headerActionText}>Done</Text>
+            </Pressable>
+          </>
+        ) : (
+          <>
+            <Pressable
+              onPress={() => void markAllVisibleRead()}
+              disabled={bulkWorking}
+              hitSlop={6}
+              accessibilityRole="button"
+              accessibilityLabel="Mark all as read"
+            >
+              <Text style={styles.headerActionText}>Read all</Text>
+            </Pressable>
+            <Pressable
+              onPress={clearAllVisible}
+              disabled={bulkWorking || rows.length === 0}
+              hitSlop={6}
+              accessibilityRole="button"
+              accessibilityLabel="Clear all notifications"
+            >
+              <Text
+                style={[
+                  styles.headerActionText,
+                  (bulkWorking || rows.length === 0) && styles.headerActionTextDisabled,
+                ]}
+              >
+                Clear
+              </Text>
+            </Pressable>
+            <Pressable
+              onPress={() => setSelectMode(true)}
+              hitSlop={6}
+              accessibilityRole="button"
+              accessibilityLabel="Select notifications"
+            >
+              <Text style={styles.headerActionText}>Select</Text>
+            </Pressable>
+          </>
+        )}
+      </View>
+    ),
+    [
+      bulkWorking,
+      clearAllVisible,
+      deleteSelected,
+      markAllVisibleRead,
+      rows.length,
+      selectMode,
+      selectedIds.size,
+    ],
+  );
+
+  const notificationsScreenOptions = useAppBackScreenOptions({
+    title: selectMode ? `${selectedIds.size} selected` : 'Notifications',
+    fallback: APP_HOME_HREF,
+    headerRight: inboxHeaderRight,
+  });
+
   useFocusEffect(
     useCallback(() => {
       perfMark('notifications_screen_focus', 'navigation');
@@ -518,24 +726,69 @@ export default function NotificationsScreen() {
   const renderItem = useCallback(
     ({ item }: { item: InboxListItem }) => {
       const isLive = item.notification.type === 'live_alert';
-      return (
-        <Pressable style={styles.card} onPress={() => openItem(item)}>
-          <View style={styles.cardTop}>
-            <Text style={styles.banditName}>{item.banditName}</Text>
-            <Text style={styles.time}>{item.timestampLabel}</Text>
+      const selected = selectedIds.has(item.id);
+      const inner = (
+        <Pressable
+          style={[styles.card, selected && styles.cardSelected]}
+          onPress={() => {
+            if (selectMode) {
+              toggleSelected(item.id);
+              return;
+            }
+            openItem(item);
+          }}
+          onLongPress={() => {
+            if (!selectMode) setSelectMode(true);
+            toggleSelected(item.id);
+          }}
+        >
+          <View style={styles.cardRow}>
+            {selectMode ? (
+              <View style={[styles.selectDot, selected && styles.selectDotOn]}>
+                {selected ? <Text style={styles.selectDotMark}>✓</Text> : null}
+              </View>
+            ) : null}
+            <View style={styles.cardBody}>
+              <View style={styles.cardTop}>
+                <Text style={styles.banditName}>{item.banditName}</Text>
+                <Text style={styles.time}>{item.timestampLabel}</Text>
+              </View>
+              {isLive && item.notification.title?.trim() ? (
+                <Text style={styles.liveTitle} numberOfLines={2}>
+                  {item.notification.title.trim()}
+                </Text>
+              ) : null}
+              <Text style={styles.preview} numberOfLines={isLive ? 5 : 2} ellipsizeMode="tail">
+                {isLive ? item.notification.message?.trim() || item.preview : item.preview}
+              </Text>
+            </View>
           </View>
-          {isLive && item.notification.title?.trim() ? (
-            <Text style={styles.liveTitle} numberOfLines={2}>
-              {item.notification.title.trim()}
-            </Text>
-          ) : null}
-          <Text style={styles.preview} numberOfLines={isLive ? 5 : 2} ellipsizeMode="tail">
-            {isLive ? item.notification.message?.trim() || item.preview : item.preview}
-          </Text>
         </Pressable>
       );
+
+      if (Platform.OS === 'web' || selectMode) {
+        return inner;
+      }
+
+      return (
+        <Swipeable
+          overshootRight={false}
+          renderRightActions={() => (
+            <Pressable
+              style={styles.swipeDelete}
+              onPress={() => void deleteInboxItem(item)}
+              accessibilityRole="button"
+              accessibilityLabel="Delete notification"
+            >
+              <Text style={styles.swipeDeleteText}>Delete</Text>
+            </Pressable>
+          )}
+        >
+          {inner}
+        </Swipeable>
+      );
     },
-    [openItem],
+    [deleteInboxItem, openItem, selectMode, selectedIds, toggleSelected],
   );
 
   return (
@@ -641,5 +894,65 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: '#3C3C3C',
     lineHeight: 20,
+  },
+  headerActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginRight: Platform.OS === 'ios' ? 2 : 6,
+    flexShrink: 1,
+  },
+  headerActionText: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#0a7ea4',
+  },
+  headerActionTextDisabled: {
+    opacity: 0.45,
+  },
+  cardRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 10,
+  },
+  cardBody: {
+    flex: 1,
+    minWidth: 0,
+  },
+  cardSelected: {
+    borderColor: '#0a7ea4',
+    backgroundColor: '#EEF7FA',
+  },
+  selectDot: {
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+    borderWidth: 2,
+    borderColor: '#C8C8C8',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: 2,
+  },
+  selectDotOn: {
+    borderColor: '#0a7ea4',
+    backgroundColor: '#0a7ea4',
+  },
+  selectDotMark: {
+    color: '#FFF',
+    fontSize: 12,
+    fontWeight: '800',
+  },
+  swipeDelete: {
+    backgroundColor: '#C62828',
+    justifyContent: 'center',
+    alignItems: 'center',
+    width: 88,
+    borderRadius: 14,
+    marginLeft: 8,
+  },
+  swipeDeleteText: {
+    color: '#FFF',
+    fontWeight: '800',
+    fontSize: 14,
   },
 });

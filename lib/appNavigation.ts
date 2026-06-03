@@ -41,7 +41,13 @@ export function getLowerTabFromPath(pathname: string | null): LowerTabKey {
   }
   if (pathname.includes('/localFriend')) return 'localFriend';
   if (pathname.includes('/menu')) return 'menu';
-  if (pathname.includes('/profile') || pathname.includes('/settings') || pathname.includes('/following')) {
+  if (
+    pathname.includes('/profile') ||
+    pathname.includes('/settings') ||
+    pathname.includes('/following') ||
+    pathname.includes('/bandiTeam') ||
+    pathname.includes('/hotelier')
+  ) {
     return 'menu';
   }
   return 'home';

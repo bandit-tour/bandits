@@ -6,6 +6,7 @@ import { Platform, ScrollView, StyleSheet, Text, useWindowDimensions, View } fro
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { useAppBackScreenOptions } from '@/hooks/useAppBackScreenOptions';
+import AppEscapeNav from '@/components/AppEscapeNav';
 
 /** Full uncropped property art — same 375×380 source used for PLAY Athenian hero; `contain` shows all branding. */
 const HOTELIER_BANNER = require('@/assets/images/play_athens_bg.png');
@@ -18,6 +19,7 @@ function HotelierScreen() {
   const screenOptions = useAppBackScreenOptions({
     title: 'Hotelier',
     fallback: '/menu',
+    escapeShortcuts: true,
   });
   const { width: winW } = useWindowDimensions();
   const pad = 20;
@@ -33,6 +35,7 @@ function HotelierScreen() {
         contentContainerStyle={[styles.content, { paddingBottom: 32 + insets.bottom }]}
         keyboardShouldPersistTaps="handled"
       >
+        <AppEscapeNav compact />
         <View style={[styles.topGrid, isDesktopWeb && styles.topGridDesktop]}>
           <View style={[styles.bannerCard, { width: bannerW }]}>
             <ExpoImage

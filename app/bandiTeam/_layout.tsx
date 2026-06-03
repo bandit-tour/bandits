@@ -1,13 +1,9 @@
 import { Stack } from 'expo-router';
 
 /**
- * bandiTEAM hub + dedicated report form (dual-use). Full alerts-only feed stays on `/scam-alerts` and `/alerts`.
+ * bandiTEAM hub + report form — outside `(tabs)` (no bottom nav).
+ * Screens set their own headers via `useAppBackScreenOptions` + in-content `AppEscapeNav`.
  */
 export default function BandiTeamLayout() {
-  return (
-    <Stack screenOptions={{ headerShown: true, headerBackTitle: 'Back' }}>
-      <Stack.Screen name="index" options={{ title: 'bandiTEAM' }} />
-      <Stack.Screen name="report" options={{ title: 'Report alert' }} />
-    </Stack>
-  );
+  return <Stack screenOptions={{ headerShown: false }} />;
 }

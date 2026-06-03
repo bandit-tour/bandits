@@ -13,6 +13,7 @@ import {
   View,
 } from 'react-native';
 
+import AppEscapeNav from '@/components/AppEscapeNav';
 import { useCity } from '@/contexts/CityContext';
 import { useAppBackScreenOptions } from '@/hooks/useAppBackScreenOptions';
 import { usePremiumRefreshControl } from '@/lib/mobilePullToRefresh';
@@ -78,6 +79,7 @@ export default function BandiTeamHubScreen() {
   const screenOptions = useAppBackScreenOptions({
     title: 'bandiTEAM',
     fallback: '/menu',
+    escapeShortcuts: true,
   });
 
   return (
@@ -87,6 +89,7 @@ export default function BandiTeamHubScreen() {
         contentContainerStyle={styles.scroll}
         refreshControl={hubRefreshControl}
       >
+        <AppEscapeNav />
         <Text style={styles.title}>Community safety alerts</Text>
         <Text style={styles.hint}>
           {previewCity

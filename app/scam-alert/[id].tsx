@@ -188,6 +188,7 @@ export default function ScamAlertDetailScreen() {
   const screenOptions = useAppBackScreenOptions({
     title: 'Alert',
     fallback: '/alerts',
+    escapeShortcuts: true,
     headerRight: () =>
       row ? (
         <Pressable onPress={() => void shareAlert()} style={styles.headerIconBtn} accessibilityLabel="Share alert">
