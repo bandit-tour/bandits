@@ -211,7 +211,7 @@ export default function ExploreMapPanel({
             fillHorizontalCell
             showRecommendations
             skipGooglePhotoFetch
-            splitTouchTargets={Platform.OS === 'android'}
+            splitTouchTargets={Platform.OS !== 'web'}
             preloadedRecommendingBandits={banditsByEventId?.get(item.id) ?? []}
             onBanditPress={onBanditPress}
             banditId={banditId}

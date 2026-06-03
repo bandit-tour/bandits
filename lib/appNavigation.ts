@@ -47,31 +47,24 @@ export function getLowerTabFromPath(pathname: string | null): LowerTabKey {
   return 'home';
 }
 
-/** Upper tabs hidden on lower-tab-only and root stack surfaces. */
+/** Upper tabs visible only on the three PLAY home surfaces. */
 export function getUpperTabFromPath(pathname: string | null): UpperTabKey | null {
   if (!pathname) return 'bandits';
-  if (
-    pathname.includes('/chat') ||
-    pathname.includes('/community') ||
-    pathname.includes('/alerts') ||
-    pathname.includes('/scam-alerts') ||
-    pathname.includes('/notifications') ||
-    pathname.includes('/inbox') ||
-    pathname.includes('/menu') ||
-    pathname.includes('/localFriend') ||
-    pathname.includes('/profile') ||
-    pathname.includes('/settings') ||
-    pathname.includes('/following') ||
-    pathname.includes('/operatorDesk') ||
-    pathname.includes('/admin') ||
-    pathname.includes('/bandiTeam')
-  ) {
-    return null;
-  }
   if (pathname.includes('/mySpots')) return 'mySpots';
   if (pathname.includes('/explore')) return 'explore';
   if (pathname.includes('/bandits')) return 'bandits';
-  return 'bandits';
+  return null;
+}
+
+export function banditProfileHref(banditId: string): Href {
+  return `/bandit/${encodeURIComponent(String(banditId || '').trim())}` as Href;
+}
+
+/** Open a specific local banDit profile (never the Local banDits list landing). */
+export function navigateToBanditProfile(router: AppNavigationRouter, banditId: string): void {
+  const id = String(banditId || '').trim();
+  if (!id) return;
+  router.push(banditProfileHref(id));
 }
 
 type NavigationLike = {

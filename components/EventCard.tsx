@@ -15,10 +15,20 @@ import {
   normalizeEventImageUri,
 } from '@/lib/placePhoto';
 import { buildUserFacingVenueFallbackImage, claimVerifiedHeroPhotoUrl } from '@/lib/recommendationImages';
-import { repairDisplayText } from '@/lib/repairTextEncoding';
+import { navigateToBanditProfile } from '@/lib/appNavigation';
 
 type Event = Database['public']['Tables']['event']['Row'];
 type BanditRecommendation = Pick<Database['public']['Tables']['bandit']['Row'], 'id' | 'image_url'>;
+
+function banditPreloadEqual(
+  a?: BanditRecommendation[],
+  b?: BanditRecommendation[],
+): boolean {
+  if (a === b) return true;
+  if (a === undefined || b === undefined) return a === b;
+  if (a.length !== b.length) return false;
+  return a.every((x, i) => x.id === b[i]?.id && x.image_url === b[i]?.image_url);
+}
 
 // Cache resolved real photo URLs so we don't repeatedly call Google for the same place.
 const EVENT_PHOTO_URL_CACHE = new Map<string, string>();
@@ -113,6 +123,14 @@ interface EventCardProps {
   strictRecommendationImagePolicy?: boolean;
   /** False while parent is still resolving recommendation hero URLs (shows neutral spacer). */
   recommendationHeroResolverReady?: boolean;
+  /** Parent-supplied avatars (Explore bulk load) — skips per-card fetch. */
+  preloadedRecommendingBandits?: BanditRecommendation[];
+  /** Override avatar tap (e.g. open full bandit profile from Explore). */
+  onBanditPress?: (banditId: string) => void;
+  /** Skip per-card Google Places photo fetch (Explore list performance). */
+  skipGooglePhotoFetch?: boolean;
+  /** Android: separate press targets so heart/avatar taps are not swallowed by the card. */
+  splitTouchTargets?: boolean;
 }
 
 function EventCardImpl({
@@ -134,6 +152,10 @@ function EventCardImpl({
   resolvedRecommendationImageUri = null,
   strictRecommendationImagePolicy = false,
   recommendationHeroResolverReady = true,
+  preloadedRecommendingBandits,
+  onBanditPress,
+  skipGooglePhotoFetch = false,
+  splitTouchTargets = false,
 }: EventCardProps) {
   const router = useRouter();
   const isHorizontal = variant === 'horizontal';
@@ -204,7 +226,8 @@ function EventCardImpl({
 
   const resolvedImageUri = displayUri;
 
-  const shouldSkipGoogleInListScope = false;
+  const shouldSkipGoogleInListScope = skipGooglePhotoFetch;
+  const useSplitTouch = splitTouchTargets && isHorizontal;
 
   const fetchPlacePhoto = async () => {
     return fetchGooglePlacePhotoUrl({
@@ -270,6 +293,10 @@ function EventCardImpl({
 
   useEffect(() => {
     if (strictRecommendationImagePolicy) return;
+    if (skipGooglePhotoFetch) {
+      setGoogleFetchFinished(true);
+      return;
+    }
     loadGooglePhoto();
   }, [
     event.id,
@@ -280,9 +307,14 @@ function EventCardImpl({
     (event as any).google_place_id,
     shouldSkipGoogleInListScope,
     strictRecommendationImagePolicy,
+    skipGooglePhotoFetch,
   ]);
 
   useEffect(() => {
+    if (preloadedRecommendingBandits !== undefined) {
+      setRecommendingBandits(preloadedRecommendingBandits);
+      return;
+    }
     if (!showRecommendations) return;
     let cancelled = false;
     (async () => {
@@ -296,7 +328,20 @@ function EventCardImpl({
     return () => {
       cancelled = true;
     };
-  }, [event.id, showRecommendations]);
+  }, [event.id, showRecommendations, preloadedRecommendingBandits]);
+
+  const openBanditProfile = useCallback(
+    (id: string) => {
+      const trimmed = String(id || '').trim();
+      if (!trimmed) return;
+      if (onBanditPress) {
+        onBanditPress(trimmed);
+        return;
+      }
+      navigateToBanditProfile(router, trimmed);
+    },
+    [onBanditPress, router],
+  );
 
   useEffect(() => {
     if (!banditId) return;
@@ -341,27 +386,115 @@ function EventCardImpl({
     }
   }, [heroUri, onPress, banditId, event.id, router]);
 
-  const handleLikePress = useCallback((e: any) => {
-    e.stopPropagation();
+  const handleLikePress = useCallback((e?: { stopPropagation?: () => void }) => {
+    e?.stopPropagation?.();
     onLike();
   }, [onLike]);
 
-  const recommendationsPointerEvents = prioritizeCardPress ? 'none' : 'auto';
-  const cardContent = (
-    <>
-      {showImageRegion ? (
-        <View
-          style={[
-            styles.imageContainer,
-            isHorizontal && styles.imageContainerHorizontal,
-            ...(imageHeight ? [{ height: imageHeight }] : []),
-          ]}
-        >
-          {heroUri ? (
+  const recommendationsPointerEvents = prioritizeCardPress && !useSplitTouch ? 'none' : 'auto';
+  const BanditTouch = useSplitTouch ? Pressable : TouchableOpacity;
+  const LikeTouch = useSplitTouch ? Pressable : TouchableOpacity;
+
+  const banditAvatarPress = (banditIdForNav: string, e?: { stopPropagation?: () => void }) => {
+    e?.stopPropagation?.();
+    if (prioritizeCardPress && !useSplitTouch) return;
+    openBanditProfile(banditIdForNav);
+  };
+
+  const imageContainerStyle = [
+    styles.imageContainer,
+    isHorizontal && styles.imageContainerHorizontal,
+    !isHorizontal && Platform.OS === 'web' && styles.imageContainerWeb,
+    ...(imageHeight ? [{ height: imageHeight, maxHeight: imageHeight }] : []),
+  ];
+
+  const imageRegion = showImageRegion ? (
+    useSplitTouch ? (
+      <Pressable onPress={handleCardPress} delayPressIn={0} style={imageContainerStyle}>
+        {heroUri ? (
+          <ExpoImage
+            source={{ uri: heroUri }}
+            style={
+              isHorizontal
+                ? styles.eventImageHorizontal
+                : Platform.OS === 'web' && imageHeight
+                  ? [styles.eventImageDefaultContained, { height: imageHeight, maxHeight: imageHeight }]
+                  : styles.eventImageDefaultContained
+            }
+            contentFit="cover"
+            transition={150}
+            cachePolicy="memory-disk"
+            recyclingKey={`event-hero:${event.id}`}
+            priority="high"
+            accessibilityLabel={
+              strictRecommendationImagePolicy
+                ? `recommendation-card-image:${event.id}`
+                : undefined
+            }
+            onError={() => {
+              if (strictRecommendationImagePolicy) {
+                setStrictImageFailed(true);
+                return;
+              }
+              photoUrlCache.delete(event.id);
+              setGooglePhotoUri(null);
+            }}
+          />
+        ) : null}
+        {!strictRecommendationImagePolicy && !heroUri && !googleFetchFinished && (
+          <View style={styles.imageLoadingSpacer} />
+        )}
+        <View style={styles.ratingContainer} pointerEvents="none">
+          <Text style={styles.ratingText}>{(event.rating || 0).toFixed(1)}</Text>
+          <Text style={styles.starText}>★</Text>
+        </View>
+        {showRecommendations && recommendingBandits.length > 0 && (
+          <View style={styles.recommendationsContainer} pointerEvents={recommendationsPointerEvents}>
+            {recommendingBandits.map((bandit, index) => (
+              <BanditTouch
+                key={bandit.id}
+                delayPressIn={0}
+                hitSlop={8}
+                style={[
+                  styles.banditIcon,
+                  index > 0 && styles.banditIconOverlap,
+                  { zIndex: recommendingBandits.length - index },
+                ]}
+                onPress={(e) => banditAvatarPress(bandit.id, e)}
+                accessibilityRole="button"
+                accessibilityLabel="Open recommender profile"
+                testID={`event-card-bandit-avatar-${bandit.id}`}
+              >
+                {sanitizeImageUrl(bandit.image_url) ? (
+                  <ExpoImage
+                    source={{ uri: sanitizeImageUrl(bandit.image_url) as string }}
+                    style={styles.banditIconImage}
+                    contentFit="cover"
+                    cachePolicy="memory-disk"
+                    recyclingKey={`bandit-avatar:${bandit.id}`}
+                    transition={120}
+                  />
+                ) : (
+                  <View style={[styles.banditIconImage, styles.octopusInIcon]}>
+                    <LocalBanditOctopusIcon style={{ width: 40, height: 40, marginRight: 0 }} />
+                  </View>
+                )}
+              </BanditTouch>
+            ))}
+          </View>
+        )}
+      </Pressable>
+    ) : (
+      <View style={imageContainerStyle}>
+        {heroUri ? (
             <ExpoImage
               source={{ uri: heroUri }}
               style={
-                isHorizontal ? styles.eventImageHorizontal : styles.eventImageDefaultContained
+                isHorizontal
+                  ? styles.eventImageHorizontal
+                  : Platform.OS === 'web' && imageHeight
+                    ? [styles.eventImageDefaultContained, { height: imageHeight, maxHeight: imageHeight }]
+                    : styles.eventImageDefaultContained
               }
               contentFit="cover"
               transition={150}
@@ -396,18 +529,20 @@ function EventCardImpl({
           {showRecommendations && recommendingBandits.length > 0 && (
             <View style={styles.recommendationsContainer} pointerEvents={recommendationsPointerEvents}>
               {recommendingBandits.map((bandit, index) => (
-                <TouchableOpacity
+                <BanditTouch
                   key={bandit.id}
                   style={[
                     styles.banditIcon,
                     index > 0 && styles.banditIconOverlap,
                     { zIndex: recommendingBandits.length - index },
                   ]}
-                  onPress={(e) => {
+                  onPress={(e: { stopPropagation?: () => void }) => {
                     if (prioritizeCardPress) return;
-                    e.stopPropagation();
-                    router.push(`/bandits?focusBanditId=${encodeURIComponent(bandit.id)}` as any);
+                    banditAvatarPress(bandit.id, e);
                   }}
+                  accessibilityRole="button"
+                  accessibilityLabel="Open recommender profile"
+                  testID={`event-card-bandit-avatar-${bandit.id}`}
                 >
                   {sanitizeImageUrl(bandit.image_url) ? (
                     <ExpoImage
@@ -423,51 +558,50 @@ function EventCardImpl({
                       <LocalBanditOctopusIcon style={{ width: 40, height: 40, marginRight: 0 }} />
                     </View>
                   )}
-                </TouchableOpacity>
+                </BanditTouch>
               ))}
             </View>
           )}
-        </View>
-      ) : (
-        <>
-          {showRecommendations && recommendingBandits.length > 0 ? (
-            <View style={styles.recommendationsRowStandalone} pointerEvents={recommendationsPointerEvents}>
-              {recommendingBandits.map((bandit, index) => (
-                <TouchableOpacity
-                  key={bandit.id}
-                  style={[
-                    styles.banditIcon,
-                    index > 0 && styles.banditIconOverlap,
-                    { zIndex: recommendingBandits.length - index },
-                  ]}
-                  onPress={(e) => {
-                    if (prioritizeCardPress) return;
-                    e.stopPropagation();
-                    router.push(`/bandits?focusBanditId=${encodeURIComponent(bandit.id)}` as any);
-                  }}
-                >
-                  {sanitizeImageUrl(bandit.image_url) ? (
-                    <ExpoImage
-                      source={{ uri: sanitizeImageUrl(bandit.image_url) as string }}
-                      style={styles.banditIconImage}
-                      contentFit="cover"
-                      cachePolicy="memory-disk"
-                      recyclingKey={`bandit-avatar:${bandit.id}`}
-                      transition={120}
-                    />
-                  ) : (
-                    <View style={[styles.banditIconImage, styles.octopusInIcon]}>
-                      <LocalBanditOctopusIcon style={{ width: 40, height: 40, marginRight: 0 }} />
-                    </View>
-                  )}
-                </TouchableOpacity>
-              ))}
-            </View>
-          ) : null}
-        </>
-      )}
+      </View>
+    )
+  ) : null;
 
-      <View style={[styles.eventContent, isHorizontal && styles.eventContentHorizontal]}>
+  const standaloneBanditsRow =
+    !showImageRegion && showRecommendations && recommendingBandits.length > 0 ? (
+      <View style={styles.recommendationsRowStandalone} pointerEvents={recommendationsPointerEvents}>
+        {recommendingBandits.map((bandit, index) => (
+          <BanditTouch
+            key={bandit.id}
+            delayPressIn={0}
+            hitSlop={8}
+            style={[
+              styles.banditIcon,
+              index > 0 && styles.banditIconOverlap,
+              { zIndex: recommendingBandits.length - index },
+            ]}
+            onPress={() => banditAvatarPress(bandit.id)}
+          >
+            {sanitizeImageUrl(bandit.image_url) ? (
+              <ExpoImage
+                source={{ uri: sanitizeImageUrl(bandit.image_url) as string }}
+                style={styles.banditIconImage}
+                contentFit="cover"
+                cachePolicy="memory-disk"
+                recyclingKey={`bandit-avatar:${bandit.id}`}
+                transition={120}
+              />
+            ) : (
+              <View style={[styles.banditIconImage, styles.octopusInIcon]}>
+                <LocalBanditOctopusIcon style={{ width: 40, height: 40, marginRight: 0 }} />
+              </View>
+            )}
+          </BanditTouch>
+        ))}
+      </View>
+    ) : null;
+
+  const eventBody = (
+    <>
         <View style={styles.eventHeader}>
           <Text style={styles.eventName}>{repairDisplayText(event.name || '')}</Text>
           {!showImageRegion ? (
@@ -478,17 +612,17 @@ function EventCardImpl({
           ) : null}
           {showButton && (
             buttonType === 'remove' ? (
-              <TouchableOpacity onPress={handleLikePress} style={styles.removeButton}>
+              <LikeTouch onPress={handleLikePress} delayPressIn={0} hitSlop={10} style={styles.removeButton}>
                 <Text style={styles.removeButtonText}>
                   {buttonText || 'Remove'}
                 </Text>
-              </TouchableOpacity>
+              </LikeTouch>
             ) : (
-              <TouchableOpacity onPress={handleLikePress} style={styles.likeButton}>
+              <LikeTouch onPress={handleLikePress} delayPressIn={0} hitSlop={12} style={styles.likeButton}>
                 <Text style={[styles.heartIcon, isLiked && styles.heartIconLiked]}>
                   {isLiked ? '❤️' : '🤍'}
                 </Text>
-              </TouchableOpacity>
+              </LikeTouch>
             )
           )}
         </View>
@@ -517,12 +651,40 @@ function EventCardImpl({
             </View>
           )}
         </View>
-      </View>
     </>
   );
 
-  return (
-    prioritizeCardPress ? (
+  const eventContentBlock = useSplitTouch ? (
+    <Pressable
+      onPress={handleCardPress}
+      delayPressIn={0}
+      style={[styles.eventContent, isHorizontal && styles.eventContentHorizontal]}
+    >
+      {eventBody}
+    </Pressable>
+  ) : (
+    <View style={[styles.eventContent, isHorizontal && styles.eventContentHorizontal]}>{eventBody}</View>
+  );
+
+  const cardContent = (
+    <>
+      {imageRegion}
+      {standaloneBanditsRow}
+      {eventContentBlock}
+    </>
+  );
+
+  return useSplitTouch ? (
+    <View
+      style={[
+        styles.eventCard,
+        isHorizontal && (fillHorizontalCell ? styles.eventCardHorizontalFluid : styles.eventCardHorizontalStrip),
+        isHighlighted && styles.highlightedCard,
+      ]}
+    >
+      {cardContent}
+    </View>
+  ) : prioritizeCardPress ? (
       <Pressable
         style={({ pressed }) => [
           styles.eventCard,
@@ -549,8 +711,7 @@ function EventCardImpl({
       >
         {cardContent}
       </TouchableOpacity>
-    )
-  );
+    );
 }
 
 /**
@@ -595,7 +756,11 @@ function areEventCardPropsEqual(prev: EventCardProps, next: EventCardProps): boo
     prev.prioritizeCardPress === next.prioritizeCardPress &&
     prev.resolvedRecommendationImageUri === next.resolvedRecommendationImageUri &&
     prev.strictRecommendationImagePolicy === next.strictRecommendationImagePolicy &&
-    prev.recommendationHeroResolverReady === next.recommendationHeroResolverReady
+    prev.recommendationHeroResolverReady === next.recommendationHeroResolverReady &&
+    banditPreloadEqual(prev.preloadedRecommendingBandits, next.preloadedRecommendingBandits) &&
+    prev.onBanditPress === next.onBanditPress &&
+    prev.skipGooglePhotoFetch === next.skipGooglePhotoFetch &&
+    prev.splitTouchTargets === next.splitTouchTargets
     // Note: onLike/onPress are intentionally NOT compared. Parents should
     // pass stable callbacks via useCallback; if they don't, we'd thrash here.
     // In practice these handlers only read the row's `event.id`, so a stale
@@ -786,6 +951,10 @@ const styles = StyleSheet.create({
     borderTopLeftRadius: 7,
     borderTopRightRadius: 7,
   },
+  imageContainerWeb: {
+    maxHeight: 320,
+    flexShrink: 0,
+  },
   imageLoadingSpacer: {
     width: '100%',
     aspectRatio: 4 / 3,
@@ -829,6 +998,8 @@ const styles = StyleSheet.create({
     right: 8,
     flexDirection: 'row',
     alignItems: 'center',
+    zIndex: 4,
+    elevation: 4,
   },
   recommendationsRowStandalone: {
     flexDirection: 'row',

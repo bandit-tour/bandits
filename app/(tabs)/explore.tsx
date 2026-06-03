@@ -20,6 +20,7 @@ import { useUpperTabHost } from '@/contexts/UpperTabHostContext';
 import { useTabActiveDataLoad } from '@/lib/useTabActiveDataLoad';
 import { useScreenFocused } from '@/lib/useScreenFocused';
 import { usePremiumRefreshControl } from '@/lib/mobilePullToRefresh';
+import { navigateToBanditProfile } from '@/lib/appNavigation';
 import { perfMark } from '@/lib/perfTiming';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import React, { useCallback, useEffect, useMemo, useRef, useState, useDeferredValue } from 'react';
@@ -77,7 +78,7 @@ const ExploreEventRow = React.memo(function ExploreEventRow({
         fillHorizontalCell
         showRecommendations
         skipGooglePhotoFetch
-        splitTouchTargets={Platform.OS === 'android'}
+        splitTouchTargets={Platform.OS !== 'web'}
         preloadedRecommendingBandits={recommendingBandits ?? []}
         onBanditPress={onBanditPress}
         banditId={banditId}
@@ -372,7 +373,7 @@ export function ExploreScreen({ tabActive }: ExploreScreenProps = {}) {
 
   const handleBanditPress = useCallback(
     (id: string) => {
-      router.push(`/bandit/${encodeURIComponent(id)}` as any);
+      navigateToBanditProfile(router, id);
     },
     [router],
   );
@@ -466,6 +467,8 @@ export function ExploreScreen({ tabActive }: ExploreScreenProps = {}) {
             onPress={toggleViewMode}
             delayPressIn={0}
             hitSlop={8}
+            accessibilityRole="button"
+            accessibilityLabel={viewMode === 'map' ? 'List' : 'Map'}
             android_ripple={{ color: 'rgba(255,255,255,0.25)', borderless: false }}
           >
             <Text style={[styles.mapBtnText, viewMode === 'map' && styles.mapBtnTextActive]}>
