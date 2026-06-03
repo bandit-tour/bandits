@@ -37,7 +37,7 @@ export default function TabsLayout() {
 
   /** Warm Explore cache off the critical path — earlier on Android so first Explore tap is warm. */
   useEffect(() => {
-    const delay = Platform.OS === 'android' ? 1800 : 1200;
+    const delay = Platform.OS === 'android' ? 600 : 1200;
     const timer = setTimeout(() => {
       void bootstrapExploreEventsCache(selectedCity || undefined);
     }, delay);
@@ -46,7 +46,7 @@ export default function TabsLayout() {
 
   useEffect(() => {
     if (!selectedCity) return;
-    const delay = Platform.OS === 'android' ? 2800 : 1800;
+    const delay = Platform.OS === 'android' ? 1200 : 1800;
     const timer = setTimeout(() => {
       preloadExploreEvents(selectedCity);
     }, delay);
@@ -79,13 +79,13 @@ export default function TabsLayout() {
       tab: LowerTabKey,
     ) => {
       perfTraceNavigationPress(`tab_lower:${tab}`, () => {
-        if (tab === 'home') {
+        if (tab === 'home' && upperTab !== 'bandits') {
           setOptimisticUpperTab('bandits');
         }
         navigateLowerTab(router, path, tab, lowerTab);
       });
     },
-    [lowerTab, router],
+    [lowerTab, router, upperTab],
   );
 
   const goUpperTab = useCallback(
@@ -117,7 +117,7 @@ export default function TabsLayout() {
 
   /** Warm upper-tab modules off the critical path so first tap is instant. */
   useEffect(() => {
-    const delay = Platform.OS === 'android' ? 2000 : 2500;
+    const delay = Platform.OS === 'android' ? 800 : 2500;
     const timer = setTimeout(() => {
       void import('@/app/(tabs)/explore');
       void import('@/app/(tabs)/mySpots');

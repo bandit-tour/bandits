@@ -108,6 +108,7 @@ export default function ScamAlertsMapScreen() {
   const screenOptions = useAppBackScreenOptions({
     title: 'Safety map',
     fallback: '/scam-alerts',
+    escapeShortcuts: true,
     headerRight: () => (
       <Pressable
         onPress={() => router.push('/scam-alerts' as never)}

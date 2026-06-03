@@ -410,46 +410,48 @@ function EventCardImpl({
 
   const imageRegion = showImageRegion ? (
     useSplitTouch ? (
-      <Pressable onPress={handleCardPress} delayPressIn={0} style={imageContainerStyle}>
-        {heroUri ? (
-          <ExpoImage
-            source={{ uri: heroUri }}
-            style={
-              isHorizontal
-                ? styles.eventImageHorizontal
-                : Platform.OS === 'web' && imageHeight
-                  ? [styles.eventImageDefaultContained, { height: imageHeight, maxHeight: imageHeight }]
-                  : styles.eventImageDefaultContained
-            }
-            contentFit="cover"
-            transition={150}
-            cachePolicy="memory-disk"
-            recyclingKey={`event-hero:${event.id}`}
-            priority="high"
-            accessibilityLabel={
-              strictRecommendationImagePolicy
-                ? `recommendation-card-image:${event.id}`
-                : undefined
-            }
-            onError={() => {
-              if (strictRecommendationImagePolicy) {
-                setStrictImageFailed(true);
-                return;
+      <View style={imageContainerStyle}>
+        <Pressable onPress={handleCardPress} delayPressIn={0} style={styles.imagePressFill}>
+          {heroUri ? (
+            <ExpoImage
+              source={{ uri: heroUri }}
+              style={
+                isHorizontal
+                  ? styles.eventImageHorizontal
+                  : Platform.OS === 'web' && imageHeight
+                    ? [styles.eventImageDefaultContained, { height: imageHeight, maxHeight: imageHeight }]
+                    : styles.eventImageDefaultContained
               }
-              photoUrlCache.delete(event.id);
-              setGooglePhotoUri(null);
-            }}
-          />
-        ) : null}
-        {!strictRecommendationImagePolicy && !heroUri && !googleFetchFinished && (
-          <View style={styles.imageLoadingSpacer} />
-        )}
-        <View style={styles.ratingContainer} pointerEvents="none">
-          <Text style={styles.ratingText}>{(event.rating || 0).toFixed(1)}</Text>
-          <Text style={styles.starText}>★</Text>
-        </View>
+              contentFit="cover"
+              transition={150}
+              cachePolicy="memory-disk"
+              recyclingKey={`event-hero:${event.id}`}
+              priority="high"
+              accessibilityLabel={
+                strictRecommendationImagePolicy
+                  ? `recommendation-card-image:${event.id}`
+                  : undefined
+              }
+              onError={() => {
+                if (strictRecommendationImagePolicy) {
+                  setStrictImageFailed(true);
+                  return;
+                }
+                photoUrlCache.delete(event.id);
+                setGooglePhotoUri(null);
+              }}
+            />
+          ) : null}
+          {!strictRecommendationImagePolicy && !heroUri && !googleFetchFinished && (
+            <View style={styles.imageLoadingSpacer} />
+          )}
+          <View style={styles.ratingContainer} pointerEvents="none">
+            <Text style={styles.ratingText}>{(event.rating || 0).toFixed(1)}</Text>
+            <Text style={styles.starText}>★</Text>
+          </View>
+        </Pressable>
         {showRecommendations && recommendingBandits.length > 0 && (
-          <View style={styles.recommendationsContainer} pointerEvents={recommendationsPointerEvents}>
+          <View style={styles.recommendationsContainer} pointerEvents="box-none">
             {recommendingBandits.map((bandit, index) => (
               <BanditTouch
                 key={bandit.id}
@@ -483,7 +485,7 @@ function EventCardImpl({
             ))}
           </View>
         )}
-      </Pressable>
+      </View>
     ) : (
       <View style={imageContainerStyle}>
         {heroUri ? (
@@ -940,6 +942,11 @@ const styles = StyleSheet.create({
     flexShrink: 0,
     backgroundColor: 'transparent',
   },
+  imagePressFill: {
+    width: '100%',
+    flex: 1,
+    minHeight: 1,
+  },
   octopusInIcon: {
     alignItems: 'center',
     justifyContent: 'center',
@@ -998,8 +1005,8 @@ const styles = StyleSheet.create({
     right: 8,
     flexDirection: 'row',
     alignItems: 'center',
-    zIndex: 4,
-    elevation: 4,
+    zIndex: 8,
+    elevation: 8,
   },
   recommendationsRowStandalone: {
     flexDirection: 'row',

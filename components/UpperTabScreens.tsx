@@ -29,7 +29,8 @@ function TabPaneFallback() {
  */
 export default function UpperTabScreens({ active }: Props) {
   const iosSinglePane = Platform.OS === 'ios';
-  const androidUnmountExplore = Platform.OS === 'android';
+  /** Keep Explore mounted once visited — remounting on Android caused dead first taps. */
+  const androidUnmountExplore = false;
   const [visited, setVisited] = useState<Set<UpperTabKey>>(() => new Set(['bandits']));
 
   const tabsToMount = useMemo(() => {

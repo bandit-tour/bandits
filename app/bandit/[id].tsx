@@ -97,6 +97,7 @@ export default function BanditScreen() {
   const screenOptions = useAppBackScreenOptions({
     title: '',
     fallback: '/bandits',
+    escapeShortcuts: true,
   });
   const { id } = useLocalSearchParams();
   const { width } = useWindowDimensions();

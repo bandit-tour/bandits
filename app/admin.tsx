@@ -45,6 +45,7 @@ const AdminPageContent = () => {
   const cDeskScreenOptions = useAppBackScreenOptions({
     title: 'CDesk',
     fallback: PLAY_MENU_HREF,
+    escapeShortcuts: true,
   });
 
   useEffect(() => {

@@ -175,6 +175,7 @@ export default function OperatorDeskScreen() {
   const pilotDeskScreenOptions = useAppBackScreenOptions({
     title: 'Pilot Desk',
     fallback: PLAY_MENU_HREF,
+    escapeShortcuts: true,
   });
 
   const loadAll = useCallback(async () => {

@@ -175,6 +175,7 @@ export default function ChatScreen() {
   const chatScreenOptions = useAppBackScreenOptions({
     title: canUseChat ? displayPersona : 'Chat',
     fallback: APP_HOME_HREF,
+    escapeShortcuts: true,
   });
 
   useLayoutEffect(() => {

@@ -23,7 +23,7 @@ import { usePremiumRefreshControl } from '@/lib/mobilePullToRefresh';
 import { navigateToBanditProfile } from '@/lib/appNavigation';
 import { perfMark } from '@/lib/perfTiming';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import React, { useCallback, useEffect, useMemo, useRef, useState, useDeferredValue } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   FlatList,
@@ -43,8 +43,8 @@ type Event = Database['public']['Tables']['event']['Row'];
 
 const EXPLORE_CACHE_TTL_MS = 5 * 60 * 1000;
 /** Avoid per-card recommendation fetches storming the JS thread on Android. */
-const ANDROID_BANDIT_BULK_DEBOUNCE_MS = 400;
-const BANDIT_BULK_DEBOUNCE_MS = Platform.OS === 'android' ? ANDROID_BANDIT_BULK_DEBOUNCE_MS : 120;
+const ANDROID_BANDIT_BULK_DEBOUNCE_MS = 200;
+const BANDIT_BULK_DEBOUNCE_MS = Platform.OS === 'android' ? ANDROID_BANDIT_BULK_DEBOUNCE_MS : 80;
 const ANDROID_BANDIT_BULK_FIRST_BATCH = 10;
 
 type ExploreRowProps = {
@@ -320,7 +320,7 @@ export function ExploreScreen({ tabActive }: ExploreScreenProps = {}) {
     () => filterEventsByExploreCategory(events, categoryChip),
     [events, categoryChip],
   );
-  const listEvents = useDeferredValue(filteredEvents);
+  const listEvents = filteredEvents;
 
   useEffect(() => {
     if (viewMode !== 'map') return;
@@ -414,8 +414,9 @@ export function ExploreScreen({ tabActive }: ExploreScreenProps = {}) {
   );
 
   const handleCategorySelect = useCallback((chip: ExploreCategoryChip) => {
+    if (chip === categoryChip) return;
     setCategoryChip(chip);
-  }, []);
+  }, [categoryChip]);
 
   const toggleViewMode = useCallback(() => {
     setViewMode((m) => {

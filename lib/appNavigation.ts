@@ -55,22 +55,29 @@ export function getLowerTabFromPath(pathname: string | null): LowerTabKey {
 
 /** Upper tabs visible only on the three PLAY home surfaces. */
 export function getUpperTabFromPath(pathname: string | null): UpperTabKey | null {
-  if (!pathname) return 'bandits';
+  if (!pathname) return null;
+  /** banDit profile stack routes — never show upper-tab overlay (would cover the profile). */
+  if (pathname.includes('/bandit/')) return null;
   if (pathname.includes('/mySpots')) return 'mySpots';
   if (pathname.includes('/explore')) return 'explore';
   if (pathname.includes('/bandits')) return 'bandits';
   return null;
 }
 
-export function banditProfileHref(banditId: string): Href {
-  return `/bandit/${encodeURIComponent(String(banditId || '').trim())}` as Href;
+const NAV_LOCK_MS = 280;
+let lastSafeNavAt = 0;
+
+/** Debounce rapid duplicate navigations (Home freeze / stacked replaces). */
+export function runSafeNavigation(_label: string, fn: () => void): boolean {
+  const now = Date.now();
+  if (now - lastSafeNavAt < NAV_LOCK_MS) return false;
+  lastSafeNavAt = now;
+  fn();
+  return true;
 }
 
-/** Open a specific local banDit profile (never the Local banDits list landing). */
-export function navigateToBanditProfile(router: AppNavigationRouter, banditId: string): void {
-  const id = String(banditId || '').trim();
-  if (!id) return;
-  router.push(banditProfileHref(id));
+export function banditProfileHref(banditId: string): Href {
+  return `/bandit/${encodeURIComponent(String(banditId || '').trim())}` as Href;
 }
 
 type NavigationLike = {
@@ -87,23 +94,29 @@ export function navigateAppBack(
   fallback: Href,
   navigation?: NavigationLike | null,
 ): void {
-  if (router.canGoBack()) {
-    router.back();
-    return;
-  }
-  if (navigation?.canGoBack?.()) {
-    navigation.goBack?.();
-    return;
-  }
-  router.replace(fallback);
+  runSafeNavigation('back', () => {
+    if (router.canGoBack()) {
+      router.back();
+      return;
+    }
+    if (navigation?.canGoBack?.()) {
+      navigation.goBack?.();
+      return;
+    }
+    router.replace(fallback);
+  });
 }
 
 export function goToPlayMenu(router: AppNavigationRouter): void {
-  router.replace(PLAY_MENU_HREF);
+  runSafeNavigation('menu', () => {
+    router.replace(PLAY_MENU_HREF);
+  });
 }
 
 export function goToAppHome(router: AppNavigationRouter): void {
-  router.replace(APP_HOME_HREF);
+  runSafeNavigation('home', () => {
+    router.replace(APP_HOME_HREF);
+  });
 }
 
 /**
@@ -116,15 +129,27 @@ export function navigateLowerTab(
   tab: LowerTabKey,
   currentTab: LowerTabKey,
 ): boolean {
-  if (tab === 'home') {
-    router.replace(APP_HOME_HREF);
-    return true;
-  }
-  if (currentTab === tab) return false;
-  router.replace(path as Href);
-  return true;
+  return runSafeNavigation(`tab:${tab}`, () => {
+    if (tab === 'home') {
+      router.replace(APP_HOME_HREF);
+      return;
+    }
+    if (currentTab === tab) return;
+    router.replace(path as Href);
+  });
 }
 
 export function navigateUpperTab(router: AppNavigationRouter, tab: UpperTabKey): void {
-  router.replace(upperTabHref(tab) as Href);
+  runSafeNavigation(`upper:${tab}`, () => {
+    router.replace(upperTabHref(tab) as Href);
+  });
+}
+
+/** Open a specific local banDit profile (never the Local banDits list landing). */
+export function navigateToBanditProfile(router: AppNavigationRouter, banditId: string): void {
+  const id = String(banditId || '').trim();
+  if (!id) return;
+  runSafeNavigation('bandit_profile', () => {
+    router.push(banditProfileHref(id));
+  });
 }
