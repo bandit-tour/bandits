@@ -20,13 +20,12 @@ import { useUpperTabHost } from '@/contexts/UpperTabHostContext';
 import { useTabActiveDataLoad } from '@/lib/useTabActiveDataLoad';
 import { useScreenFocused } from '@/lib/useScreenFocused';
 import { usePremiumRefreshControl } from '@/lib/mobilePullToRefresh';
-import { perfDumpSummary, perfMark, perfStart } from '@/lib/perfTiming';
+import { perfMark } from '@/lib/perfTiming';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import React, { Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState, useDeferredValue } from 'react';
 import {
   ActivityIndicator,
   FlatList,
-  InteractionManager,
   Platform,
   Pressable,
   ScrollView,
@@ -37,11 +36,15 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
+import ExploreMapPanel from '@/components/ExploreMapPanel';
+
 type Event = Database['public']['Tables']['event']['Row'];
 
 const EXPLORE_CACHE_TTL_MS = 5 * 60 * 1000;
-
-const ExploreMapPanelLazy = React.lazy(() => import('@/components/ExploreMapPanel'));
+/** Avoid per-card recommendation fetches storming the JS thread on Android. */
+const ANDROID_BANDIT_BULK_DEBOUNCE_MS = 400;
+const BANDIT_BULK_DEBOUNCE_MS = Platform.OS === 'android' ? ANDROID_BANDIT_BULK_DEBOUNCE_MS : 120;
+const ANDROID_BANDIT_BULK_FIRST_BATCH = 10;
 
 type ExploreRowProps = {
   item: Event;
@@ -75,7 +78,7 @@ const ExploreEventRow = React.memo(function ExploreEventRow({
         showRecommendations
         skipGooglePhotoFetch
         splitTouchTargets={Platform.OS === 'android'}
-        preloadedRecommendingBandits={recommendingBandits}
+        preloadedRecommendingBandits={recommendingBandits ?? []}
         onBanditPress={onBanditPress}
         banditId={banditId}
         onPress={onPressSpot}
@@ -143,19 +146,31 @@ export function ExploreScreen({ tabActive }: ExploreScreenProps = {}) {
   const [viewMode, setViewMode] = useState<'list' | 'map'>(() =>
     openMapParam === 'map' ? 'map' : 'list',
   );
+  const [mapMounted, setMapMounted] = useState(() => openMapParam === 'map');
+  const [banditsByEventId, setBanditsByEventId] = useState<Map<string, EventBanditRecommendation[]>>(
+    () => new Map(),
+  );
+  const [banditsBulkVersion, setBanditsBulkVersion] = useState(0);
 
   useEffect(() => {
     setCategoryChip(exploreChipFromGenreParam(selectedGenre));
   }, [selectedGenre]);
 
   useEffect(() => {
-    if (openMapParam === 'map') setViewMode('map');
+    if (openMapParam === 'map') {
+      setViewMode('map');
+      setMapMounted(true);
+    }
   }, [openMapParam]);
 
-  const [banditsByEventId, setBanditsByEventId] = useState<Map<string, EventBanditRecommendation[]>>(
-    () => new Map(),
-  );
-  const [banditsBulkLoaded, setBanditsBulkLoaded] = useState(false);
+  useEffect(() => {
+    if (viewMode === 'map') setMapMounted(true);
+  }, [viewMode]);
+
+  useEffect(() => {
+    if (!screenActive) return;
+    void import('@/components/ExploreMapPanel');
+  }, [screenActive]);
 
   const listBottomPad = useMemo(
     () => 72 + (Platform.OS === 'android' ? Math.max(insets.bottom, 12) : Math.max(insets.bottom, 8)) + 16,
@@ -259,22 +274,9 @@ export function ExploreScreen({ tabActive }: ExploreScreenProps = {}) {
   }, [screenActive]);
 
   useEffect(() => {
-    if (viewMode === 'map') {
-      void import('@/components/ExploreMapPanel');
-    }
-  }, [viewMode]);
-
-  useEffect(() => {
     if (!screenActive) return;
     perfMark('explore_screen_active', 'render');
-    const t = setTimeout(() => perfDumpSummary(), 800);
-    return () => clearTimeout(t);
   }, [screenActive]);
-
-  useEffect(() => {
-    if (!screenActive || events.length === 0) return;
-    perfMark('explore_events_painted', 'render', { count: events.length });
-  }, [screenActive, events.length]);
 
   const toggleLike = useCallback(async (eventId: string) => {
     const currentlyLiked = likedEventIdsRef.current.has(eventId);
@@ -317,6 +319,7 @@ export function ExploreScreen({ tabActive }: ExploreScreenProps = {}) {
     () => filterEventsByExploreCategory(events, categoryChip),
     [events, categoryChip],
   );
+  const listEvents = useDeferredValue(filteredEvents);
 
   useEffect(() => {
     if (viewMode !== 'map') return;
@@ -329,33 +332,41 @@ export function ExploreScreen({ tabActive }: ExploreScreenProps = {}) {
   );
 
   useEffect(() => {
-    if (!screenActive || !filteredEventIdsKey) {
-      setBanditsByEventId(new Map());
-      setBanditsBulkLoaded(false);
-      return;
-    }
+    if (!screenActive || !filteredEventIdsKey) return;
     let cancelled = false;
-    setBanditsBulkLoaded(false);
     const ids = filteredEventIdsKey.split(',').filter(Boolean);
-    const load = () => {
-      void getEventBanditRecommendationsBulk(ids)
+    const timer = setTimeout(() => {
+      const loadIds =
+        Platform.OS === 'android' && ids.length > ANDROID_BANDIT_BULK_FIRST_BATCH
+          ? ids.slice(0, ANDROID_BANDIT_BULK_FIRST_BATCH)
+          : ids;
+      void getEventBanditRecommendationsBulk(loadIds)
         .then((map) => {
-          if (!cancelled) {
-            setBanditsByEventId(map);
-            setBanditsBulkLoaded(true);
+          if (cancelled) return;
+          setBanditsByEventId((prev) => {
+            const next = new Map(prev);
+            for (const [id, rows] of map.entries()) next.set(id, rows);
+            return next;
+          });
+          setBanditsBulkVersion((v) => v + 1);
+          if (Platform.OS === 'android' && ids.length > loadIds.length) {
+            const rest = ids.slice(loadIds.length);
+            void getEventBanditRecommendationsBulk(rest).then((restMap) => {
+              if (cancelled) return;
+              setBanditsByEventId((prev) => {
+                const next = new Map(prev);
+                for (const [id, rows] of restMap.entries()) next.set(id, rows);
+                return next;
+              });
+              setBanditsBulkVersion((v) => v + 1);
+            });
           }
         })
-        .catch(() => {
-          if (!cancelled) setBanditsBulkLoaded(true);
-        });
-    };
-    const handle =
-      Platform.OS === 'android'
-        ? InteractionManager.runAfterInteractions(load)
-        : (load(), undefined);
+        .catch(() => {});
+    }, BANDIT_BULK_DEBOUNCE_MS);
     return () => {
       cancelled = true;
-      handle?.cancel?.();
+      clearTimeout(timer);
     };
   }, [screenActive, filteredEventIdsKey]);
 
@@ -382,6 +393,9 @@ export function ExploreScreen({ tabActive }: ExploreScreenProps = {}) {
     [banditId, router],
   );
 
+  const banditsByEventIdRef = useRef(banditsByEventId);
+  banditsByEventIdRef.current = banditsByEventId;
+
   const renderEventRow = useCallback(
     ({ item }: { item: Event }) => (
       <ExploreEventRow
@@ -391,18 +405,21 @@ export function ExploreScreen({ tabActive }: ExploreScreenProps = {}) {
         isLiked={likedEventIds.has(item.id)}
         onLike={() => void toggleLike(item.id)}
         onPressSpot={() => handleNavigateToSpot(item.id)}
-        recommendingBandits={
-          banditsBulkLoaded ? banditsByEventId.get(item.id) ?? [] : undefined
-        }
+        recommendingBandits={banditsByEventIdRef.current.get(item.id) ?? []}
         onBanditPress={handleBanditPress}
       />
     ),
-    [columns, likesEpoch, banditId, banditsBulkLoaded, banditsByEventId, toggleLike, handleNavigateToSpot, handleBanditPress],
+    [columns, likesEpoch, banditId, toggleLike, handleNavigateToSpot, handleBanditPress],
   );
+
+  const handleCategorySelect = useCallback((chip: ExploreCategoryChip) => {
+    setCategoryChip(chip);
+  }, []);
 
   const toggleViewMode = useCallback(() => {
     setViewMode((m) => {
       const next = m === 'list' ? 'map' : 'list';
+      if (next === 'map') setMapMounted(true);
       perfMark(`explore_toggle_view:${next}`, 'navigation');
       return next;
     });
@@ -441,10 +458,15 @@ export function ExploreScreen({ tabActive }: ExploreScreenProps = {}) {
         </Text>
         <View style={[styles.headerSide, styles.headerSideRight]}>
           <Pressable
-            style={[styles.mapBtn, viewMode === 'map' && styles.mapBtnActive]}
+            style={({ pressed }) => [
+              styles.mapBtn,
+              viewMode === 'map' && styles.mapBtnActive,
+              pressed && styles.mapBtnPressed,
+            ]}
             onPress={toggleViewMode}
             delayPressIn={0}
             hitSlop={8}
+            android_ripple={{ color: 'rgba(255,255,255,0.25)', borderless: false }}
           >
             <Text style={[styles.mapBtnText, viewMode === 'map' && styles.mapBtnTextActive]}>
               {viewMode === 'map' ? 'List' : 'Map'}
@@ -455,14 +477,17 @@ export function ExploreScreen({ tabActive }: ExploreScreenProps = {}) {
           ) : null}
         </View>
       </View>
-      <ExploreCategoryChips selected={categoryChip} onSelect={setCategoryChip} />
+      <ExploreCategoryChips selected={categoryChip} onSelect={handleCategorySelect} />
 
       <View style={styles.body}>
-        {viewMode === 'list' ? (
+        <View
+          style={[styles.bodyPane, viewMode !== 'list' && styles.bodyPaneHidden]}
+          pointerEvents={viewMode === 'list' ? 'auto' : 'none'}
+        >
           <FlatList
             style={styles.listFlex}
-            data={filteredEvents}
-            extraData={{ categoryChip, likesEpoch, banditsBulkLoaded, banditsByEventId }}
+            data={listEvents}
+            extraData={{ categoryChip, likesEpoch, banditsBulkVersion }}
             keyExtractor={keyExtractor}
             numColumns={columns}
             refreshControl={exploreRefreshControl}
@@ -479,35 +504,32 @@ export function ExploreScreen({ tabActive }: ExploreScreenProps = {}) {
                 </Text>
               )
             }
-            initialNumToRender={Platform.OS === 'web' ? 8 : Platform.OS === 'android' ? 4 : 5}
-            maxToRenderPerBatch={Platform.OS === 'android' ? 3 : 4}
-            windowSize={Platform.OS === 'android' ? 4 : 5}
-            updateCellsBatchingPeriod={Platform.OS === 'android' ? 80 : 50}
+            initialNumToRender={Platform.OS === 'web' ? 8 : Platform.OS === 'android' ? 3 : 5}
+            maxToRenderPerBatch={Platform.OS === 'android' ? 2 : 4}
+            windowSize={Platform.OS === 'android' ? 3 : 5}
+            updateCellsBatchingPeriod={Platform.OS === 'android' ? 100 : 50}
             removeClippedSubviews={Platform.OS === 'android'}
             renderItem={renderEventRow}
           />
-        ) : (
-          <Suspense
-            fallback={
-              <View style={styles.mapLoading}>
-                <ActivityIndicator size="large" color="#0a7ea4" />
-              </View>
-            }
+        </View>
+        {mapMounted ? (
+          <View
+            style={[styles.bodyPane, viewMode !== 'map' && styles.bodyPaneHidden]}
+            pointerEvents={viewMode === 'map' ? 'auto' : 'none'}
           >
-            <ExploreMapPanelLazy
+            <ExploreMapPanel
               events={filteredEvents}
               banditId={banditId}
               onOpenSpot={handleNavigateToSpot}
               onBanditPress={handleBanditPress}
               banditsByEventId={banditsByEventId}
-              banditsBulkLoaded={banditsBulkLoaded}
               listBottomPad={Math.max(insets.bottom, 8)}
               isLiked={(eventId) => likedEventIds.has(eventId)}
               onLike={(eventId) => void toggleLike(eventId)}
-              visible
+              visible={viewMode === 'map'}
             />
-          </Suspense>
-        )}
+          </View>
+        ) : null}
       </View>
     </View>
   );
@@ -522,6 +544,14 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
   },
   body: { flex: 1, minHeight: 0 },
+  bodyPane: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: '#FFFFFF',
+  },
+  bodyPaneHidden: {
+    opacity: 0,
+    zIndex: 0,
+  },
   listFlex: {
     flex: 1,
     width: '100%',
@@ -572,9 +602,14 @@ const styles = StyleSheet.create({
     borderRadius: 999,
     paddingHorizontal: 12,
     paddingVertical: 7,
+    minWidth: 52,
+    alignItems: 'center',
   },
   mapBtnActive: {
     backgroundColor: '#0a7ea4',
+  },
+  mapBtnPressed: {
+    opacity: 0.88,
   },
   mapBtnText: {
     color: '#FFF',

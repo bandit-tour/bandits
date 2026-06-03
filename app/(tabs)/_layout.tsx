@@ -35,9 +35,9 @@ export default function TabsLayout() {
   const { unreadCount, chatUnreadCount } = useAppState();
   const { selectedCity } = useCity();
 
-  /** Warm Explore cache off the critical path (longer delay on Android — avoids JS stalls). */
+  /** Warm Explore cache off the critical path — earlier on Android so first Explore tap is warm. */
   useEffect(() => {
-    const delay = Platform.OS === 'android' ? 4000 : 1200;
+    const delay = Platform.OS === 'android' ? 1800 : 1200;
     const timer = setTimeout(() => {
       void bootstrapExploreEventsCache(selectedCity || undefined);
     }, delay);
@@ -46,7 +46,7 @@ export default function TabsLayout() {
 
   useEffect(() => {
     if (!selectedCity) return;
-    const delay = Platform.OS === 'android' ? 6000 : 1800;
+    const delay = Platform.OS === 'android' ? 2800 : 1800;
     const timer = setTimeout(() => {
       preloadExploreEvents(selectedCity);
     }, delay);
@@ -92,10 +92,13 @@ export default function TabsLayout() {
     (tab: UpperTabKey) => {
       perfTraceNavigationPress(`tab_upper:${tab}`, () => {
         setOptimisticUpperTab(tab);
+        if (tab === 'explore') {
+          preloadExploreEvents(selectedCity || undefined);
+        }
         navigateUpperTab(router, tab);
       });
     },
-    [router],
+    [router, selectedCity],
   );
 
   useEffect(() => {

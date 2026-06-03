@@ -24,20 +24,23 @@ function TabPaneFallback() {
  * Instant upper-tab switch (no stack transition). Stack routes stay in sync via router.replace
  * but render null while this overlay is enabled.
  *
- * iOS: mount only the active pane (memory). Android/web: keep visited panes mounted;
- * inactive tabs use tabActive=false so Explore/WebView do not run while hidden.
+ * iOS: mount only the active pane (memory). Android: unmount Explore when hidden (WebView/FlatList
+ * steal JS from bottom nav). Bandits + My Spots stay visited for fast return.
  */
 export default function UpperTabScreens({ active }: Props) {
-  /** iOS: single active pane only. Android/web: keep visited panes (inactive tabs render lightweight shells). */
   const iosSinglePane = Platform.OS === 'ios';
+  const androidUnmountExplore = Platform.OS === 'android';
   const [visited, setVisited] = useState<Set<UpperTabKey>>(() => new Set(['bandits']));
 
   const tabsToMount = useMemo(() => {
     if (iosSinglePane) return new Set<UpperTabKey>([active]);
     const next = new Set(visited);
     next.add(active);
+    if (androidUnmountExplore && active !== 'explore') {
+      next.delete('explore');
+    }
     return next;
-  }, [active, iosSinglePane, visited]);
+  }, [active, androidUnmountExplore, iosSinglePane, visited]);
 
   useEffect(() => {
     if (iosSinglePane) return;

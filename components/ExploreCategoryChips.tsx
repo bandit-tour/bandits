@@ -1,5 +1,5 @@
-import React from 'react';
-import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import React, { useCallback } from 'react';
+import { Platform, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 
 import {
   EXPLORE_CATEGORY_CHIPS,
@@ -12,6 +12,14 @@ type Props = {
 };
 
 function ExploreCategoryChipsInner({ selected, onSelect }: Props) {
+  const handleSelect = useCallback(
+    (chip: ExploreCategoryChip) => {
+      if (chip === selected) return;
+      onSelect(chip);
+    },
+    [onSelect, selected],
+  );
+
   return (
     <View style={styles.wrap}>
       <ScrollView
@@ -25,11 +33,14 @@ function ExploreCategoryChipsInner({ selected, onSelect }: Props) {
           return (
             <Pressable
               key={chip}
-              onPress={() => onSelect(chip)}
+              onPress={() => handleSelect(chip)}
+              delayPressIn={0}
+              hitSlop={{ top: 4, bottom: 4, left: 2, right: 2 }}
+              android_ripple={{ color: 'rgba(10, 126, 164, 0.18)', borderless: false }}
               style={({ pressed }) => [
                 styles.chip,
                 active && styles.chipActive,
-                pressed && styles.chipPressed,
+                pressed && !active && styles.chipPressed,
               ]}
               accessibilityRole="button"
               accessibilityState={{ selected: active }}

@@ -1,13 +1,13 @@
 import { ATHENS_CENTER } from '@/lib/mapCoordinates';
+import type { EventBanditRecommendation } from '@/app/services/events';
 import type { Database } from '@/lib/database.types';
 import { buildLeafletBootHtml } from '@/lib/leafletMapHtml';
 import { eventsToMapMarkers } from '@/lib/eventsToMapMarkers';
-import { injectMapCatalog, injectMapSelection } from '@/lib/mapWebViewBridge';
+import { injectMapSync } from '@/lib/mapWebViewBridge';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   FlatList,
-  InteractionManager,
   Platform,
   Pressable,
   StyleSheet,
@@ -17,6 +17,7 @@ import {
 import { WebView } from 'react-native-webview';
 
 import EventCard from '@/components/EventCard';
+import { perfMark, perfStart } from '@/lib/perfTiming';
 
 type Event = Database['public']['Tables']['event']['Row'];
 
@@ -24,10 +25,11 @@ type Props = {
   events: Event[];
   banditId?: string;
   onOpenSpot: (eventId: string) => void;
+  onBanditPress?: (banditId: string) => void;
+  banditsByEventId?: Map<string, EventBanditRecommendation[]>;
   listBottomPad: number;
   isLiked: (eventId: string) => boolean;
   onLike: (eventId: string) => void;
-  /** When false, skip mounting the WebView (saves memory while user stays on list). */
   visible?: boolean;
 };
 
@@ -37,6 +39,8 @@ export default function ExploreMapPanel({
   events,
   banditId,
   onOpenSpot,
+  onBanditPress,
+  banditsByEventId,
   listBottomPad,
   isLiked,
   onLike,
@@ -48,12 +52,32 @@ export default function ExploreMapPanel({
   const selectedIdRef = useRef<string | null>(null);
   const [mapReady, setMapReady] = useState(false);
   const [selectedId, setSelectedId] = useState<string | null>(null);
-  const [webViewMounted, setWebViewMounted] = useState(visible);
+  const [webViewMounted, setWebViewMounted] = useState(false);
+  const mapLoadSpanRef = useRef<(() => void) | null>(null);
+  const injectRafRef = useRef<number | null>(null);
+
+  useEffect(() => {
+    if (!visible) {
+      mapLoadSpanRef.current?.();
+      mapLoadSpanRef.current = null;
+      return;
+    }
+    mapLoadSpanRef.current = perfStart('explore_map_webview_load', 'map', {
+      markerCount: events.length,
+    });
+    perfMark('explore_map_panel_visible', 'map');
+    return () => {
+      mapLoadSpanRef.current?.();
+      mapLoadSpanRef.current = null;
+    };
+  }, [visible, events.length]);
 
   const markersData = useMemo(() => eventsToMapMarkers(events), [events]);
+  const markersPayload = useMemo(() => JSON.stringify(markersData), [markersData]);
+  const mappableIds = useMemo(() => new Set(markersData.map((m) => m.id)), [markersData]);
   const mappableEvents = useMemo(
-    () => events.filter((e) => markersData.some((m) => m.id === e.id)),
-    [events, markersData],
+    () => events.filter((e) => mappableIds.has(e.id)),
+    [events, mappableIds],
   );
 
   const bootHtml = useMemo(
@@ -69,19 +93,42 @@ export default function ExploreMapPanel({
   );
 
   useEffect(() => {
-    if (!visible) return;
-    const task = InteractionManager.runAfterInteractions(() => {
-      setWebViewMounted(true);
-    });
-    return () => task.cancel();
+    if (!visible) {
+      setWebViewMounted(false);
+      setMapReady(false);
+      catalogPayloadRef.current = '';
+      selectedIdRef.current = null;
+      return;
+    }
+    setWebViewMounted(true);
+    return () => {
+      if (injectRafRef.current != null) cancelAnimationFrame(injectRafRef.current);
+      setWebViewMounted(false);
+      setMapReady(false);
+    };
   }, [visible]);
+
+  const pushMapState = useCallback(
+    (eventId: string | null) => {
+      if (!mapReady || !webViewRef.current) return;
+      if (catalogPayloadRef.current === markersPayload && selectedIdRef.current === eventId) return;
+      if (injectRafRef.current != null) cancelAnimationFrame(injectRafRef.current);
+      injectRafRef.current = requestAnimationFrame(() => {
+        injectRafRef.current = null;
+        if (!webViewRef.current) return;
+        injectMapSync(webViewRef.current, markersPayload, eventId);
+        catalogPayloadRef.current = markersPayload;
+      });
+    },
+    [mapReady, markersPayload],
+  );
 
   const applySelection = useCallback(
     (eventId: string | null, scrollList = false) => {
       if (!eventId) return;
       selectedIdRef.current = eventId;
       setSelectedId(eventId);
-      if (mapReady) injectMapSelection(webViewRef.current, eventId);
+      pushMapState(eventId);
       if (scrollList) {
         const index = mappableEvents.findIndex((e) => e.id === eventId);
         if (index >= 0) {
@@ -89,24 +136,24 @@ export default function ExploreMapPanel({
         }
       }
     },
-    [mapReady, mappableEvents],
+    [mappableEvents, pushMapState],
   );
 
   useEffect(() => {
-    if (!mapReady || !webViewRef.current) return;
-    const payload = JSON.stringify(markersData);
-    if (payload === catalogPayloadRef.current) return;
-    catalogPayloadRef.current = payload;
-    injectMapCatalog(webViewRef.current, payload);
+    if (!mapReady) return;
     const nextId = selectedIdRef.current ?? mappableEvents[0]?.id ?? null;
-    if (nextId) applySelection(nextId, false);
-  }, [mapReady, markersData, mappableEvents, applySelection]);
+    pushMapState(nextId);
+    if (nextId && nextId !== selectedIdRef.current) {
+      selectedIdRef.current = nextId;
+      setSelectedId(nextId);
+    }
+  }, [mapReady, markersPayload, mappableEvents, pushMapState]);
 
   useEffect(() => {
     if (!mapReady || mappableEvents.length === 0) return;
-    if (selectedIdRef.current && mappableEvents.some((e) => e.id === selectedIdRef.current)) return;
+    if (selectedIdRef.current && mappableIds.has(selectedIdRef.current)) return;
     applySelection(mappableEvents[0].id, false);
-  }, [mapReady, mappableEvents, applySelection]);
+  }, [mapReady, mappableEvents, mappableIds, applySelection]);
 
   const onViewableItemsChanged = useCallback(
     ({ viewableItems }: { viewableItems: ViewToken[] }) => {
@@ -123,7 +170,22 @@ export default function ExploreMapPanel({
       try {
         const data = JSON.parse(raw.nativeEvent.data) as { type?: string; eventId?: string };
         if (data.type === 'mapReady') {
+          mapLoadSpanRef.current?.({ phase: 'mapReady' });
+          mapLoadSpanRef.current = null;
+          perfMark('explore_map_ready', 'map', { markerCount: markersData.length });
           setMapReady(true);
+          const nextId = selectedIdRef.current ?? mappableEvents[0]?.id ?? null;
+          if (nextId) {
+            selectedIdRef.current = nextId;
+            setSelectedId(nextId);
+          }
+          requestAnimationFrame(() => {
+            if (webViewRef.current) {
+              catalogPayloadRef.current = '';
+              injectMapSync(webViewRef.current, markersPayload, nextId);
+              catalogPayloadRef.current = markersPayload;
+            }
+          });
           return;
         }
         if (data.type === 'markerClick' && data.eventId) {
@@ -133,33 +195,39 @@ export default function ExploreMapPanel({
         /* ignore */
       }
     },
-    [applySelection],
+    [applySelection, markersPayload, mappableEvents],
   );
 
   const renderMapCard = useCallback(
     ({ item }: { item: Event }) => {
       const active = selectedId === item.id;
       return (
-        <Pressable
-          onPress={() => applySelection(item.id, false)}
-          style={[styles.cardWrap, active && styles.cardSelected]}
-        >
+        <View style={[styles.cardWrap, active && styles.cardSelected]}>
           <EventCard
             event={item}
             onLike={() => onLike(item.id)}
             isLiked={isLiked(item.id)}
             variant="horizontal"
             fillHorizontalCell
-            showRecommendations={false}
+            showRecommendations
+            skipGooglePhotoFetch
+            splitTouchTargets={Platform.OS === 'android'}
+            preloadedRecommendingBandits={banditsByEventId?.get(item.id) ?? []}
+            onBanditPress={onBanditPress}
             banditId={banditId}
-            onPress={() => onOpenSpot(item.id)}
+            onPress={() => {
+              applySelection(item.id, false);
+              onOpenSpot(item.id);
+            }}
             isHighlighted={active}
           />
-        </Pressable>
+        </View>
       );
     },
-    [applySelection, banditId, isLiked, onLike, onOpenSpot, selectedId],
+    [applySelection, banditId, banditsByEventId, isLiked, onBanditPress, onLike, onOpenSpot, selectedId],
   );
+
+  if (!visible) return null;
 
   return (
     <View style={styles.root}>
@@ -175,6 +243,8 @@ export default function ExploreMapPanel({
             originWhitelist={['*']}
             cacheEnabled
             androidLayerType="hardware"
+            androidHardwareAccelerationDisabled={false}
+            setBuiltInZoomControls={Platform.OS === 'android'}
             startInLoadingState={false}
             mixedContentMode="always"
           />
@@ -200,7 +270,7 @@ export default function ExploreMapPanel({
         onScrollToIndexFailed={({ index }) => {
           setTimeout(() => listRef.current?.scrollToIndex({ index, animated: true }), 100);
         }}
-        initialNumToRender={3}
+        initialNumToRender={2}
         maxToRenderPerBatch={2}
         windowSize={3}
         removeClippedSubviews={Platform.OS === 'android'}
