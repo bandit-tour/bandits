@@ -396,7 +396,15 @@ export function BanditsScreen({ tabActive }: BanditsScreenProps = {}) {
                           variant="horizontal"
                           fillHorizontalCell
                           showRecommendations
+                          preloadedRecommendingBandits={[
+                            {
+                              id: item.bandit.id,
+                              image_url: String(item.bandit.image_url ?? '').trim(),
+                            },
+                          ]}
                           prioritizeCardPress
+                          splitTouchTargets={Platform.OS !== 'web'}
+                          skipGooglePhotoFetch={Platform.OS !== 'web'}
                           banditId={item.bandit.id}
                           listImageScope={plan?.get(event.id)}
                           resolvedRecommendationImageUri={

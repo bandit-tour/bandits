@@ -750,6 +750,12 @@ export default function ChatScreen() {
     });
   }, []);
 
+  /** Native FlatList skips row updates unless `extraData` changes (select UI). */
+  const threadListExtraData = useMemo(
+    () => `${selectMode ? 1 : 0}:${[...selectedIds].sort().join(',')}`,
+    [selectMode, selectedIds],
+  );
+
   const removeMessagesLocally = useCallback((ids: Iterable<string>) => {
     const idSet = new Set([...ids].map((x) => String(x || '').trim()).filter(Boolean));
     if (idSet.size === 0) return;
@@ -1138,6 +1144,7 @@ export default function ChatScreen() {
             ref={listRef}
             data={messages}
             keyExtractor={(m) => m.id}
+            extraData={threadListExtraData}
             renderItem={renderItem}
             contentContainerStyle={styles.thread}
             onContentSizeChange={() => {

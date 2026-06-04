@@ -11,7 +11,7 @@
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.yuvaldafni.bandits",
-      "buildNumber": "25",
+      "buildNumber": "28",
       "associatedDomains": [
         "applinks:bandits-two.vercel.app",
         "applinks:bandit-tours.vercel.app"

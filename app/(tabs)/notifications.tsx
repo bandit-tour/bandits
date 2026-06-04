@@ -286,6 +286,12 @@ export default function NotificationsScreen() {
     });
   }, []);
 
+  /** Native SectionList skips row updates unless `extraData` changes (select UI). */
+  const inboxListExtraData = useMemo(
+    () => `${selectMode ? 1 : 0}:${[...selectedIds].sort().join(',')}`,
+    [selectMode, selectedIds],
+  );
+
   const refreshNearbyExtras = useCallback(async () => {
     const stored = await getNearbyStoredNotifications();
     setNearbyExtras(stored.map((s) => notificationToInboxItem(nearbyToRow(s), false)));
@@ -798,6 +804,7 @@ export default function NotificationsScreen() {
         <SectionList
           sections={sections}
           keyExtractor={(item) => item.id}
+          extraData={inboxListExtraData}
           renderItem={renderItem}
           renderSectionHeader={({ section }) =>
             section.title ? <Text style={styles.sectionHeader}>{section.title}</Text> : null

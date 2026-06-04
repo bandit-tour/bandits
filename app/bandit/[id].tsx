@@ -3,6 +3,7 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   ActivityIndicator,
   Alert,
+  FlatList,
   Keyboard,
   Modal,
   Platform,
@@ -211,32 +212,59 @@ export default function BanditScreen() {
     };
   }, []);
 
+  const genreEventsRenderable = useMemo(
+    () => genreEvents.filter((e) => String(e?.id ?? '').trim().length > 0),
+    [genreEvents],
+  );
+
+  const genreImagePlan = useMemo(
+    () =>
+      genreEventsRenderable.length > 0
+        ? buildEventListImagePlan(genreEventsRenderable)
+        : null,
+    [genreEventsRenderable],
+  );
+
+  const profileRecommenderPreload = useMemo(() => {
+    if (!bandit?.id) return [];
+    const uri = String((bandit as { image_url?: string | null }).image_url ?? '').trim();
+    return [{ id: bandit.id, image_url: uri }];
+  }, [bandit]);
+
   useEffect(() => {
     let cancelled = false;
-    if (genreEvents.length === 0) {
+    if (genreEventsRenderable.length === 0) {
       setGenreRecoHeroReady(true);
       setGenreRecommendationImageById({});
       return;
     }
     setGenreRecoHeroReady(false);
     void (async () => {
-      const out = await resolveStrictRecommendationImagesByEventId(genreEvents as any);
-      const uniqueOut = enforceUniqueRecommendationImagesByEventId(genreEvents as any, out);
-      if (!cancelled) {
-        setGenreRecommendationImageById(uniqueOut);
-        setGenreRecoHeroReady(true);
+      try {
+        const out = await resolveStrictRecommendationImagesByEventId(genreEventsRenderable as any);
+        const uniqueOut = enforceUniqueRecommendationImagesByEventId(
+          genreEventsRenderable as any,
+          out,
+        );
+        if (!cancelled) {
+          setGenreRecommendationImageById(uniqueOut);
+          setGenreRecoHeroReady(true);
+        }
+      } catch {
+        if (!cancelled) {
+          setGenreRecommendationImageById({});
+          setGenreRecoHeroReady(true);
+        }
       }
     })();
     return () => {
       cancelled = true;
     };
-  }, [genreEvents]);
-
-  const banditIdParam = typeof id === 'string' ? id : Array.isArray(id) ? id[0] : '';
+  }, [genreEventsRenderable]);
 
   const handleCategoryPress = useCallback(
     async (genre: string) => {
-      const bid = bandit?.id ?? banditIdParam;
+      const bid = String(bandit?.id ?? id ?? '').trim();
       if (!bid) return;
       // Tap same chip to collapse and keep user on profile.
       if (selectedGenre === genre) {
@@ -245,17 +273,22 @@ export default function BanditScreen() {
         return;
       }
       setSelectedGenre(genre);
+      setGenreEvents([]);
+      setGenreRecommendationImageById({});
+      setGenreRecoHeroReady(false);
       setLoadingGenreEvents(true);
       try {
         const events = await getEvents({ banditId: bid, genre });
-        setGenreEvents(events);
+        setGenreEvents(
+          (events ?? []).filter((e) => String(e?.id ?? '').trim().length > 0),
+        );
       } catch {
         setGenreEvents([]);
       } finally {
         setLoadingGenreEvents(false);
       }
     },
-    [bandit?.id, banditIdParam, selectedGenre],
+    [bandit?.id, id, selectedGenre],
   );
 
   const handleBanditLike = useCallback(
@@ -279,16 +312,62 @@ export default function BanditScreen() {
     [handleCategoryPress],
   );
 
-  const categoryExpandBelow = useMemo(() => {
-    if (!selectedGenre || !bandit) return null;
-    return (
-      <View style={styles.inlineCategorySection} pointerEvents="box-none">
+  const renderGenreEventRow = useCallback(
+    ({ item: event }: { item: EventItem }) => {
+      if (!bandit) return null;
+      const eventId = String(event.id).trim();
+      return (
+        <View
+          style={[styles.inlineSpotCardWrap, isDesktopWeb && styles.inlineSpotCardWrapDesktop]}
+        >
+          <EventCard
+            event={event}
+            onLike={() => undefined}
+            isLiked={false}
+            showButton={false}
+            variant="horizontal"
+            fillHorizontalCell
+            showRecommendations
+            preloadedRecommendingBandits={profileRecommenderPreload}
+            prioritizeCardPress
+            splitTouchTargets={Platform.OS !== 'web'}
+            skipGooglePhotoFetch={Platform.OS !== 'web'}
+            banditId={bandit.id}
+            listImageScope={genreImagePlan?.get(eventId) ?? null}
+            resolvedRecommendationImageUri={genreRecommendationImageById[eventId] ?? null}
+            recommendationHeroResolverReady={genreRecoHeroReady}
+            strictRecommendationImagePolicy
+            onPress={() =>
+              router.push(
+                `/spot/${encodeURIComponent(eventId)}?banditId=${encodeURIComponent(bandit.id)}` as any,
+              )
+            }
+          />
+        </View>
+      );
+    },
+    [
+      bandit,
+      genreImagePlan,
+      genreRecommendationImageById,
+      genreRecoHeroReady,
+      isDesktopWeb,
+      profileRecommenderPreload,
+      router,
+    ],
+  );
+
+  const categoryExpandBelow =
+    selectedGenre && bandit ? (
+      <View style={styles.inlineCategorySection} pointerEvents="box-none" collapsable={false}>
         <View style={styles.inlineCategoryHeader}>
           <Text style={styles.inlineCategoryTitle}>{selectedGenre} picks</Text>
           <Pressable
             onPress={() => {
               setSelectedGenre(null);
               setGenreEvents([]);
+              setGenreRecommendationImageById({});
+              setGenreRecoHeroReady(true);
             }}
             hitSlop={6}
           >
@@ -297,50 +376,27 @@ export default function BanditScreen() {
         </View>
         {loadingGenreEvents ? (
           <ActivityIndicator size="small" />
-        ) : genreEvents.length === 0 ? (
+        ) : genreEventsRenderable.length === 0 ? (
           <Text style={styles.inlineCategoryEmpty}>No spots in this category yet.</Text>
         ) : (
-          <View style={styles.inlineCategoryGrid}>
-            {(() => {
-              const plan = buildEventListImagePlan(genreEvents);
-              return genreEvents.map((event) => (
-                <View
-                  key={event.id}
-                  style={[styles.inlineSpotCardWrap, isDesktopWeb && styles.inlineSpotCardWrapDesktop]}
-                >
-                  <EventCard
-                    event={event}
-                    onLike={() => undefined}
-                    isLiked={false}
-                    showButton={false}
-                    variant="horizontal"
-                    fillHorizontalCell
-                    showRecommendations
-                    prioritizeCardPress
-                    banditId={bandit.id}
-                    listImageScope={plan.get(event.id)}
-                    resolvedRecommendationImageUri={genreRecommendationImageById[event.id] ?? null}
-                    strictRecommendationImagePolicy
-                    onPress={() =>
-                      router.push(`/spot/${event.id}?banditId=${encodeURIComponent(bandit.id)}` as any)
-                    }
-                  />
-                </View>
-              ));
-            })()}
-          </View>
+          <FlatList
+            data={genreEventsRenderable}
+            keyExtractor={(event) => event.id}
+            renderItem={renderGenreEventRow}
+            numColumns={isDesktopWeb ? 2 : 1}
+            key={isDesktopWeb ? 'profile-genre-2col' : 'profile-genre-1col'}
+            columnWrapperStyle={isDesktopWeb ? styles.inlineCategoryRow : undefined}
+            scrollEnabled={false}
+            nestedScrollEnabled
+            removeClippedSubviews={false}
+            initialNumToRender={6}
+            maxToRenderPerBatch={4}
+            windowSize={5}
+            style={styles.inlineCategoryGrid}
+          />
         )}
       </View>
-    );
-  }, [
-    bandit,
-    genreEvents,
-    genreRecommendationImageById,
-    isDesktopWeb,
-    loadingGenreEvents,
-    router,
-    selectedGenre,
-  ]);
+    ) : null;
 
 
   if (loading) {
@@ -398,6 +454,7 @@ export default function BanditScreen() {
         {...(Platform.OS !== 'web'
           ? {
               keyboardShouldPersistTaps: 'always' as const,
+              nestedScrollEnabled: true,
             }
           : {})}
       >
@@ -700,16 +757,18 @@ const styles = StyleSheet.create({
   },
   inlineCategoryGrid: {
     width: '100%',
-    flexDirection: 'row',
-    flexWrap: 'wrap',
+  },
+  inlineCategoryRow: {
     gap: 12,
-    alignItems: 'flex-start',
+    marginBottom: 12,
   },
   inlineSpotCardWrap: {
     width: '100%',
+    marginBottom: 12,
   },
   inlineSpotCardWrapDesktop: {
-    width: '48.8%',
+    flex: 1,
+    marginBottom: 0,
   },
   
   askMeButton: {
