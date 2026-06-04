@@ -31,6 +31,7 @@ import { trackEvent } from '@/lib/analytics';
 import { usePremiumRefreshControl } from '@/lib/mobilePullToRefresh';
 import { useAppBackScreenOptions } from '@/hooks/useAppBackScreenOptions';
 import { repairDisplayText } from '@/lib/repairTextEncoding';
+import { routeParamString } from '@/lib/routeParams';
 
 // For City Guide, the ID passed into /spot/[id] comes from the event card,
 // so this screen should load from the event table, not spots.
@@ -45,7 +46,12 @@ type SpotReview = {
 };
 
 export default function SpotDetailScreen() {
-  const { id } = useLocalSearchParams();
+  const { id: rawId, banditId: rawBanditId } = useLocalSearchParams<{
+    id?: string | string[];
+    banditId?: string | string[];
+  }>();
+  const id = routeParamString(rawId);
+  const spotBanditId = routeParamString(rawBanditId);
   const { width } = useWindowDimensions();
   const screenOptions = useAppBackScreenOptions({
     title: '',

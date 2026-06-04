@@ -44,6 +44,7 @@ import {
   resolveStrictRecommendationImagesByEventId,
 } from '@/lib/recommendationImages';
 import { trackEvent } from '@/lib/analytics';
+import { routeParamString } from '@/lib/routeParams';
 
 type Bandit = Database['public']['Tables']['bandit']['Row'];
 
@@ -99,7 +100,8 @@ export default function BanditScreen() {
     fallback: '/bandits',
     escapeShortcuts: true,
   });
-  const { id } = useLocalSearchParams();
+  const { id: rawId } = useLocalSearchParams<{ id?: string | string[] }>();
+  const id = routeParamString(rawId);
   const { width } = useWindowDimensions();
   const isDesktopWeb = Platform.OS === 'web' && width >= 1100;
   const insets = useSafeAreaInsets();
@@ -127,8 +129,12 @@ export default function BanditScreen() {
   const askTargetBanditIdRef = useRef<string>('');
 
   useEffect(() => {
-    if (!id) return;
-    const banditIdStr = id as string;
+    if (!id) {
+      setLoading(false);
+      setError('banDit not found');
+      return;
+    }
+    const banditIdStr = id;
 
     const fetchBanditData = async () => {
       try {

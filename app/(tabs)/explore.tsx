@@ -373,7 +373,9 @@ export function ExploreScreen({ tabActive }: ExploreScreenProps = {}) {
 
   const handleBanditPress = useCallback(
     (id: string) => {
-      navigateToBanditProfile(router, id);
+      const trimmed = String(id || '').trim();
+      if (!trimmed) return;
+      navigateToBanditProfile(router, trimmed);
     },
     [router],
   );
@@ -387,8 +389,13 @@ export function ExploreScreen({ tabActive }: ExploreScreenProps = {}) {
 
   const handleNavigateToSpot = useCallback(
     (eventId: string) => {
+      const eid = String(eventId || '').trim();
+      if (!eid) return;
+      const bid = String(banditId || '').trim();
       router.push(
-        `${banditId ? `/spot/${eventId}?banditId=${encodeURIComponent(banditId)}` : `/spot/${eventId}`}` as any,
+        (bid
+          ? `/spot/${encodeURIComponent(eid)}?banditId=${encodeURIComponent(bid)}`
+          : `/spot/${encodeURIComponent(eid)}`) as any,
       );
     },
     [banditId, router],

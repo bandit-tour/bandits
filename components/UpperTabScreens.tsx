@@ -1,24 +1,14 @@
-import React, { Suspense, useEffect, useMemo, useState } from 'react';
-import { ActivityIndicator, Platform, StyleSheet, View } from 'react-native';
+import React, { useEffect, useMemo, useState } from 'react';
+import { Platform, StyleSheet, View } from 'react-native';
 
 import { BanditsScreen } from '@/app/(tabs)/bandits';
 import { ExploreScreen } from '@/app/(tabs)/explore';
+import { MySpotsScreen } from '@/app/(tabs)/mySpots';
 import type { UpperTabKey } from '@/lib/upperTab';
 
 type Props = {
   active: UpperTabKey;
 };
-
-const MySpotsLazy = React.lazy(() =>
-  import('@/app/(tabs)/mySpots').then((m) => ({ default: m.MySpotsScreen })),
-);
-function TabPaneFallback() {
-  return (
-    <View style={styles.fallback}>
-      <ActivityIndicator size="small" color="#0a7ea4" />
-    </View>
-  );
-}
 
 /**
  * Instant upper-tab switch (no stack transition). Stack routes stay in sync via router.replace
@@ -28,7 +18,8 @@ function TabPaneFallback() {
  * steal JS from bottom nav). Bandits + My Spots stay visited for fast return.
  */
 export default function UpperTabScreens({ active }: Props) {
-  const iosSinglePane = Platform.OS === 'ios';
+  /** Mount visited panes on iOS — remounting My Spots via lazy/Suspense caused native crashes. */
+  const iosSinglePane = false;
   /** Keep Explore mounted once visited — remounting on Android caused dead first taps. */
   const androidUnmountExplore = false;
   const [visited, setVisited] = useState<Set<UpperTabKey>>(() => new Set(['bandits']));
@@ -72,9 +63,7 @@ export default function UpperTabScreens({ active }: Props) {
           style={[styles.pane, active === 'mySpots' ? styles.paneVisible : styles.paneHidden]}
           pointerEvents={active === 'mySpots' ? 'auto' : 'none'}
         >
-          <Suspense fallback={<TabPaneFallback />}>
-            <MySpotsLazy tabActive={active === 'mySpots'} />
-          </Suspense>
+          <MySpotsScreen tabActive={active === 'mySpots'} />
         </View>
       ) : null}
       {mountExplore ? (
@@ -103,11 +92,5 @@ const styles = StyleSheet.create({
     opacity: 0,
     zIndex: 0,
     pointerEvents: 'none',
-  },
-  fallback: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: '#FFFFFF',
   },
 });

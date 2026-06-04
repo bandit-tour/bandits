@@ -149,7 +149,5 @@ export function navigateUpperTab(router: AppNavigationRouter, tab: UpperTabKey):
 export function navigateToBanditProfile(router: AppNavigationRouter, banditId: string): void {
   const id = String(banditId || '').trim();
   if (!id) return;
-  runSafeNavigation('bandit_profile', () => {
-    router.push(banditProfileHref(id));
-  });
+  router.push(banditProfileHref(id));
 }

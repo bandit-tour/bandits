@@ -14,6 +14,7 @@ import {
   TextInput,
   View,
 } from 'react-native';
+import { Swipeable } from 'react-native-gesture-handler';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import {
   BANDIT_QUESTION_GUEST_ECHO_REF,
@@ -46,6 +47,12 @@ import { useAppBackScreenOptions } from '@/hooks/useAppBackScreenOptions';
 import { APP_HOME_HREF } from '@/lib/appNavigation';
 import { syncLatestArrivalNotificationMessageFromDelivery } from '@/lib/syncArrivalNotification';
 import { supabase } from '@/lib/supabase';
+import {
+  chatMessageNotificationId,
+  clearChatThreadReplies,
+  deleteChatMessagesByIds,
+  deleteEntireChatConversation,
+} from '@/lib/chatThreadManage';
 import { deleteNotificationThread } from '@/lib/threadDelete';
 import { useAppState } from '@/contexts/AppStateContext';
 import { usePremiumRefreshControl } from '@/lib/mobilePullToRefresh';
@@ -131,6 +138,9 @@ export default function ChatScreen() {
   const [oceanWaitingForGuest, setOceanWaitingForGuest] = useState(false);
   const listRef = useRef<FlatList<ChatMessage>>(null);
   const firstScrollDoneRef = useRef(false);
+  const [selectMode, setSelectMode] = useState(false);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(() => new Set());
+  const [bulkWorking, setBulkWorking] = useState(false);
 
   const displayPersona = useMemo(() => {
     const fromIdentity = threadIdentity?.sender_persona_display_name?.trim();
@@ -171,12 +181,6 @@ export default function ChatScreen() {
 
   const personaBarLock =
     threadIdentity?.sender_persona_display_name?.trim() || deskPersonaLock.trim() || '';
-
-  const chatScreenOptions = useAppBackScreenOptions({
-    title: canUseChat ? displayPersona : 'Chat',
-    fallback: APP_HOME_HREF,
-    escapeShortcuts: true,
-  });
 
   useLayoutEffect(() => {
     firstScrollDoneRef.current = false;
@@ -737,6 +741,201 @@ export default function ChatScreen() {
 
   const threadRefreshControl = usePremiumRefreshControl(refreshing, onRefreshThread);
 
+  const toggleSelected = useCallback((id: string) => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }, []);
+
+  const removeMessagesLocally = useCallback((ids: Iterable<string>) => {
+    const idSet = new Set([...ids].map((x) => String(x || '').trim()).filter(Boolean));
+    if (idSet.size === 0) return;
+    setMessages((prev) => prev.filter((m) => !idSet.has(m.id)));
+  }, []);
+
+  const deleteChatMessages = useCallback(
+    async (targets: ChatMessage[]) => {
+      if (targets.length === 0) return;
+      const ids = targets.map((m) => m.id);
+      removeMessagesLocally(ids);
+      const serverIds = ids.filter((id) => chatMessageNotificationId(id));
+      if (serverIds.length > 0) {
+        await deleteChatMessagesByIds(serverIds);
+      }
+      await refreshNotifications();
+      DeviceEventEmitter.emit(BANDITS_NOTIFICATIONS_REFRESH);
+    },
+    [refreshNotifications, removeMessagesLocally],
+  );
+
+  const deleteSelected = useCallback(() => {
+    if (bulkWorking || selectedIds.size === 0) return;
+    const targets = messages.filter((m) => selectedIds.has(m.id));
+    void (async () => {
+      setBulkWorking(true);
+      try {
+        await deleteChatMessages(targets);
+        setSelectMode(false);
+        setSelectedIds(new Set());
+      } catch (e) {
+        Alert.alert('Delete failed', e instanceof Error ? e.message : 'Could not delete messages.');
+        await loadThread(true);
+      } finally {
+        setBulkWorking(false);
+      }
+    })();
+  }, [bulkWorking, deleteChatMessages, loadThread, messages, selectedIds]);
+
+  const clearChatHistory = useCallback(() => {
+    if (bulkWorking || !incomingNotifId) return;
+    Alert.alert('Clear chat history?', 'Removes all messages in this conversation.', [
+      { text: 'Cancel', style: 'cancel' },
+      {
+        text: 'Clear',
+        style: 'destructive',
+        onPress: () => {
+          void (async () => {
+            setBulkWorking(true);
+            try {
+              setSelectMode(false);
+              setSelectedIds(new Set());
+              setMessages([]);
+              if (!oceanFloatId) {
+                await clearChatThreadReplies(incomingNotifId);
+              }
+              await refreshNotifications();
+              DeviceEventEmitter.emit(BANDITS_NOTIFICATIONS_REFRESH);
+              await loadThread(true);
+            } catch (e) {
+              Alert.alert('Clear failed', e instanceof Error ? e.message : 'Could not clear chat.');
+            } finally {
+              setBulkWorking(false);
+            }
+          })();
+        },
+      },
+    ]);
+  }, [bulkWorking, incomingNotifId, loadThread, oceanFloatId, refreshNotifications]);
+
+  const deleteConversation = useCallback(() => {
+    if (bulkWorking || !incomingNotifId) return;
+    Alert.alert('Delete conversation?', 'This removes the whole thread from your inbox.', [
+      { text: 'Cancel', style: 'cancel' },
+      {
+        text: 'Delete',
+        style: 'destructive',
+        onPress: () => {
+          void (async () => {
+            setBulkWorking(true);
+            try {
+              await deleteEntireChatConversation(incomingNotifId);
+              await refreshNotifications();
+              DeviceEventEmitter.emit(BANDITS_NOTIFICATIONS_REFRESH);
+              router.back();
+            } catch (e) {
+              Alert.alert(
+                'Delete failed',
+                e instanceof Error ? e.message : 'Could not delete conversation.',
+              );
+            } finally {
+              setBulkWorking(false);
+            }
+          })();
+        },
+      },
+    ]);
+  }, [bulkWorking, incomingNotifId, refreshNotifications, router]);
+
+  const deleteOneMessage = useCallback(
+    (item: ChatMessage) => {
+      void (async () => {
+        try {
+          await deleteChatMessages([item]);
+        } catch (e) {
+          Alert.alert('Delete failed', e instanceof Error ? e.message : 'Could not delete message.');
+          await loadThread(true);
+        }
+      })();
+    },
+    [deleteChatMessages, loadThread],
+  );
+
+  const chatHeaderRight = useCallback(
+    () =>
+      !canUseChat ? null : (
+        <View style={styles.chatHeaderActions}>
+          {selectMode ? (
+            <>
+              <Pressable
+                onPress={deleteSelected}
+                disabled={selectedIds.size === 0 || bulkWorking}
+                hitSlop={6}
+                accessibilityRole="button"
+                accessibilityLabel="Delete selected messages"
+              >
+                <Text
+                  style={[
+                    styles.chatHeaderActionText,
+                    (selectedIds.size === 0 || bulkWorking) && styles.chatHeaderActionTextDisabled,
+                  ]}
+                >
+                  Delete{selectedIds.size > 0 ? ` (${selectedIds.size})` : ''}
+                </Text>
+              </Pressable>
+              <Pressable
+                onPress={() => {
+                  setSelectMode(false);
+                  setSelectedIds(new Set());
+                }}
+                hitSlop={6}
+              >
+                <Text style={styles.chatHeaderActionText}>Done</Text>
+              </Pressable>
+            </>
+          ) : (
+            <>
+              <Pressable onPress={clearChatHistory} disabled={bulkWorking || messages.length === 0} hitSlop={6}>
+                <Text
+                  style={[
+                    styles.chatHeaderActionText,
+                    (bulkWorking || messages.length === 0) && styles.chatHeaderActionTextDisabled,
+                  ]}
+                >
+                  Clear
+                </Text>
+              </Pressable>
+              <Pressable onPress={deleteConversation} disabled={bulkWorking} hitSlop={6}>
+                <Text style={styles.chatHeaderActionText}>Delete chat</Text>
+              </Pressable>
+              <Pressable onPress={() => setSelectMode(true)} disabled={bulkWorking} hitSlop={6}>
+                <Text style={styles.chatHeaderActionText}>Select</Text>
+              </Pressable>
+            </>
+          )}
+        </View>
+      ),
+    [
+      bulkWorking,
+      canUseChat,
+      clearChatHistory,
+      deleteConversation,
+      deleteSelected,
+      messages.length,
+      selectMode,
+      selectedIds.size,
+    ],
+  );
+
+  const chatScreenOptions = useAppBackScreenOptions({
+    title: selectMode ? `${selectedIds.size} selected` : canUseChat ? displayPersona : 'Chat',
+    fallback: APP_HOME_HREF,
+    escapeShortcuts: true,
+    headerRight: chatHeaderRight,
+  });
+
   const onRevealOceanSender = useCallback(() => {
     const fid = String(oceanFloatId || '').trim();
     if (!fid || oceanRevealing) return;
@@ -852,23 +1051,65 @@ export default function ChatScreen() {
     loadThread,
   ]);
 
-  const renderItem = useCallback(({ item }: { item: ChatMessage }) => {
-    const isUser = item.role === 'user';
-    const leftLabel = item.role === 'traveler' ? item.senderLabel || 'Traveler' : displayPersona;
-    const showUserLabel = isUser && !!item.senderLabel;
-    return (
-      <View style={[styles.row, isUser ? styles.rowUser : styles.rowBandit]}>
-        {showUserLabel && <Text style={styles.userSenderLabel}>{item.senderLabel}</Text>}
-        {!isUser && <Text style={styles.senderLabel}>{leftLabel}</Text>}
-        <View style={[styles.bubble, isUser ? styles.bubbleUser : styles.bubbleBandit]}>
-          <Text style={[styles.bubbleText, isUser ? styles.bubbleTextUser : styles.bubbleTextBandit]}>
-            {item.body}
-          </Text>
-          <Text style={[styles.time, isUser && styles.timeUser]}>{item.sentAt}</Text>
-        </View>
-      </View>
-    );
-  }, [displayPersona]);
+  const renderItem = useCallback(
+    ({ item }: { item: ChatMessage }) => {
+      const isUser = item.role === 'user';
+      const leftLabel = item.role === 'traveler' ? item.senderLabel || 'Traveler' : displayPersona;
+      const showUserLabel = isUser && !!item.senderLabel;
+      const selected = selectedIds.has(item.id);
+      const inner = (
+        <Pressable
+          onPress={() => {
+            if (selectMode) toggleSelected(item.id);
+          }}
+          onLongPress={() => {
+            if (!selectMode) setSelectMode(true);
+            toggleSelected(item.id);
+          }}
+          style={[styles.row, isUser ? styles.rowUser : styles.rowBandit, selected && styles.rowSelected]}
+        >
+          {selectMode ? (
+            <View style={[styles.selectDot, selected && styles.selectDotOn]}>
+              {selected ? <Text style={styles.selectDotMark}>✓</Text> : null}
+            </View>
+          ) : null}
+          <View style={styles.rowBody}>
+            {showUserLabel && <Text style={styles.userSenderLabel}>{item.senderLabel}</Text>}
+            {!isUser && <Text style={styles.senderLabel}>{leftLabel}</Text>}
+            <View style={[styles.bubble, isUser ? styles.bubbleUser : styles.bubbleBandit]}>
+              <Text style={[styles.bubbleText, isUser ? styles.bubbleTextUser : styles.bubbleTextBandit]}>
+                {item.body}
+              </Text>
+              <Text style={[styles.time, isUser && styles.timeUser]}>{item.sentAt}</Text>
+            </View>
+          </View>
+        </Pressable>
+      );
+
+      if (Platform.OS === 'web' || selectMode) {
+        return inner;
+      }
+
+      return (
+        <Swipeable
+          overshootRight={false}
+          renderRightActions={() => (
+            <Pressable
+              style={styles.swipeDelete}
+              onPress={() => deleteOneMessage(item)}
+              accessibilityRole="button"
+              accessibilityLabel="Delete message"
+            >
+              <Text style={styles.swipeDeleteText}>Delete</Text>
+            </Pressable>
+          )}
+        >
+          {inner}
+        </Swipeable>
+      );
+    },
+    [deleteOneMessage, displayPersona, selectMode, selectedIds, toggleSelected],
+  );
 
   if (!canUseChat) {
     return (
@@ -999,9 +1240,66 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
   },
+  chatHeaderActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    marginRight: Platform.OS === 'ios' ? 4 : 8,
+  },
+  chatHeaderActionText: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#0a7ea4',
+  },
+  chatHeaderActionTextDisabled: {
+    opacity: 0.4,
+  },
   row: {
     marginBottom: 10,
     maxWidth: '100%',
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 8,
+  },
+  rowBody: {
+    flex: 1,
+    minWidth: 0,
+  },
+  rowSelected: {
+    backgroundColor: 'rgba(10, 126, 164, 0.08)',
+    borderRadius: 10,
+    paddingHorizontal: 4,
+  },
+  selectDot: {
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+    borderWidth: 2,
+    borderColor: '#0a7ea4',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: 8,
+  },
+  selectDotOn: {
+    backgroundColor: '#0a7ea4',
+  },
+  selectDotMark: {
+    color: '#FFF',
+    fontSize: 12,
+    fontWeight: '800',
+  },
+  swipeDelete: {
+    backgroundColor: '#FF3B30',
+    justifyContent: 'center',
+    alignItems: 'center',
+    width: 76,
+    marginBottom: 10,
+    borderRadius: 10,
+  },
+  swipeDeleteText: {
+    color: '#FFF',
+    fontWeight: '700',
+    fontSize: 13,
   },
   rowUser: {
     alignSelf: 'flex-end',
