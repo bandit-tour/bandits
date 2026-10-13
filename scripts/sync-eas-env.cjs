@@ -12,11 +12,15 @@ const keys = [
   'EXPO_PUBLIC_SUPABASE_ANON_KEY',
   'EXPO_PUBLIC_OPERATOR_USER_ID',
   'EXPO_PUBLIC_APP_ADMIN_EMAILS',
+  'EXPO_PUBLIC_PERF_LOG',
 ];
 const envs = ['preview', 'production', 'development'];
 
 for (const name of keys) {
-  const value = process.env[name];
+  let value = process.env[name];
+  if (name === 'EXPO_PUBLIC_PERF_LOG' && (!value || !String(value).trim())) {
+    value = '1';
+  }
   if (!value || !String(value).trim()) {
     console.error(`Missing ${name} in .env`);
     process.exit(1);

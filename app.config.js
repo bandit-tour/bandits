@@ -74,12 +74,29 @@ function resolveOperatorUserId(value) {
 
 const resolvedOperatorUserId = resolveOperatorUserId(process.env.EXPO_PUBLIC_OPERATOR_USER_ID);
 const resolvedGoogleMapsKey = String(process.env.EXPO_PUBLIC_GOOGLE_MAPS_KEY ?? '').trim();
+/** Hotel #N white-label — Partner Platform public config (not Orchestra product UI). */
+const DEFAULT_PARTNER_PLATFORM_URL = 'https://www.banditours.com';
+function resolvePartnerPlatformUrl(value) {
+  const raw = typeof value === 'string' ? value.trim() : '';
+  if (raw && /^https:\/\//i.test(raw)) {
+    try {
+      return new URL(raw).toString().replace(/\/$/, '');
+    } catch {
+      /* fall through */
+    }
+  }
+  return DEFAULT_PARTNER_PLATFORM_URL;
+}
+const resolvedPartnerPlatformUrl = resolvePartnerPlatformUrl(
+  process.env.EXPO_PUBLIC_PARTNER_PLATFORM_URL || process.env.PARTNER_PLATFORM_URL,
+);
 
 process.env.EXPO_PUBLIC_SUPABASE_URL = resolvedUrl;
 process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY = resolvedAnon;
 process.env.EXPO_PUBLIC_PLAY_GUEST_ENTRY_URL = resolvedPlayGuestEntryUrl;
 process.env.EXPO_PUBLIC_APP_ADMIN_EMAILS = resolvedAppAdminEmails;
 process.env.EXPO_PUBLIC_OPERATOR_USER_ID = resolvedOperatorUserId;
+process.env.EXPO_PUBLIC_PARTNER_PLATFORM_URL = resolvedPartnerPlatformUrl;
 
 /** Ad Hoc preview profile predates Associated Domains; keep production/TestFlight entitlements intact. */
 const buildProfile = process.env.EAS_BUILD_PROFILE;
@@ -105,6 +122,16 @@ module.exports = {
       EXPO_PUBLIC_APP_ADMIN_EMAILS: resolvedAppAdminEmails,
       EXPO_PUBLIC_GOOGLE_MAPS_KEY: resolvedGoogleMapsKey,
       googleMapsApiKey: resolvedGoogleMapsKey,
+      /** Dynamic hotel tenants / white-label — Partner Platform only. */
+      EXPO_PUBLIC_PARTNER_PLATFORM_URL: resolvedPartnerPlatformUrl,
+      PARTNER_PLATFORM_URL: resolvedPartnerPlatformUrl,
+      /** Live Workspace System — Premium Insights / Commerce (never localhost in production builds). */
+      EXPO_PUBLIC_WORKSPACE_URL:
+        String(process.env.EXPO_PUBLIC_WORKSPACE_URL || "").trim() ||
+        "https://banditour-workspace.vercel.app",
+      EXPO_PUBLIC_ORCHESTRA_OS_URL:
+        String(process.env.EXPO_PUBLIC_ORCHESTRA_OS_URL || process.env.EXPO_PUBLIC_WORKSPACE_URL || "").trim() ||
+        "https://banditour-workspace.vercel.app",
     },
   },
 };

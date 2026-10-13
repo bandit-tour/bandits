@@ -37,6 +37,15 @@ export type HotelOnboardingFlowProps = {
   markOnboardingComplete: () => Promise<void>;
   backGuardPath: string;
   testID?: string;
+  /** When set (e.g. `/bottle` QR), use this instead of `getGuestFlipSignal` for Side A quoted text. */
+  resolveSignalLine?: () => Promise<string>;
+  /** Pre-resolved quote (avoids double ocean claim when bottle screen already loaded hook). */
+  prefilledSignalLine?: string;
+  /** When set, final CTA opens this banDit profile instead of guest home. */
+  exploreBanditId?: string;
+  /** Bottle QR: secondary hook on message step (e.g. Who sent this? → in-app discovery). */
+  bottleDiscoverLabel?: string;
+  onBottleDiscover?: () => void;
 };
 
 /**
@@ -50,6 +59,11 @@ export function HotelOnboardingFlow({
   markOnboardingComplete,
   backGuardPath,
   testID,
+  resolveSignalLine,
+  prefilledSignalLine,
+  exploreBanditId,
+  bottleDiscoverLabel,
+  onBottleDiscover,
 }: HotelOnboardingFlowProps) {
   const router = useRouter();
   const insets = useSafeAreaInsets();
@@ -76,18 +90,25 @@ export function HotelOnboardingFlow({
         const skip = await shouldSkipIntro();
         if (cancelled) return;
         if (skip) {
-          router.replace('/bandits');
+          router.replace('/home');
           return;
         }
         try {
           await bootstrapMainAppSession();
           await syncPilotHotelProfileIfNeeded();
           await persistHotelEntry(hotelSlug, 'guest_universal');
-          const flip = await getGuestFlipSignal(hotelSlug);
-          let line = flip.body?.trim() || '';
-          if (!line) {
-            const bank = await loadSignalBank();
-            line = bank[Math.floor(Math.random() * Math.max(bank.length, 1))]?.body?.trim() || '';
+          let line = '';
+          if (prefilledSignalLine?.trim()) {
+            line = prefilledSignalLine.trim();
+          } else if (resolveSignalLine) {
+            line = (await resolveSignalLine()).trim();
+          } else {
+            const flip = await getGuestFlipSignal(hotelSlug);
+            line = flip.body?.trim() || '';
+            if (!line) {
+              const bank = await loadSignalBank();
+              line = bank[Math.floor(Math.random() * Math.max(bank.length, 1))]?.body?.trim() || '';
+            }
           }
           if (!cancelled) setSignalBody(line || 'Trust the street with no sign.');
         } catch {
@@ -100,7 +121,7 @@ export function HotelOnboardingFlow({
     return () => {
       cancelled = true;
     };
-  }, [hotelSlug, router, shouldSkipIntro]);
+  }, [hotelSlug, prefilledSignalLine, resolveSignalLine, router, shouldSkipIntro]);
 
   useEffect(() => {
     if (!shouldUseIphonePlayInlineFlow || booting) {
@@ -119,11 +140,16 @@ export function HotelOnboardingFlow({
       await syncPilotHotelProfileIfNeeded();
       await persistHotelEntry(hotelSlug, 'guest_universal');
       await markOnboardingComplete();
-      router.replace('/bandits');
+      const bid = String(exploreBanditId || '').trim();
+      if (bid) {
+        router.replace(`/bandit/${encodeURIComponent(bid)}` as never);
+      } else {
+        router.replace('/home');
+      }
     } finally {
       setBusy(false);
     }
-  }, [busy, hotelSlug, markOnboardingComplete, router]);
+  }, [busy, exploreBanditId, hotelSlug, markOnboardingComplete, router]);
 
   const advance = useCallback(() => {
     if (busy || transitionLock.current) return;
@@ -208,6 +234,10 @@ export function HotelOnboardingFlow({
                   onCta={onInlineCta}
                   busy={busy}
                   hideCta={shouldUseIphonePlayInlineFlow && !iphonePlayCtaVisible}
+                  secondaryCtaLabel={
+                    stepIndex === 0 && bottleDiscoverLabel && onBottleDiscover ? bottleDiscoverLabel : undefined
+                  }
+                  onSecondaryCta={stepIndex === 0 ? onBottleDiscover : undefined}
                 />
               </Animated.View>
             </View>

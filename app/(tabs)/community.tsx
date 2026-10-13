@@ -1,8 +1,10 @@
 import { Stack, useRouter } from 'expo-router';
 import { useFocusEffect } from '@react-navigation/native';
-import React, { useCallback, useState } from 'react';
+import React, { useCallback, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
+  Alert,
+  DeviceEventEmitter,
   FlatList,
   Pressable,
   StyleSheet,
@@ -14,16 +16,30 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { IconSymbol } from '@/components/ui/IconSymbol';
 import { useAppState } from '@/contexts/AppStateContext';
 import { usePremiumRefreshControl } from '@/lib/mobilePullToRefresh';
+import { deleteEntireChatConversation } from '@/lib/chatThreadManage';
 import { loadChatThreadSummaries, type ChatThreadSummary } from '@/lib/chatThreads';
 import { formatInboxSentAt } from '@/lib/inboxSentAtLabel';
-import { ensureAnonymousSession } from '@/lib/pilotSession';
-import { supabase } from '@/lib/supabase';
+import { ensureAnonymousSession, resolveTravelerSession } from '@/lib/pilotSession';
 import { BANDITS_NOTIFICATIONS_REFRESH } from '@/lib/notificationEvents';
-import { DeviceEventEmitter } from 'react-native';
 import { markChatSurfaceOpened } from '@/lib/osAppBadge';
 import { syncOsAppIconBadge } from '@/lib/pushNotifications';
 import { useAppBackScreenOptions } from '@/hooks/useAppBackScreenOptions';
 import { APP_HOME_HREF } from '@/lib/appNavigation';
+
+function threadDeleteRootId(t: ChatThreadSummary): string {
+  const rt = String(t.openReferenceType || '').trim();
+  if (
+    rt === 'bandit_question_guest_echo' ||
+    rt === 'local_friend_guest_echo' ||
+    rt === 'bandit_question_request' ||
+    rt === 'local_friend_request'
+  ) {
+    return String(t.openReferenceId || t.openNotificationId || '').trim();
+  }
+  if (t.threadKey.startsWith('ask:')) return t.threadKey.slice(4);
+  if (t.threadKey.startsWith('local_friend:')) return t.threadKey.slice('local_friend:'.length);
+  return String(t.openNotificationId || t.openReferenceId || '').trim();
+}
 
 /**
  * Bottom Chat tab — unified conversation threads (same /chat route as Notifications deep links).
@@ -31,23 +47,20 @@ import { APP_HOME_HREF } from '@/lib/appNavigation';
 export default function CommunityScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
-  const communityScreenOptions = useAppBackScreenOptions({
-    title: 'Chat',
-    fallback: APP_HOME_HREF,
-  });
   const { refreshNotifications, markNotificationRead, unreadCount, chatUnreadCount } = useAppState();
   const [threads, setThreads] = useState<ChatThreadSummary[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [selectMode, setSelectMode] = useState(false);
+  const [selectedKeys, setSelectedKeys] = useState<Set<string>>(() => new Set());
+  const [bulkWorking, setBulkWorking] = useState(false);
 
   const loadThreads = useCallback(async (silent?: boolean) => {
     if (!silent) setLoading(true);
     try {
       await ensureAnonymousSession().catch(() => undefined);
-      const {
-        data: { session },
-      } = await supabase.auth.getSession();
-      const userId = session?.user?.id || '';
+      const traveler = await resolveTravelerSession();
+      const userId = traveler?.user?.id || '';
       const list = userId ? await loadChatThreadSummaries(userId) : [];
       setThreads(list);
     } finally {
@@ -86,6 +99,106 @@ export default function CommunityScreen() {
 
   const refreshControl = usePremiumRefreshControl(refreshing, onRefresh);
 
+  const toggleSelected = useCallback((threadKey: string) => {
+    setSelectedKeys((prev) => {
+      const next = new Set(prev);
+      if (next.has(threadKey)) next.delete(threadKey);
+      else next.add(threadKey);
+      return next;
+    });
+  }, []);
+
+  const deleteSelectedThreads = useCallback(() => {
+    if (bulkWorking || selectedKeys.size === 0) return;
+    const targets = threads.filter((t) => selectedKeys.has(t.threadKey));
+    Alert.alert(
+      'Delete conversations',
+      `Remove ${targets.length} conversation${targets.length === 1 ? '' : 's'}?`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete',
+          style: 'destructive',
+          onPress: () => {
+            void (async () => {
+              setBulkWorking(true);
+              try {
+                for (const t of targets) {
+                  const root = threadDeleteRootId(t);
+                  if (root) await deleteEntireChatConversation(root);
+                }
+                setSelectMode(false);
+                setSelectedKeys(new Set());
+                await loadThreads(true);
+                await refreshNotifications();
+                DeviceEventEmitter.emit(BANDITS_NOTIFICATIONS_REFRESH);
+              } catch (e) {
+                Alert.alert('Could not delete', e instanceof Error ? e.message : 'Try again.');
+              } finally {
+                setBulkWorking(false);
+              }
+            })();
+          },
+        },
+      ],
+    );
+  }, [bulkWorking, loadThreads, refreshNotifications, selectedKeys, threads]);
+
+  const chatHeaderRight = useCallback(
+    () => (
+      <View style={styles.headerActions}>
+        {selectMode ? (
+          <>
+            <Pressable
+              onPress={deleteSelectedThreads}
+              disabled={selectedKeys.size === 0 || bulkWorking}
+              hitSlop={6}
+              accessibilityRole="button"
+              accessibilityLabel="Delete selected conversations"
+            >
+              <Text
+                style={[
+                  styles.headerActionText,
+                  (selectedKeys.size === 0 || bulkWorking) && styles.headerActionTextDisabled,
+                ]}
+              >
+                Delete{selectedKeys.size > 0 ? ` (${selectedKeys.size})` : ''}
+              </Text>
+            </Pressable>
+            <Pressable
+              onPress={() => {
+                setSelectMode(false);
+                setSelectedKeys(new Set());
+              }}
+              hitSlop={6}
+              accessibilityRole="button"
+              accessibilityLabel="Done selecting"
+            >
+              <Text style={styles.headerActionText}>Done</Text>
+            </Pressable>
+          </>
+        ) : (
+          <Pressable
+            onPress={() => setSelectMode(true)}
+            hitSlop={6}
+            accessibilityRole="button"
+            accessibilityLabel="Select conversations"
+          >
+            <Text style={styles.headerActionText}>Select</Text>
+          </Pressable>
+        )}
+      </View>
+    ),
+    [bulkWorking, deleteSelectedThreads, selectMode, selectedKeys.size],
+  );
+
+  const communityScreenOptions = useAppBackScreenOptions({
+    title: selectMode ? `${selectedKeys.size} selected` : 'Chat',
+    fallback: APP_HOME_HREF,
+    showBack: false,
+    headerRight: chatHeaderRight,
+  });
+
   const openThread = useCallback(
     (t: ChatThreadSummary) => {
       void markNotificationRead(t.openNotificationId);
@@ -105,6 +218,22 @@ export default function CommunityScreen() {
     [markNotificationRead, router],
   );
 
+  const listEmpty = useMemo(
+    () => (
+      <View style={styles.center}>
+        <View style={styles.heroIconBubble}>
+          <IconSymbol name="bubble.left.and.bubble.right.fill" size={36} color="#111111" />
+        </View>
+        <Text style={styles.emptyTitle}>No conversations yet</Text>
+        <Text style={styles.emptyBody}>
+          When you reveal or reply to a message in a bottle, the thread appears here — the same chat
+          everywhere in the app.
+        </Text>
+      </View>
+    ),
+    [],
+  );
+
   return (
     <>
       <Stack.Screen options={communityScreenOptions} />
@@ -114,42 +243,45 @@ export default function CommunityScreen() {
             <ActivityIndicator size="large" />
           </View>
         ) : threads.length === 0 ? (
-          <View style={styles.center}>
-            <View style={styles.heroIconBubble}>
-              <IconSymbol name="bubble.left.and.bubble.right.fill" size={36} color="#0A7EA4" />
-            </View>
-            <Text style={styles.emptyTitle}>No conversations yet</Text>
-            <Text style={styles.emptyBody}>
-              When you reveal or reply to a message in a bottle, the thread appears here — the same chat
-              everywhere in the app.
-            </Text>
-          </View>
+          listEmpty
         ) : (
           <FlatList
             data={threads}
             keyExtractor={(item) => item.threadKey}
             refreshControl={refreshControl}
             contentContainerStyle={styles.list}
-            renderItem={({ item }) => (
-              <Pressable style={styles.row} onPress={() => openThread(item)}>
-                <View style={styles.rowTop}>
-                  <Text style={styles.rowTitle} numberOfLines={1}>
-                    {item.title}
-                  </Text>
-                  <Text style={styles.rowTime}>{formatInboxSentAt(item.lastAt)}</Text>
-                </View>
-                <Text style={styles.rowPreview} numberOfLines={2}>
-                  {item.preview}
-                </Text>
-                {item.unreadCount > 0 ? (
-                  <View style={styles.unreadPill}>
-                    <Text style={styles.unreadPillText}>
-                      {item.unreadCount > 9 ? '9+' : item.unreadCount}
+            renderItem={({ item }) => {
+              const selected = selectedKeys.has(item.threadKey);
+              return (
+                <Pressable
+                  style={[styles.row, selected && styles.rowSelected]}
+                  onPress={() => {
+                    if (selectMode) {
+                      toggleSelected(item.threadKey);
+                      return;
+                    }
+                    openThread(item);
+                  }}
+                >
+                  <View style={styles.rowTop}>
+                    <Text style={styles.rowTitle} numberOfLines={1}>
+                      {item.title}
                     </Text>
+                    <Text style={styles.rowTime}>{formatInboxSentAt(item.lastAt)}</Text>
                   </View>
-                ) : null}
-              </Pressable>
-            )}
+                  <Text style={styles.rowPreview} numberOfLines={2}>
+                    {item.preview}
+                  </Text>
+                  {item.unreadCount > 0 ? (
+                    <View style={styles.unreadPill}>
+                      <Text style={styles.unreadPillText}>
+                        {item.unreadCount > 9 ? '9+' : item.unreadCount}
+                      </Text>
+                    </View>
+                  ) : null}
+                </Pressable>
+              );
+            }}
           />
         )}
       </View>
@@ -186,6 +318,10 @@ const styles = StyleSheet.create({
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: '#E6E6E6',
   },
+  rowSelected: {
+    borderColor: '#111111',
+    backgroundColor: '#F0F8FC',
+  },
   rowTop: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 6, gap: 8 },
   rowTitle: { flex: 1, fontSize: 16, fontWeight: '700', color: '#111' },
   rowTime: { fontSize: 12, color: '#888' },
@@ -197,10 +333,13 @@ const styles = StyleSheet.create({
     minWidth: 22,
     height: 22,
     borderRadius: 11,
-    backgroundColor: '#FF3B30',
+    backgroundColor: '#111111',
     alignItems: 'center',
     justifyContent: 'center',
     paddingHorizontal: 6,
   },
-  unreadPillText: { color: '#FFF', fontSize: 11, fontWeight: '800' },
+  unreadPillText: { color: '#FFF', fontSize: 11, fontWeight: '700' },
+  headerActions: { flexDirection: 'row', alignItems: 'center', gap: 14, marginRight: 4 },
+  headerActionText: { fontSize: 15, fontWeight: '600', color: '#111111' },
+  headerActionTextDisabled: { opacity: 0.4 },
 });

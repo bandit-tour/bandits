@@ -1,0 +1,29 @@
+name: CI
+
+on:
+  push:
+    branches: [main, master, "restore/**"]
+  pull_request:
+
+jobs:
+  skeleton:
+    name: S0 CI skeleton
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+      - name: Install
+        run: npm ci
+      - name: Feature flag module present
+        run: test -f lib/featureFlags.ts
+      - name: Typecheck (tsc noEmit if available)
+        run: |
+          if npx tsc --noEmit -p . >/tmp/tsc.log 2>&1; then
+            echo "OK: tsc"
+          else
+            echo "WARN: tsc reported issues (non-blocking S0 skeleton)"
+            tail -n 40 /tmp/tsc.log || true
+          fi

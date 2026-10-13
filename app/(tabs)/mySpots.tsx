@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Alert, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { getUserLikedEvents, toggleEventLike } from '@/app/services/events';
+import { ensureAnonymousSession } from '@/lib/pilotSession';
 import EventCardSkeleton from '@/components/EventCardSkeleton';
 import EventList from '@/components/EventList';
 import { useCity } from '@/contexts/CityContext';
@@ -9,6 +10,7 @@ import { fetchSWR, invalidateAppDataCache, readCacheStale } from '@/lib/appDataC
 import { useUpperTabHost } from '@/contexts/UpperTabHostContext';
 import { useTabActiveDataLoad } from '@/lib/useTabActiveDataLoad';
 import { useScreenFocused } from '@/lib/useScreenFocused';
+import { useGuestLiveSurface } from '@/lib/orchestra/useGuestLiveSurface';
 import { Database } from '@/lib/database.types';
 
 type Event = Database['public']['Tables']['event']['Row'];
@@ -35,6 +37,7 @@ export function MySpotsScreen({ tabActive }: MySpotsScreenProps = {}) {
   const [likedEventsAll, setLikedEventsAll] = useState<Event[]>(cachedAll ?? []);
   const [loadedOnce, setLoadedOnce] = useState(cachedAll !== undefined);
   const [refreshing, setRefreshing] = useState(false);
+  const [likesLoadHint, setLikesLoadHint] = useState<string | null>(null);
   const { selectedCity } = useCity();
 
   // Stable Set reference so EventList / EventCard don't see "different"
@@ -59,15 +62,25 @@ export function MySpotsScreen({ tabActive }: MySpotsScreenProps = {}) {
     const handle = fetchSWR<Event[]>(
       LIKED_EVENTS_CACHE_KEY,
       LIKED_EVENTS_TTL_MS,
-      () => getUserLikedEvents(),
+      async () => {
+        await ensureAnonymousSession().catch(() => undefined);
+        return getUserLikedEvents();
+      },
       (events) => {
         setLikedEventsAll(events);
+        setLikesLoadHint(null);
         setLoadedOnce(true);
         setRefreshing(false);
         mySpotsInitialFocusDoneRef.current = true;
       },
       (error) => {
         console.error('Error loading liked events:', error);
+        const msg = error instanceof Error ? error.message : '';
+        setLikesLoadHint(
+          /not authenticated/i.test(msg)
+            ? 'Likes are tied to your guest session. Pull to refresh after opening the app.'
+            : null,
+        );
         setLoadedOnce(true);
         setRefreshing(false);
         mySpotsInitialFocusDoneRef.current = true;
@@ -77,6 +90,10 @@ export function MySpotsScreen({ tabActive }: MySpotsScreenProps = {}) {
   }, []);
 
   useTabActiveDataLoad(screenActive, mySpotsInitialFocusDoneRef, loadLikedEvents);
+
+  useGuestLiveSurface('journey', () => {
+    loadLikedEvents(false);
+  });
 
   /** City filter changes while mounted no longer require a refetch — filtering is now client-side. */
   useEffect(() => {
@@ -135,11 +152,20 @@ export function MySpotsScreen({ tabActive }: MySpotsScreenProps = {}) {
         </Pressable>
       </View>
       
+      {likesLoadHint ? (
+        <Text style={styles.likesHint}>{likesLoadHint}</Text>
+      ) : null}
       <EventList
         events={filteredEvents}
         onEventLike={handleEventRemove}
         likedEventIds={likedEventIds}
-        emptyMessage="No liked events yet"
+        emptyMessage={
+          likesLoadHint
+            ? 'Could not load likes for this session.'
+            : selectedCity
+              ? `No liked spots in ${selectedCity} yet.`
+              : 'No liked events yet. Tap the heart on a spot in Explore to save it here.'
+        }
         variant="vertical"
         showRecommendations={false}
         buttonType="remove"
@@ -182,6 +208,14 @@ const styles = StyleSheet.create({
     fontSize: 24,
     fontWeight: 'bold',
     color: '#3C3C3C',
+  },
+  likesHint: {
+    marginHorizontal: 16,
+    marginBottom: 8,
+    fontSize: 14,
+    color: '#666',
+    textAlign: 'center',
+    lineHeight: 20,
   },
   refreshBtn: {
     position: 'absolute',

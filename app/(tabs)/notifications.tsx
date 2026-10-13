@@ -46,7 +46,7 @@ import {
   isLocalFriendOceanFoundRef,
 } from '@/lib/localFriendOcean';
 import { OCEAN_THREAD_REPLY_REF } from '@/lib/oceanBottleChat';
-import { inboxPreviewForType } from '@/lib/bottleThreadText';
+import { inboxPreviewForType, isSignalBottleInboxType } from '@/lib/bottleThreadText';
 import { isDeletedThreadRef } from '@/lib/threadDelete';
 import { markInboxSurfaceOpened } from '@/lib/osAppBadge';
 import { syncOsAppIconBadge } from '@/lib/pushNotifications';
@@ -162,6 +162,10 @@ function banditNameFromNotification(n: NotificationRow): string {
   if (isLocalFriendBottleInboxType(n.type)) {
     if (t.length > 0 && t.length < 64 && !/^message in a bottle$/i.test(t)) return t;
     return 'Message in a bottle';
+  }
+  if (n.type === 'guest_moment') {
+    if (t.length > 0 && t.length < 64 && !/^a moment from the city$/i.test(t)) return t;
+    return 'A Moment';
   }
   const fromReply = /^reply\s+from\s+(.+)/i.exec(t);
   if (fromReply) return fromReply[1].trim();
@@ -618,6 +622,7 @@ export default function NotificationsScreen() {
   const notificationsScreenOptions = useAppBackScreenOptions({
     title: selectMode ? `${selectedIds.size} selected` : 'Notifications',
     fallback: APP_HOME_HREF,
+    showBack: false,
     headerRight: inboxHeaderRight,
   });
 
@@ -724,6 +729,79 @@ export default function NotificationsScreen() {
             notificationMessage: n.message ?? '',
           },
         });
+        return;
+      }
+
+      if (isSignalBottleInboxType(t)) {
+        router.push({
+          pathname: '/chat',
+          params: {
+            banditName: banditNameFromNotification(n),
+            notificationId: n.id,
+            notificationType: n.type,
+            referenceId: n.reference_id ?? '',
+            referenceType: n.reference_type ?? '',
+            notificationTitle: n.title ?? '',
+            notificationMessage: n.message ?? '',
+          },
+        });
+        return;
+      }
+
+      const isGuestAskEcho = t === 'bandit_question' && rt === BANDIT_QUESTION_GUEST_ECHO_REF;
+      const isGuestLocalFriendEcho = t === 'local_friend' && rt === 'local_friend_guest_echo';
+      if (isGuestAskEcho || isGuestLocalFriendEcho) {
+        router.push({
+          pathname: '/chat',
+          params: {
+            banditName: banditNameFromNotification(n),
+            notificationId: n.id,
+            notificationType: n.type,
+            referenceId: n.reference_id ?? '',
+            referenceType: n.reference_type ?? '',
+            notificationTitle: n.title ?? '',
+            notificationMessage: n.message ?? '',
+          },
+        });
+        return;
+      }
+
+      /** Mode A Moment discovery — open bridge (reveal) or continue Chat. */
+      if (t === 'guest_moment') {
+        if (rt === 'guest_moment_thread' && floatRef) {
+          router.push({
+            pathname: '/chat',
+            params: {
+              banditName: banditNameFromNotification(n),
+              notificationId: floatRef,
+              notificationType: 'guest_moment',
+              referenceId: floatRef,
+              referenceType: 'guest_moment_thread',
+              notificationTitle: n.title ?? '',
+              notificationMessage: n.message ?? '',
+            },
+          });
+          return;
+        }
+        router.push('/bottleDiscover');
+        return;
+      }
+
+      const isGuestAskReply = t === 'bandit_reply' && ASK_ME_GUEST_BANDIT_REPLY_REFS.has(rt);
+      const isGuestLocalFriendReply = t === 'bandit_reply' && rt === 'operator_reply_local_friend';
+      if (isGuestAskReply || isGuestLocalFriendReply) {
+        router.push({
+          pathname: '/chat',
+          params: {
+            banditName: banditNameFromNotification(n),
+            notificationId: n.id,
+            notificationType: n.type,
+            referenceId: n.reference_id ?? '',
+            referenceType: n.reference_type ?? '',
+            notificationTitle: n.title ?? '',
+            notificationMessage: n.message ?? '',
+          },
+        });
       }
     },
     [markNotificationRead, router],
@@ -817,7 +895,7 @@ export default function NotificationsScreen() {
           ListEmptyComponent={
             loading ? (
               <View style={styles.center}>
-                <ActivityIndicator size="large" color="#0a7ea4" />
+                <ActivityIndicator size="large" color="#111111" />
               </View>
             ) : (
               <View style={styles.center}>
@@ -912,7 +990,7 @@ const styles = StyleSheet.create({
   headerActionText: {
     fontSize: 13,
     fontWeight: '700',
-    color: '#0a7ea4',
+    color: '#111111',
   },
   headerActionTextDisabled: {
     opacity: 0.45,
@@ -927,7 +1005,7 @@ const styles = StyleSheet.create({
     minWidth: 0,
   },
   cardSelected: {
-    borderColor: '#0a7ea4',
+    borderColor: '#111111',
     backgroundColor: '#EEF7FA',
   },
   selectDot: {
@@ -941,8 +1019,8 @@ const styles = StyleSheet.create({
     marginTop: 2,
   },
   selectDotOn: {
-    borderColor: '#0a7ea4',
-    backgroundColor: '#0a7ea4',
+    borderColor: '#111111',
+    backgroundColor: '#111111',
   },
   selectDotMark: {
     color: '#FFF',

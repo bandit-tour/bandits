@@ -1,3 +1,5 @@
+import { PERF_ENABLED, perfStart } from '@/lib/perfTiming';
+
 /**
  * Tiny in-memory TTL cache for async fetchers. Designed for "stale-while-
  * revalidate" UX: tab screens read cached data instantly on focus, then
@@ -108,13 +110,18 @@ export function fetchSWR<T>(
   const cached = readCacheStale<T>(key);
   if (cached !== undefined) onValue(cached, { fromCache: true });
   void (async () => {
+    const endNetwork = PERF_ENABLED
+      ? perfStart(`fetchSWR:${key}`, 'network', { cacheHit: cached !== undefined })
+      : () => undefined;
     try {
       const fresh = await fetchCached<T>(key, ttlMs, fetcher);
       if (cancelled) return;
       // If the fetcher returned the same reference we already painted, skip the
       // second callback (callers can rely on this to avoid extra renders).
       if (cached !== fresh) onValue(fresh, { fromCache: false });
+      endNetwork({ fromCache: false });
     } catch (err) {
+      endNetwork({ error: true });
       if (!cancelled && onError) onError(err);
     }
   })();

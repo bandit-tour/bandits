@@ -197,6 +197,11 @@ export default function ScamAlertDetailScreen() {
       ) : null,
   });
 
+  const handleBack = useCallback(() => {
+    if (router.canGoBack()) router.back();
+    else router.replace('/alerts');
+  }, [router]);
+
   return (
     <>
       <Stack.Screen options={screenOptions} />

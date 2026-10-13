@@ -18,7 +18,13 @@ const outDir = path.join(repoRoot, 'artifacts', 'runtime-proof', `ocean-bottle-u
 const result = {
   base,
   routes: {},
-  bottle: { loaded: false, phase: null, hasWhoSentThis: false, errorText: null },
+  bottle: {
+    loaded: false,
+    hasPlayIntro: false,
+    hasWhoSentThis: false,
+    hasExploreCity: false,
+    errorText: null,
+  },
   pass: false,
 };
 
@@ -61,33 +67,31 @@ async function main() {
     }
 
     await page.goto(`${base}/bottle`, { waitUntil: 'domcontentloaded', timeout: 120000 });
-    await page.waitForTimeout(6000);
+    await page.waitForTimeout(8000);
     const body = (await page.textContent('body')) || '';
-    result.bottle.loaded = /Travel in a Bottle|floating ocean|note drifted|ocean is quiet|Could not fetch/i.test(body);
+    result.bottle.loaded = body.length > 80;
+    result.bottle.hasPlayIntro =
+      /message in a bottle has arrived/i.test(body) &&
+      (/Flip/i.test(body) || /Explore the City/i.test(body));
     result.bottle.hasWhoSentThis = /Who sent this\?/i.test(body);
-    result.bottle.phase = body.includes('note drifted ashore')
-      ? 'message'
-      : body.includes('ocean is quiet')
-        ? 'empty'
-        : body.includes('Could not fetch')
-          ? 'error'
-          : body.includes('Searching the floating ocean')
-            ? 'loading'
-            : 'unknown';
-    if (body.includes('Could not fetch')) {
-      const m = body.match(/Could not fetch a bottle[\s\S]{0,200}/i);
-      result.bottle.errorText = m ? m[0].slice(0, 180) : 'claim error';
-    }
+    result.bottle.hasExploreCity = /Explore the City/i.test(body);
     await shot(page, 'bottle-page.png');
 
-    if (result.bottle.hasWhoSentThis) {
-      await page.getByRole('button', { name: /Who sent this\?/i }).click({ timeout: 10000 });
+    const flipBtn = page.getByRole('button', { name: /^Flip$/i });
+    if (await flipBtn.count()) {
+      await flipBtn.click({ timeout: 10000 });
+      await page.waitForTimeout(2000);
+    }
+    const exploreBtn = page.getByRole('button', { name: /Explore the City/i });
+    if (await exploreBtn.count()) {
+      await exploreBtn.click({ timeout: 10000 });
       await page.waitForTimeout(3000);
-      result.bottle.chatOpened = /Write a message|Who sent this\?/i.test((await page.textContent('body')) || '');
-      await shot(page, 'bottle-chat.png');
+      result.bottle.enteredApp = /Home|Local Friend|Explore/i.test((await page.textContent('body')) || '');
+      await shot(page, 'bottle-after-explore-city.png');
     }
 
-    result.pass = safetyOk && result.bottle.loaded;
+    result.pass =
+      safetyOk && result.bottle.loaded && result.bottle.hasPlayIntro && !result.bottle.hasWhoSentThis;
     await fs.writeFile(path.join(outDir, 'RESULT.json'), JSON.stringify(result, null, 2));
     console.log(JSON.stringify(result, null, 2));
     process.exit(result.pass ? 0 : 1);

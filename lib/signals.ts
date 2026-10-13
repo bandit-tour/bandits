@@ -417,6 +417,19 @@ export async function getGuestFlipSignal(hotelSlug: string): Promise<GuestFlipSi
   return row;
 }
 
+export async function readGuestFlipSignalCache(): Promise<GuestFlipSignalResult | null> {
+  const cached = await readFlipCache();
+  if (!cached) return null;
+  return {
+    id: cached.id,
+    body: cached.body,
+    deliveryId: cached.deliveryId ?? null,
+    senderUserId: cached.senderUserId ?? null,
+    deliveryStatus: cached.deliveryStatus ?? null,
+    threadNotificationId: cached.threadNotificationId ?? null,
+  };
+}
+
 export function invalidateGuestFlipSignalCache(): void {
   try {
     if (Platform.OS === 'web' && typeof sessionStorage !== 'undefined') {

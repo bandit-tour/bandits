@@ -1,0 +1,6 @@
+# Shrink EAS upload archive — keep build inputs only.
+artifacts/
+.eas-build-log*.txt
+.eas-build.json
+node_modules/.cache/
+.git/

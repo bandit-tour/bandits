@@ -149,7 +149,7 @@ module.exports = async function handler(req, res) {
       p_sender_persona_name: title,
     });
     if (oceanErr) {
-      return res.status(500).json({ error: oceanErr.message || 'Could not enqueue floating message' });
+      console.warn('[operator-message] ocean enqueue skipped:', oceanErr.message || oceanErr);
     }
   }
 

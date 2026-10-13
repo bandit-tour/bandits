@@ -1,14 +1,14 @@
-import { PLAY_HOTEL_BOTTLE_ASSET } from '@/lib/hotelWhiteLabel';
 import React, { useCallback, useEffect, useRef } from 'react';
-import { Image, Modal, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Modal, Pressable, StyleSheet, Text, View } from 'react-native';
 
 /**
- * Web variant — expo-video can break hydration / loop unpredictably on RN-web.
- * We render the static bottle hero asset and auto-advance after a short delay
- * so the calling screen still flips to its confirmation card without manual interaction.
+ * Web variant of bottle throw animation.
+ * Uses the approved MP4 (same ocean bottle clip as native .mov source family).
+ * Falls back to timed advance if the video cannot play — never invents a new asset.
  */
 
-const WEB_ADVANCE_MS = 2_400;
+const WEB_ADVANCE_MS = 9_000;
+const BOTTLE_MP4 = '/videos/play-intro.mp4';
 
 type BottleSubmitVideoProps = {
   visible: boolean;
@@ -18,6 +18,7 @@ type BottleSubmitVideoProps = {
 
 export function BottleSubmitVideo({ visible, onFinished, skipLabel = 'Skip' }: BottleSubmitVideoProps) {
   const doneRef = useRef(false);
+  const videoRef = useRef<HTMLVideoElement | null>(null);
 
   const finish = useCallback(() => {
     if (doneRef.current) return;
@@ -28,9 +29,31 @@ export function BottleSubmitVideo({ visible, onFinished, skipLabel = 'Skip' }: B
   useEffect(() => {
     if (!visible) {
       doneRef.current = false;
+      const el = videoRef.current;
+      if (el) {
+        try {
+          el.pause();
+          el.currentTime = 0;
+        } catch {
+          /* ignore */
+        }
+      }
       return;
     }
     doneRef.current = false;
+    const el = videoRef.current;
+    if (el) {
+      try {
+        el.muted = true;
+        el.loop = false;
+        el.currentTime = 0;
+        void el.play().catch(() => {
+          /* autoplay blocked — safety timer still advances */
+        });
+      } catch {
+        /* ignore */
+      }
+    }
     const t = setTimeout(finish, WEB_ADVANCE_MS);
     return () => clearTimeout(t);
   }, [visible, finish]);
@@ -40,12 +63,24 @@ export function BottleSubmitVideo({ visible, onFinished, skipLabel = 'Skip' }: B
   return (
     <Modal visible animationType="fade" transparent onRequestClose={finish}>
       <View style={styles.backdrop} accessibilityViewIsModal>
-        <Image
-          source={PLAY_HOTEL_BOTTLE_ASSET}
-          style={styles.image}
-          resizeMode="contain"
-          accessibilityLabel="Message in a bottle"
-        />
+        {/* RN-web: native <video> for the approved bottle throw clip */}
+        {React.createElement('video', {
+          ref: (node: HTMLVideoElement | null) => {
+            videoRef.current = node;
+          },
+          src: BOTTLE_MP4,
+          style: {
+            width: '100%',
+            height: '88%',
+            objectFit: 'contain',
+            backgroundColor: 'transparent',
+          },
+          muted: true,
+          playsInline: true,
+          controls: false,
+          onEnded: finish,
+          'aria-label': 'Message in a bottle animation',
+        })}
         <Pressable
           onPress={finish}
           style={styles.skip}
@@ -66,10 +101,6 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(0,0,0,0.92)',
     justifyContent: 'center',
     alignItems: 'center',
-  },
-  image: {
-    width: '100%',
-    height: '80%',
   },
   skip: {
     position: 'absolute',

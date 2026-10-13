@@ -1,4 +1,4 @@
-import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
+import { Stack, useLocalSearchParams, useRouter, type Href } from 'expo-router';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
@@ -20,6 +20,7 @@ import { mergeVibeSequence, type VibeStop } from '@/services/vibeRoute';
 import { buildCategoryNeutralPlaceholder } from '@/lib/recommendationImages';
 import { Database } from '@/lib/database.types';
 import { supabase } from '@/lib/supabase';
+import { useAppBackScreenOptions } from '@/hooks/useAppBackScreenOptions';
 
 type EventRow = Database['public']['Tables']['event']['Row'];
 type BanditRow = Database['public']['Tables']['bandit']['Row'];
@@ -128,6 +129,12 @@ export default function VibeRouteScreen() {
   const { width } = useWindowDimensions();
   const isDesktopWeb = Platform.OS === 'web' && width >= 1024;
 
+  const screenOptions = useAppBackScreenOptions({
+    title: 'Vibe Route',
+    fallback: (banditId ? `/bandit/${banditId}` : '/bandits') as Href,
+    showBack: true,
+  });
+
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [bandit, setBandit] = useState<BanditRow | null>(null);
@@ -183,7 +190,8 @@ export default function VibeRouteScreen() {
 
   const title = useMemo(() => {
     if (!bandit) return 'Vibe route';
-    return `${bandit.name}’s vibe`;
+    const first = String(bandit.name || '').trim().split(/\s+/)[0] || 'Local';
+    return `${first}'s route`;
   }, [bandit]);
 
   const openStop = useCallback(
@@ -209,7 +217,7 @@ export default function VibeRouteScreen() {
   if (loading) {
     return (
       <>
-        <Stack.Screen options={{ headerShown: true, title: '' }} />
+        <Stack.Screen options={screenOptions} />
         <View style={styles.centered}>
           <ActivityIndicator size="large" />
         </View>
@@ -220,7 +228,7 @@ export default function VibeRouteScreen() {
   if (error) {
     return (
       <>
-        <Stack.Screen options={{ headerShown: true, title: '' }} />
+        <Stack.Screen options={screenOptions} />
         <View style={styles.centered}>
           <Text style={styles.err}>{error}</Text>
         </View>
@@ -230,15 +238,15 @@ export default function VibeRouteScreen() {
 
   return (
     <>
-      <Stack.Screen options={{ headerShown: true, title: '' }} />
+      <Stack.Screen options={screenOptions} />
       <ScrollView
         style={styles.scroll}
         contentContainerStyle={[styles.scrollContent, isDesktopWeb && styles.scrollContentDesktop]}
       >
-        <Text style={styles.kicker}>Curated vibe</Text>
+        <Text style={styles.kicker}>Routes</Text>
         <Text style={styles.headline}>{title}</Text>
         <Text style={styles.intro}>
-          A short route in order — tap a stop to open details or maps. Pulled from this local banDit’s picks.
+          Photographic stops in order — not a map dump.
         </Text>
 
         {stops.length === 0 ? (
@@ -247,17 +255,21 @@ export default function VibeRouteScreen() {
           </Text>
         ) : (
           stops.map((stop) => (
-            <Pressable key={stop.key} style={[styles.card, isDesktopWeb && styles.cardDesktop]} onPress={() => openStop(stop)}>
-              <View style={styles.stepRow}>
-                <Text style={styles.stepNum}>{stop.order}</Text>
-                <View style={styles.stepBody}>
-                  <View style={styles.imageWrap}>
-                    <VibeStopImage stop={stop} />
-                  </View>
-                  <Text style={styles.category}>{stop.category}</Text>
-                  <Text style={styles.placeName}>{stop.name}</Text>
-                  <Text style={styles.vibeLine}>{stop.vibeLine}</Text>
-                  <Text style={styles.address}>{stop.address}</Text>
+            <Pressable
+              key={stop.key}
+              style={[styles.photoStop, isDesktopWeb && styles.cardDesktop]}
+              onPress={() => openStop(stop)}
+            >
+              <View style={styles.photoBleed}>
+                <VibeStopImage stop={stop} />
+                <View style={styles.photoScrim} />
+                <View style={styles.photoCopy}>
+                  <Text style={styles.stepBadge}>{`Stop ${stop.order}`}</Text>
+                  <Text style={styles.categoryOnPhoto}>{stop.category}</Text>
+                  <Text style={styles.placeNameOnPhoto}>{stop.name}</Text>
+                  <Text style={styles.vibeOnPhoto} numberOfLines={3}>
+                    {stop.vibeLine}
+                  </Text>
                 </View>
               </View>
             </Pressable>
@@ -269,82 +281,105 @@ export default function VibeRouteScreen() {
 }
 
 const styles = StyleSheet.create({
-  scroll: { flex: 1, backgroundColor: '#FFFFFF' },
-  scrollContent: { padding: 16, paddingBottom: 40 },
+  scroll: { flex: 1, backgroundColor: '#0B0B0B' },
+  scrollContent: { padding: 16, paddingBottom: 48 },
   scrollContentDesktop: {
     maxWidth: 980,
     width: '100%',
     alignSelf: 'center',
     paddingHorizontal: 24,
   },
-  centered: { flex: 1, justifyContent: 'center', alignItems: 'center', padding: 24 },
-  err: { color: '#B00020', fontSize: 15, textAlign: 'center' },
+  centered: { flex: 1, justifyContent: 'center', alignItems: 'center', padding: 24, backgroundColor: '#0B0B0B' },
+  err: { color: '#FF8A80', fontSize: 15, textAlign: 'center' },
   kicker: {
     fontSize: 12,
     fontWeight: '700',
-    color: '#FF3B30',
-    letterSpacing: 0.6,
+    color: '#E03131',
+    letterSpacing: 0.8,
     textTransform: 'uppercase',
     marginBottom: 6,
   },
   headline: {
     fontFamily: 'Caros',
     fontWeight: '800',
-    fontSize: 24,
-    color: '#222',
+    fontSize: 28,
+    color: '#FFFFFF',
     marginBottom: 8,
   },
   intro: {
-    fontSize: 14,
-    color: '#555',
-    lineHeight: 20,
-    marginBottom: 20,
+    fontSize: 15,
+    color: 'rgba(255,255,255,0.7)',
+    lineHeight: 22,
+    marginBottom: 22,
   },
-  empty: { fontSize: 14, color: '#666' },
-  card: {
-    backgroundColor: '#F8F8F8',
-    borderRadius: 14,
-    marginBottom: 14,
+  empty: { fontSize: 14, color: 'rgba(255,255,255,0.6)' },
+  photoStop: {
+    marginBottom: 16,
+    borderRadius: 20,
     overflow: 'hidden',
+    backgroundColor: '#1A1A1A',
   },
   cardDesktop: {
     maxWidth: 860,
     alignSelf: 'center',
     width: '100%',
   },
-  stepRow: { flexDirection: 'row', padding: 12 },
-  stepNum: {
-    width: 28,
-    fontSize: 18,
-    fontWeight: '800',
-    color: '#111',
-    marginRight: 8,
-    paddingTop: 4,
-  },
-  stepBody: { flex: 1 },
-  imageWrap: {
+  photoBleed: {
     width: '100%',
-    aspectRatio: 16 / 9,
-    maxHeight: 320,
-    borderRadius: 10,
-    overflow: 'hidden',
-    marginBottom: 8,
-    backgroundColor: '#E8E8E8',
+    aspectRatio: 4 / 5,
+    position: 'relative',
   },
-  stopImage: { width: '100%', height: '100%' },
+  photoScrim: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(0,0,0,0.45)',
+  },
+  photoCopy: {
+    position: 'absolute',
+    left: 16,
+    right: 16,
+    bottom: 18,
+  },
+  stepBadge: {
+    alignSelf: 'flex-start',
+    fontSize: 11,
+    fontWeight: '800',
+    letterSpacing: 0.6,
+    color: '#FFFFFF',
+    backgroundColor: '#E03131',
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 999,
+    overflow: 'hidden',
+    marginBottom: 10,
+  },
+  categoryOnPhoto: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: 'rgba(255,255,255,0.7)',
+    textTransform: 'uppercase',
+    letterSpacing: 0.6,
+    marginBottom: 4,
+  },
+  placeNameOnPhoto: {
+    fontSize: 22,
+    fontWeight: '800',
+    color: '#FFFFFF',
+    fontFamily: 'Caros',
+    marginBottom: 6,
+  },
+  vibeOnPhoto: {
+    fontSize: 14,
+    lineHeight: 20,
+    color: 'rgba(255,255,255,0.88)',
+  },
+  stopImage: {
+    ...StyleSheet.absoluteFillObject,
+    width: '100%',
+    height: '100%',
+  },
   vibeImageLoading: {
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#FFFFFF',
+    backgroundColor: '#1A1A1A',
   },
-  category: {
-    fontSize: 11,
-    fontWeight: '700',
-    color: '#FF3B30',
-    textTransform: 'uppercase',
-    marginBottom: 4,
-  },
-  placeName: { fontSize: 17, fontWeight: '700', color: '#222', marginBottom: 6 },
-  vibeLine: { fontSize: 14, color: '#444', lineHeight: 20, marginBottom: 8 },
-  address: { fontSize: 13, color: '#666' },
 });

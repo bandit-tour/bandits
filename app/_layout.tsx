@@ -3,6 +3,7 @@ import { Stack } from 'expo-router';
 import { Platform, StyleSheet } from 'react-native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
+import GuestLiveBootstrap from '@/components/GuestLiveBootstrap';
 import PerfBootstrap from '@/components/PerfBootstrap';
 import PushNotificationBootstrap from '@/components/PushNotificationBootstrap';
 import { trackEvent } from '@/lib/analytics';
@@ -21,14 +22,18 @@ export default function RootLayout() {
       <PerfBootstrap />
       <SafeAreaProvider>
         <AppStateProvider>
+          <GuestLiveBootstrap />
           <PushNotificationBootstrap />
           <CityProvider>
             <Stack
               initialRouteName="index"
               screenOptions={{
                 headerShown: false,
-                headerBackTitle: 'Back',
-                headerBackTitleVisible: Platform.OS === 'ios',
+                headerBackTitle: "Back",
+                headerBackTitleVisible: true,
+                gestureEnabled: true,
+                fullScreenGestureEnabled: true,
+                animation: Platform.OS === "ios" ? "default" : "fade_from_bottom",
               }}
             />
           </CityProvider>
@@ -41,5 +46,6 @@ export default function RootLayout() {
 const styles = StyleSheet.create({
   root: {
     flex: 1,
+    width: "100%",
   },
 });

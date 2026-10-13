@@ -1,5 +1,4 @@
 import { useFocusEffect } from '@react-navigation/native';
-import { HeaderBackButton } from '@react-navigation/elements';
 import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ActivityIndicator, Image, Platform, Pressable, ScrollView, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
@@ -10,24 +9,22 @@ import { getSpotsByBanditId } from '@/services/spots';
 import { getEvents, getUserLikedEventIds, toggleEventLike } from '@/app/services/events';
 import { getTrailsByBanditId, TrailWithStops } from '@/services/trails';
 import type { GeneratedTrail } from '@/services/aiTrails';
-import BanditProfileHeroMedia from '@/components/BanditProfileHeroMedia';
 import EventCategories from '@/components/EventCategories';
-import LocalBanditOctopusIcon from '@/components/LocalBanditOctopusIcon';
 import TrailCard from '@/components/TrailCard';
 import TrailDetailView from '@/components/TrailDetailView';
 import { EVENT_GENRES, EventGenre } from '@/constants/Genres';
 import { Database } from '@/lib/database.types';
 import { supabase } from '@/lib/supabase';
 import { trackEvent } from '@/lib/analytics';
+import { getSpotDetailHeroUri } from '@/lib/eventVenueGallery';
 import {
-  fetchGooglePlacePhotoUrl,
-  isGooglePlacesDerivedPhotoUrl,
+  fetchGooglePlacePhotoUrls,
+  fetchTrustedPlaceIdPhotoUrls,
   normalizeEventImageUri,
 } from '@/lib/placePhoto';
-import { pickCityGuideHeroUriByEventId } from '@/lib/eventVenueGallery';
-import { buildUserFacingVenueFallbackImage, claimVerifiedHeroPhotoUrl } from '@/lib/recommendationImages';
 import { repairDisplayText } from '@/lib/repairTextEncoding';
-import { navigateAppBack } from '@/lib/appNavigation';
+import { useAppBackScreenOptions } from '@/hooks/useAppBackScreenOptions';
+import type { Href } from 'expo-router';
 
 type Bandit = Database['public']['Tables']['bandit']['Row'];
 type Event = Database['public']['Tables']['event']['Row'];
@@ -107,7 +104,8 @@ export default function CityGuideScreen() {
   const [likedEventIds, setLikedEventIds] = useState<Set<string>>(new Set());
   const [activeRecommendationIndex, setActiveRecommendationIndex] = useState(0);
   const [hiddenHeroEventIds, setHiddenHeroEventIds] = useState<Set<string>>(new Set());
-  const [placesFallbackHeroUriById, setPlacesFallbackHeroUriById] = useState<Record<string, string>>({});
+  /** Live Places refresh when MVP rows only store expired/incomplete Places resource URLs. */
+  const [liveHeroByEventId, setLiveHeroByEventId] = useState<Record<string, string>>({});
   const recommendationScrollRef = useRef<ScrollView>(null);
 
   const refreshLikedIds = useCallback(async () => {
@@ -188,7 +186,15 @@ export default function CityGuideScreen() {
         setTrails(trailsData);
         setEvents(eventsData ?? []);
       } catch (err) {
-        setError(err instanceof Error ? err.message : 'Failed to fetch data');
+        const msg = err instanceof Error ? err.message : String(err);
+        const soft =
+          /failed to fetch|network|load failed|timeout|abort/i.test(msg)
+            ? 'Connection issue — pull to refresh or try again in a moment.'
+            : msg || 'Could not load City Guide';
+        setError(soft);
+        setAllSpots([]);
+        setTrails([]);
+        setEvents([]);
       } finally {
         setLoading(false);
       }
@@ -265,54 +271,50 @@ export default function CityGuideScreen() {
     Math.min(420, Math.round(recommendationsContainerWidth * 0.86)),
   );
   const recommendationGap = isDesktopWeb ? 20 : 14;
-  const cityGuideHeroUriById = useMemo(() => pickCityGuideHeroUriByEventId(filteredEvents), [filteredEvents]);
+  const cityGuideHeroUriById = useMemo(() => {
+    const out: Record<string, string | null> = {};
+    for (const e of filteredEvents) {
+      out[e.id] = getSpotDetailHeroUri(e) ?? liveHeroByEventId[e.id] ?? null;
+    }
+    return out;
+  }, [filteredEvents, liveHeroByEventId]);
 
   useEffect(() => {
     let cancelled = false;
-    const syncedHeroById = pickCityGuideHeroUriByEventId(filteredEvents);
-    const needPlacesFallback = filteredEvents.filter((e) => !syncedHeroById[e.id]);
-
-    if (needPlacesFallback.length === 0) {
-      setPlacesFallbackHeroUriById({});
-      return () => {
-        cancelled = true;
-      };
-    }
+    const needLive = filteredEvents.filter((e) => !getSpotDetailHeroUri(e));
+    if (needLive.length === 0) return;
 
     void (async () => {
-      const fetched: Record<string, string> = {};
+      const heroUpdates: Record<string, string> = {};
       await Promise.all(
-        needPlacesFallback.map(async (e) => {
+        needLive.map(async (event) => {
           try {
-            const raw = await fetchGooglePlacePhotoUrl({
-              placeId: (e as any).google_place_id ?? null,
-              name: String(e.name ?? ''),
-              address: String(e.address ?? ''),
-              city: String(e.city ?? ''),
-              neighborhood: String(e.neighborhood ?? ''),
-            });
-            const uri = raw ? normalizeEventImageUri(raw) ?? raw : null;
-            if (!uri || !isGooglePlacesDerivedPhotoUrl(uri)) return;
-            const claimed = claimVerifiedHeroPhotoUrl(uri, {
-              eventId: e.id,
-              googlePlaceId: (e as any).google_place_id ?? null,
-            });
-            if (claimed) fetched[e.id] = claimed;
+            const placeId = (event as { google_place_id?: string | null }).google_place_id ?? null;
+            let urls = placeId ? await fetchTrustedPlaceIdPhotoUrls(placeId, 8) : [];
+            if (urls.length === 0) {
+              urls = await fetchGooglePlacePhotoUrls({
+                placeId,
+                name: String(event.name ?? ''),
+                address: String(event.address ?? ''),
+                city: String(event.city ?? ''),
+                neighborhood: String(event.neighborhood ?? ''),
+                limit: 8,
+              });
+            }
+            const cleaned = urls
+              .map((u) => normalizeEventImageUri(u) ?? u)
+              .filter((u) => /^https?:\/\//i.test(u));
+            if (cleaned.length === 0) return;
+            heroUpdates[event.id] = cleaned[0];
           } catch {
-            /* ignore row */
+            /* keep card without inventing stock */
           }
         }),
       );
-
       if (cancelled) return;
-
-      const nextById: Record<string, string> = {};
-      for (const row of filteredEvents) {
-        if (!syncedHeroById[row.id] && fetched[row.id]) {
-          nextById[row.id] = fetched[row.id];
-        }
+      if (Object.keys(heroUpdates).length > 0) {
+        setLiveHeroByEventId((prev) => ({ ...prev, ...heroUpdates }));
       }
-      setPlacesFallbackHeroUriById(nextById);
     })();
 
     return () => {
@@ -342,23 +344,23 @@ export default function CityGuideScreen() {
     }));
   }, [events]);
 
-  const exitCityGuide = useCallback(() => {
+  const backFallback = useMemo(() => {
     const bid = String(banditIdParam ?? effectiveBanditId ?? bandit?.id ?? '').trim();
-    const fallback = (bid ? `/bandit/${bid}` : '/bandits') as import('expo-router').Href;
-    navigateAppBack(router, fallback);
-  }, [router, banditIdParam, effectiveBanditId, bandit?.id]);
+    return (bid ? `/bandit/${bid}` : '/bandits') as Href;
+  }, [banditIdParam, effectiveBanditId, bandit?.id]);
 
-  const cityGuideHeaderOptions = useMemo(
-    () => ({
-      headerShown: true as const,
-      title: 'City Guide' as const,
-      headerBackTitle: 'Back' as const,
-      headerLeft: (props: any) => (
-        <HeaderBackButton {...props} onPress={exitCityGuide} />
-      ),
-    }),
-    [exitCityGuide],
-  );
+  const firstName = (bandit?.name || 'Local').trim().split(/\s+/)[0] || 'Local';
+  const athensTitle = `${firstName}'s Athens`;
+  const placeCount = filteredEvents.length;
+  const voiceLine =
+    repairDisplayText(String(bandit?.description || '').trim()).slice(0, 160) ||
+    `Welcome to ${firstName}'s Athens — places locals actually go, not a tourism dump.`;
+
+  const cityGuideHeaderOptions = useAppBackScreenOptions({
+    title: bandit ? athensTitle : 'City Guide',
+    fallback: backFallback,
+    showBack: true,
+  });
 
   if (loading) {
     return (
@@ -403,19 +405,21 @@ export default function CityGuideScreen() {
 
   const renderRecommendationCard = (event: Event, index: number) => {
     const fromGallery = cityGuideHeroUriById[event.id] ?? null;
-    const fromPlacesFallback = placesFallbackHeroUriById[event.id] ?? null;
-    const fallbackPlaceholder = buildUserFacingVenueFallbackImage(
-      event,
-      `city-guide-hero:${event.id}`,
-    );
-    const imageUri = hiddenHeroEventIds.has(event.id)
-      ? fallbackPlaceholder
-      : (fromGallery ?? fromPlacesFallback ?? fallbackPlaceholder);
-    const showHero = true;
+    const showHero = Boolean(fromGallery) && !hiddenHeroEventIds.has(event.id);
     const locationLine = [event.neighborhood, event.city].filter(Boolean).join(' · ') || 'Athens';
     const vibeLine = repairDisplayText(
       (event.description?.trim() || 'Curated local pick from your banDit guide.').slice(0, 110),
     );
+    const openSpot = () => {
+      const hero = fromGallery ? encodeURIComponent(fromGallery) : '';
+      const qs = [
+        `banditId=${encodeURIComponent(bandit.id)}`,
+        hero ? `heroUri=${hero}` : '',
+      ]
+        .filter(Boolean)
+        .join('&');
+      router.push(`/spot/${event.id}?${qs}` as never);
+    };
     return (
       <Pressable
         key={event.id}
@@ -427,57 +431,55 @@ export default function CityGuideScreen() {
             marginBottom: isDesktopWeb ? 16 : 0,
           },
         ]}
-        onPress={() =>
-          router.push(`/spot/${event.id}?banditId=${encodeURIComponent(bandit.id)}` as never)
-        }
+        onPress={openSpot}
       >
-        {showHero ? (
+        {showHero && fromGallery ? (
           <RecommendationHeroImage
-            sourceUri={imageUri as string}
+            sourceUri={fromGallery}
             eventId={event.id}
             onInvalid={() => {
+              // Drop this frame and let live Places refresh replace it — never fall back to
+              // the raw incomplete Places resource URL stored on image_url.
               setHiddenHeroEventIds((prev) => {
                 const next = new Set(prev);
                 next.add(event.id);
                 return next;
               });
-              // Best-effort re-resolve: if the stored Places photo URL has gone stale,
-              // ask Google for a fresh photo resource by `google_place_id` so future renders
-              // can use a real venue photo (still shows the category fallback meanwhile).
-              const placeId = String((event as any).google_place_id ?? '').trim();
-              if (!placeId) return;
+              setLiveHeroByEventId((prev) => {
+                if (!prev[event.id]) return prev;
+                const next = { ...prev };
+                delete next[event.id];
+                return next;
+              });
               void (async () => {
-                try {
-                  const fresh = await fetchGooglePlacePhotoUrl({
+                const placeId = (event as { google_place_id?: string | null }).google_place_id ?? null;
+                let urls = placeId ? await fetchTrustedPlaceIdPhotoUrls(placeId, 4) : [];
+                if (urls.length === 0) {
+                  urls = await fetchGooglePlacePhotoUrls({
                     placeId,
                     name: String(event.name ?? ''),
                     address: String(event.address ?? ''),
                     city: String(event.city ?? ''),
                     neighborhood: String(event.neighborhood ?? ''),
+                    limit: 4,
                   });
-                  const uri = fresh ? normalizeEventImageUri(fresh) ?? fresh : null;
-                  if (!uri || !isGooglePlacesDerivedPhotoUrl(uri)) return;
-                  const claimed = claimVerifiedHeroPhotoUrl(uri, {
-                    eventId: event.id,
-                    googlePlaceId: placeId,
-                  });
-                  if (!claimed) return;
-                  setPlacesFallbackHeroUriById((prev) =>
-                    prev[event.id] === claimed ? prev : { ...prev, [event.id]: claimed },
-                  );
-                  setHiddenHeroEventIds((prev) => {
-                    if (!prev.has(event.id)) return prev;
-                    const next = new Set(prev);
-                    next.delete(event.id);
-                    return next;
-                  });
-                } catch {
-                  /* ignore — category fallback already rendered */
                 }
+                const n = urls[0] ? normalizeEventImageUri(urls[0]) ?? urls[0] : null;
+                if (!n || !/^https?:\/\//i.test(n)) return;
+                setHiddenHeroEventIds((prev) => {
+                  const next = new Set(prev);
+                  next.delete(event.id);
+                  return next;
+                });
+                setLiveHeroByEventId((prev) => ({ ...prev, [event.id]: n }));
               })();
             }}
           />
-        ) : null}
+        ) : (
+          <View style={styles.heroPendingApproval}>
+            <Text style={styles.heroPendingApprovalText}>Loading photo…</Text>
+          </View>
+        )}
         <View style={styles.recommendationBody}>
           <View style={styles.recommendationTopMetaRow}>
             <Text style={styles.recommendationCategory}>{event.genre || 'Spot'}</Text>
@@ -510,55 +512,51 @@ export default function CityGuideScreen() {
         contentContainerStyle={styles.scrollContent}
         refreshControl={cityGuideRefresh}
       >
-        {/* Header */}
-        <Text style={styles.headerText}>City Guide</Text>
-        <View style={styles.banditNameRow}>
-          <LocalBanditOctopusIcon />
-          <Text style={styles.banditNameLabel}>
-            {`${bandit.name} ${bandit.family_name ?? ''}`.trim()}
-          </Text>
-        </View>
+        {/* Header — personal curated, not generic City Guide dump */}
+        <Text style={styles.headerText}>{athensTitle}</Text>
+        <Text style={styles.placesCountLine}>
+          {placeCount > 0
+            ? `${firstName}'s ${placeCount} places · photo-led · ${firstName}'s voice`
+            : `${firstName}'s curated Athens`}
+        </Text>
 
-        {/* Bandit Profile Section */}
+        {/* Bandit Profile Section — full-bleed portrait, not 88px circle */}
         <View style={styles.profileSection}>
-
-
-          <View style={styles.descriptionContent}>
-
-            <Text style={styles.descriptionText}>
-              {`Yo, traveler. Your adventure just got upgraded.\nWelcome to the side of the city locals don't usually share.\nYou've officially entered the bandiVerse. Let's go rogue.`}
-            </Text>
-
-            <View style={styles.profileImageContainer}>
-              {(() => {
-                const raw = bandit.image_url?.trim();
-                const validUrl = raw && /^https?:\/\//i.test(raw) ? raw : null;
-                if (!avatarLoadFailed && validUrl) {
-                  return (
-                    <BanditProfileHeroMedia
-                      variant="fixedSquare"
-                      squareSize={88}
-                      source={{ uri: validUrl }}
-                      accessibilityLabel={`${bandit.name ?? ''} portrait`.trim()}
-                      onError={() => setAvatarLoadFailed(true)}
-                    />
-                  );
-                }
+          <View style={styles.heroPortraitWrap}>
+            {(() => {
+              const raw = (bandit.image_url || bandit.face_image_url)?.trim();
+              const validUrl = raw && /^https?:\/\//i.test(raw) ? raw : null;
+              if (!avatarLoadFailed && validUrl) {
                 return (
-                  <View style={styles.profileImageFallback}>
-                    <LocalBanditOctopusIcon />
-                  </View>
+                  <ExpoImage
+                    source={{ uri: validUrl }}
+                    style={styles.heroPortrait}
+                    contentFit="cover"
+                    contentPosition={{ top: 0, left: '50%' }}
+                    transition={160}
+                    cachePolicy="memory-disk"
+                    accessibilityLabel={`${bandit.name ?? ''} portrait`.trim()}
+                    onError={() => setAvatarLoadFailed(true)}
+                  />
                 );
-              })()}
-            </View>
-
+              }
+              return (
+                <Image
+                  source={require('@/assets/images/play_athens_bg.png')}
+                  style={styles.heroPortrait}
+                  resizeMode="cover"
+                  accessibilityLabel="Athens"
+                />
+              );
+            })()}
           </View>
+          <Text style={styles.descriptionText}>{voiceLine}</Text>
         </View>
 
         {/* Event Categories - driven by event data (do not gate on separate spots dataset). */}
         {eventCategories.length > 0 && (
           <>
-            <Text style={styles.interestsText}>Select Your Interests</Text>
+            <Text style={styles.interestsText}>{`What ${firstName} knows`}</Text>
             <EventCategories
               categories={eventCategories}
               selectedGenre={selectedGenre}
@@ -570,7 +568,7 @@ export default function CityGuideScreen() {
         {/* Curated Trails */}
         {trails.length > 0 && (
           <>
-            <Text style={styles.interestsText}>Curated Trails</Text>
+            <Text style={styles.interestsText}>{`${firstName}'s routes`}</Text>
             <ScrollView
               horizontal
               showsHorizontalScrollIndicator={false}
@@ -585,7 +583,7 @@ export default function CityGuideScreen() {
 
         {/* AI vibe button + inline trail */}
         <View style={styles.aiSection}>
-          <Text style={styles.aiPunchline}>For when the map feels too clean.</Text>
+          <Text style={styles.aiPunchline}>{`${firstName}'s midnight loop`}</Text>
           <Text style={styles.aiPunchlineText}>
             No bus tours. No best‑of lists.
             Just a loose thread into the parts of Athens locals don’t post about.
@@ -597,13 +595,13 @@ export default function CityGuideScreen() {
             style={{ alignSelf: 'stretch' }}
           >
             <View style={styles.aiButton}>
-              <Text style={styles.aiButtonText}>{aiLoading ? 'Finding a vibe…' : 'Get a vibe'}</Text>
+              <Text style={styles.aiButtonText}>{aiLoading ? 'Finding a vibe…' : `Get ${firstName}'s vibe`}</Text>
               <Text style={styles.aiButtonSubtext}>Pull a trail from local‑coded spots.</Text>
             </View>
           </Pressable>
           {aiTrail && (
             <View style={styles.aiTrailContainer}>
-              <Text style={styles.aiTrailLabel}>AI trail idea</Text>
+              <Text style={styles.aiTrailLabel}>Trail idea</Text>
               {/* Reuse the trail detail layout inline */}
               <TrailDetailView
                 trail={{
@@ -628,7 +626,7 @@ export default function CityGuideScreen() {
         <View style={styles.recommendationsSection}>
           <View style={styles.recommendationsHeadRow}>
             <Text style={styles.recommendationsTitle}>
-              {selectedGenre ? `${selectedGenre} picks` : 'Recommended picks'}
+              {selectedGenre ? `${firstName}'s ${selectedGenre}` : `${firstName}'s picks`}
             </Text>
             {isDesktopWeb && filteredEvents.length > 1 ? (
               <View style={styles.recommendationArrowsRow}>
@@ -736,10 +734,18 @@ const styles = StyleSheet.create({
   headerText: {
     fontFamily: 'Caros',
     fontWeight: '800',
-    fontSize: 24,
-    color: '#3C3C3C',
+    fontSize: 28,
+    color: '#111111',
+    textAlign: 'left',
+    marginBottom: 4,
+  },
+  placesCountLine: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#6B6B6B',
     textAlign: 'center',
-    marginBottom: 8,
+    marginBottom: 16,
+    paddingHorizontal: 16,
   },
   banditNameRow: {
     flexDirection: 'row',
@@ -754,11 +760,29 @@ const styles = StyleSheet.create({
     color: '#222',
   },
   profileSection: {
-    alignItems: 'center',
+    alignItems: 'stretch',
     marginBottom: 20,
+    paddingHorizontal: 16,
+  },
+  heroPortraitWrap: {
+    width: '100%',
+    borderRadius: 16,
+    overflow: 'hidden',
+    marginBottom: 14,
+    backgroundColor: '#1A1A1A',
+  },
+  heroPortrait: {
+    width: '100%',
+    aspectRatio: 3 / 4,
   },
   profileImageContainer: {
     marginBottom: 16,
+  },
+  descriptionText: {
+    fontSize: 15,
+    lineHeight: 22,
+    color: '#3C3C3C',
+    textAlign: 'left',
   },
   profileImageFallback: {
     width: 88,
@@ -783,16 +807,6 @@ const styles = StyleSheet.create({
     height: 32,
     borderRadius: 16,
     marginRight: 8,
-  },
-  descriptionText: {
-    fontFamily: 'Caros',
-    fontWeight: '400',
-    fontSize: 14,
-    color: '#3C3C3C',
-    textAlign: 'left', // Left align the text
-    lineHeight: 20,
-    flex: 1, // Take up available space
-    marginRight: 16, // Add some space between text and image
   },
   interestsText: {
     fontFamily: 'Caros',
@@ -855,6 +869,20 @@ const styles = StyleSheet.create({
     width: '100%',
     aspectRatio: 16 / 9,
     backgroundColor: 'transparent',
+  },
+  heroPendingApproval: {
+    width: '100%',
+    aspectRatio: 16 / 9,
+    backgroundColor: '#ECECEC',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 12,
+  },
+  heroPendingApprovalText: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#666',
+    textAlign: 'center',
   },
   recommendationBody: {
     padding: 14,

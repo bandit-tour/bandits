@@ -483,26 +483,65 @@ export async function getBanditEventPersonalTip(banditId: string, eventId: strin
   return data?.personal_tip || null;
 }
 
-// Get bandit recommendations for a specific event (up to 3 bandits)
-export async function getEventBanditRecommendations(eventId: string): Promise<Pick<Database['public']['Tables']['bandit']['Row'], 'id' | 'image_url'>[]> {
-  const { data, error } = await supabase
-    .from('bandit_event')
-    .select(`
-      bandit:bandit(
-        id,
-        image_url
-      )
-    `)
-    .eq('event_id', eventId)
-    .limit(3);
+export type EventBanditRecommendation = Pick<
+  Database['public']['Tables']['bandit']['Row'],
+  'id' | 'image_url'
+>;
 
-  if (error) {
-    console.error('Error fetching event bandit recommendations:', error);
-    throw error;
+// Get bandit recommendations for a specific event (up to 3 bandits)
+export async function getEventBanditRecommendations(eventId: string): Promise<EventBanditRecommendation[]> {
+  const m = await getEventBanditRecommendationsBulk([eventId]);
+  return m.get(eventId) ?? [];
+}
+
+/** One round-trip for many events (Explore list — avoids N per-card Supabase calls). */
+export async function getEventBanditRecommendationsBulk(
+  eventIds: string[],
+): Promise<Map<string, EventBanditRecommendation[]>> {
+  const out = new Map<string, EventBanditRecommendation[]>();
+  const unique = [...new Set(eventIds.map((id) => String(id || '').trim()).filter(Boolean))];
+  for (const id of unique) out.set(id, []);
+  if (unique.length === 0) return out;
+
+  const CHUNK = 120;
+  for (let i = 0; i < unique.length; i += CHUNK) {
+    const slice = unique.slice(i, i + CHUNK);
+    const { data, error } = await supabase
+      .from('bandit_event')
+      .select(
+        `
+        event_id,
+        bandit:bandit(
+          id,
+          image_url
+        )
+      `,
+      )
+      .in('event_id', slice);
+
+    if (error) {
+      if (isAuthOrMissingError(error)) continue;
+      console.error('Error fetching event bandit recommendations (bulk):', error);
+      throw error;
+    }
+
+    const grouped = new Map<string, EventBanditRecommendation[]>();
+    for (const row of (data as { event_id?: string; bandit?: EventBanditRecommendation | null }[]) || []) {
+      const eid = String(row?.event_id || '').trim();
+      const bandit = row?.bandit;
+      if (!eid || !bandit?.id) continue;
+      const list = grouped.get(eid) ?? [];
+      if (list.length >= 3) continue;
+      if (list.some((b) => b.id === bandit.id)) continue;
+      list.push({ id: bandit.id, image_url: bandit.image_url ?? null });
+      grouped.set(eid, list);
+    }
+    for (const eid of slice) {
+      out.set(eid, grouped.get(eid) ?? []);
+    }
   }
 
-  // Extract bandit data from the joined result
-  return data?.map((item: any) => item.bandit).filter(Boolean) || [];
+  return out;
 }
 
 async function enrichEventBusinessMedia(

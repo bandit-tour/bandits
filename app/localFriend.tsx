@@ -28,7 +28,8 @@ export default function LocalFriendScreen() {
   const localFriendScreenOptions = useAppBackScreenOptions({
     title: 'Local Friend',
     fallback: APP_HOME_HREF,
-    escapeShortcuts: true,
+    showBack: false,
+    escapeShortcuts: false,
   });
   const { width } = useWindowDimensions();
   const isDesktopWeb = Platform.OS === 'web' && width >= 1024;

@@ -13,6 +13,8 @@ export type AlumaIntroCardProps = {
   onCta: () => void;
   busy?: boolean;
   hideCta?: boolean;
+  secondaryCtaLabel?: string;
+  onSecondaryCta?: () => void;
 };
 
 /**
@@ -29,6 +31,8 @@ export function AlumaIntroCard({
   onCta,
   busy,
   hideCta,
+  secondaryCtaLabel,
+  onSecondaryCta,
 }: AlumaIntroCardProps) {
   return (
     <View style={styles.card} accessibilityRole="summary">
@@ -59,15 +63,29 @@ export function AlumaIntroCard({
         {subline ? <Text style={styles.subline}>{subline}</Text> : null}
       </View>
       {hideCta ? null : (
-        <Pressable
-          onPress={onCta}
-          disabled={busy}
-          style={({ pressed }) => [styles.cta, pressed && styles.ctaPressed, busy && styles.ctaDisabled]}
-          accessibilityRole="button"
-          accessibilityLabel={ctaLabel}
-        >
-          <Text style={styles.ctaText}>{busy ? 'Opening…' : ctaLabel}</Text>
-        </Pressable>
+        <>
+          <Pressable
+            onPress={onCta}
+            disabled={busy}
+            style={({ pressed }) => [styles.cta, pressed && styles.ctaPressed, busy && styles.ctaDisabled]}
+            accessibilityRole="button"
+            accessibilityLabel={ctaLabel}
+          >
+            <Text style={styles.ctaText}>{busy ? 'Opening…' : ctaLabel}</Text>
+          </Pressable>
+          {secondaryCtaLabel && onSecondaryCta ? (
+            <Pressable
+              onPress={onSecondaryCta}
+              disabled={busy}
+              style={({ pressed }) => [styles.secondaryCta, pressed && styles.ctaPressed, busy && styles.ctaDisabled]}
+              accessibilityRole="button"
+              accessibilityLabel={secondaryCtaLabel}
+              testID="bottle-who-sent-discover"
+            >
+              <Text style={styles.secondaryCtaText}>{secondaryCtaLabel}</Text>
+            </Pressable>
+          ) : null}
+        </>
       )}
     </View>
   );
@@ -156,5 +174,21 @@ const styles = StyleSheet.create({
     fontWeight: '800',
     color: '#111111',
     letterSpacing: 0.3,
+  },
+  secondaryCta: {
+    marginTop: 12,
+    alignSelf: 'stretch',
+    paddingVertical: 14,
+    paddingHorizontal: 20,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: 'rgba(216, 185, 138, 0.55)',
+    alignItems: 'center',
+  },
+  secondaryCtaText: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: '#F8F4EE',
+    letterSpacing: 0.2,
   },
 });

@@ -24,10 +24,7 @@ import { buildEventListImagePlan } from '@/lib/eventListImagePlan';
 import { usePremiumRefreshControl } from '@/lib/mobilePullToRefresh';
 import { useAppBackScreenOptions } from '@/hooks/useAppBackScreenOptions';
 import { APP_HOME_HREF } from '@/lib/appNavigation';
-import {
-  enforceUniqueRecommendationImagesByEventId,
-  resolveStrictRecommendationImagesByEventId,
-} from '@/lib/recommendationImages';
+import { resolveApprovedListHeroUrisByEventId } from '@/lib/recommendationImages';
 
 const FOLLOWING_ROWS_CACHE_KEY = 'following:rows:withCategories';
 const FOLLOWING_ROWS_TTL_MS = 90 * 1000;
@@ -67,9 +64,14 @@ export default function FollowingScreen() {
   const [categoryExpandByBanditId, setCategoryExpandByBanditId] = useState<
     Record<string, CategoryExpand | undefined>
   >({});
-  const [recommendationImageByBanditId, setRecommendationImageByBanditId] = useState<
-    Record<string, Record<string, string>>
-  >({});
+  const recommendationImageByBanditId = useMemo(() => {
+    const next: Record<string, Record<string, string>> = {};
+    for (const [banditId, exp] of Object.entries(categoryExpandByBanditId)) {
+      if (!exp || exp.loading || exp.events.length === 0) continue;
+      next[banditId] = resolveApprovedListHeroUrisByEventId(exp.events);
+    }
+    return next;
+  }, [categoryExpandByBanditId]);
 
   const imagePlanByBanditId = useMemo(() => {
     const m = new Map<string, ReturnType<typeof buildEventListImagePlan>>();
@@ -120,31 +122,6 @@ export default function FollowingScreen() {
       }
     })();
   }, []);
-
-  useEffect(() => {
-    // Resolve images in parallel (not sequential `for...of` as before) and
-    // use the signature-keyed cache in `lib/recommendationImages.ts` so
-    // re-expansions skip the network entirely.
-    let cancelled = false;
-    void (async () => {
-      const entries = Object.entries(categoryExpandByBanditId).filter(
-        ([, exp]) => exp && !exp.loading && exp.events.length > 0,
-      );
-      const results = await Promise.all(
-        entries.map(async ([banditId, exp]) => {
-          const out = await resolveStrictRecommendationImagesByEventId(exp!.events as any);
-          return [banditId, enforceUniqueRecommendationImagesByEventId(exp!.events as any, out)] as const;
-        }),
-      );
-      if (cancelled) return;
-      const next: Record<string, Record<string, string>> = {};
-      for (const [banditId, map] of results) next[banditId] = map;
-      setRecommendationImageByBanditId(next);
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [categoryExpandByBanditId]);
 
   const fetchRows = useCallback((asRefresh: boolean) => {
     if (asRefresh) setRefreshing(true);
@@ -286,7 +263,7 @@ export default function FollowingScreen() {
                         recommendationHeroResolverReady={
                           !exp.loading && recommendationImageByBanditId[item.bandit.id] !== undefined
                         }
-                        strictRecommendationImagePolicy
+                        strictRecommendationImagePolicy={false}
                         onPress={() => undefined}
                       />
                     </View>
@@ -395,7 +372,7 @@ const styles = StyleSheet.create({
   inlineCategoryCollapse: {
     fontSize: 12,
     fontWeight: '700',
-    color: '#0a7ea4',
+    color: '#111111',
   },
   inlineCategoryEmpty: {
     fontSize: 13,

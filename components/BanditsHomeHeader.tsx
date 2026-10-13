@@ -15,6 +15,17 @@ import { getHotelWhiteLabelOrDefault, type HotelSlug } from '@/lib/hotelWhiteLab
 const BANNER_BODY =
   'Trusted traveler alerts for PLAY guests.\n\nReport scams, fake taxis, tourist traps and unsafe situations.\n\nStay safe. Protect the holiday together.';
 
+const CAPABILITY_RIBBON = [
+  'Hotelier',
+  'banDit OS',
+  'Experiences',
+  'Intelligence',
+  'Commerce',
+  'Identity',
+  'Live',
+  'Concierge',
+] as const;
+
 const bandiStyles = StyleSheet.create({
   /** Sticky below upper tabs: stays visible when the list below scrolls. */
   stack: {
@@ -103,6 +114,27 @@ const bandiStyles = StyleSheet.create({
     color: 'rgba(248, 244, 238, 0.65)',
     marginTop: 4,
   },
+  ribbon: {
+    backgroundColor: '#14110E',
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: 'rgba(200, 175, 120, 0.22)',
+  },
+  ribbonHotel: {
+    fontSize: 11,
+    fontWeight: '800',
+    color: 'rgba(240, 215, 160, 0.95)',
+    letterSpacing: 0.3,
+    marginBottom: 3,
+  },
+  ribbonCaps: {
+    fontSize: 10,
+    fontWeight: '600',
+    color: 'rgba(250, 245, 236, 0.72)',
+    letterSpacing: 0.2,
+    lineHeight: 14,
+  },
 });
 
 type Props = {
@@ -189,6 +221,14 @@ export default function BanditsHomeHeader({ hotelSlug, loadingContext }: Props) 
         </View>
         <View style={bandiStyles.hairline} pointerEvents="none" />
       </Pressable>
+      <View style={bandiStyles.ribbon} accessibilityLabel="Workspace capabilities live on this Guest App">
+        <Text style={bandiStyles.ribbonHotel} numberOfLines={1}>
+          {hotel.displayName}
+        </Text>
+        <Text style={bandiStyles.ribbonCaps} numberOfLines={2}>
+          {CAPABILITY_RIBBON.join(' · ')}
+        </Text>
+      </View>
     </View>
   );
 }

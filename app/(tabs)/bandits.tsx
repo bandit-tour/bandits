@@ -15,26 +15,26 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import { getBanditsWithTags, toggleBanditLike } from '@/app/services/bandits';
 import { getBanditEventCategoriesBulk, getEvents } from '@/app/services/events';
 import BanditHeader from '@/components/BanditHeader';
-import BanditsHomeHeader from '@/components/BanditsHomeHeader';
 import EventCard from '@/components/EventCard';
 import EventCardSkeleton from '@/components/EventCardSkeleton';
 import { fetchSWR, invalidateAppDataCache, readCacheStale } from '@/lib/appDataCache';
+import { BANDITS_ROWS_CACHE_KEY, persistBanditsHomeSnapshot } from '@/lib/banditsHomeCache';
 import { Database } from '@/lib/database.types';
-import { getHotelEntry } from '@/lib/pilotSession';
+import { ensureAnonymousSession, getHotelEntry } from '@/lib/pilotSession';
+import { useGuestLifecycle } from '@/lib/guest-lifecycle/useGuestLifecycle';
+import { trackEvent } from '@/lib/analytics';
 import { usePremiumRefreshControl } from '@/lib/mobilePullToRefresh';
 import { useUpperTabHost } from '@/contexts/UpperTabHostContext';
 import { useTabActiveDataLoad } from '@/lib/useTabActiveDataLoad';
 import { useScreenFocused } from '@/lib/useScreenFocused';
+import { useGuestLiveSurface } from '@/lib/orchestra/useGuestLiveSurface';
 import { buildEventListImagePlan, getEventDbImageCandidatesOrdered } from '@/lib/eventListImagePlan';
-import {
-  enforceUniqueRecommendationImagesByEventId,
-  resolveStrictRecommendationImagesByEventId,
-} from '@/lib/recommendationImages';
+import { resolveApprovedListHeroUrisByEventId } from '@/lib/recommendationImages';
 
-const BANDITS_ROWS_CACHE_KEY = 'bandits:rows:withCategories';
-const BANDITS_ROWS_TTL_MS = 90 * 1000;
 
 type BanditRow = Database['public']['Tables']['bandit']['Row'];
+
+const BANDITS_ROWS_TTL_MS = 90 * 1000;
 
 type BanditWithTags = BanditRow & {
   bandit_tags?: { tags: { id: string; name: string } | null }[] | null;
@@ -76,9 +76,14 @@ export function BanditsScreen({ tabActive }: BanditsScreenProps = {}) {
   const [categoryExpandByBanditId, setCategoryExpandByBanditId] = useState<
     Record<string, CategoryExpand | undefined>
   >({});
-  const [recommendationImageByBanditId, setRecommendationImageByBanditId] = useState<
-    Record<string, Record<string, string>>
-  >({});
+  const recommendationImageByBanditId = useMemo(() => {
+    const next: Record<string, Record<string, string>> = {};
+    for (const [banditId, exp] of Object.entries(categoryExpandByBanditId)) {
+      if (!exp || exp.loading || exp.events.length === 0) continue;
+      next[banditId] = resolveApprovedListHeroUrisByEventId(exp.events);
+    }
+    return next;
+  }, [categoryExpandByBanditId]);
   const categoryImageAuditRef = useRef<Record<string, string>>({});
 
   /**
@@ -110,33 +115,6 @@ export function BanditsScreen({ tabActive }: BanditsScreenProps = {}) {
     () => Object.values(categoryExpandByBanditId).some((exp) => exp != null),
     [categoryExpandByBanditId],
   );
-
-  useEffect(() => {
-    let cancelled = false;
-    void (async () => {
-      const busyPairs = Object.entries(categoryExpandByBanditId).filter(
-        ([, exp]) => exp && !exp.loading && exp.events.length > 0,
-      );
-      if (busyPairs.length === 0) {
-        if (!cancelled) setRecommendationImageByBanditId({});
-        return;
-      }
-      setRecommendationImageByBanditId((prev) => {
-        const next = { ...prev };
-        for (const [banditId] of busyPairs) delete next[banditId];
-        return next;
-      });
-      const next: Record<string, Record<string, string>> = {};
-      for (const [banditId, exp] of busyPairs) {
-        const out = await resolveStrictRecommendationImagesByEventId(exp!.events as any);
-        next[banditId] = enforceUniqueRecommendationImagesByEventId(exp!.events as any, out);
-      }
-      if (!cancelled) setRecommendationImageByBanditId((prev) => ({ ...prev, ...next }));
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [categoryExpandByBanditId]);
 
   const handleListCategoryPress = useCallback((banditId: string, genre: string) => {
     void (async () => {
@@ -176,9 +154,7 @@ export function BanditsScreen({ tabActive }: BanditsScreenProps = {}) {
       BANDITS_ROWS_CACHE_KEY,
       BANDITS_ROWS_TTL_MS,
       async () => {
-        // Note: session bootstrap is performed in `app/_layout.tsx` (root) and
-        // `app/(tabs)/_layout.tsx`. Calling it here too just queued through
-        // the serialized auth lock and added latency on every tab focus.
+        await ensureAnonymousSession().catch(() => undefined);
         const data = await getBanditsWithTags();
         const list = (data || []) as BanditWithTags[];
         const catByBandit = await getBanditEventCategoriesBulk(list.map((b) => b.id));
@@ -192,6 +168,7 @@ export function BanditsScreen({ tabActive }: BanditsScreenProps = {}) {
         setRows(data);
         setLoadedOnce(true);
         setRefreshing(false);
+        void persistBanditsHomeSnapshot(data);
       },
       (e) => {
         if (__DEV__) {
@@ -210,10 +187,21 @@ export function BanditsScreen({ tabActive }: BanditsScreenProps = {}) {
   useEffect(() => {
     void getHotelEntry().then((entry) => {
       setHotelSlug(entry?.slug ?? null);
+      if (entry?.slug) {
+        void import('@/lib/orchestra/hydrate')
+          .then(({ hydrateOrchestraGuestProjection }) =>
+            hydrateOrchestraGuestProjection({ hotelSlug: entry.slug }),
+          )
+          .catch(() => undefined);
+      }
     });
   }, []);
 
   useTabActiveDataLoad(screenActive, banditsInitialFocusDoneRef, fetchRows);
+
+  useGuestLiveSurface('bandits', () => {
+    fetchRows(false);
+  });
 
   const onRefresh = useCallback(async () => {
     invalidateAppDataCache(BANDITS_ROWS_CACHE_KEY);
@@ -299,10 +287,37 @@ export function BanditsScreen({ tabActive }: BanditsScreenProps = {}) {
     );
   }, [loadedOnce, rows.length, loadError, fetchRows]);
 
-  const listHeader = useMemo(
-    () => <BanditsHomeHeader hotelSlug={hotelSlug} loadingContext={false} />,
-    [hotelSlug],
-  );
+  const { isAfterTrip, afterTripHome, state: lifeState } = useGuestLifecycle();
+
+  const listHeader = isAfterTrip && afterTripHome ? (
+    <Pressable
+      onPress={() => {
+        void trackEvent({ eventName: 'city_memory_opened' });
+        router.push('/hotelier' as never);
+      }}
+      style={{
+        marginHorizontal: 16,
+        marginTop: 10,
+        marginBottom: 6,
+        padding: 14,
+        borderRadius: 14,
+        backgroundColor: '#F7F4EE',
+        borderWidth: StyleSheet.hairlineWidth,
+        borderColor: '#E6E0D6',
+      }}
+      accessibilityRole="button"
+    >
+      <Text style={{ fontSize: 11, fontWeight: '800', letterSpacing: 0.8, color: '#6B5A3A' }}>
+        {lifeState === 'NEXT_TRIP_PLANNING' ? 'NEXT TRIP PLANNING' : 'BETWEEN TRIPS'}
+      </Text>
+      <Text style={{ fontSize: 17, fontWeight: '800', color: '#1A1A1A', marginTop: 4 }}>
+        {afterTripHome.memoryTitle}
+      </Text>
+      <Text style={{ fontSize: 13, color: '#666', marginTop: 4 }}>
+        Followed banDits keep publishing · open City Memory
+      </Text>
+    </Pressable>
+  ) : null;
 
   if (!screenActive) {
     return <View style={styles.screen} />;
@@ -410,16 +425,17 @@ export function BanditsScreen({ tabActive }: BanditsScreenProps = {}) {
                           resolvedRecommendationImageUri={
                             recommendationImageByBanditId[item.bandit.id]?.[event.id] ?? null
                           }
-                          recommendationHeroResolverReady={
-                            !exp.loading &&
-                            recommendationImageByBanditId[item.bandit.id] !== undefined
-                          }
-                          strictRecommendationImagePolicy
-                          onPress={() =>
-                            router.push(
-                              `/spot/${event.id}?banditId=${encodeURIComponent(item.bandit.id)}` as any,
-                            )
-                          }
+                          recommendationHeroResolverReady={!exp.loading}
+                          strictRecommendationImagePolicy={false}
+                          onPress={() => {
+                            const hero =
+                              recommendationImageByBanditId[item.bandit.id]?.[event.id] ?? null;
+                            const base = `/spot/${encodeURIComponent(event.id)}?banditId=${encodeURIComponent(item.bandit.id)}`;
+                            const url = hero
+                              ? `${base}&heroUri=${encodeURIComponent(hero)}`
+                              : base;
+                            router.push(url as any);
+                          }}
                         />
                       </View>
                     );
@@ -479,7 +495,7 @@ export function BanditsScreen({ tabActive }: BanditsScreenProps = {}) {
 const styles = StyleSheet.create({
   screen: {
     flex: 1,
-    backgroundColor: '#f6f6f6',
+    backgroundColor: '#0B0B0B',
   },
   listFlex: {
     flex: 1,
@@ -491,21 +507,24 @@ const styles = StyleSheet.create({
     backgroundColor: '#f6f6f6',
   },
   listContent: {
-    padding: 16,
+    padding: 8,
     paddingBottom: 28,
-    backgroundColor: '#f6f6f6',
+    backgroundColor: '#0B0B0B',
   },
   listContentDesktop: {
-    maxWidth: 1320,
+    /* ~2×480 cards + 28 gap + horizontal padding → editorial portrait cells */
+    maxWidth: 1040,
     width: '100%',
     alignSelf: 'center',
     paddingHorizontal: 24,
   },
   desktopColumns: {
-    gap: 14,
+    gap: 28,
+    alignItems: 'stretch',
   },
   desktopCardCell: {
     flex: 1,
+    maxWidth: '50%',
   },
   emptyContainer: {
     paddingVertical: 40,
@@ -531,7 +550,7 @@ const styles = StyleSheet.create({
   retryBtn: {
     paddingVertical: 12,
     paddingHorizontal: 20,
-    backgroundColor: '#0a7ea4',
+    backgroundColor: '#111111',
     borderRadius: 8,
   },
   retryBtnText: {
@@ -568,7 +587,7 @@ const styles = StyleSheet.create({
   inlineCategoryCollapse: {
     fontSize: 12,
     fontWeight: '700',
-    color: '#0a7ea4',
+    color: '#111111',
   },
   inlineCategoryEmpty: {
     fontSize: 13,

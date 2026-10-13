@@ -1,4 +1,5 @@
-import { getHotelWhiteLabelOrDefault, normalizeHotelSlug } from '@/lib/hotelWhiteLabel';
+import { getHotelWhiteLabelOrDefault, normalizeHotelSlug, type HotelWhiteLabelConfig } from '@/lib/hotelWhiteLabel';
+import { resolveHotelWhiteLabel } from '@/lib/hotelRemoteWhiteLabel';
 import { openStaffEmailLogin } from '@/lib/loginNavigation';
 import {
   HOTEL_BY_SLUG,
@@ -7,7 +8,7 @@ import {
   syncPilotHotelProfileIfNeeded,
 } from '@/lib/pilotSession';
 import * as Haptics from 'expo-haptics';
-import { Stack, useRouter, type Href } from 'expo-router';
+import { Stack, useRouter } from 'expo-router';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   Animated,
@@ -30,6 +31,7 @@ export type HotelEntryScreenProps = {
 /**
  * QR / web flip-card landing (legacy /hotel/[slug] paths). PWA-first: no app-store CTAs.
  * Continue opens in-app guest home (`/bandits`) on this origin — same tab / PWA; no external redirect.
+ * Branding: local HOTEL_WHITE_LABELS, else Partner Platform `/api/public/hotels/:slug/config`.
  */
 export function HotelEntryScreen({ slug: rawSlug }: HotelEntryScreenProps) {
   const router = useRouter();
@@ -37,28 +39,37 @@ export function HotelEntryScreen({ slug: rawSlug }: HotelEntryScreenProps) {
   const [ready, setReady] = useState(false);
   const [showBack, setShowBack] = useState(false);
   const [busyContinue, setBusyContinue] = useState(false);
+  const [hotelBranding, setHotelBranding] = useState<HotelWhiteLabelConfig>(() =>
+    getHotelWhiteLabelOrDefault(rawSlug),
+  );
+  const [isKnownHotel, setIsKnownHotel] = useState(Boolean(HOTEL_BY_SLUG[normalizeHotelSlug(rawSlug)]));
 
   const frontOpacity = useRef(new Animated.Value(1)).current;
   const backOpacity = useRef(new Animated.Value(0)).current;
 
   /** Canonical slug + public URL aliases (`nyx-theatrou` → `nyx-athens`, etc.). */
   const slugNorm = useMemo(() => normalizeHotelSlug(rawSlug), [rawSlug]);
-  const hotelBranding = useMemo(() => getHotelWhiteLabelOrDefault(slugNorm), [slugNorm]);
-
-  const isKnownHotel = Boolean(slugNorm && HOTEL_BY_SLUG[slugNorm]);
 
   useEffect(() => {
     let cancelled = false;
     void (async () => {
-      if (slugNorm && isKnownHotel) {
-        await persistHotelEntry(slugNorm, 'guest_universal');
+      const resolved = await resolveHotelWhiteLabel(slugNorm, { allowPlayFallback: false });
+      if (cancelled) return;
+      const known =
+        Boolean(HOTEL_BY_SLUG[slugNorm]) ||
+        resolved.source === 'local' ||
+        resolved.source === 'remote';
+      setHotelBranding(resolved.config);
+      setIsKnownHotel(known);
+      if (known) {
+        await persistHotelEntry(resolved.config.slug || slugNorm, 'guest_universal');
       }
       if (!cancelled) setReady(true);
     })();
     return () => {
       cancelled = true;
     };
-  }, [slugNorm, isKnownHotel]);
+  }, [slugNorm]);
 
   const onFlip = useCallback(() => {
     if (showBack) return;
@@ -91,11 +102,26 @@ export function HotelEntryScreen({ slug: rawSlug }: HotelEntryScreenProps) {
     try {
       await bootstrapMainAppSession();
       await syncPilotHotelProfileIfNeeded();
-      router.replace('/bandits');
+      // Isolated PLAY sandbox only — never seed demo stay for live hotels.
+      if (slugNorm === 'play-theatrou' || slugNorm === 'play-athens') {
+        try {
+          const { resetLifecycleToDemoActiveStay } = await import('@/lib/guest-lifecycle/store');
+          await resetLifecycleToDemoActiveStay();
+        } catch {
+          /* sandbox seed optional */
+        }
+      }
+      try {
+        const { hydrateOrchestraGuestProjection } = await import('@/lib/orchestra/hydrate');
+        await hydrateOrchestraGuestProjection({ hotelSlug: slugNorm, force: true });
+      } catch {
+        /* Orchestra optional — MVP continues */
+      }
+      router.replace('/home');
     } finally {
       setBusyContinue(false);
     }
-  }, [busyContinue, router]);
+  }, [busyContinue, router, slugNorm]);
 
   if (!ready) {
     return (

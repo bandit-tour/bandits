@@ -3,10 +3,7 @@ import { usePremiumRefreshControl } from '@/lib/mobilePullToRefresh';
 import React, { forwardRef, useCallback, useEffect, useImperativeHandle, useMemo, useRef, useState } from 'react';
 import { FlatList, Platform, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { buildEventListImagePlan } from '@/lib/eventListImagePlan';
-import {
-  enforceUniqueRecommendationImagesByEventId,
-  resolveStrictRecommendationImagesByEventId,
-} from '@/lib/recommendationImages';
+import { resolveApprovedListHeroUrisByEventId } from '@/lib/recommendationImages';
 import EventCard from './EventCard';
 
 type Event = Database['public']['Tables']['event']['Row'];
@@ -71,29 +68,11 @@ const EventList = forwardRef<EventListRef, EventListProps>(({
     { active: onRefresh != null },
   );
   const listImagePlan = useMemo(() => buildEventListImagePlan(events), [events]);
-  const [resolvedRecommendationImageById, setResolvedRecommendationImageById] = useState<Record<string, string>>({});
-  const [recoHeroReady, setRecoHeroReady] = useState(true);
-
-  useEffect(() => {
-    if (!showRecommendations || events.length === 0) {
-      setResolvedRecommendationImageById({});
-      setRecoHeroReady(true);
-      return;
-    }
-    let cancelled = false;
-    setRecoHeroReady(false);
-    void (async () => {
-      const out = await resolveStrictRecommendationImagesByEventId(events);
-      const uniqueOut = enforceUniqueRecommendationImagesByEventId(events, out);
-      if (!cancelled) {
-        setResolvedRecommendationImageById(uniqueOut);
-        setRecoHeroReady(true);
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [showRecommendations, events]);
+  const resolvedRecommendationImageById = useMemo(
+    () => resolveApprovedListHeroUrisByEventId(events),
+    [events],
+  );
+  const recoHeroReady = true;
 
   useImperativeHandle(ref, () => ({
     scrollToEvent: (eventId: string) => {
@@ -132,11 +111,10 @@ const EventList = forwardRef<EventListRef, EventListProps>(({
           showButton={showButton}
           imageHeight={imageHeight}
           listImageScope={listImagePlan.get(item.id)}
-          resolvedRecommendationImageUri={
-            showRecommendations ? (resolvedRecommendationImageById[item.id] ?? null) : null
-          }
-          recommendationHeroResolverReady={showRecommendations ? recoHeroReady : true}
-          strictRecommendationImagePolicy={showRecommendations}
+          resolvedRecommendationImageUri={resolvedRecommendationImageById[item.id] ?? null}
+          recommendationHeroResolverReady={recoHeroReady}
+          skipGooglePhotoFetch={Boolean(resolvedRecommendationImageById[item.id])}
+          strictRecommendationImagePolicy={false}
           onPress={onEventPress ? () => onEventPress(item) : undefined}
         />
       </View>
@@ -219,11 +197,10 @@ const EventList = forwardRef<EventListRef, EventListProps>(({
                 showButton={showButton}
                 imageHeight={imageHeight}
                 listImageScope={listImagePlan.get(event.id)}
-                resolvedRecommendationImageUri={
-                  showRecommendations ? (resolvedRecommendationImageById[event.id] ?? null) : null
-                }
-                recommendationHeroResolverReady={showRecommendations ? recoHeroReady : true}
-                strictRecommendationImagePolicy={showRecommendations}
+                resolvedRecommendationImageUri={resolvedRecommendationImageById[event.id] ?? null}
+                recommendationHeroResolverReady={recoHeroReady}
+                skipGooglePhotoFetch={Boolean(resolvedRecommendationImageById[event.id])}
+                strictRecommendationImagePolicy={false}
                 onPress={onEventPress ? () => onEventPress(event) : undefined}
               />
             </View>
@@ -306,8 +283,8 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   verticalContentContainer: {
-    /** Let content shrink-wrap list rows; avoid web flex-expanding rows to viewport height */
-    flexGrow: 1,
+    /** Web: flexGrow 1 stretches rows to viewport height — keep list shrink-wrapped */
+    flexGrow: Platform.OS === 'web' ? 0 : 1,
   },
   verticalContainer: {
     width: '100%',

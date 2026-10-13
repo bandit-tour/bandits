@@ -3,7 +3,6 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   ActivityIndicator,
   Alert,
-  FlatList,
   Keyboard,
   Modal,
   Platform,
@@ -17,7 +16,6 @@ import {
   View,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { ScrollView as GHScrollView } from 'react-native-gesture-handler';
 
 import { getBanditById, getBanditTags, submitBanditQuestion, toggleBanditLike } from '@/app/services/bandits';
 import { getBanditEventCategories, getEvents } from '@/app/services/events';
@@ -40,11 +38,9 @@ import { TAG_EMOJI_MAP } from '@/constants/tagNameToEmoji';
 import { Database } from '@/lib/database.types';
 import { repairDisplayText } from '@/lib/repairTextEncoding';
 import { buildEventListImagePlan } from '@/lib/eventListImagePlan';
-import {
-  enforceUniqueRecommendationImagesByEventId,
-  resolveStrictRecommendationImagesByEventId,
-} from '@/lib/recommendationImages';
+import { resolveApprovedListHeroUrisByEventId } from '@/lib/recommendationImages';
 import { trackEvent } from '@/lib/analytics';
+import { logNativeNav } from '@/lib/nativeNavLog';
 import { routeParamString } from '@/lib/routeParams';
 
 type Bandit = Database['public']['Tables']['bandit']['Row'];
@@ -64,8 +60,8 @@ type EventCategory = {
 
 type EventItem = Database['public']['Tables']['event']['Row'];
 
-/** GH ScrollView on native so category chip taps win over scroll gesture deferral. */
-const ProfileScrollView = Platform.OS === 'web' ? RNScrollView : GHScrollView;
+/** RN ScrollView only — nested VirtualizedList inside GH ScrollView hard-crashes iOS. */
+const ProfileScrollView = RNScrollView;
 
 const FALLBACK_HANDLES = [
   'athens.nights',
@@ -114,8 +110,6 @@ export default function BanditScreen() {
   const [categories, setCategories] = useState<EventCategory[]>([]);
   const [selectedGenre, setSelectedGenre] = useState<string | null>(null);
   const [genreEvents, setGenreEvents] = useState<EventItem[]>([]);
-  const [genreRecommendationImageById, setGenreRecommendationImageById] = useState<Record<string, string>>({});
-  const [genreRecoHeroReady, setGenreRecoHeroReady] = useState(true);
   const [loadingGenreEvents, setLoadingGenreEvents] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -127,6 +121,7 @@ export default function BanditScreen() {
   const [submitSuccess, setSubmitSuccess] = useState(false);
   const [askNotificationsHint, setAskNotificationsHint] = useState<string | null>(null);
   const [likeUserId, setLikeUserId] = useState<string | null>(null);
+  const [galleryExtras, setGalleryExtras] = useState<string[]>([]);
   const askTargetBanditIdRef = useRef<string>('');
 
   useEffect(() => {
@@ -155,16 +150,42 @@ export default function BanditScreen() {
         const tagsPromise: Promise<any[]> = getBanditTags(banditIdStr).catch(() => []);
         const categoriesPromise: Promise<any[]> = getBanditEventCategories(banditIdStr).catch(() => []);
         const reviewsPromise: Promise<any[]> = getBanditReviews(banditIdStr).catch(() => []);
+        const galleryPromise: Promise<string[]> = getEvents({ banditId: banditIdStr })
+          .then((events) => {
+            const out: string[] = [];
+            for (const ev of events || []) {
+              const candidates = [
+                (ev as any).recommendation_place_photo_url,
+                (ev as any).bandit_photo_url,
+                (ev as any).google_photo_url,
+                ev.image_url,
+              ];
+              for (const u of candidates) {
+                const t = typeof u === 'string' ? u.trim() : '';
+                if (
+                  (t.startsWith('https://') || t.startsWith('http://')) &&
+                  !out.includes(t)
+                ) {
+                  out.push(t);
+                }
+                if (out.length >= 6) return out;
+              }
+            }
+            return out;
+          })
+          .catch(() => [] as string[]);
 
-        const [banditData, tagData, catData, raw] = await Promise.all([
+        const [banditData, tagData, catData, raw, extras] = await Promise.all([
           banditPromise,
           tagsPromise,
           categoriesPromise,
           reviewsPromise,
+          galleryPromise,
         ]);
 
         if (!banditData) throw new Error('banDit not found');
         setBandit(banditData);
+        setGalleryExtras(extras);
         void trackEvent({
           eventName: 'bandit_profile_opened',
           referenceType: 'bandit',
@@ -225,47 +246,16 @@ export default function BanditScreen() {
     [genreEventsRenderable],
   );
 
-  const profileRecommenderPreload = useMemo(() => {
-    if (!bandit?.id) return [];
-    const uri = String((bandit as { image_url?: string | null }).image_url ?? '').trim();
-    return [{ id: bandit.id, image_url: uri }];
-  }, [bandit]);
-
-  useEffect(() => {
-    let cancelled = false;
-    if (genreEventsRenderable.length === 0) {
-      setGenreRecoHeroReady(true);
-      setGenreRecommendationImageById({});
-      return;
-    }
-    setGenreRecoHeroReady(false);
-    void (async () => {
-      try {
-        const out = await resolveStrictRecommendationImagesByEventId(genreEventsRenderable as any);
-        const uniqueOut = enforceUniqueRecommendationImagesByEventId(
-          genreEventsRenderable as any,
-          out,
-        );
-        if (!cancelled) {
-          setGenreRecommendationImageById(uniqueOut);
-          setGenreRecoHeroReady(true);
-        }
-      } catch {
-        if (!cancelled) {
-          setGenreRecommendationImageById({});
-          setGenreRecoHeroReady(true);
-        }
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [genreEventsRenderable]);
+  const genreRecommendationImageById = useMemo(
+    () => resolveApprovedListHeroUrisByEventId(genreEventsRenderable),
+    [genreEventsRenderable],
+  );
 
   const handleCategoryPress = useCallback(
     async (genre: string) => {
       const bid = String(bandit?.id ?? id ?? '').trim();
       if (!bid) return;
+      logNativeNav('profile.category.tap', { banditId: bid, genre });
       // Tap same chip to collapse and keep user on profile.
       if (selectedGenre === genre) {
         setSelectedGenre(null);
@@ -274,15 +264,18 @@ export default function BanditScreen() {
       }
       setSelectedGenre(genre);
       setGenreEvents([]);
-      setGenreRecommendationImageById({});
-      setGenreRecoHeroReady(false);
       setLoadingGenreEvents(true);
       try {
         const events = await getEvents({ banditId: bid, genre });
-        setGenreEvents(
-          (events ?? []).filter((e) => String(e?.id ?? '').trim().length > 0),
-        );
-      } catch {
+        const safe = (events ?? []).filter((e) => String(e?.id ?? '').trim().length > 0);
+        logNativeNav('profile.category.loaded', { banditId: bid, genre, count: safe.length });
+        setGenreEvents(safe);
+      } catch (err) {
+        logNativeNav('profile.category.error', {
+          banditId: bid,
+          genre,
+          message: err instanceof Error ? err.message : String(err),
+        });
         setGenreEvents([]);
       } finally {
         setLoadingGenreEvents(false);
@@ -312,51 +305,6 @@ export default function BanditScreen() {
     [handleCategoryPress],
   );
 
-  const renderGenreEventRow = useCallback(
-    ({ item: event }: { item: EventItem }) => {
-      if (!bandit) return null;
-      const eventId = String(event.id).trim();
-      return (
-        <View
-          style={[styles.inlineSpotCardWrap, isDesktopWeb && styles.inlineSpotCardWrapDesktop]}
-        >
-          <EventCard
-            event={event}
-            onLike={() => undefined}
-            isLiked={false}
-            showButton={false}
-            variant="horizontal"
-            fillHorizontalCell
-            showRecommendations
-            preloadedRecommendingBandits={profileRecommenderPreload}
-            prioritizeCardPress
-            splitTouchTargets={Platform.OS !== 'web'}
-            skipGooglePhotoFetch={Platform.OS !== 'web'}
-            banditId={bandit.id}
-            listImageScope={genreImagePlan?.get(eventId) ?? null}
-            resolvedRecommendationImageUri={genreRecommendationImageById[eventId] ?? null}
-            recommendationHeroResolverReady={genreRecoHeroReady}
-            strictRecommendationImagePolicy
-            onPress={() =>
-              router.push(
-                `/spot/${encodeURIComponent(eventId)}?banditId=${encodeURIComponent(bandit.id)}` as any,
-              )
-            }
-          />
-        </View>
-      );
-    },
-    [
-      bandit,
-      genreImagePlan,
-      genreRecommendationImageById,
-      genreRecoHeroReady,
-      isDesktopWeb,
-      profileRecommenderPreload,
-      router,
-    ],
-  );
-
   const categoryExpandBelow =
     selectedGenre && bandit ? (
       <View style={styles.inlineCategorySection} pointerEvents="box-none" collapsable={false}>
@@ -366,8 +314,6 @@ export default function BanditScreen() {
             onPress={() => {
               setSelectedGenre(null);
               setGenreEvents([]);
-              setGenreRecommendationImageById({});
-              setGenreRecoHeroReady(true);
             }}
             hitSlop={6}
           >
@@ -379,21 +325,42 @@ export default function BanditScreen() {
         ) : genreEventsRenderable.length === 0 ? (
           <Text style={styles.inlineCategoryEmpty}>No spots in this category yet.</Text>
         ) : (
-          <FlatList
-            data={genreEventsRenderable}
-            keyExtractor={(event) => event.id}
-            renderItem={renderGenreEventRow}
-            numColumns={isDesktopWeb ? 2 : 1}
-            key={isDesktopWeb ? 'profile-genre-2col' : 'profile-genre-1col'}
-            columnWrapperStyle={isDesktopWeb ? styles.inlineCategoryRow : undefined}
-            scrollEnabled={false}
-            nestedScrollEnabled
-            removeClippedSubviews={false}
-            initialNumToRender={6}
-            maxToRenderPerBatch={4}
-            windowSize={5}
-            style={styles.inlineCategoryGrid}
-          />
+          <View style={styles.inlineCategoryGrid} pointerEvents="box-none">
+            {genreEventsRenderable.map((event) => {
+              const eventId = String(event.id).trim();
+              return (
+                <View
+                  key={eventId}
+                  style={[
+                    styles.inlineSpotCardWrap,
+                    isDesktopWeb && styles.inlineSpotCardWrapDesktop,
+                  ]}
+                >
+                  <EventCard
+                    event={event}
+                    onLike={() => undefined}
+                    isLiked={false}
+                    showButton={false}
+                    variant="horizontal"
+                    fillHorizontalCell
+                    showRecommendations={false}
+                    prioritizeCardPress
+                    splitTouchTargets={Platform.OS !== 'web'}
+                    skipGooglePhotoFetch={Boolean(genreRecommendationImageById[eventId])}
+                    listImageScope={genreImagePlan?.get(eventId) ?? null}
+                    resolvedRecommendationImageUri={genreRecommendationImageById[eventId] ?? null}
+                    recommendationHeroResolverReady
+                    strictRecommendationImagePolicy={false}
+                    onPress={() =>
+                      router.push(
+                        `/spot/${encodeURIComponent(eventId)}?banditId=${encodeURIComponent(bandit.id)}` as any,
+                      )
+                    }
+                  />
+                </View>
+              );
+            })}
+          </View>
         )}
       </View>
     ) : null;
@@ -451,12 +418,8 @@ export default function BanditScreen() {
           styles.contentContainer,
           isDesktopWeb && styles.contentContainerDesktop,
         ]}
-        {...(Platform.OS !== 'web'
-          ? {
-              keyboardShouldPersistTaps: 'always' as const,
-              nestedScrollEnabled: true,
-            }
-          : {})}
+        keyboardShouldPersistTaps="always"
+        nestedScrollEnabled
       >
         {/* HEADER + CATEGORIES + inline accordion under chips */}
         <BanditHeader
@@ -467,15 +430,23 @@ export default function BanditScreen() {
           showActionButtons
           onCategoryPress={onHeaderCategoryPress}
           onLike={handleBanditLike}
+          onMeet={handleAskMePress}
           categoryExpandBelow={categoryExpandBelow}
+          galleryExtras={galleryExtras}
         />
 
         <View style={[styles.profileBodyGrid, isDesktopWeb && styles.profileBodyGridDesktop]}>
           <View style={styles.profileMainCol}>
-            {/* VIBES (directly under Categories) */}
+            {!!bandit.description && (
+              <View style={styles.aboutSection}>
+                <Text style={styles.sectionLabel}>About</Text>
+                <Text style={styles.description}>{bandit.description}</Text>
+              </View>
+            )}
+
             {tags.length > 0 && (
               <View style={styles.vibesSection}>
-                <Text style={styles.vibesLabel}>Vibes</Text>
+                <Text style={styles.vibesLabel}>Interests</Text>
                 <RNScrollView
                   horizontal
                   showsHorizontalScrollIndicator={false}
@@ -483,19 +454,14 @@ export default function BanditScreen() {
                 >
                   {tags.map((tag, index) => (
                     <TagChip
-                    key={index}
-                    label={`${TAG_EMOJI_MAP[tag] ?? '✨'} ${tag}`}
+                      key={index}
+                      label={`${TAG_EMOJI_MAP[tag] ?? '✨'} ${tag}`}
                     />
-                  
                   ))}
                 </RNScrollView>
               </View>
             )}
 
-            {/* DESCRIPTION */}
-            <Text style={styles.description}>{bandit.description}</Text>
-
-            {/* WHY FOLLOW */}
             <Text style={styles.whyFollowLabel}>
               {`Why follow ${bandit.name}?`}
             </Text>
@@ -518,7 +484,6 @@ export default function BanditScreen() {
           </View>
 
           <View style={styles.profileSideCol}>
-            {/* REVIEWS */}
             <View style={styles.reviewsSection}>
               <Text style={styles.reviewsTitle}>
                 Reviews <Text style={styles.reviewsCount}>({reviews.length})</Text>
@@ -671,7 +636,105 @@ const styles = StyleSheet.create({
   description: {
     fontSize: 14,
     color: '#3C3C3C',
-    marginBottom: 8,
+    lineHeight: 21,
+  },
+  aboutSection: {
+    marginBottom: 16,
+    gap: 6,
+  },
+  sectionLabel: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#6B6B6B',
+    letterSpacing: 0.4,
+    textTransform: 'uppercase',
+  },
+  cityGuidePreview: {
+    marginBottom: 12,
+    paddingVertical: 14,
+    paddingHorizontal: 16,
+    borderRadius: 16,
+    backgroundColor: '#111111',
+  },
+  cityGuidePreviewTitle: {
+    color: '#FFFFFF',
+    fontSize: 15,
+    fontWeight: '700',
+    marginBottom: 4,
+  },
+  cityGuidePreviewSub: {
+    color: 'rgba(255,255,255,0.72)',
+    fontSize: 13,
+    lineHeight: 18,
+  },
+  routesEntry: {
+    marginBottom: 12,
+    paddingVertical: 14,
+    paddingHorizontal: 16,
+    borderRadius: 16,
+    backgroundColor: '#FAF9F7',
+    borderWidth: 1,
+    borderColor: '#E8E8E8',
+  },
+  routesEntryTitle: {
+    color: '#111111',
+    fontSize: 15,
+    fontWeight: '700',
+    marginBottom: 4,
+  },
+  routesEntrySub: {
+    color: '#6B6B6B',
+    fontSize: 13,
+    lineHeight: 18,
+  },
+  premiumEntry: {
+    marginBottom: 12,
+    paddingVertical: 14,
+    paddingHorizontal: 16,
+    borderRadius: 16,
+    backgroundColor: '#181818',
+    borderWidth: 1.5,
+    borderColor: 'rgba(224, 49, 49, 0.45)',
+  },
+  premiumEntryTitle: {
+    color: '#FFFFFF',
+    fontSize: 14,
+    fontWeight: '800',
+    letterSpacing: 0.3,
+    marginBottom: 4,
+  },
+  premiumEntrySub: {
+    color: 'rgba(255, 255, 255, 0.78)',
+    fontSize: 13,
+    lineHeight: 18,
+  },
+  passportBlock: {
+    marginBottom: 16,
+    paddingVertical: 14,
+    paddingHorizontal: 16,
+    borderRadius: 16,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: '#E8E8E8',
+    backgroundColor: '#FFFFFF',
+  },
+  passportTitle: {
+    fontSize: 11,
+    fontWeight: '800',
+    letterSpacing: 0.6,
+    textTransform: 'uppercase',
+    color: '#6B6B6B',
+    marginBottom: 6,
+  },
+  passportBody: {
+    fontSize: 13,
+    lineHeight: 19,
+    color: '#3C3C3C',
+  },
+  passportLink: {
+    marginTop: 10,
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#E03131',
   },
   whyFollowLabel: {
     fontWeight: '600',
@@ -749,7 +812,7 @@ const styles = StyleSheet.create({
   inlineCategoryCollapse: {
     fontSize: 12,
     fontWeight: '700',
-    color: '#0a7ea4',
+    color: '#111111',
   },
   inlineCategoryEmpty: {
     fontSize: 13,
@@ -757,18 +820,16 @@ const styles = StyleSheet.create({
   },
   inlineCategoryGrid: {
     width: '100%',
-  },
-  inlineCategoryRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
     gap: 12,
-    marginBottom: 12,
+    alignItems: 'flex-start',
   },
   inlineSpotCardWrap: {
     width: '100%',
-    marginBottom: 12,
   },
   inlineSpotCardWrapDesktop: {
-    flex: 1,
-    marginBottom: 0,
+    width: '48.8%',
   },
   
   askMeButton: {

@@ -1,6 +1,6 @@
 import { Platform } from 'react-native';
 
-import { supabase } from '@/lib/supabase';
+import { resolveTravelerSession } from '@/lib/pilotSession';
 
 const DEFAULT_PRODUCTION_API_ORIGIN = 'https://bandits-two.vercel.app';
 
@@ -44,13 +44,9 @@ export async function insertGuestEchoViaApi(
   if (!base) {
     throw new Error('notifications_api_missing');
   }
-  const {
-    data: { session },
-    error: sessionError,
-  } = await supabase.auth.getSession();
-  if (sessionError) throw new Error(sessionError.message || 'Session error.');
-  const token = String(session?.access_token ?? '').trim();
-  if (!token) throw new Error('Session required.');
+  const traveler = await resolveTravelerSession();
+  if (!traveler) throw new Error('Session required.');
+  const token = traveler.accessToken;
 
   const res = await fetch(`${base}/api/notifications-guest-echo`, {
     method: 'POST',

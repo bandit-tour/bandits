@@ -19,14 +19,25 @@ import {
 import { useUpperTabHost } from '@/contexts/UpperTabHostContext';
 import { useTabActiveDataLoad } from '@/lib/useTabActiveDataLoad';
 import { useScreenFocused } from '@/lib/useScreenFocused';
+import { useGuestLiveSurface } from '@/lib/orchestra/useGuestLiveSurface';
 import { usePremiumRefreshControl } from '@/lib/mobilePullToRefresh';
-import { navigateToBanditProfile } from '@/lib/appNavigation';
+import { navigateToBanditProfile, runSafeNavigation } from '@/lib/appNavigation';
+import { buildEventListImagePlan, type EventListImageScope } from '@/lib/eventListImagePlan';
+import { eventHasVenueMediaSource, getSpotDetailHeroUri } from '@/lib/eventVenueGallery';
+import {
+  fetchGooglePlacePhotoUrls,
+  fetchTrustedPlaceIdPhotoUrls,
+  normalizeEventImageUri,
+} from '@/lib/placePhoto';
+import { resolveApprovedListHeroUrisByEventId } from '@/lib/recommendationImages';
+import { logNativeNav } from '@/lib/nativeNavLog';
 import { perfMark } from '@/lib/perfTiming';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   FlatList,
+  InteractionManager,
   Platform,
   Pressable,
   ScrollView,
@@ -38,6 +49,7 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import ExploreMapPanel from '@/components/ExploreMapPanel';
+import ExploreBanditLane from '@/components/ExploreBanditLane';
 
 type Event = Database['public']['Tables']['event']['Row'];
 
@@ -56,6 +68,10 @@ type ExploreRowProps = {
   onPressSpot: () => void;
   recommendingBandits?: EventBanditRecommendation[];
   onBanditPress: (banditId: string) => void;
+  listImageScope?: EventListImageScope;
+  resolvedRecommendationImageUri?: string | null;
+  recommendationHeroResolverReady?: boolean;
+  onHeroUnavailable?: (eventId: string) => void;
 };
 
 const ExploreEventRow = React.memo(function ExploreEventRow({
@@ -67,7 +83,16 @@ const ExploreEventRow = React.memo(function ExploreEventRow({
   onPressSpot,
   recommendingBandits,
   onBanditPress,
+  listImageScope,
+  resolvedRecommendationImageUri,
+  recommendationHeroResolverReady,
+  onHeroUnavailable,
 }: ExploreRowProps) {
+  const resolved = resolvedRecommendationImageUri ?? null;
+  // Skip per-card Places fetch when Explore already resolved a usable https hero
+  // (durable storage OR live-refreshed Places media from the list pipeline).
+  const skipGoogle = Boolean(resolved) && /^https?:\/\//i.test(resolved);
+
   return (
     <View style={[styles.cardWrap, columns > 1 && styles.cardWrapMulti]}>
       <EventCard
@@ -77,11 +102,17 @@ const ExploreEventRow = React.memo(function ExploreEventRow({
         variant="horizontal"
         fillHorizontalCell
         showRecommendations
-        skipGooglePhotoFetch
+        skipGooglePhotoFetch={skipGoogle}
+        omitWhenNoHero
+        onHeroUnavailable={onHeroUnavailable}
         splitTouchTargets={Platform.OS !== 'web'}
         preloadedRecommendingBandits={recommendingBandits ?? []}
         onBanditPress={onBanditPress}
         banditId={banditId}
+        listImageScope={listImageScope}
+        resolvedRecommendationImageUri={resolved}
+        recommendationHeroResolverReady={recommendationHeroResolverReady ?? true}
+        strictRecommendationImagePolicy={false}
         onPress={onPressSpot}
       />
     </View>
@@ -101,6 +132,10 @@ const ExploreEventRow = React.memo(function ExploreEventRow({
     prev.isLiked === next.isLiked &&
     prev.columns === next.columns &&
     prev.banditId === next.banditId &&
+    prev.listImageScope === next.listImageScope &&
+    prev.resolvedRecommendationImageUri === next.resolvedRecommendationImageUri &&
+    prev.recommendationHeroResolverReady === next.recommendationHeroResolverReady &&
+    prev.onHeroUnavailable === next.onHeroUnavailable &&
     banditsEqual
   );
 });
@@ -147,25 +182,39 @@ export function ExploreScreen({ tabActive }: ExploreScreenProps = {}) {
   const [viewMode, setViewMode] = useState<'list' | 'map'>(() =>
     openMapParam === 'map' ? 'map' : 'list',
   );
-  const [mapMounted, setMapMounted] = useState(() => openMapParam === 'map');
+  /** Defer WebView until user opens Map — mounting under list panes has crashed iOS. */
+  const [mapMounted, setMapMounted] = useState(false);
   const [banditsByEventId, setBanditsByEventId] = useState<Map<string, EventBanditRecommendation[]>>(
     () => new Map(),
   );
   const [banditsBulkVersion, setBanditsBulkVersion] = useState(0);
+  /** Cards that exhausted gallery + Places recovery — omit from feed (never "Photo unavailable"). */
+  const [hiddenHeroEventIds, setHiddenHeroEventIds] = useState<Set<string>>(() => new Set());
+  /** Live Place Details heroes for rows whose stored image_url/gallery are expired Places resources. */
+  const [liveHeroByEventId, setLiveHeroByEventId] = useState<Record<string, string>>({});
 
   useEffect(() => {
     setCategoryChip(exploreChipFromGenreParam(selectedGenre));
   }, [selectedGenre]);
 
   useEffect(() => {
+    // New city / genre list → allow previously hidden rows to retry.
+    setHiddenHeroEventIds(new Set());
+    setLiveHeroByEventId({});
+  }, [exploreCacheKey]);
+
+  useEffect(() => {
     if (openMapParam === 'map') {
       setViewMode('map');
-      setMapMounted(true);
+      const t = setTimeout(() => setMapMounted(true), Platform.OS === 'ios' ? 400 : 0);
+      return () => clearTimeout(t);
     }
   }, [openMapParam]);
 
   useEffect(() => {
-    if (viewMode === 'map') setMapMounted(true);
+    if (viewMode !== 'map') return;
+    const t = setTimeout(() => setMapMounted(true), Platform.OS === 'ios' ? 400 : 0);
+    return () => clearTimeout(t);
   }, [viewMode]);
 
   useEffect(() => {
@@ -259,6 +308,10 @@ export function ExploreScreen({ tabActive }: ExploreScreenProps = {}) {
 
   useTabActiveDataLoad(screenActive, exploreInitialLoadDoneRef, runExploreFetch);
 
+  useGuestLiveSurface('experiences', () => {
+    runExploreFetch(false);
+  });
+
   useEffect(() => {
     if (!screenActive) return;
     let cancelled = false;
@@ -320,22 +373,96 @@ export function ExploreScreen({ tabActive }: ExploreScreenProps = {}) {
     () => filterEventsByExploreCategory(events, categoryChip),
     [events, categoryChip],
   );
-  const listEvents = filteredEvents;
+  const listEvents = useMemo(
+    () =>
+      filteredEvents.filter(
+        (e) => eventHasVenueMediaSource(e) && !hiddenHeroEventIds.has(e.id),
+      ),
+    [filteredEvents, hiddenHeroEventIds],
+  );
+
+  const filteredEventIdsKey = useMemo(
+    () => filteredEvents.map((e) => e.id).join('|'),
+    [filteredEvents],
+  );
+
+  const exploreListImagePlan = useMemo(
+    () => buildEventListImagePlan(filteredEvents, { w: 900, h: 675 }),
+    [filteredEvents],
+  );
+
+  const approvedHeroById = useMemo(
+    () => resolveApprovedListHeroUrisByEventId(filteredEvents),
+    [filteredEventIdsKey, filteredEvents],
+  );
+
+  const resolvedRecommendationImageById = useMemo(() => {
+    const out: Record<string, string | null> = {};
+    for (const e of filteredEvents) {
+      out[e.id] =
+        approvedHeroById[e.id] ??
+        getSpotDetailHeroUri(e) ??
+        liveHeroByEventId[e.id] ??
+        null;
+    }
+    return out;
+  }, [filteredEvents, approvedHeroById, liveHeroByEventId]);
+
+  // City Guide parity: when stored heroes are expired Places resources, live-refresh
+  // from google_place_id via fetchTrustedPlaceIdPhotoUrls (no English name re-match).
+  useEffect(() => {
+    if (!screenActive) return;
+    let cancelled = false;
+    const needLive = filteredEvents.filter((e) => !getSpotDetailHeroUri(e) && !approvedHeroById[e.id]);
+    if (needLive.length === 0) return;
+
+    void (async () => {
+      const heroUpdates: Record<string, string> = {};
+      await Promise.all(
+        needLive.map(async (event) => {
+          try {
+            const placeId = (event as { google_place_id?: string | null }).google_place_id ?? null;
+            let urls = placeId ? await fetchTrustedPlaceIdPhotoUrls(placeId, 8) : [];
+            if (urls.length === 0) {
+              urls = await fetchGooglePlacePhotoUrls({
+                placeId,
+                name: String(event.name ?? ''),
+                address: String(event.address ?? ''),
+                city: String(event.city ?? ''),
+                neighborhood: String(event.neighborhood ?? ''),
+                limit: 8,
+              });
+            }
+            const cleaned = urls
+              .map((u) => normalizeEventImageUri(u) ?? u)
+              .filter((u) => /^https?:\/\//i.test(u));
+            if (cleaned.length === 0) return;
+            heroUpdates[event.id] = cleaned[0];
+          } catch {
+            /* keep card without inventing stock — EventCard may still recover */
+          }
+        }),
+      );
+      if (cancelled) return;
+      if (Object.keys(heroUpdates).length > 0) {
+        setLiveHeroByEventId((prev) => ({ ...prev, ...heroUpdates }));
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [screenActive, filteredEventIdsKey, filteredEvents, approvedHeroById]);
 
   useEffect(() => {
     if (viewMode !== 'map') return;
     perfMark('explore_map_mode_opened', 'map', { eventCount: filteredEvents.length });
   }, [viewMode, filteredEvents.length]);
 
-  const filteredEventIdsKey = useMemo(
-    () => filteredEvents.map((e) => e.id).join(','),
-    [filteredEvents],
-  );
-
   useEffect(() => {
     if (!screenActive || !filteredEventIdsKey) return;
     let cancelled = false;
-    const ids = filteredEventIdsKey.split(',').filter(Boolean);
+    const ids = filteredEventIdsKey.split('|').filter(Boolean);
     const timer = setTimeout(() => {
       const loadIds =
         Platform.OS === 'android' && ids.length > ANDROID_BANDIT_BULK_FIRST_BATCH
@@ -375,10 +502,26 @@ export function ExploreScreen({ tabActive }: ExploreScreenProps = {}) {
     (id: string) => {
       const trimmed = String(id || '').trim();
       if (!trimmed) return;
-      navigateToBanditProfile(router, trimmed);
+      logNativeNav('explore.bandit.press', { banditId: trimmed });
+      InteractionManager.runAfterInteractions(() => {
+        runSafeNavigation('explore-bandit-profile', () => {
+          navigateToBanditProfile(router, trimmed);
+        });
+      });
     },
     [router],
   );
+
+  const handleHeroUnavailable = useCallback((eventId: string) => {
+    const id = String(eventId || '').trim();
+    if (!id) return;
+    setHiddenHeroEventIds((prev) => {
+      if (prev.has(id)) return prev;
+      const next = new Set(prev);
+      next.add(id);
+      return next;
+    });
+  }, []);
 
   const goBackToBanditHome = useCallback(() => {
     if (!banditId) return;
@@ -388,21 +531,32 @@ export function ExploreScreen({ tabActive }: ExploreScreenProps = {}) {
   const keyExtractor = useCallback((item: Event) => item.id, []);
 
   const handleNavigateToSpot = useCallback(
-    (eventId: string) => {
+    (eventId: string, heroUri?: string | null) => {
       const eid = String(eventId || '').trim();
       if (!eid) return;
       const bid = String(banditId || '').trim();
-      router.push(
-        (bid
-          ? `/spot/${encodeURIComponent(eid)}?banditId=${encodeURIComponent(bid)}`
-          : `/spot/${encodeURIComponent(eid)}`) as any,
-      );
+      const base = bid
+        ? `/spot/${encodeURIComponent(eid)}?banditId=${encodeURIComponent(bid)}`
+        : `/spot/${encodeURIComponent(eid)}`;
+      const hero = String(heroUri || '').trim();
+      const url = hero
+        ? `${base}${base.includes('?') ? '&' : '?'}heroUri=${encodeURIComponent(hero)}`
+        : base;
+      runSafeNavigation('explore-spot', () => {
+        router.push(url as any);
+      });
     },
     [banditId, router],
   );
 
   const banditsByEventIdRef = useRef(banditsByEventId);
   banditsByEventIdRef.current = banditsByEventId;
+  const resolvedHeroRef = useRef(resolvedRecommendationImageById);
+  resolvedHeroRef.current = resolvedRecommendationImageById;
+  const recoHeroReadyRef = useRef(true);
+  recoHeroReadyRef.current = true;
+  const exploreListImagePlanRef = useRef(exploreListImagePlan);
+  exploreListImagePlanRef.current = exploreListImagePlan;
 
   const renderEventRow = useCallback(
     ({ item }: { item: Event }) => (
@@ -412,12 +566,16 @@ export function ExploreScreen({ tabActive }: ExploreScreenProps = {}) {
         banditId={banditId}
         isLiked={likedEventIds.has(item.id)}
         onLike={() => void toggleLike(item.id)}
-        onPressSpot={() => handleNavigateToSpot(item.id)}
+        onPressSpot={() => handleNavigateToSpot(item.id, resolvedHeroRef.current[item.id] ?? null)}
         recommendingBandits={banditsByEventIdRef.current.get(item.id) ?? []}
         onBanditPress={handleBanditPress}
+        listImageScope={exploreListImagePlanRef.current.get(item.id)}
+        resolvedRecommendationImageUri={resolvedHeroRef.current[item.id] ?? null}
+        recommendationHeroResolverReady={recoHeroReadyRef.current}
+        onHeroUnavailable={handleHeroUnavailable}
       />
     ),
-    [columns, likesEpoch, banditId, toggleLike, handleNavigateToSpot, handleBanditPress],
+    [columns, likesEpoch, banditId, toggleLike, handleNavigateToSpot, handleBanditPress, handleHeroUnavailable],
   );
 
   const handleCategorySelect = useCallback((chip: ExploreCategoryChip) => {
@@ -484,7 +642,7 @@ export function ExploreScreen({ tabActive }: ExploreScreenProps = {}) {
             </Text>
           </Pressable>
           {backgroundLoading && events.length === 0 ? (
-            <ActivityIndicator size="small" color="#0a7ea4" style={styles.headerSpinner} />
+            <ActivityIndicator size="small" color="#111111" style={styles.headerSpinner} />
           ) : null}
         </View>
       </View>
@@ -492,18 +650,33 @@ export function ExploreScreen({ tabActive }: ExploreScreenProps = {}) {
 
       <View style={styles.body}>
         <View
-          style={[styles.bodyPane, viewMode !== 'list' && styles.bodyPaneHidden]}
+          style={[
+            styles.bodyPane,
+            viewMode !== 'list' && styles.bodyPaneHidden,
+            viewMode === 'list' && styles.bodyPaneActive,
+          ]}
           pointerEvents={viewMode === 'list' ? 'auto' : 'none'}
         >
           <FlatList
             style={styles.listFlex}
             data={listEvents}
-            extraData={{ categoryChip, likesEpoch, banditsBulkVersion }}
+            key={`explore-list-${columns}`}
+            extraData={{ categoryChip, likesEpoch, banditsBulkVersion, resolvedRecommendationImageById }}
             keyExtractor={keyExtractor}
             numColumns={columns}
             refreshControl={exploreRefreshControl}
             columnWrapperStyle={columns > 1 ? styles.row : undefined}
             contentContainerStyle={[styles.gridContent, { paddingBottom: listBottomPad }]}
+            ListHeaderComponent={
+              !banditId ? (
+                <ExploreBanditLane
+                  onMeet={handleBanditPress}
+                  onSeeAll={() =>
+                    runSafeNavigation('explore-bandits-all', () => router.push('/bandits' as any))
+                  }
+                />
+              ) : null
+            }
             ListEmptyComponent={
               backgroundLoading ? (
                 <Text style={styles.emptyText}>Loading places…</Text>
@@ -525,7 +698,12 @@ export function ExploreScreen({ tabActive }: ExploreScreenProps = {}) {
         </View>
         {mapMounted ? (
           <View
-            style={[styles.bodyPane, viewMode !== 'map' && styles.bodyPaneHidden]}
+            style={[
+              styles.bodyPane,
+              viewMode !== 'map' && styles.bodyPaneHidden,
+              viewMode === 'map' && styles.bodyPaneActive,
+              viewMode === 'map' && styles.mapBodyPane,
+            ]}
             pointerEvents={viewMode === 'map' ? 'auto' : 'none'}
           >
             <ExploreMapPanel
@@ -534,10 +712,12 @@ export function ExploreScreen({ tabActive }: ExploreScreenProps = {}) {
               onOpenSpot={handleNavigateToSpot}
               onBanditPress={handleBanditPress}
               banditsByEventId={banditsByEventId}
-              listBottomPad={Math.max(insets.bottom, 8)}
+              heroUriByEventId={resolvedRecommendationImageById}
+              listBottomPad={Math.max(insets.bottom, 8) + 72}
               isLiked={(eventId) => likedEventIds.has(eventId)}
               onLike={(eventId) => void toggleLike(eventId)}
               visible={viewMode === 'map'}
+              onRequestListMode={() => setViewMode('list')}
             />
           </View>
         ) : null}
@@ -559,9 +739,16 @@ const styles = StyleSheet.create({
     ...StyleSheet.absoluteFillObject,
     backgroundColor: '#FFFFFF',
   },
+  bodyPaneActive: {
+    opacity: 1,
+    zIndex: 2,
+  },
   bodyPaneHidden: {
     opacity: 0,
     zIndex: 0,
+  },
+  mapBodyPane: {
+    minHeight: 520,
   },
   listFlex: {
     flex: 1,
@@ -606,7 +793,7 @@ const styles = StyleSheet.create({
   backBtnText: {
     fontSize: 16,
     fontWeight: '600',
-    color: '#0a7ea4',
+    color: '#111111',
   },
   mapBtn: {
     backgroundColor: '#111',
@@ -617,7 +804,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   mapBtnActive: {
-    backgroundColor: '#0a7ea4',
+    backgroundColor: '#111111',
   },
   mapBtnPressed: {
     opacity: 0.88,

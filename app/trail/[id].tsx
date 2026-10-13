@@ -1,4 +1,4 @@
-import { Stack, useLocalSearchParams } from 'expo-router';
+import { Stack, useLocalSearchParams, type Href } from 'expo-router';
 import { useEffect, useState } from 'react';
 import { ActivityIndicator, StyleSheet, Text, View } from 'react-native';
 
@@ -6,12 +6,19 @@ import { isDemoMode } from '@/lib/demoMode';
 import { getTrailById, TrailWithStops } from '@/services/trails';
 import TrailDetailView, { BasicTrail, BasicTrailStop } from '@/components/TrailDetailView';
 import { trackEvent } from '@/lib/analytics';
+import { useAppBackScreenOptions } from '@/hooks/useAppBackScreenOptions';
 
 export default function TrailDetailScreen() {
   const { id } = useLocalSearchParams();
   const [trail, setTrail] = useState<TrailWithStops | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+
+  const screenOptions = useAppBackScreenOptions({
+    title: 'Trail',
+    fallback: '/cityGuide' as Href,
+    showBack: true,
+  });
 
   useEffect(() => {
     const fetchTrail = async () => {
@@ -46,6 +53,7 @@ export default function TrailDetailScreen() {
   if (loading) {
     return (
       <View style={styles.center}>
+        <Stack.Screen options={screenOptions} />
         <ActivityIndicator size="large" />
       </View>
     );
@@ -54,6 +62,7 @@ export default function TrailDetailScreen() {
   if (error || !trail) {
     return (
       <View style={styles.center}>
+        <Stack.Screen options={screenOptions} />
         <Text style={styles.errorText}>{error ?? 'Trail not found'}</Text>
       </View>
     );
@@ -133,7 +142,7 @@ export default function TrailDetailScreen() {
 
   return (
     <>
-      <Stack.Screen options={{ headerShown: true, title: '' }} />
+      <Stack.Screen options={screenOptions} />
       {isDemoMode() ? (
         <View style={styles.demoBanner}>
           <Text style={styles.demoBannerText}>

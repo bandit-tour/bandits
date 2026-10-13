@@ -1,77 +1,221 @@
-import type { User } from '@supabase/supabase-js';
-import { useFocusEffect } from '@react-navigation/native';
-import { Stack, useRouter } from 'expo-router';
-import React from 'react';
-import { Alert, Image, Platform, Pressable, ScrollView, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
-
+import type { User } from "@supabase/supabase-js";
+import { useFocusEffect } from "@react-navigation/native";
+import { Image as ExpoImage } from "expo-image";
+import { Stack, useRouter, type Href } from "expo-router";
+import React from "react";
 import {
-  canAccessHotelier,
-  canShowOwnerPrivateMenu,
-} from '@/lib/appAdminAccess';
-import { usePremiumRefreshControl } from '@/lib/mobilePullToRefresh';
-import { getHotelWhiteLabelOrDefault } from '@/lib/hotelWhiteLabel';
-import { openStaffEmailLogin } from '@/lib/loginNavigation';
-import { getHotelEntry } from '@/lib/pilotSession';
-import { resolveMenuAuthSnapshot } from '@/lib/pilotDeskGate';
-import { supabase } from '@/lib/supabase';
+  Image,
+  Platform,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  View,
+  useWindowDimensions,
+} from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 
-type MenuItem = {
+import { useAppState } from "@/contexts/AppStateContext";
+import { canShowOwnerPrivateMenu, isAnonymousSupabaseSession } from "@/lib/appAdminAccess";
+import { safeSignOut } from "@/lib/authSafe";
+import { liveHotelDisplayName } from "@/lib/stay/liveHotelIdentity";
+import { useGuestLifecycle } from "@/lib/guest-lifecycle/useGuestLifecycle";
+import { usePremiumRefreshControl } from "@/lib/mobilePullToRefresh";
+import { resolveMenuAuthSnapshot } from "@/lib/pilotDeskGate";
+import { getHotelEntry } from "@/lib/pilotSession";
+import { supabase } from "@/lib/supabase";
+
+const LOGO = require("@/assets/icons/logobanditourapp.png");
+
+type MenuCard = {
+  key: string;
+  emoji: string;
   title: string;
-  route: string;
+  href?: Href;
+  action?: "logout";
 };
 
-const MENU_ITEMS: MenuItem[] = [
-  { title: 'Profile', route: '/profile' },
-  { title: 'Following', route: '/following' },
-  { title: 'Settings', route: '/settings' },
-  { title: 'bandiTeam', route: '/bandiTeam' },
+type MenuGroup = {
+  id: string;
+  title: string;
+  cards: MenuCard[];
+};
+
+const QUICK_ACTIONS_STAY: { key: string; title: string; subtitle: string; emoji: string; href: Href }[] = [
+      { key: "stay", title: "Continue My Stay", subtitle: "Stay management", emoji: "🏨", href: "/hotelier/stayInfo" },
+      { key: "lf", title: "Local Friend", subtitle: "Meet someone local", emoji: "💬", href: "/localFriend" },
+      { key: "alerts", title: "Safety alerts", subtitle: "bandiTEAM", emoji: "🛡", href: "/scam-alerts" },
+      { key: "impact", title: "Impact / Passport", subtitle: "Your journey trace", emoji: "🌍", href: "/impact" },
+      { key: "notif", title: "Notifications", subtitle: "Inbox", emoji: "🔔", href: "/notifications" },
+    ];
+
+const QUICK_ACTIONS_AFTER: { key: string; title: string; subtitle: string; emoji: string; href: Href }[] = [
+      { key: "memory", title: "City Memory", subtitle: "Between trips home", emoji: "🧭", href: "/hotelier" },
+      { key: "bottle", title: "Next journey", subtitle: "Travel in a Bottle", emoji: "🌲", href: "/travelBottle" },
+      { key: "lf", title: "Local Friend", subtitle: "Meet someone local", emoji: "💬", href: "/localFriend" },
+  { key: "alerts", title: "Safety alerts", subtitle: "bandiTEAM", emoji: "🛡", href: "/scam-alerts" },
+  { key: "impact", title: "Impact / Passport", subtitle: "Your journey trace", emoji: "🌍", href: "/impact" },
+  { key: "spots", title: "My Spots", subtitle: "Saved places", emoji: "❤️", href: "/mySpots" },
+  { key: "reactivate", title: "Activate Stay", subtitle: "New booking", emoji: "🔑", href: "/reactivateStay" },
 ];
 
-const OWNER_PRIVATE_MENU_ITEMS: MenuItem[] = [
-  { title: 'Pilot Desk', route: '/operatorDesk' },
-  { title: 'CDesk', route: '/admin' },
+/**
+ * MORE (canonical): Local Friend | Impact / Passport | Bookings | Following |
+ * My Spots | Notifications | Account | Alerts / bandiTEAM safety
+ */
+const MENU_GROUPS_STAY: MenuGroup[] = [
+  {
+    id: "journey",
+    title: "Your journey",
+    cards: [
+      { key: "lf", emoji: "💬", title: "Local Friend", href: "/localFriend" },
+      { key: "impact", emoji: "🌍", title: "Impact / Passport", href: "/impact" },
+      { key: "bookings", emoji: "🎟", title: "Bookings", href: "/bookings" },
+      { key: "following", emoji: "👥", title: "Following", href: "/following" },
+      { key: "spots", emoji: "❤️", title: "My Spots", href: "/mySpots" },
+      { key: "premium", emoji: "🎫", title: "Premium Membership", href: "/account/membership" },
+      { key: "bottle", emoji: "🍾", title: "Travel in a Bottle", href: "/travelBottle" },
+      { key: "notif", emoji: "🔔", title: "Notifications", href: "/notifications" },
+    ],
+  },
+  {
+    id: "safety",
+    title: "bandiTEAM · Safety",
+    cards: [
+      { key: "alerts", emoji: "🛡", title: "Scam alerts", href: "/scam-alerts" },
+      { key: "feed", emoji: "⚠", title: "Traveler alerts", href: "/alerts" },
+      { key: "team", emoji: "🤝", title: "bandiTEAM", href: "/bandiTeam" },
+      { key: "report", emoji: "📝", title: "Report unsafe", href: "/bandiTeam/report" },
+    ],
+  },
+  {
+    id: "stay",
+    title: "My Stay",
+    cards: [
+      { key: "hotel", emoji: "🏨", title: "Current Hotel", href: "/hotelier/welcome" },
+      { key: "room", emoji: "🛏", title: "Room Details", href: "/hotelier/stayInfo" },
+      { key: "brk", emoji: "🍽", title: "Breakfast", href: "/hotelier/breakfast" },
+      { key: "rest", emoji: "🍷", title: "Restaurant", href: "/hotelier/restaurant" },
+      { key: "spa", emoji: "🧖", title: "Spa", href: "/hotelier/spa" },
+      { key: "rs", emoji: "🛎️", title: "Room Service", href: "/hotelier/roomService" },
+      { key: "late", emoji: "⏰", title: "Late Checkout", href: "/hotelier/lateCheckout" },
+      { key: "hev", emoji: "📅", title: "Hotel Events", href: "/hotelier/events" },
+    ],
+  },
+  {
+    id: "account",
+    title: "Account",
+    cards: [
+      { key: "profile", emoji: "👤", title: "Profile", href: "/profile" },
+      { key: "acct", emoji: "⚙", title: "Account Settings", href: "/account" },
+      { key: "premium", emoji: "🎫", title: "Premium Membership", href: "/account/membership" },
+      { key: "pay", emoji: "💳", title: "Payments", href: "/account/payments" },
+      { key: "lang", emoji: "🌍", title: "Language", href: "/account/language" },
+      { key: "privacy", emoji: "🔒", title: "Privacy", href: "/account/privacy" },
+      { key: "help", emoji: "❓", title: "Help", href: "/account/faq" },
+    ],
+  },
+];
+
+const MENU_GROUPS_AFTER: MenuGroup[] = [
+  {
+    id: "memory",
+    title: "City Memory",
+    cards: [
+      { key: "memory", emoji: "🧭", title: "Between Trips Home", href: "/hotelier" },
+      { key: "bottle", emoji: "🍾", title: "Travel in a Bottle", href: "/travelBottle" },
+      { key: "reactivate", emoji: "🔑", title: "Activate New Stay", href: "/reactivateStay" },
+    ],
+  },
+  {
+    id: "saved",
+    title: "Saved · Following · Premium",
+    cards: [
+      { key: "following", emoji: "👥", title: "Following", href: "/following" },
+      { key: "spots", emoji: "❤️", title: "My Spots", href: "/mySpots" },
+      { key: "premium", emoji: "🎫", title: "Premium Membership", href: "/account/membership" },
+      { key: "moments", emoji: "✨", title: "My Moments", href: "/myMoment" },
+    ],
+  },
+  ...MENU_GROUPS_STAY.filter((g) => g.id !== "stay" && g.id !== "journey"),
+  {
+    id: "journey-after",
+    title: "Your journey",
+    cards: [
+      { key: "lf", emoji: "💬", title: "Local Friend", href: "/localFriend" },
+      { key: "impact", emoji: "🌍", title: "Impact / Passport", href: "/impact" },
+      { key: "bookings", emoji: "🎟", title: "Bookings", href: "/bookings" },
+      { key: "notif", emoji: "🔔", title: "Notifications", href: "/notifications" },
+    ],
+  },
 ];
 
 function applyMenuAuthFromUser(
   user: User | null,
   setters: {
     setOwnerPrivateMenuAllowed: (v: boolean) => void;
-    setCanStaffSignOut: (v: boolean) => void;
     setAuthHydrated: (v: boolean) => void;
   },
 ) {
-  setters.setOwnerPrivateMenuAllowed(canShowOwnerPrivateMenu(user));
-  setters.setCanStaffSignOut(canAccessHotelier(user));
+  /** Guests / anonymous must never see Owner tools — even if a stale email slips through. */
+  const allowed =
+    Boolean(user) &&
+    !isAnonymousSupabaseSession(user) &&
+    canShowOwnerPrivateMenu(user);
+  setters.setOwnerPrivateMenuAllowed(allowed);
   setters.setAuthHydrated(true);
 }
 
+/** Premium trip command center — not a settings list. Lifecycle-aware. */
 export default function MenuScreen() {
   const router = useRouter();
+  const insets = useSafeAreaInsets();
   const { width } = useWindowDimensions();
-  const isDesktopWeb = Platform.OS === 'web' && width >= 1000;
+  const isDesktopWeb = Platform.OS === "web" && width >= 1000;
+  const { activeIdentity } = useAppState();
+  const { isFullStay, state: lifeState, activeStay, refresh: refreshLife } = useGuestLifecycle();
   const [ownerPrivateMenuAllowed, setOwnerPrivateMenuAllowed] = React.useState(false);
   const [authHydrated, setAuthHydrated] = React.useState(false);
-  const [canStaffSignOut, setCanStaffSignOut] = React.useState(false);
   const [refreshing, setRefreshing] = React.useState(false);
-  const [menuLocationLine, setMenuLocationLine] = React.useState(
-    () => getHotelWhiteLabelOrDefault(null).menuLocationLine,
-  );
+  const [hotelName, setHotelName] = React.useState("");
+  const roomLabel = activeStay?.roomNumber
+    ? `Room ${activeStay.roomNumber}`
+    : isFullStay
+      ? "In stay"
+      : "Between trips";
+
+  const guestName = activeIdentity?.displayName?.trim() || "Guest";
+  const avatarUrl = activeIdentity?.avatarUrl;
 
   const authSetters = React.useMemo(
     () => ({
       setOwnerPrivateMenuAllowed,
-      setCanStaffSignOut,
       setAuthHydrated,
     }),
     [],
   );
 
+  const quickActions = isFullStay ? QUICK_ACTIONS_STAY : QUICK_ACTIONS_AFTER;
+  const menuGroups = isFullStay ? MENU_GROUPS_STAY : MENU_GROUPS_AFTER;
+
   const refreshMenuAccess = React.useCallback(async () => {
     const { user } = await resolveMenuAuthSnapshot();
     applyMenuAuthFromUser(user, authSetters);
-  }, [authSetters]);
+    await refreshLife();
+  }, [authSetters, refreshLife]);
 
-  /** Fast local session read before async merge — avoids blank owner menu on cold open. */
+  React.useEffect(() => {
+    void getHotelEntry().then((entry) => {
+      setHotelName(
+        liveHotelDisplayName({
+          stayName: activeStay?.hotelName,
+          entry,
+          slug: activeStay?.hotelSlug || entry?.slug,
+        }),
+      );
+    });
+  }, [activeStay?.hotelName, activeStay?.hotelSlug]);
+
   React.useLayoutEffect(() => {
     void supabase.auth.getSession().then(({ data: { session } }) => {
       applyMenuAuthFromUser(session?.user ?? null, authSetters);
@@ -97,12 +241,6 @@ export default function MenuScreen() {
     }, [refreshMenuAccess]),
   );
 
-  React.useEffect(() => {
-    void getHotelEntry().then((entry) => {
-      setMenuLocationLine(getHotelWhiteLabelOrDefault(entry?.slug ?? null).menuLocationLine);
-    });
-  }, []);
-
   const onRefresh = React.useCallback(async () => {
     setRefreshing(true);
     try {
@@ -114,165 +252,301 @@ export default function MenuScreen() {
 
   const menuRefreshControl = usePremiumRefreshControl(refreshing, onRefresh);
 
-  const items: MenuItem[] = React.useMemo(() => {
-    const out: MenuItem[] = [...MENU_ITEMS, { title: 'Hotelier', route: '/hotelier' }];
-    if (ownerPrivateMenuAllowed) {
-      out.push(...OWNER_PRIVATE_MENU_ITEMS);
-    }
-    return out;
-  }, [ownerPrivateMenuAllowed]);
+  const go = (href: Href) => router.push(href);
 
-  const signedInEmailUser = canStaffSignOut;
-  const showGuestMenuTitle = !signedInEmailUser;
-  const headerTitle = showGuestMenuTitle ? 'Guest Menu' : 'Menu';
-  const showPilotStaffChrome = authHydrated && ownerPrivateMenuAllowed;
-  /** Match web Guest Menu: always offer email sign-in until a real account session exists. */
-  const showStaffSignIn = !signedInEmailUser;
+  const onLogout = async () => {
+    await safeSignOut();
+    router.replace("/bandits" as Href);
+  };
+
+  const initials = guestName
+    .split(/\s+/)
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((p) => p[0]?.toUpperCase() ?? "")
+    .join("");
 
   return (
     <ScrollView
-      contentContainerStyle={styles.content}
+      style={styles.screen}
+      contentContainerStyle={[
+        styles.content,
+        isDesktopWeb && styles.contentDesktop,
+        { paddingBottom: 48 + insets.bottom },
+      ]}
       keyboardShouldPersistTaps="handled"
       refreshControl={menuRefreshControl}
     >
-      <Stack.Screen options={{ headerShown: true, title: headerTitle }} />
+      <Stack.Screen options={{ headerShown: false }} />
 
+      {/* Header — trip identity */}
       <View style={styles.header}>
-        <Image source={require('@/assets/icons/logobanditourapp.png')} style={styles.wordmark} resizeMode="contain" />
-        <Text style={styles.headerTitle}>{headerTitle}</Text>
-        <Text style={styles.headerSubtitle}>
-          {showPilotStaffChrome ? `Staff · ${menuLocationLine}` : menuLocationLine}
-        </Text>
+        <View style={styles.logoChip}>
+          <Image source={LOGO} style={styles.logo} resizeMode="contain" accessibilityLabel="bandiTour" />
+        </View>        <View style={styles.identityRow}>
+          <Pressable style={styles.avatarWrap} onPress={() => go("/profile" as Href)}>
+            {avatarUrl ? (
+              <ExpoImage source={{ uri: avatarUrl }} style={styles.avatar} contentFit="cover" />
+            ) : (
+              <View style={styles.avatarFallback}>
+                <Text style={styles.avatarInitials}>{initials || "G"}</Text>
+              </View>
+            )}
+          </Pressable>
+          <View style={styles.identityText}>
+            <Text style={styles.guestName}>{guestName}</Text>
+            <Text style={styles.hotelLine}>{hotelName}</Text>
+            <Text style={styles.metaLine}>
+              {isFullStay
+                ? `${roomLabel} · 2 nights remaining`
+                : `${lifeState.replace(/_/g, " ")} · account active`}
+            </Text>
+            <View style={styles.statusPill}>
+              <View style={styles.statusDot} />
+              <Text style={styles.statusText}>
+                {isFullStay ? "Premium Guest" : "Members Club · After Trip"}
+              </Text>
+            </View>
+          </View>
+        </View>
       </View>
 
-      <View style={[styles.section, isDesktopWeb && styles.sectionDesktop]}>
-        {items.map((item) => (
+      {/* Quick actions */}
+      <Text style={styles.sectionLabel}>Quick actions</Text>
+      <ScrollView
+        horizontal
+        showsHorizontalScrollIndicator={false}
+        contentContainerStyle={styles.quickRow}
+      >
+        {quickActions.map((q) => (
           <Pressable
-            key={item.title}
-            style={[styles.row, isDesktopWeb && styles.rowDesktop]}
-            onPress={() => router.push(item.route as never)}
+            key={q.key}
+            style={({ pressed }) => [styles.quickCard, pressed && styles.pressed]}
+            onPress={() => go(q.href)}
           >
-            <Text style={styles.rowText}>{item.title}</Text>
+            <Text style={styles.quickEmoji}>{q.emoji}</Text>
+            <Text style={styles.quickTitle} numberOfLines={2}>
+              {q.title}
+            </Text>
+            <Text style={styles.quickSub} numberOfLines={1}>
+              {q.subtitle}
+            </Text>
           </Pressable>
         ))}
-      </View>
+      </ScrollView>
 
-      {showStaffSignIn ? (
-        <Pressable
-          style={styles.staffSignIn}
-          onPress={() => openStaffEmailLogin(router, '/menu')}
-        >
-          <Text style={styles.staffSignInTitle}>Sign in with email</Text>
-          <Text style={styles.staffSignInSub}>For hotel partners and verified accounts.</Text>
-        </Pressable>
+      {/* Grouped destination cards */}
+      {menuGroups.map((group) => (
+        <View key={group.id} style={styles.group}>
+          <Text style={styles.sectionLabel}>{group.title}</Text>
+          <View style={styles.grid}>
+            {group.cards.map((card) => (
+              <Pressable
+                key={card.key}
+                style={({ pressed }) => [styles.card, pressed && styles.pressed]}
+                onPress={() => {
+                  if (card.href) go(card.href);
+                }}
+              >
+                <Text style={styles.cardEmoji}>{card.emoji}</Text>
+                <Text style={styles.cardTitle} numberOfLines={2}>
+                  {card.title}
+                </Text>
+              </Pressable>
+            ))}
+          </View>
+        </View>
+      ))}
+
+      {ownerPrivateMenuAllowed ? (
+        <View style={styles.group}>
+          <Text style={styles.sectionLabel}>Owner</Text>
+          <View style={styles.grid}>
+            <Pressable
+              style={({ pressed }) => [styles.card, pressed && styles.pressed]}
+              onPress={() => go("/operatorDesk" as Href)}
+            >
+              <Text style={styles.cardEmoji}>🛠</Text>
+              <Text style={styles.cardTitle}>Pilot Desk</Text>
+            </Pressable>
+            <Pressable
+              style={({ pressed }) => [styles.card, pressed && styles.pressed]}
+              onPress={() => go("/admin" as Href)}
+            >
+              <Text style={styles.cardEmoji}>🎛</Text>
+              <Text style={styles.cardTitle}>CDesk</Text>
+            </Pressable>
+          </View>
+        </View>
       ) : null}
 
-      {canStaffSignOut ? (
-        <Pressable
-          style={styles.signOut}
-          onPress={async () => {
-            await supabase.auth.signOut();
-            Alert.alert('Signed out', 'You have been signed out successfully.');
-            openStaffEmailLogin(router, '/menu');
-          }}
-        >
-          <Text style={styles.signOutText}>Sign out</Text>
-        </Pressable>
-      ) : null}
+      <Pressable style={styles.logout} onPress={() => void onLogout()}>
+        <Text style={styles.logoutText}>Sign out</Text>
+      </Pressable>
+
+      {authHydrated ? null : <Text style={styles.hint}>Loading account…</Text>}
     </ScrollView>
   );
 }
 
 const styles = StyleSheet.create({
-  content: {
-    paddingHorizontal: 16,
-    paddingTop: 16,
-    paddingBottom: 32,
-    backgroundColor: '#FFFFFF',
-    width: '100%',
-    maxWidth: 1120,
-    alignSelf: 'center',
-  },
+  screen: { flex: 1, backgroundColor: "#F6F4F0" },
+  content: { paddingHorizontal: 16, paddingTop: 8 },
+  contentDesktop: { maxWidth: 720, alignSelf: "center", width: "100%" },
   header: {
-    alignItems: 'center',
-    marginBottom: 18,
+    backgroundColor: "#0A0908",
+    borderRadius: 24,
+    padding: 20,
+    marginBottom: 22,
+    ...Platform.select({
+      ios: {
+        shadowColor: "#000",
+        shadowOffset: { width: 0, height: 8 },
+        shadowOpacity: 0.18,
+        shadowRadius: 16,
+      },
+      android: { elevation: 8 },
+      default: {},
+    }),
   },
-  wordmark: {
-    width: 176,
+  logoChip: {
+    alignSelf: "flex-start",
+    backgroundColor: "#FFF",
+    borderRadius: 12,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    marginBottom: 16,
+  },
+  logo: { width: 118, height: 26 },
+  identityRow: { flexDirection: "row", alignItems: "center", gap: 14 },
+  avatarWrap: { borderRadius: 28, overflow: "hidden" },
+  avatar: { width: 56, height: 56, borderRadius: 28 },
+  avatarFallback: {
+    width: 56,
     height: 56,
-    marginBottom: 8,
+    borderRadius: 28,
+    backgroundColor: "rgba(240,215,160,0.2)",
+    alignItems: "center",
+    justifyContent: "center",
+    borderWidth: 1,
+    borderColor: "rgba(240,215,160,0.45)",
   },
-  headerTitle: {
-    fontSize: 20,
-    fontWeight: '800',
-    color: '#111',
-    marginBottom: 4,
+  avatarInitials: {
+    color: "rgba(240,215,160,0.98)",
+    fontWeight: "800",
+    fontSize: 18,
   },
-  headerSubtitle: {
-    fontSize: 12,
-    color: '#6D6D6D',
-    letterSpacing: 0.4,
-    textTransform: 'uppercase',
+  identityText: { flex: 1, minWidth: 0 },
+  guestName: {
+    fontSize: 22,
+    fontWeight: "800",
+    color: "#FFF",
+    letterSpacing: -0.3,
   },
-  section: {
-    borderRadius: 14,
-    overflow: 'hidden',
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: '#E6E6E6',
-  },
-  sectionDesktop: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    alignItems: 'stretch',
-  },
-  row: {
-    paddingVertical: 16,
-    paddingHorizontal: 14,
-    backgroundColor: '#fff',
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: '#E6E6E6',
-  },
-  rowDesktop: {
-    width: '50%',
-    borderRightWidth: StyleSheet.hairlineWidth,
-    borderRightColor: '#E6E6E6',
-  },
-  rowText: {
-    fontSize: 16,
-    fontWeight: '700',
-    color: '#0a7ea4',
-  },
-  staffSignIn: {
-    marginTop: 18,
-    borderRadius: 12,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: '#C8E6EF',
-    backgroundColor: '#F5FBFD',
-    paddingVertical: 14,
-    paddingHorizontal: 14,
-  },
-  staffSignInTitle: {
+  hotelLine: {
     fontSize: 15,
-    fontWeight: '800',
-    color: '#0a7ea4',
-    marginBottom: 4,
+    fontWeight: "600",
+    color: "rgba(240,215,160,0.95)",
+    marginTop: 2,
   },
-  staffSignInSub: {
-    fontSize: 12,
-    color: '#5a7a82',
-    fontWeight: '600',
+  metaLine: {
+    fontSize: 13,
+    color: "rgba(255,255,255,0.7)",
+    marginTop: 4,
   },
-  signOut: {
-    marginTop: 18,
-    backgroundColor: '#111',
-    borderRadius: 12,
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 14,
+  statusPill: {
+    flexDirection: "row",
+    alignItems: "center",
+    alignSelf: "flex-start",
+    gap: 6,
+    marginTop: 10,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 999,
+    backgroundColor: "rgba(240,215,160,0.14)",
   },
-  signOutText: {
-    color: '#FFF',
-    fontSize: 14,
-    fontWeight: '700',
+  statusDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: "#E8A317",
   },
+  statusText: {
+    fontSize: 11,
+    fontWeight: "800",
+    color: "rgba(240,215,160,0.98)",
+    letterSpacing: 0.3,
+  },
+  sectionLabel: {
+    fontSize: 13,
+    fontWeight: "800",
+    color: "#6B5A3A",
+    letterSpacing: 0.8,
+    textTransform: "uppercase",
+    marginBottom: 12,
+    marginTop: 8,
+  },
+  quickRow: { gap: 12, paddingBottom: 8, paddingRight: 40 },
+  quickCard: {
+    width: 148,
+    backgroundColor: "#FFFFFF",
+    borderRadius: 20,
+    padding: 16,
+    ...Platform.select({
+      ios: {
+        shadowColor: "#000",
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.08,
+        shadowRadius: 12,
+      },
+      android: { elevation: 3 },
+      default: {},
+    }),
+  },
+  quickEmoji: { fontSize: 28, marginBottom: 10 },
+  quickTitle: { fontSize: 14, fontWeight: "800", color: "#111", lineHeight: 18 },
+  quickSub: { fontSize: 12, color: "#777", marginTop: 4 },
+  group: { marginTop: 18 },
+  grid: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 12,
+  },
+  card: {
+    width: "47.5%",
+    flexGrow: 1,
+    maxWidth: "48.5%",
+    minHeight: 108,
+    backgroundColor: "#FFFFFF",
+    borderRadius: 20,
+    padding: 16,
+    justifyContent: "space-between",
+    ...Platform.select({
+      ios: {
+        shadowColor: "#000",
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.07,
+        shadowRadius: 10,
+      },
+      android: { elevation: 2 },
+      default: {},
+    }),
+  },
+  cardEmoji: { fontSize: 26, marginBottom: 12 },
+  cardTitle: { fontSize: 15, fontWeight: "700", color: "#1A1A1A", lineHeight: 20 },
+  pressed: { opacity: 0.88, transform: [{ scale: 0.98 }] },
+  logout: {
+    marginTop: 28,
+    marginBottom: 8,
+    backgroundColor: "#0A0908",
+    borderRadius: 16,
+    paddingVertical: 16,
+    alignItems: "center",
+  },
+  logoutText: {
+    color: "rgba(240,215,160,0.98)",
+    fontWeight: "800",
+    fontSize: 15,
+  },
+  hint: { marginTop: 12, fontSize: 12, color: "#999", textAlign: "center" },
 });

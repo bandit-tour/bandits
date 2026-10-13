@@ -1,117 +1,102 @@
 import { router } from 'expo-router';
 import React from 'react';
-import { Image, Platform, Pressable, StyleSheet, View } from 'react-native';
-
-import LeafletMapView from '@/components/LeafletMapView';
+import { Image, Platform, Pressable, StyleSheet, useWindowDimensions, View } from 'react-native';
 
 /**
- * Top-right thumbnail on every Local banDit card.
+ * Top-right territory / map control on every Local banDit card.
  *
- * Visual contract (must be identical for every bandit):
- *  - Fixed 80×80 rounded thumbnail with subtle white border + soft shadow.
- *  - Web: live Leaflet mini-map auto-centered on the bandit's curated locations
- *    with colored dot markers. When the bandit has zero mappable events the
- *    LeafletMapView mini path renders a branded placeholder (NOT raw OSM tiles)
- *    so the thumbnail never shows "pale blue lines / broken tiles".
- *  - Native: branded Google-Maps icon button (same outer dimensions/shape).
+ * Communicates: this person belongs to / knows this local area.
+ * Sized to be clearly readable — elegant and secondary to the portrait,
+ * never a tiny decorative icon.
  *
- * Tapping the thumbnail always opens the full city map filtered by this bandit.
+ * Opens `/cityMap?banditId=` for this banDit's curated pins.
  */
 
-const ATHENS = {
-  latitude: 37.9838,
-  longitude: 23.7275,
-  latitudeDelta: 0.0922,
-  longitudeDelta: 0.0421,
-};
+const DESKTOP_BREAK = 900;
 
-const THUMB_SIZE = 80;
+/** ~1.75× prior 44/48 chip — recognizable territory mark. */
+const SIZE = { desktop: 84, mobile: 76 } as const;
+const ICON = { desktop: 46, mobile: 42 } as const;
 
 export default function BanditMiniMapPreview({ banditId }: { banditId: string }) {
+  const { width } = useWindowDimensions();
+  const isDesktop = Platform.OS === 'web' && width >= DESKTOP_BREAK;
+  const size = isDesktop ? SIZE.desktop : SIZE.mobile;
+  const iconSize = isDesktop ? ICON.desktop : ICON.mobile;
+  const radius = isDesktop ? 18 : 16;
+
   const openFullMap = () => {
     router.push(`/cityMap?banditId=${encodeURIComponent(banditId)}` as any);
   };
 
-  if (Platform.OS !== 'web') {
-    return (
-      <Pressable onPress={openFullMap} style={styles.nativeWrap} hitSlop={8} accessibilityRole="button" accessibilityLabel="Open city map">
-        <View style={styles.nativeInner}>
-          <Image
-            source={require('@/assets/icons/google-maps-512.png')}
-            style={styles.mapIcon}
-          />
-        </View>
-      </Pressable>
-    );
-  }
-
   return (
-    <Pressable onPress={openFullMap} style={styles.webWrap} hitSlop={4} accessibilityRole="button" accessibilityLabel="Open city map">
-      <View style={styles.mapClip} pointerEvents="none">
-        <LeafletMapView
-          miniMode
-          banditId={banditId}
-          initialRegion={ATHENS}
-          onMapReady={() => {}}
-          onError={() => {}}
-          onRegionChange={() => {}}
+    <Pressable
+      onPress={openFullMap}
+      style={({ pressed, hovered }: any) => [
+        styles.wrap,
+        {
+          width: size,
+          height: size,
+          borderRadius: radius,
+        },
+        (pressed || hovered) && styles.wrapHover,
+      ]}
+      hitSlop={6}
+      accessibilityRole="button"
+      accessibilityLabel="Open this banDit's local map"
+    >
+      <View style={[styles.inner, { borderRadius: radius - 2 }]}>
+        <Image
+          source={require('@/assets/icons/google-maps-512.png')}
+          style={{ width: iconSize, height: iconSize }}
+          resizeMode="contain"
         />
       </View>
     </Pressable>
   );
 }
 
-const sharedShadow = Platform.select({
-  ios: {
-    shadowColor: '#000',
-    shadowOpacity: 0.18,
-    shadowOffset: { width: 0, height: 2 },
-    shadowRadius: 4,
-  },
-  android: { elevation: 4 },
-  default: {
-    boxShadow: '0 2px 6px rgba(0,0,0,0.18)' as any,
-  },
-});
-
 const styles = StyleSheet.create({
-  webWrap: {
-    width: THUMB_SIZE,
-    height: THUMB_SIZE,
-    borderRadius: 14,
-    overflow: 'hidden',
-    borderWidth: 2,
-    borderColor: '#FFFFFF',
-    backgroundColor: '#FFFFFF',
-    ...(sharedShadow as object),
-  },
-  mapClip: {
-    width: '100%',
-    height: '100%',
-    overflow: 'hidden',
-    backgroundColor: '#EEF1F4',
-  },
-  nativeWrap: {
-    width: THUMB_SIZE,
-    height: THUMB_SIZE,
-    borderRadius: 14,
-    overflow: 'hidden',
-    borderWidth: 2,
-    borderColor: '#FFFFFF',
-    backgroundColor: '#FFFFFF',
+  wrap: {
+    backgroundColor: '#FAF9F7',
+    borderWidth: 1.5,
+    borderColor: 'rgba(255,255,255,0.98)',
     alignItems: 'center',
     justifyContent: 'center',
-    ...(sharedShadow as object),
+    ...Platform.select({
+      web: {
+        boxShadow: '0 4px 16px rgba(0,0,0,0.22)',
+        cursor: 'pointer',
+        transition: 'transform 140ms ease, box-shadow 140ms ease',
+      } as any,
+      ios: {
+        shadowColor: '#000',
+        shadowOpacity: 0.22,
+        shadowOffset: { width: 0, height: 3 },
+        shadowRadius: 8,
+      },
+      android: { elevation: 7 },
+      default: {},
+    }),
   },
-  nativeInner: {
+  wrapHover: {
+    transform: [{ scale: 1.04 }],
+    ...Platform.select({
+      web: {
+        boxShadow: '0 8px 22px rgba(0,0,0,0.28)',
+      } as any,
+      default: {
+        shadowOpacity: 0.3,
+        elevation: 9,
+      },
+    }),
+  },
+  inner: {
     width: '100%',
     height: '100%',
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#F5F7FA',
-  },
-  mapIcon: {
-    width: 56,
-    height: 56,
+    backgroundColor: '#FFFFFF',
+    overflow: 'hidden',
   },
 });

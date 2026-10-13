@@ -131,7 +131,7 @@ export default function Login() {
             u.app_metadata?.provider === 'anonymous' ||
             (u as { is_anonymous?: boolean }).is_anonymous === true;
           if (isAnon && !forceAuth) {
-            router.replace('/bandits' as Href);
+            router.replace('/home' as Href);
             return;
           }
           setUser(u);
@@ -429,7 +429,7 @@ export default function Login() {
     return (
       <>
         <Stack.Screen options={screenOptions} />
-        <Redirect href={(safe ?? '/bandits') as Href} />
+        <Redirect href={(safe ?? '/home') as Href} />
       </>
     );
   }
@@ -442,7 +442,7 @@ export default function Login() {
     return (
       <>
         <Stack.Screen options={screenOptions} />
-        <Redirect href={('/bandits' as Href)} />
+        <Redirect href={('/home' as Href)} />
       </>
     );
   }

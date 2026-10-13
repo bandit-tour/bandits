@@ -23,6 +23,7 @@ import { getSavedAlertIds, toggleSavedAlertId } from '@/lib/banditeamSavedAlerts
 import { renderSafeText } from '@/lib/renderSafeText';
 import { severityAccent } from '@/lib/scamAlertTrust';
 import { useScamAlertsFeedRefresh } from '@/lib/scamAlertsRefresh';
+import { useGuestLiveSurface } from '@/lib/orchestra/useGuestLiveSurface';
 import { useAppBackScreenOptions } from '@/hooks/useAppBackScreenOptions';
 import { supabase } from '@/lib/supabase';
 import { fetchScamAlerts, type ScamAlertRow } from '@/services/scamAlerts';
@@ -265,6 +266,7 @@ export default function ScamAlertsScreen() {
   }, [load]);
 
   useScamAlertsFeedRefresh(load);
+  useGuestLiveSurface('alerts', (opts) => void load({ silent: opts?.silent !== false }));
 
   useFocusEffect(
     useCallback(() => {
@@ -644,7 +646,7 @@ const styles = StyleSheet.create({
   headerReportBtnText: {
     fontSize: 16,
     fontWeight: '800',
-    color: '#0a7ea4',
+    color: '#E03131',
   },
   headerActions: { flexDirection: 'row', alignItems: 'center' },
   headerMapBtn: {

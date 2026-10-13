@@ -5,17 +5,22 @@ import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useSta
 import { Platform, Pressable, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 
 import { getEventBanditRecommendations, getBanditEventPersonalTip } from '@/app/services/events';
-import LocalBanditOctopusIcon from '@/components/LocalBanditOctopusIcon';
 import type { EventListImageScope } from '@/lib/eventListImagePlan';
-import { pickVenueGalleryHeroUri } from '@/lib/eventVenueGallery';
+import { getEventVenueGalleryOrdered, pickVenueGalleryHeroUri } from '@/lib/eventVenueGallery';
 import {
   fetchGooglePlacePhotoUrl,
+  fetchGooglePlacePhotoUrls,
+  fetchTrustedPlaceIdPhotoUrls,
   isGooglePlacesDerivedPhotoUrl,
   isLikelyLogoOrBadPlaceImage,
   normalizeEventImageUri,
 } from '@/lib/placePhoto';
-import { buildUserFacingVenueFallbackImage, claimVerifiedHeroPhotoUrl } from '@/lib/recommendationImages';
+import {
+  claimVerifiedHeroPhotoUrl,
+  pickUserFacingStoredHeroUrl,
+} from '@/lib/recommendationImages';
 import { navigateToBanditProfile } from '@/lib/appNavigation';
+import { repairDisplayText } from '@/lib/repairTextEncoding';
 
 type Event = Database['public']['Tables']['event']['Row'];
 type BanditRecommendation = Pick<Database['public']['Tables']['bandit']['Row'], 'id' | 'image_url'>;
@@ -28,6 +33,17 @@ function banditPreloadEqual(
   if (a === undefined || b === undefined) return a === b;
   if (a.length !== b.length) return false;
   return a.every((x, i) => x.id === b[i]?.id && x.image_url === b[i]?.image_url);
+}
+
+/** Pure helper — never a component-scoped const (avoids TDZ / hook-reorder crashes). */
+function buildEventPlacePhotoArgs(event: Event) {
+  return {
+    placeId: (event as { google_place_id?: string | null }).google_place_id ?? null,
+    name: String(event.name ?? ''),
+    address: String(event.address ?? ''),
+    city: String(event.city ?? ''),
+    neighborhood: String(event.neighborhood ?? ''),
+  };
 }
 
 // Cache resolved real photo URLs so we don't repeatedly call Google for the same place.
@@ -131,6 +147,13 @@ interface EventCardProps {
   skipGooglePhotoFetch?: boolean;
   /** Android: separate press targets so heart/avatar taps are not swallowed by the card. */
   splitTouchTargets?: boolean;
+  /**
+   * When every stored gallery URI fails and live Places recovery returns nothing,
+   * hide the card entirely (Explore fail-safe). Never leave "Photo unavailable".
+   */
+  omitWhenNoHero?: boolean;
+  /** Fired once when the card has no loadable hero after gallery + Places recovery. */
+  onHeroUnavailable?: (eventId: string) => void;
 }
 
 function EventCardImpl({
@@ -156,6 +179,8 @@ function EventCardImpl({
   onBanditPress,
   skipGooglePhotoFetch = false,
   splitTouchTargets = false,
+  omitWhenNoHero = false,
+  onHeroUnavailable,
 }: EventCardProps) {
   const router = useRouter();
   const isHorizontal = variant === 'horizontal';
@@ -178,136 +203,238 @@ function EventCardImpl({
 
   const isLogoLikeImageUri = (uri: string) => isLikelyLogoOrBadPlaceImage(uri);
 
-  const [googlePhotoUri, setGooglePhotoUri] = useState<string | null>(null);
+  const [livePhotoUris, setLivePhotoUris] = useState<string[]>([]);
   const [googleFetchFinished, setGoogleFetchFinished] = useState(false);
-  const [strictImageFailed, setStrictImageFailed] = useState(false);
+  const [failedUris, setFailedUris] = useState<Record<string, true>>({});
+  const [heroExhausted, setHeroExhausted] = useState(false);
   const googleFetchStarted = useRef(false);
+  const recoveryFetchStarted = useRef(false);
+  const heroUnavailableNotified = useRef(false);
 
-  const userFacingFallbackUri = useMemo(
-    () => buildUserFacingVenueFallbackImage(event, `event-card:${event.id}`),
-    [event.id, event.name, event.genre, event.address, (event as any).google_place_id],
+  const venueGalleryUris = useMemo(
+    () => getEventVenueGalleryOrdered(event),
+    [event.id, event.image_gallery, event.image_url, (event as any).google_photo_url, (event as any).bandit_photo_url],
   );
 
   const venueGalleryHero = useMemo(
     () => pickVenueGalleryHeroUri(event),
-    [event.id, event.image_gallery, event.image_url],
+    [event.id, event.image_gallery, event.image_url, (event as any).google_photo_url, (event as any).bandit_photo_url],
+  );
+
+  const storedHeroUri = useMemo(
+    () => pickUserFacingStoredHeroUrl(event),
+    [event.id, event.image_gallery, event.image_url, (event as any).google_photo_url, (event as any).bandit_photo_url],
+  );
+
+  const parentResolvedNormalized = useMemo(() => {
+    if (!recommendationHeroResolverReady) return null;
+    return normalizeEventImageUri(resolvedRecommendationImageUri ?? '');
+  }, [recommendationHeroResolverReady, resolvedRecommendationImageUri]);
+
+  /** Skip list-time Places fetch when parent already supplied a usable https hero (incl. live-refreshed). */
+  const shouldSkipGoogleInListScope =
+    skipGooglePhotoFetch &&
+    Boolean(parentResolvedNormalized) &&
+    /^https?:\/\//i.test(parentResolvedNormalized!) &&
+    !failedUris[parentResolvedNormalized!];
+
+  const resolveLivePlacePhotoUrls = useCallback(
+    async (limit: number) => {
+      const args = buildEventPlacePhotoArgs(event);
+      const placeId = args.placeId;
+      // Same trusted path as City Guide — google_place_id without English name re-match.
+      let urls = placeId ? await fetchTrustedPlaceIdPhotoUrls(placeId, limit) : [];
+      if (urls.length === 0) {
+        urls = await fetchGooglePlacePhotoUrls({ ...args, limit });
+      }
+      if (urls.length === 0) {
+        const single = await fetchGooglePlacePhotoUrl(args);
+        if (single) urls = [single];
+      }
+      return urls;
+    },
+    [
+      event.id,
+      event.name,
+      event.address,
+      event.city,
+      event.neighborhood,
+      (event as { google_place_id?: string | null }).google_place_id,
+    ],
   );
 
   const displayUri = useMemo(() => {
     const meta = { eventId: event.id, googlePlaceId: (event as any).google_place_id as string | null | undefined };
-    if (strictRecommendationImagePolicy) {
-      if (!recommendationHeroResolverReady) return userFacingFallbackUri;
-      const raw = normalizeEventImageUri(resolvedRecommendationImageUri ?? '');
-      if (!raw) return userFacingFallbackUri;
-      if (!isGooglePlacesDerivedPhotoUrl(raw)) return raw;
-      return claimVerifiedHeroPhotoUrl(raw, meta) ?? userFacingFallbackUri;
-    }
-    const normalizedVenueGallery = normalizeEventImageUri(venueGalleryHero ?? '');
-    if (normalizedVenueGallery) {
-      if (isGooglePlacesDerivedPhotoUrl(normalizedVenueGallery)) {
-        return claimVerifiedHeroPhotoUrl(normalizedVenueGallery, meta) ?? null;
+    const claimOrKeep = (uri: string | null): string | null => {
+      if (!uri || failedUris[uri]) return null;
+      if (isGooglePlacesDerivedPhotoUrl(uri)) {
+        return claimVerifiedHeroPhotoUrl(uri, meta) ?? uri;
       }
-      return normalizedVenueGallery;
+      return uri;
+    };
+
+    const candidates: string[] = [];
+    const push = (raw: string | null | undefined) => {
+      const n = normalizeEventImageUri(raw ?? '');
+      if (!n || failedUris[n] || candidates.includes(n)) return;
+      const kept = claimOrKeep(n);
+      if (kept && !candidates.includes(kept)) candidates.push(kept);
+    };
+
+    if (strictRecommendationImagePolicy) {
+      push(parentResolvedNormalized);
+      return candidates[0] ?? null;
     }
-    const normalizedGoogle = normalizeEventImageUri(googlePhotoUri);
-    if (!normalizedGoogle) return null;
-    return claimVerifiedHeroPhotoUrl(normalizedGoogle, meta) ?? null;
+
+    // Live-refreshed + parent Explore heroes first; stored gallery is already
+    // durable-only (shared eventVenueGallery rejects expired Places resources).
+    for (const u of livePhotoUris) push(u);
+    push(parentResolvedNormalized);
+    for (const u of venueGalleryUris) push(u);
+    push(storedHeroUri);
+    push(venueGalleryHero);
+
+    return candidates[0] ?? null;
   }, [
     event.id,
     (event as any).google_place_id,
+    venueGalleryUris,
     venueGalleryHero,
-    googlePhotoUri,
-    googleFetchFinished,
+    storedHeroUri,
+    livePhotoUris,
+    failedUris,
     strictRecommendationImagePolicy,
-    resolvedRecommendationImageUri,
-    recommendationHeroResolverReady,
-    userFacingFallbackUri,
+    parentResolvedNormalized,
   ]);
 
   const resolvedImageUri = displayUri;
-
-  const shouldSkipGoogleInListScope = skipGooglePhotoFetch;
   const useSplitTouch = splitTouchTargets && isHorizontal;
-
-  const fetchPlacePhoto = async () => {
-    return fetchGooglePlacePhotoUrl({
-      placeId: (event as any).google_place_id ?? null,
-      name: String(event.name ?? ''),
-      address: String(event.address ?? ''),
-      city: String(event.city ?? ''),
-      neighborhood: String(event.neighborhood ?? ''),
-    });
-  };
 
   /** Reset when event / DB URLs change. */
   useLayoutEffect(() => {
-    setStrictImageFailed(false);
-    setGooglePhotoUri(null);
+    setFailedUris({});
+    setLivePhotoUris([]);
     setGoogleFetchFinished(false);
+    setHeroExhausted(false);
     googleFetchStarted.current = false;
+    recoveryFetchStarted.current = false;
+    heroUnavailableNotified.current = false;
   }, [
     event.id,
     strictRecommendationImagePolicy,
     resolvedRecommendationImageUri ?? '',
   ]);
 
-  /** Always resolve place-name photo first; DB/category remain fallback chain. */
-  const loadGooglePhoto = () => {
+  const applyLivePhotoUrls = useCallback(
+    (urls: string[]) => {
+      const meta = {
+        eventId: event.id,
+        googlePlaceId: (event as any).google_place_id as string | null | undefined,
+      };
+      const accepted: string[] = [];
+      for (const photoUrl of urls) {
+        if (!photoUrl || isLogoLikeImageUri(photoUrl)) continue;
+        const claimed = claimVerifiedHeroPhotoUrl(photoUrl, meta) ?? photoUrl;
+        if (claimed && !accepted.includes(claimed)) accepted.push(claimed);
+      }
+      if (accepted.length > 0) {
+        photoUrlCache.set(event.id, accepted[0]);
+        setLivePhotoUris(accepted);
+      }
+      return accepted;
+    },
+    [event.id, (event as any).google_place_id, photoUrlCache],
+  );
+
+  /** List-time Places fetch — trusted google_place_id path (City Guide parity). */
+  const loadGooglePhoto = useCallback(() => {
     if (shouldSkipGoogleInListScope) {
       setGoogleFetchFinished(true);
       return;
     }
     if (googleFetchStarted.current) return;
     googleFetchStarted.current = true;
-    const meta = {
-      eventId: event.id,
-      googlePlaceId: (event as any).google_place_id as string | null | undefined,
-    };
     const cached = photoUrlCache.get(event.id);
-    if (cached && !isLogoLikeImageUri(cached)) {
-      const claimed = claimVerifiedHeroPhotoUrl(cached, meta);
-      if (claimed) {
-        setGooglePhotoUri(claimed);
-        setGoogleFetchFinished(true);
-        return;
-      }
-      photoUrlCache.delete(event.id);
+    if (cached && !isLogoLikeImageUri(cached) && !failedUris[cached]) {
+      applyLivePhotoUrls([cached]);
+      setGoogleFetchFinished(true);
+      return;
     }
     void (async () => {
       try {
-        const photoUrl = await fetchPlacePhoto();
-        if (photoUrl && !isLogoLikeImageUri(photoUrl)) {
-          const claimed = claimVerifiedHeroPhotoUrl(photoUrl, meta);
-          if (claimed) {
-            photoUrlCache.set(event.id, claimed);
-            setGooglePhotoUri(claimed);
-          }
-        }
+        const urls = await resolveLivePlacePhotoUrls(6);
+        if (urls.length > 0) applyLivePhotoUrls(urls);
       } catch (e) {
         console.warn('[EventCard] google photo fetch failed', { eventId: event.id, e });
       } finally {
         setGoogleFetchFinished(true);
       }
     })();
-  };
+  }, [
+    shouldSkipGoogleInListScope,
+    event.id,
+    resolveLivePlacePhotoUrls,
+    applyLivePhotoUrls,
+    failedUris,
+    photoUrlCache,
+  ]);
 
   useEffect(() => {
     if (strictRecommendationImagePolicy) return;
-    if (skipGooglePhotoFetch) {
+    if (shouldSkipGoogleInListScope) {
       setGoogleFetchFinished(true);
       return;
     }
     loadGooglePhoto();
   }, [
     event.id,
-    event.name,
-    event.address,
-    event.city,
-    event.neighborhood,
-    (event as any).google_place_id,
     shouldSkipGoogleInListScope,
     strictRecommendationImagePolicy,
-    skipGooglePhotoFetch,
+    loadGooglePhoto,
+  ]);
+
+  /** When the active hero dies, advance gallery then live-recover via trusted place id. */
+  const handleHeroImageError = useCallback(
+    (failedUri: string) => {
+      const n = normalizeEventImageUri(failedUri) ?? failedUri;
+      photoUrlCache.delete(event.id);
+      setFailedUris((prev) => (prev[n] ? prev : { ...prev, [n]: true }));
+
+      if (!recoveryFetchStarted.current) {
+        recoveryFetchStarted.current = true;
+        void (async () => {
+          try {
+            const urls = await resolveLivePlacePhotoUrls(8);
+            applyLivePhotoUrls(urls);
+          } catch (e) {
+            console.warn('[EventCard] hero recovery fetch failed', { eventId: event.id, e });
+          } finally {
+            setGoogleFetchFinished(true);
+          }
+        })();
+      }
+    },
+    [event.id, resolveLivePlacePhotoUrls, applyLivePhotoUrls, photoUrlCache],
+  );
+
+  useEffect(() => {
+    if (strictRecommendationImagePolicy) return;
+    if (resolvedImageUri) {
+      setHeroExhausted(false);
+      return;
+    }
+    if (!googleFetchFinished) return;
+    setHeroExhausted(true);
+    if (!heroUnavailableNotified.current) {
+      heroUnavailableNotified.current = true;
+      onHeroUnavailable?.(event.id);
+    }
+  }, [
+    resolvedImageUri,
+    googleFetchFinished,
+    strictRecommendationImagePolicy,
+    onHeroUnavailable,
+    event.id,
   ]);
 
   useEffect(() => {
@@ -360,14 +487,8 @@ function EventCardImpl({
   }, [banditId, event.id]);
 
   const showImageRegion = true;
-  const heroUri =
-    strictRecommendationImagePolicy && strictImageFailed
-      ? userFacingFallbackUri
-      : strictRecommendationImagePolicy
-        ? resolvedImageUri ?? userFacingFallbackUri
-        : resolvedImageUri ?? (googleFetchFinished ? userFacingFallbackUri : userFacingFallbackUri);
-
-  const fallbackImageUri = userFacingFallbackUri;
+  // Real venue photos only — never Pexels/Unsplash shopping-cart stock fallbacks.
+  const heroUri = resolvedImageUri ?? null;
 
   const handleCardPress = useCallback(() => {
     // Warm the next screen's hero image cache before navigating.
@@ -433,15 +554,16 @@ function EventCardImpl({
                   : undefined
               }
               onError={() => {
-                if (strictRecommendationImagePolicy) {
-                  setStrictImageFailed(true);
-                  return;
-                }
-                photoUrlCache.delete(event.id);
-                setGooglePhotoUri(null);
+                if (heroUri) handleHeroImageError(heroUri);
               }}
             />
-          ) : null}
+          ) : strictRecommendationImagePolicy ? (
+            <View style={styles.heroPendingApproval}>
+              <Text style={styles.heroPendingApprovalText}>Hero pending approval</Text>
+            </View>
+          ) : (
+            <View style={styles.imageLoadingSpacer} />
+          )}
           {!strictRecommendationImagePolicy && !heroUri && !googleFetchFinished && (
             <View style={styles.imageLoadingSpacer} />
           )}
@@ -477,8 +599,10 @@ function EventCardImpl({
                     transition={120}
                   />
                 ) : (
-                  <View style={[styles.banditIconImage, styles.octopusInIcon]}>
-                    <LocalBanditOctopusIcon style={{ width: 40, height: 40, marginRight: 0 }} />
+                  <View style={[styles.banditIconImage, styles.banditFallbackIcon]}>
+                    <Text style={{ color: '#5a6a72', fontWeight: '700', fontSize: 14 }}>
+                      {(bandit.name || 'LB').slice(0, 2).toUpperCase()}
+                    </Text>
                   </View>
                 )}
               </BanditTouch>
@@ -511,15 +635,16 @@ function EventCardImpl({
                   : undefined
               }
               onError={() => {
-                if (strictRecommendationImagePolicy) {
-                  setStrictImageFailed(true);
-                  return;
-                }
-                photoUrlCache.delete(event.id);
-                setGooglePhotoUri(null);
+                if (heroUri) handleHeroImageError(heroUri);
               }}
             />
-          ) : null}
+          ) : strictRecommendationImagePolicy ? (
+            <View style={styles.heroPendingApproval}>
+              <Text style={styles.heroPendingApprovalText}>Hero pending approval</Text>
+            </View>
+          ) : (
+            <View style={styles.imageLoadingSpacer} />
+          )}
           {!strictRecommendationImagePolicy && !heroUri && !googleFetchFinished && (
             <View style={styles.imageLoadingSpacer} />
           )}
@@ -556,8 +681,10 @@ function EventCardImpl({
                       transition={120}
                     />
                   ) : (
-                    <View style={[styles.banditIconImage, styles.octopusInIcon]}>
-                      <LocalBanditOctopusIcon style={{ width: 40, height: 40, marginRight: 0 }} />
+                    <View style={[styles.banditIconImage, styles.banditFallbackIcon]}>
+                      <Text style={{ color: '#5a6a72', fontWeight: '700', fontSize: 14 }}>
+                        {(bandit.name || 'LB').slice(0, 2).toUpperCase()}
+                      </Text>
                     </View>
                   )}
                 </BanditTouch>
@@ -593,8 +720,10 @@ function EventCardImpl({
                 transition={120}
               />
             ) : (
-              <View style={[styles.banditIconImage, styles.octopusInIcon]}>
-                <LocalBanditOctopusIcon style={{ width: 40, height: 40, marginRight: 0 }} />
+              <View style={[styles.banditIconImage, styles.banditFallbackIcon]}>
+                <Text style={{ color: '#c4a35a', fontWeight: '700', fontSize: 14 }}>
+                  {(bandit.name || 'LB').slice(0, 2).toUpperCase()}
+                </Text>
               </View>
             )}
           </BanditTouch>
@@ -633,21 +762,28 @@ function EventCardImpl({
             {event.genre}
           </Text>
         )}
-        <Text style={[styles.eventDescription, isHorizontal && styles.eventDescriptionHorizontal]}>
-          {repairDisplayText(event.description || '')}
-        </Text>
+        {!!event.description?.trim() && (
+          <Text
+            style={[styles.eventDescription, isHorizontal && styles.eventDescriptionHorizontal]}
+            numberOfLines={isHorizontal ? 2 : 4}
+          >
+            {repairDisplayText(event.description || '')}
+          </Text>
+        )}
         {personalTip && (
-          <Text style={[styles.personalTip, isHorizontal && styles.personalTipHorizontal]}>
+          <Text style={[styles.personalTip, isHorizontal && styles.personalTipHorizontal]} numberOfLines={2}>
             {`banDit tip: ${repairDisplayText(personalTip)}`}
           </Text>
         )}
         <View style={[styles.bottomInfo, isHorizontal && styles.bottomInfoHorizontal]}>
-          <Text style={[styles.eventAddress, isHorizontal && styles.eventAddressHorizontal]}>
-            {repairDisplayText(event.address || '')}
-          </Text>
+          {!!event.address?.trim() && (
+            <Text style={[styles.eventAddress, isHorizontal && styles.eventAddressHorizontal]} numberOfLines={2}>
+              {repairDisplayText(event.address || '')}
+            </Text>
+          )}
           {event.timing_info && typeof event.timing_info === 'string' && event.timing_info.trim() && (
             <View style={styles.timeContainer}>
-              <Text style={styles.eventTime}>
+              <Text style={styles.eventTime} numberOfLines={1}>
                 {repairDisplayText(event.timing_info || '')}
               </Text>
             </View>
@@ -675,6 +811,10 @@ function EventCardImpl({
       {eventContentBlock}
     </>
   );
+
+  if (omitWhenNoHero && heroExhausted && !heroUri) {
+    return null;
+  }
 
   return useSplitTouch ? (
     <View
@@ -762,7 +902,9 @@ function areEventCardPropsEqual(prev: EventCardProps, next: EventCardProps): boo
     banditPreloadEqual(prev.preloadedRecommendingBandits, next.preloadedRecommendingBandits) &&
     prev.onBanditPress === next.onBanditPress &&
     prev.skipGooglePhotoFetch === next.skipGooglePhotoFetch &&
-    prev.splitTouchTargets === next.splitTouchTargets
+    prev.splitTouchTargets === next.splitTouchTargets &&
+    prev.omitWhenNoHero === next.omitWhenNoHero &&
+    prev.onHeroUnavailable === next.onHeroUnavailable
     // Note: onLike/onPress are intentionally NOT compared. Parents should
     // pass stable callbacks via useCallback; if they don't, we'd thrash here.
     // In practice these handlers only read the row's `event.id`, so a stale
@@ -947,10 +1089,10 @@ const styles = StyleSheet.create({
     flex: 1,
     minHeight: 1,
   },
-  octopusInIcon: {
+  banditFallbackIcon: {
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#FFF',
+    backgroundColor: '#EEF2F4',
   },
   imageContainerHorizontal: {
     width: '100%',
@@ -1031,6 +1173,21 @@ const styles = StyleSheet.create({
   banditIconImage: {
     width: '100%',
     height: '100%',
+  },
+  heroPendingApproval: {
+    flex: 1,
+    width: '100%',
+    minHeight: 120,
+    backgroundColor: '#ECECEC',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 12,
+  },
+  heroPendingApprovalText: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#666',
+    textAlign: 'center',
   },
   banditIconImageLoading: {
     width: '100%',

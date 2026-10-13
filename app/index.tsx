@@ -10,6 +10,8 @@ import type { Href } from 'expo-router';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { Platform, StyleSheet, View } from 'react-native';
 
+import { perfMark } from '@/lib/perfTiming';
+
 type Gate = 'loading' | 'redirect' | 'intro';
 
 /**
@@ -28,7 +30,7 @@ function initialGate(): Gate {
 }
 
 /**
- * Root `/`: opening intro on first visit, then **Home** at `/bandits` after Enter or Skip.
+ * Root `/`: opening intro on first visit, then **Home** at `/home` after Enter or Skip.
  */
 export default function Index() {
   const router = useRouter();
@@ -44,6 +46,10 @@ export default function Index() {
   }, [params.intro]);
 
   const [gate, setGate] = useState<Gate>(initialGate);
+
+  useEffect(() => {
+    perfMark(`index_gate:${gate}`, 'launch');
+  }, [gate]);
 
   useEffect(() => {
     if (forceIntroFromQuery) {
@@ -72,7 +78,7 @@ export default function Index() {
 
   const finish = useCallback(async () => {
     await markOpeningIntroSeen();
-    router.replace('/bandits' as Href);
+    router.replace('/home' as Href);
   }, [router]);
 
   if (gate === 'loading') {
@@ -86,7 +92,7 @@ export default function Index() {
   }
 
   if (gate === 'redirect') {
-    return <Redirect href={'/bandits' as Href} />;
+    return <Redirect href={'/home' as Href} />;
   }
 
   return <OpeningIntroScreen onEnter={finish} onSkip={finish} />;

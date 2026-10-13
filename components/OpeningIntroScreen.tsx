@@ -250,7 +250,12 @@ function CtaBody({ h, insets, onEnter, onSkip }: CtaBodyProps) {
       testID="opening-intro-step-cta"
       contentContainerStyle={[
         styles.scrollInner,
-        { paddingTop: insets.top + 24, paddingBottom: insets.bottom + 20, minHeight: h },
+        styles.ctaScrollCentered,
+        {
+          paddingTop: Math.max(insets.top, 12),
+          paddingBottom: Math.max(insets.bottom, 20),
+          minHeight: h,
+        },
       ]}
       bounces={false}
       showsVerticalScrollIndicator={false}
@@ -261,14 +266,14 @@ function CtaBody({ h, insets, onEnter, onSkip }: CtaBodyProps) {
       <View style={styles.textBlock}>
         <Text style={styles.headline}>Your stay just unlocked the city.</Text>
         <Text style={styles.subA}>Trusted locals. Hidden places. Real signals.</Text>
-        <Text style={styles.giftLine}>A welcome gift is waiting for you at reception.</Text>
+        <Text style={styles.giftLine}>Enter to find out who left you the message.</Text>
       </View>
 
       <View style={styles.ctaWrap}>
         <Pressable
           onPress={onEnter}
           accessibilityRole="button"
-          accessibilityLabel="Enter the City"
+          accessibilityLabel="Enter bandiTour"
           style={({ pressed, hovered }) => [
             styles.ctaOuter,
             Platform.select({
@@ -284,7 +289,7 @@ function CtaBody({ h, insets, onEnter, onSkip }: CtaBodyProps) {
             end={{ x: 1, y: 1 }}
             style={styles.ctaGradient}
           >
-            <Text style={styles.ctaText}>Enter the City</Text>
+            <Text style={styles.ctaText}>Enter bandiTour</Text>
           </LinearGradient>
         </Pressable>
 
@@ -376,11 +381,13 @@ export default function OpeningIntroScreen({ onEnter, onSkip }: OpeningIntroScre
                 Athens waits.{'\n\n'}
                 Someone thought you might listen.
               </Text>
+              <Text style={styles.whoSentTease}>Who sent it?</Text>
+              <Text style={styles.whoSentSub}>Enter bandiTour to find out.</Text>
               <View style={styles.messageCta}>
                 <Pressable
                   onPress={() => runTransition('bottle')}
                   accessibilityRole="button"
-                  accessibilityLabel="Flip the message"
+                  accessibilityLabel="Who sent it — Flip the message"
                   style={({ pressed, hovered }) => [
                     styles.ctaOuter,
                     Platform.select({
@@ -396,7 +403,7 @@ export default function OpeningIntroScreen({ onEnter, onSkip }: OpeningIntroScre
                     end={{ x: 1, y: 1 }}
                     style={styles.ctaGradient}
                   >
-                    <Text style={styles.ctaText}>Flip the message</Text>
+                    <Text style={styles.ctaText}>Who sent it?</Text>
                   </LinearGradient>
                 </Pressable>
               </View>
@@ -439,7 +446,17 @@ const styles = StyleSheet.create({
     height: '100%',
     backgroundColor: '#0B0F18',
   },
-  scrollInner: { flexGrow: 1, alignItems: 'center', paddingHorizontal: 24, width: '100%', maxWidth: 520, alignSelf: 'center' },
+  scrollInner: {
+    alignItems: 'center',
+    paddingHorizontal: 24,
+    width: '100%',
+    maxWidth: 520,
+    alignSelf: 'center',
+  },
+  ctaScrollCentered: {
+    flexGrow: 1,
+    justifyContent: 'center',
+  },
   messageStep: { width: '100%', maxWidth: 420, alignItems: 'center' },
   messageLead: {
     color: '#F5F0E8',
@@ -456,7 +473,22 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     lineHeight: 26,
     fontWeight: '400',
-    marginBottom: 40,
+    marginBottom: 20,
+  },
+  whoSentTease: {
+    color: '#EED8B4',
+    fontSize: 20,
+    fontWeight: '800',
+    textAlign: 'center',
+    marginBottom: 6,
+    letterSpacing: 0.2,
+  },
+  whoSentSub: {
+    color: 'rgba(240, 232, 220, 0.72)',
+    fontSize: 14,
+    textAlign: 'center',
+    marginBottom: 28,
+    fontWeight: '500',
   },
   messageCta: { width: '100%', maxWidth: 360, alignItems: 'center' },
   brandKicker: {

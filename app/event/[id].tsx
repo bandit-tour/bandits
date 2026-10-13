@@ -7,11 +7,9 @@ import {
   isGooglePlacesDerivedPhotoUrl,
   normalizeEventImageUri,
 } from '@/lib/placePhoto';
-import { buildUserFacingVenueFallbackImage } from '@/lib/recommendationImages';
 import { getEventVenueGalleryOrdered } from '@/lib/eventVenueGallery';
 import { supabase } from '@/lib/supabase';
 import { useLocalSearchParams, useRouter, Stack } from 'expo-router';
-import LocalBanditOctopusIcon from '@/components/LocalBanditOctopusIcon';
 import { VenueScamWarningsSection } from '@/components/VenueScamWarningsSection';
 import { usePremiumRefreshControl } from '@/lib/mobilePullToRefresh';
 import { useAppBackScreenOptions } from '@/hooks/useAppBackScreenOptions';
@@ -179,11 +177,9 @@ export default function EventDetailScreen() {
     );
   }
 
-  // Strict policy: only Google Places–verified gallery URLs reach the UI. No stock pools.
+  // Real venue photos only — never stock category pools.
   const galleryImages = verifiedGallery;
-  const heroUri = !imageFailed && galleryImages[0]
-    ? galleryImages[0]
-    : buildUserFacingVenueFallbackImage(event, `event-detail-${event.id}`);
+  const heroUri = !imageFailed && galleryImages[0] ? galleryImages[0] : null;
 
   return (
     <ThemedView style={styles.container}>
@@ -208,16 +204,26 @@ export default function EventDetailScreen() {
       >
         {/* Main Event Image */}
         <View style={[styles.mainImageContainer, { width: heroWidth, height: heroHeight }]}>
-          <ExpoImage
-            source={{ uri: heroUri }}
-            style={styles.mainImage}
-            contentFit="cover"
-            transition={150}
-            cachePolicy="memory-disk"
-            recyclingKey={`event-hero:${event.id}`}
-            priority="high"
-            onError={() => setImageFailed(true)}
-          />
+          {heroUri ? (
+            <ExpoImage
+              source={{ uri: heroUri }}
+              style={styles.mainImage}
+              contentFit="cover"
+              transition={150}
+              cachePolicy="memory-disk"
+              recyclingKey={`event-hero:${event.id}`}
+              priority="high"
+              onError={() => setImageFailed(true)}
+            />
+          ) : galleryResolving ? (
+            <View style={[styles.mainImage, styles.heroPending]}>
+              <Text style={styles.heroPendingText}>Loading photo…</Text>
+            </View>
+          ) : (
+            <View style={[styles.mainImage, styles.heroPending]}>
+              <Text style={styles.heroPendingText}>Photo unavailable</Text>
+            </View>
+          )}
         </View>
 
         {/* Event Title */}
@@ -257,7 +263,6 @@ export default function EventDetailScreen() {
         {bandit && personalTip && (
           <View style={styles.personalTipContainer}>
             <View style={styles.personalTipTitleRow}>
-              <LocalBanditOctopusIcon />
               <Text style={styles.personalTipTitle}>{`${bandit.name}'s Personal Tip`}</Text>
             </View>
             <Text style={styles.personalTipText}>{repairDisplayText(personalTip || '')}</Text>
@@ -360,6 +365,16 @@ const styles = StyleSheet.create({
   mainImage: {
     width: '100%',
     height: '100%',
+  },
+  heroPending: {
+    backgroundColor: '#ECECEC',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  heroPendingText: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#666',
   },
   titleContainer: {
     paddingHorizontal: 20,

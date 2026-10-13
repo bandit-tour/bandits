@@ -24,15 +24,21 @@ const MAPPING = {
   'heart.fill': 'favorite',
   heart: 'favorite-outline',
   /** Main bottom nav + modals */
+  'building.2.fill': 'apartment',
   'person.2.fill': 'people',
   'bubble.left.and.bubble.right.fill': 'chat',
   'tray.full.fill': 'inbox',
+  'bell.badge.fill': 'notifications',
   'exclamationmark.triangle.fill': 'warning',
   'line.3.horizontal': 'menu',
   'gearshape.fill': 'settings',
   'person.circle': 'account-circle',
+  'person.crop.circle': 'account-circle',
   'person.2.circle': 'groups',
   'person.2.circle.fill': 'groups',
+  /** ACCESS bottom nav */
+  'safari.fill': 'explore',
+  'ellipsis.circle.fill': 'more-horiz',
 } as const satisfies Record<string, MaterialName>;
 
 /**

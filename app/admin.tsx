@@ -22,7 +22,7 @@ import { useAppBackScreenOptions } from '@/hooks/useAppBackScreenOptions';
 import { PLAY_MENU_HREF } from '@/lib/appNavigation';
 import { Database } from '@/lib/database.types';
 import { operatorSurfaceTextInputProps, operatorSurfaceTextInputStyle } from '@/lib/operatorSurfaceTextInput';
-import { supabase } from '@/lib/supabase';
+import { buildManualHeroApprovalUpdate } from '@/lib/manualVenueHero';
 
 type Bandit = Database['public']['Tables']['bandit']['Row'];
 type Event = Database['public']['Tables']['event']['Row'];
@@ -468,6 +468,10 @@ const EditModal: React.FC<EditModalProps> = ({ visible, onClose, item, onSave })
           image_url: imageUrl,
           link: formData.link,
           image_gallery: formData.image_gallery,
+          approved_hero_url: formData.approved_hero_url ?? imageUrl,
+          approved_thumbnail_url: formData.approved_thumbnail_url ?? imageUrl,
+          approved_gallery: formData.approved_gallery ?? formData.image_gallery ?? '[]',
+          hero_approved_at: formData.hero_approved_at ?? null,
         };
         console.log('Event update data:', eventUpdate);
         await updateEvent(item.item.id, eventUpdate);
@@ -516,6 +520,49 @@ const EditModal: React.FC<EditModalProps> = ({ visible, onClose, item, onSave })
           <FormField label="Link" value={formData.link} onChangeText={(text) => setFormData({...formData, link: text})} />
           <FormField label="Location Lat" value={formData.location_lat?.toString()} onChangeText={(text) => setFormData({...formData, location_lat: parseFloat(text) || 0})} keyboardType="numeric" />
           <FormField label="Location Lng" value={formData.location_lng?.toString()} onChangeText={(text) => setFormData({...formData, location_lng: parseFloat(text) || 0})} keyboardType="numeric" />
+          <Text style={styles.heroApprovalHeading}>Manual hero approval</Text>
+          <Text style={styles.heroApprovalStatus}>
+            {formData.hero_approved_at ? 'Status: APPROVED (live on all surfaces)' : 'Status: PENDING — venue shows gray placeholder until approved'}
+          </Text>
+          <FormField
+            label="Approved hero URL"
+            value={formData.approved_hero_url ?? formData.image_url ?? ''}
+            onChangeText={(text) => setFormData({ ...formData, approved_hero_url: text })}
+          />
+          <FormField
+            label="Approved gallery (JSON array of URLs)"
+            value={formData.approved_gallery ?? formData.image_gallery ?? '[]'}
+            onChangeText={(text) => setFormData({ ...formData, approved_gallery: text })}
+            multiline
+          />
+          <TouchableOpacity
+            style={styles.approveHeroButton}
+            onPress={() => {
+              const hero = String(formData.approved_hero_url || formData.image_url || '').trim();
+              if (!hero) {
+                Alert.alert('Hero required', 'Set an approved hero URL before approving.');
+                return;
+              }
+              let gallery: string[] = [];
+              try {
+                const raw = formData.approved_gallery ?? formData.image_gallery;
+                if (raw) {
+                  const parsed = JSON.parse(String(raw));
+                  if (Array.isArray(parsed)) gallery = parsed.filter((u) => typeof u === 'string');
+                }
+              } catch {
+                gallery = [];
+              }
+              const patch = buildManualHeroApprovalUpdate({
+                approvedHeroUrl: hero,
+                approvedGallery: gallery.length ? gallery : [hero],
+              });
+              setFormData((prev: Record<string, unknown>) => ({ ...prev, ...patch }));
+              Alert.alert('Ready to approve', 'Tap Save to publish this hero to Explore, City Guide, My Spots, maps, and venue page.');
+            }}
+          >
+            <Text style={styles.approveHeroButtonText}>Approve hero for all surfaces</Text>
+          </TouchableOpacity>
         </>
       );
     }
@@ -925,6 +972,32 @@ const styles = StyleSheet.create({
   formInputMultiline: {
     minHeight: 80,
     textAlignVertical: 'top',
+  },
+  heroApprovalHeading: {
+    fontSize: 17,
+    fontWeight: '700',
+    color: '#111',
+    marginTop: 8,
+    marginBottom: 6,
+  },
+  heroApprovalStatus: {
+    fontSize: 14,
+    color: '#444',
+    marginBottom: 12,
+    lineHeight: 20,
+  },
+  approveHeroButton: {
+    backgroundColor: '#0a7ea4',
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    borderRadius: 10,
+    alignItems: 'center',
+    marginBottom: 24,
+  },
+  approveHeroButtonText: {
+    color: '#fff',
+    fontSize: 15,
+    fontWeight: '700',
   },
 });
 

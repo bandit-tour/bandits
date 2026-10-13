@@ -78,8 +78,8 @@ const styles = StyleSheet.create({
     backgroundColor: '#F7F7F7',
   },
   chipActive: {
-    backgroundColor: '#0a7ea4',
-    borderColor: '#0a7ea4',
+    backgroundColor: '#181818',
+    borderColor: '#181818',
   },
   chipPressed: {
     opacity: 0.88,

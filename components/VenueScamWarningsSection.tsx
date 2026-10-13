@@ -106,5 +106,5 @@ const styles = StyleSheet.create({
   rowTitle: { fontSize: 14, fontWeight: '700', color: '#222' },
   rowMeta: { fontSize: 11, color: '#777', marginTop: 4 },
   linkBtn: { marginTop: 12, alignSelf: 'flex-start' },
-  linkBtnText: { fontSize: 13, fontWeight: '800', color: '#0a7ea4', textDecorationLine: 'underline' },
+  linkBtnText: { fontSize: 13, fontWeight: '800', color: '#E03131', textDecorationLine: 'underline' },
 });

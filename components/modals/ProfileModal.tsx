@@ -25,7 +25,7 @@ export default function ProfileModal({ visible, onClose }: ProfileModalProps) {
             activeOpacity={0.7}
             hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
           >
-            <IconSymbol name="gearshape.fill" size={22} color="#0a7ea4" />
+            <IconSymbol name="gearshape.fill" size={22} color="#E03131" />
             <Text style={styles.settingsText}>Open Settings</Text>
           </TouchableOpacity>
         </View>
@@ -59,6 +59,6 @@ const styles = StyleSheet.create({
     marginLeft: 12,
     fontSize: 18,
     fontWeight: '600',
-    color: '#0a7ea4',
+    color: '#E03131',
   },
 });

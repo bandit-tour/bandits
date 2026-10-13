@@ -3,6 +3,7 @@ import Constants from 'expo-constants';
 import { Platform } from 'react-native';
 
 import { DEFAULT_HOTEL_SLUG, HOTEL_WHITE_LABELS, isKnownHotelSlug, normalizeHotelSlug } from '@/lib/hotelWhiteLabel';
+import { fetchRemoteHotelConfig } from '@/lib/hotelRemoteWhiteLabel';
 import { getUserEmailForAdminCheck } from '@/lib/appAdminAccess';
 import {
   assignInitialSignalIfNeeded,
@@ -101,37 +102,64 @@ export type HotelEntry = {
 export async function persistHotelEntry(
   slug: string,
   source: HotelEntry['entrySource'] = 'guest_universal',
+  identity?: { hotelId?: string | null; displayName?: string | null },
 ): Promise<boolean> {
   const norm = normalizeHotelSlug(slug);
-  if (!isKnownHotelSlug(norm)) {
-    const fallback = HOTEL_WHITE_LABELS[DEFAULT_HOTEL_SLUG];
-    const fallbackPayload: HotelEntry = {
-      slug: DEFAULT_HOTEL_SLUG,
-      hotelId: fallback.hotelId,
-      displayName: fallback.displayName,
+  const liveName = String(identity?.displayName || '').trim();
+  const liveId = String(identity?.hotelId || '').trim();
+
+  if (isKnownHotelSlug(norm)) {
+    const meta = HOTEL_BY_SLUG[norm];
+    if (!meta) return false;
+    const payload: HotelEntry = {
+      slug: norm,
+      hotelId: liveId || meta.hotelId,
+      displayName: liveName || meta.displayName,
       entrySource: source,
     };
     try {
-      await AsyncStorage.setItem(HOTEL_ENTRY_KEY, JSON.stringify(fallbackPayload));
+      await AsyncStorage.setItem(HOTEL_ENTRY_KEY, JSON.stringify(payload));
     } catch {
       /* ignore */
     }
-    return false;
+    return true;
   }
-  const meta = HOTEL_BY_SLUG[norm];
-  if (!meta) return false;
-  const payload: HotelEntry = {
-    slug: norm,
-    hotelId: meta.hotelId,
-    displayName: meta.displayName,
-    entrySource: source,
-  };
-  try {
-    await AsyncStorage.setItem(HOTEL_ENTRY_KEY, JSON.stringify(payload));
-  } catch {
-    /* ignore */
+
+  // Dynamic tenant from Partner Platform — Hotel #N without HOTEL_WHITE_LABELS entry.
+  const remote = await fetchRemoteHotelConfig(norm);
+  if (remote) {
+    const payload: HotelEntry = {
+      slug: remote.slug,
+      hotelId: liveId || remote.hotelId,
+      displayName: liveName || remote.whiteLabel.displayName || remote.name,
+      entrySource: source,
+    };
+    try {
+      await AsyncStorage.setItem(HOTEL_ENTRY_KEY, JSON.stringify(payload));
+    } catch {
+      /* ignore */
+    }
+    return true;
   }
-  return true;
+
+  // Live unlock/verify identity — persist even if public config is still warming.
+  if (norm && liveName) {
+    const payload: HotelEntry = {
+      slug: norm,
+      hotelId: liveId,
+      displayName: liveName,
+      entrySource: source,
+    };
+    try {
+      await AsyncStorage.setItem(HOTEL_ENTRY_KEY, JSON.stringify(payload));
+    } catch {
+      /* ignore */
+    }
+    return true;
+  }
+
+  // Unknown slug: do not silently rewrite to PLAY (preserves tenant isolation).
+  return false;
 }
 
 export async function getHotelEntry(): Promise<HotelEntry | null> {
@@ -182,6 +210,30 @@ export async function ensureAnonymousSession(): Promise<void> {
   } finally {
     ensureAnonInFlight = null;
   }
+}
+
+/** Fresh JWT for messaging API — refreshes when `getSession()` is empty on native. */
+export async function resolveTravelerSession(): Promise<{
+  user: import('@supabase/supabase-js').User;
+  accessToken: string;
+} | null> {
+  await ensureAnonymousSession().catch(() => undefined);
+  const {
+    data: { user },
+    error: userError,
+  } = await supabase.auth.getUser();
+  if (userError || !user?.id) return null;
+
+  let {
+    data: { session },
+  } = await supabase.auth.getSession();
+  let accessToken = String(session?.access_token ?? '').trim();
+  if (!accessToken) {
+    const { data: refreshed } = await supabase.auth.refreshSession();
+    accessToken = String(refreshed.session?.access_token ?? '').trim();
+  }
+  if (!accessToken) return null;
+  return { user, accessToken };
 }
 
 /**

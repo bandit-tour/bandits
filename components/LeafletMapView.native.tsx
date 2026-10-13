@@ -164,7 +164,7 @@ export default function LeafletMapView({
         />
         {loading && markersData.length === 0 ? (
           <View style={styles.mapLoadingOverlay} pointerEvents="none">
-            <ActivityIndicator size="large" color="#0a7ea4" />
+            <ActivityIndicator size="large" color="#111111" />
           </View>
         ) : null}
       </View>

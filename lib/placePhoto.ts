@@ -219,6 +219,66 @@ export function isGooglePlacesDerivedPhotoUrl(uri: string | null | undefined): b
   return false;
 }
 
+/**
+ * Places API (New) photo resource URLs stored on event rows are not durable image bytes.
+ *
+ * MVP / backfill often wrote either:
+ * - incomplete resource URLs (`…/photos/{ref}` without `/media`) → 404 as <img src>
+ * - full `/media?key=` URLs whose photo resource names expire → 400 until Place Details refresh
+ *
+ * Treat both as ephemeral so gallery mappers skip them and call sites live-refresh via
+ * `google_place_id` (same photography source as the original MVP Places pipeline).
+ */
+export function isEphemeralPlacesMediaUrl(uri: string | null | undefined): boolean {
+  const t = String(uri ?? '').trim().toLowerCase();
+  if (!t) return false;
+  if (t.includes('places.googleapis.com/') && t.includes('/photos/')) {
+    return true;
+  }
+  // Legacy photo endpoint still needs a live key but does not use rotating resource names.
+  return false;
+}
+
+/** True when a URI can be used directly as an <Image> source without a Places refresh. */
+export function isDirectlyLoadableVenuePhotoUri(uri: string | null | undefined): boolean {
+  const n = normalizeEventImageUri(uri);
+  if (!n) return false;
+  if (isLikelyLogoOrBadPlaceImage(n)) return false;
+  if (isEphemeralPlacesMediaUrl(n)) return false;
+  return /^https?:\/\//i.test(n) || n.startsWith('/') || n.startsWith('data:image');
+}
+
+/**
+ * Durable venue photography: Supabase/workspace storage, Wikimedia, or Google CDN redirects.
+ * Ephemeral Places `/media` resource URLs are NOT durable — they need live refresh on failure.
+ */
+export function isDurableVenuePhotoUri(uri: string | null | undefined): boolean {
+  const n = normalizeEventImageUri(uri);
+  if (!n) return false;
+  if (isLikelyLogoOrBadPlaceImage(n)) return false;
+  if (isEphemeralPlacesMediaUrl(n)) return false;
+  try {
+    const h = new URL(n).hostname.toLowerCase();
+    if (
+      h.includes('supabase.co') ||
+      h.includes('wikimedia.org') ||
+      h.includes('wikipedia.org') ||
+      h.includes('googleusercontent.com') ||
+      h.includes('ggpht.com')
+    ) {
+      return true;
+    }
+    // Non-Places https hosts (operator CDN, custom storage) count as durable.
+    if (/^https?:\/\//i.test(n) && !h.includes('places.googleapis.com') && !h.includes('maps.googleapis.com')) {
+      return true;
+    }
+  } catch {
+    // Relative storage paths after normalize without base still start with /
+    if (n.startsWith('/storage/')) return true;
+  }
+  return false;
+}
+
 export function hasPlacesFormattedAddressAlignment(
   expectedAddress: string,
   expectedCity: string,
@@ -792,6 +852,28 @@ export async function fetchGooglePlacePhotoUrls(args: {
     return resolved?.photoUrls ?? [];
   } catch (err) {
     logPlacesFetchError('fetchGooglePlacePhotoUrls', err);
+    return [];
+  }
+}
+
+/**
+ * MVP City Guide / Place detail: when `event.google_place_id` is already the curated
+ * venue link, trust it and load Places photography without re-running text-search
+ * name confidence (Greek Google names often fail English DB title matching).
+ */
+export async function fetchTrustedPlaceIdPhotoUrls(
+  placeId: string | null | undefined,
+  limit = 8,
+): Promise<string[]> {
+  try {
+    const apiKey = getMapsApiKey();
+    const id = normalizeStoredPlaceId(String(placeId ?? ''));
+    if (!apiKey || !id) return [];
+    const place = await placesNewFetchPlace(id, apiKey);
+    if (!place) return [];
+    return photoUrlsFromPlacesNewPayload(apiKey, place, Math.max(1, Math.min(10, limit)));
+  } catch (err) {
+    logPlacesFetchError('fetchTrustedPlaceIdPhotoUrls', err);
     return [];
   }
 }

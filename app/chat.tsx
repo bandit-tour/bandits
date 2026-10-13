@@ -57,6 +57,7 @@ import { deleteNotificationThread } from '@/lib/threadDelete';
 import { useAppState } from '@/contexts/AppStateContext';
 import { usePremiumRefreshControl } from '@/lib/mobilePullToRefresh';
 import { getOperatorUserId } from '@/services/localFriend';
+import { ensureAnonymousSession, resolveTravelerSession } from '@/lib/pilotSession';
 
 type ChatRole = 'user' | 'bandit' | 'traveler';
 
@@ -162,6 +163,13 @@ export default function ChatScreen() {
     if (nType === 'local_friend') {
       return 'Local Friend';
     }
+    if (nType === 'guest_moment') {
+      const t = typeof notificationTitle === 'string' ? notificationTitle.trim() : '';
+      if (t && !/^a moment from the city$/i.test(t)) return t;
+      const route = banditName.trim();
+      if (route && route !== 'Local banDit') return route;
+      return 'A Moment';
+    }
     if (isLocalFriendOceanBottleType(nType)) {
       const t = typeof notificationTitle === 'string' ? notificationTitle.trim() : '';
       if (t && !/^message in a bottle$/i.test(t)) return t;
@@ -208,6 +216,25 @@ export default function ChatScreen() {
             id: 'notification-initial',
             role: 'user',
             body: askBody,
+            sentAt: new Date().toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' }),
+          },
+        ]);
+      } else {
+        setMessages([]);
+        setLoadingThread(true);
+      }
+      if (!incomingNotifId) setLoadingThread(false);
+      return;
+    }
+
+    if (nType === 'local_friend' && routeRefType === 'local_friend_guest_echo') {
+      const combined = (msg || [title, msg].filter(Boolean).join('\n\n').trim()).trim();
+      if (combined) {
+        setMessages([
+          {
+            id: 'notification-initial',
+            role: 'user',
+            body: combined,
             sentAt: new Date().toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' }),
           },
         ]);
@@ -270,10 +297,9 @@ export default function ChatScreen() {
         if (!silent) setLoadingThread(true);
         setDeskPersonaLock('');
         const operatorUserId = getOperatorUserId();
-        const {
-          data: { session },
-        } = await supabase.auth.getSession();
-        const user = session?.user;
+        await ensureAnonymousSession().catch(() => undefined);
+        const traveler = await resolveTravelerSession();
+        const user = traveler?.user;
         const userMeta = (user?.user_metadata && typeof user.user_metadata === 'object' ? user.user_metadata : {}) || {};
         const metaDisplayName =
           (typeof userMeta.full_name === 'string' && userMeta.full_name.trim()) ||
@@ -289,6 +315,48 @@ export default function ChatScreen() {
         const nid = String(notificationId || '').trim();
         const nType = String(notificationType || '').trim();
         const refId = String(referenceId || '').trim();
+        const routeRefType = String(referenceTypeParam || '').trim();
+
+        /** Guest Moment threads — bottle discovery → reveal → reply continues here. */
+        if (
+          nType === 'guest_moment' ||
+          routeRefType === 'guest_moment_thread' ||
+          nid.startsWith('gm_')
+        ) {
+          const { loadMomentChatThread, getOrCreateMomentChatThread } = await import('@/lib/guest-moment');
+          const threadId = refId || nid;
+          let thread = await loadMomentChatThread(threadId);
+          if (!thread) {
+            thread = await getOrCreateMomentChatThread({
+              threadId,
+              peer: {
+                id: threadId,
+                displayName: banditName,
+                avatarInitials: banditName.slice(0, 1).toUpperCase() || 'G',
+                kind: 'guest',
+              },
+              openingQuote:
+                (typeof notificationMessage === 'string' && notificationMessage.trim()) ||
+                'A Moment from the city.',
+            });
+          }
+          setOceanFloatId(null);
+          setOceanRevealHidden(false);
+          setOceanComposeAllowed(true);
+          setOceanWaitingForGuest(false);
+          setOperatorMode(false);
+          setDeskPersonaLock(thread.peer.displayName);
+          setMessages(
+            thread.messages.map((m) => ({
+              id: m.id,
+              role: m.role === 'user' ? 'user' : 'bandit',
+              body: m.body,
+              sentAt: m.sentAt,
+            })),
+          );
+          setLoadingThread(false);
+          return;
+        }
 
         const anchorSelect = 'type, title, message, reference_id, reference_type, ask_target_bandit_id' as const;
         type NotifAnchor = {
@@ -339,12 +407,16 @@ export default function ChatScreen() {
         /**
          * Same account can act as traveler and operator; guest Ask echo threads must stay on traveler-side UI.
          */
-        const routeRefType = String(referenceTypeParam || '').trim();
         const isAskGuestEchoThread =
           effectiveType === 'bandit_question' &&
           (anchorRefType === BANDIT_QUESTION_GUEST_ECHO_REF || routeRefType === BANDIT_QUESTION_GUEST_ECHO_REF);
-        /** Operator opening a traveler-side thread (`bandit_reply` or Ask guest echo) — not Pilot Desk compose. */
-        const viewAsGuest = !!user && (notificationType === 'bandit_reply' || isAskGuestEchoThread);
+        const isLocalFriendGuestEchoThread =
+          effectiveType === 'local_friend' &&
+          (anchorRefType === 'local_friend_guest_echo' || routeRefType === 'local_friend_guest_echo');
+        /** Operator opening a traveler-side thread (`bandit_reply` or guest echo) — not Pilot Desk compose. */
+        const viewAsGuest =
+          !!user &&
+          (notificationType === 'bandit_reply' || isAskGuestEchoThread || isLocalFriendGuestEchoThread);
         const isOperatorRequestThread =
           ['bandit_question_request', 'local_friend_request'].includes(anchorRefType) ||
           ['bandit_question_request', 'local_friend_request'].includes(routeRefType);
@@ -357,6 +429,9 @@ export default function ChatScreen() {
         /** `pilot_thread_identity` is keyed by the *operator thread root* id (see guest echo rows). */
         let identityKey = effectiveType === 'bandit_reply' && refFromAnchor ? refFromAnchor : nid;
         if (anchorRefType === BANDIT_QUESTION_GUEST_ECHO_REF && refFromAnchor) {
+          identityKey = refFromAnchor;
+        }
+        if (anchorRefType === 'local_friend_guest_echo' && refFromAnchor) {
           identityKey = refFromAnchor;
         }
         const identity = identityKey ? await fetchPilotThreadIdentity(identityKey).catch(() => null) : null;
@@ -515,7 +590,13 @@ export default function ChatScreen() {
           const aMsg = String(anchor?.message || '').trim();
 
           const operatorRootFromEcho =
-            anchorRefType === BANDIT_QUESTION_GUEST_ECHO_REF && refFromAnchor ? refFromAnchor : '';
+            (anchorRefType === BANDIT_QUESTION_GUEST_ECHO_REF ||
+              anchorRefType === 'local_friend_guest_echo' ||
+              routeRefType === BANDIT_QUESTION_GUEST_ECHO_REF ||
+              routeRefType === 'local_friend_guest_echo') &&
+            refFromAnchor
+              ? refFromAnchor
+              : '';
           const rootThreadId =
             operatorRootFromEcho ||
             (viewAsGuest && String(refId || refFromAnchor || '').trim()
@@ -718,7 +799,7 @@ export default function ChatScreen() {
         setLoadingThread(false);
       }
     },
-    [notificationId, notificationType, referenceId, referenceTypeParam, notificationTitle, notificationMessage],
+    [notificationId, notificationType, referenceId, referenceTypeParam, notificationTitle, notificationMessage, banditName],
   );
 
   useEffect(() => {
@@ -967,6 +1048,30 @@ export default function ChatScreen() {
     const t = draft.trim();
     if (!t) return;
     void (async () => {
+      const nType = String(notificationType || '').trim();
+      const routeRefType = String(referenceTypeParam || '').trim();
+      const nid = String(notificationId || '').trim();
+      const refId = String(referenceId || '').trim();
+      if (nType === 'guest_moment' || routeRefType === 'guest_moment_thread' || nid.startsWith('gm_')) {
+        try {
+          const { appendMomentChatReply } = await import('@/lib/guest-moment');
+          const threadId = refId || nid;
+          const next = await appendMomentChatReply(threadId, t);
+          setMessages(
+            next.messages.map((m) => ({
+              id: m.id,
+              role: m.role === 'user' ? 'user' : 'bandit',
+              body: m.body,
+              sentAt: m.sentAt,
+            })),
+          );
+          setDraft('');
+          setTimeout(() => listRef.current?.scrollToEnd({ animated: true }), 80);
+        } catch (e) {
+          Alert.alert('Send failed', e instanceof Error ? e.message : 'Try again.');
+        }
+        return;
+      }
       const fid = String(oceanFloatId || '').trim();
       if (fid && !operatorMode) {
         if (!oceanComposeAllowed) {
@@ -1055,6 +1160,8 @@ export default function ChatScreen() {
     oceanComposeAllowed,
     oceanWaitingForGuest,
     loadThread,
+    referenceId,
+    referenceTypeParam,
   ]);
 
   const renderItem = useCallback(
@@ -1256,7 +1363,7 @@ const styles = StyleSheet.create({
   chatHeaderActionText: {
     fontSize: 13,
     fontWeight: '700',
-    color: '#0a7ea4',
+    color: '#111111',
   },
   chatHeaderActionTextDisabled: {
     opacity: 0.4,
@@ -1282,13 +1389,13 @@ const styles = StyleSheet.create({
     height: 22,
     borderRadius: 11,
     borderWidth: 2,
-    borderColor: '#0a7ea4',
+    borderColor: '#111111',
     alignItems: 'center',
     justifyContent: 'center',
     marginTop: 8,
   },
   selectDotOn: {
-    backgroundColor: '#0a7ea4',
+    backgroundColor: '#111111',
   },
   selectDotMark: {
     color: '#FFF',

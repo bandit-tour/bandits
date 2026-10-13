@@ -182,7 +182,7 @@ export function buildCityGuideRecommendationHeroUris(
 
   for (const event of events) {
     if (!needsFallback.has(event.id)) continue;
-    byEventId[event.id] = pickUniqueNeutralFallback(event, used);
+    byEventId[event.id] = pickUniqueUserFacingFallback(event, used);
   }
 
   return byEventId;

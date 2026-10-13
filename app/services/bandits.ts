@@ -1,4 +1,4 @@
-import {
+﻿import {
   BANDIT_QUESTION_GUEST_ECHO_REF,
   buildAskMeNotificationMessage,
   travelerNameForAskMeTitle,
@@ -6,7 +6,7 @@ import {
 import { Database } from '@/lib/database.types';
 import { trackEvent } from '@/lib/analytics';
 import { ensureOperatorUserId } from '@/lib/operatorConfig';
-import { ensureAnonymousSession } from '@/lib/pilotSession';
+import { ensureAnonymousSession, resolveTravelerSession } from '@/lib/pilotSession';
 import { insertGuestEchoViaApi } from '@/lib/guestNotificationEchoApi';
 import {
   deliverOperatorMessage,
@@ -17,6 +17,7 @@ import { userFacingMessagingError } from '@/lib/userFacingMessagingError';
 import { isPersistenceBlocked } from '@/services/localFriend';
 import { isAuthOrMissingError } from '@/lib/postgrestAuth';
 import { supabase } from '@/lib/supabase';
+import { echoFollowToWorkspace } from '@/lib/workspace/actions';
 
 type Bandit = Database['public']['Tables']['bandit']['Row'];
 type BanditInsert = Database['public']['Tables']['bandit']['Insert'];
@@ -48,7 +49,7 @@ export async function getBandits(): Promise<Bandit[]> {
   return data || [];
 }
 
-/** Liked bandits for a known user id — no `auth.getUser()` (avoids token-lock races with AppState). */
+/** Liked bandits for a known user id â€” no `auth.getUser()` (avoids token-lock races with AppState). */
 export async function getUserLikedBanditIdsForUser(userId: string): Promise<Set<string>> {
   const uid = String(userId || '').trim();
   if (!uid) return new Set();
@@ -159,6 +160,17 @@ export async function toggleBanditLike(
     }
   } else {
     // Add like for this user/bandit pair
+    void echoFollowToWorkspace({ banditId: id, title: id }).catch(() => undefined);
+    try {
+      const { recordFollowedBandit } = await import('@/lib/guest-lifecycle');
+      await recordFollowedBandit({
+        city: 'Athens',
+        banditId: id,
+        title: id,
+      });
+    } catch {
+      /* lifecycle memory is best-effort */
+    }
     const { error } = await supabase.from('bandit_user_likes').insert({
       user_id: uid,
       bandit_id: id,
@@ -311,13 +323,9 @@ export async function submitBanditQuestion(banditId: string, question: string): 
 
   await ensureAnonymousSession();
 
-  const {
-    data: { session },
-    error: sessionError,
-  } = await supabase.auth.getSession();
-  if (sessionError) throw userFacingMessagingError(sessionError);
-  const user = session?.user;
-  if (!user) throw userFacingMessagingError(new Error('Session required.'));
+  const traveler = await resolveTravelerSession();
+  if (!traveler) throw userFacingMessagingError(new Error('Session required.'));
+  const user = traveler.user;
 
   /** Must match `notifications_insert_routed` (uses same id as Postgres `app_public_config.operator_user_id`). */
   const operatorUserId = await ensureOperatorUserId();
@@ -349,7 +357,7 @@ export async function submitBanditQuestion(banditId: string, question: string): 
     title: travelerTitle,
     message: text,
     operatorMessage: askMessage,
-    guestTitle: `Ask Me · ${banditName}`,
+    guestTitle: `Ask Me Â· ${banditName}`,
   };
 
   const row = {
@@ -415,7 +423,7 @@ export async function submitBanditQuestion(banditId: string, question: string): 
   const guestEcho = {
       user_id: String(user.id || '').trim(),
       type: 'bandit_question',
-      title: `Ask Me · ${banditName}`,
+      title: `Ask Me Â· ${banditName}`,
       message: text,
       reference_id: rootId || null,
       reference_type: BANDIT_QUESTION_GUEST_ECHO_REF,
@@ -429,7 +437,7 @@ export async function submitBanditQuestion(banditId: string, question: string): 
           kind: 'ask_me',
           threadRootId: rootId,
           askTargetBanditId: targetBanditId,
-          title: String((guestEcho as { title?: string }).title || '').trim() || `Ask Me · ${banditName}`,
+          title: String((guestEcho as { title?: string }).title || '').trim() || `Ask Me Â· ${banditName}`,
           message: text,
         });
       } catch (err) {

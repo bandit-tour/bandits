@@ -1,6 +1,6 @@
 import { Platform } from 'react-native';
 
-import { supabase } from '@/lib/supabase';
+import { resolveTravelerSession } from '@/lib/pilotSession';
 import { mapOperatorApiHttpError } from '@/lib/userFacingMessagingError';
 
 const DEFAULT_PRODUCTION_API_ORIGIN = 'https://bandits-two.vercel.app';
@@ -105,13 +105,9 @@ export async function routeOperatorMessageViaApi(payload: RoutePayload): Promise
   if (!base.trim()) {
     throw new Error('messaging_api_missing');
   }
-  const {
-    data: { session },
-    error: sessionError,
-  } = await supabase.auth.getSession();
-  if (sessionError) throw new Error(sessionError.message || 'Session error.');
-  const token = String(session?.access_token ?? '').trim();
-  if (!token) throw new Error('Session required.');
+  const traveler = await resolveTravelerSession();
+  if (!traveler) throw new Error('Session required.');
+  const token = traveler.accessToken;
 
   await postOperatorRoute(base, token, payload);
 }

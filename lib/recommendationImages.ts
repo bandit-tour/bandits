@@ -1,8 +1,9 @@
 import { Database } from '@/lib/database.types';
-import { pickVenueGalleryHeroUri } from '@/lib/eventVenueGallery';
+import { getSpotDetailHeroUri, pickVenueGalleryHeroUri, resolveApprovedHeroUrisByEventId } from '@/lib/eventVenueGallery';
 import { isBannedPhotoIdentity, isBannedPhotoUri } from '@/lib/photoBanList';
 import {
   resolveGooglePlaceBusinessData,
+  isEphemeralPlacesMediaUrl,
   isGooglePlacesDerivedPhotoUrl,
   isLikelyLogoOrBadPlaceImage,
   normalizeEventImageUri,
@@ -353,6 +354,8 @@ function isUserFacingStoredHeroUri(uri: string): boolean {
   if (isLikelyLogoOrBadPlaceImage(uri)) return false;
   if (isBannedPhotoUri(uri)) return false;
   if (isStockHostUri(uri)) return false;
+  // Incomplete/expired Places photo resource URLs are not loadable <img> sources.
+  if (isEphemeralPlacesMediaUrl(uri)) return false;
   return true;
 }
 
@@ -435,6 +438,19 @@ export function pickStoredRecommendationHeroUrl(event: Event): string | null {
   }
   const db = getDbImageCandidates(event);
   return db[0] ?? null;
+}
+
+/** DB-backed canonical hero — identical to /spot/[id] gallery[0] (ignores list-time bandit photo merge). */
+export function resolveCanonicalHeroUriFromDb(event: Event): string | null {
+  return getSpotDetailHeroUri(event);
+}
+
+export function resolveCanonicalHeroUrisFromDb(events: Event[]): Record<string, string | null> {
+  const out: Record<string, string | null> = {};
+  for (const event of events) {
+    out[event.id] = resolveCanonicalHeroUriFromDb(event);
+  }
+  return out;
 }
 
 export async function resolveStrictRecommendationImagesByEventId(
@@ -624,6 +640,13 @@ function shareKeyForRecommendationDuplicate(ev: Event): string {
   return p ? `place:${p}` : `solo:${ev.id}`;
 }
 
+/** DB-backed list heroes — approved gallery when present, else real stored venue photos. */
+export function resolveApprovedListHeroUrisByEventId(
+  events: Event[],
+): Record<string, string | null> {
+  return resolveApprovedHeroUrisByEventId(events);
+}
+
 /** Collapse illegitimate duplicates to row placeholders; duplicates under one google_place_id may stay. */
 export function enforceUniqueRecommendationImagesByEventId(
   events: Event[],
@@ -656,7 +679,7 @@ export function enforceUniqueRecommendationImagesByEventId(
     byCanon.set(c, arr);
   }
 
-  for (const group of byCanon.values()) {
+  for (const [c, group] of byCanon.entries()) {
     if (group.length <= 1) continue;
     const placeKeys = new Set(group.map((ev) => shareKeyForRecommendationDuplicate(ev)));
     if (placeKeys.size <= 1) continue;

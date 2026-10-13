@@ -35,7 +35,12 @@ export function firstBubbleBodyForType(
   message: string,
   _title: string,
 ): string {
-  if (isSignalBottleInboxType(notifType) || isLocalFriendOceanBottleType(notifType)) {
+  const t = String(notifType || '').trim();
+  if (
+    isSignalBottleInboxType(notifType) ||
+    isLocalFriendOceanBottleType(notifType) ||
+    t === 'guest_moment'
+  ) {
     return String(message || '').trim();
   }
   // Default: the payload text is the message; title is separate (name / subject).
@@ -44,7 +49,12 @@ export function firstBubbleBodyForType(
 
 /** Inbox / list preview line: always the bottle or reply body, not the sender name. */
 export function inboxPreviewForType(notifType: string | null | undefined, message: string, title: string): string {
-  if (isSignalBottleInboxType(notifType) || isLocalFriendOceanBottleType(notifType)) {
+  const t = String(notifType || '').trim();
+  if (
+    isSignalBottleInboxType(notifType) ||
+    isLocalFriendOceanBottleType(notifType) ||
+    t === 'guest_moment'
+  ) {
     return String(message || '').trim() || String(title || '').trim() || 'New message';
   }
   return String(message || '').trim() || String(title || '').trim() || 'New update';

@@ -3,7 +3,7 @@ import {
   deliverOperatorMessage,
   shouldRequireOperatorMessageApi,
 } from '@/lib/operatorMessageDelivery';
-import { ensureAnonymousSession } from '@/lib/pilotSession';
+import { ensureAnonymousSession, resolveTravelerSession } from '@/lib/pilotSession';
 import { insertGuestEchoViaApi } from '@/lib/guestNotificationEchoApi';
 import { requestNotificationsRefresh } from '@/lib/notificationEvents';
 import { enqueueLocalFriendOceanFloat } from '@/lib/localFriendOcean';
@@ -100,13 +100,9 @@ export async function sendLocalFriendMessage(message: string): Promise<void> {
   if (!trimmed) throw new Error('Message is required');
 
   await ensureAnonymousSession().catch(() => undefined);
-  const {
-    data: { session },
-    error: sessionError,
-  } = await supabase.auth.getSession();
-  if (sessionError) throw userFacingMessagingError(sessionError);
-  const user = session?.user;
-  if (!user) throw userFacingMessagingError(new Error('Session required.'));
+  const traveler = await resolveTravelerSession();
+  if (!traveler) throw userFacingMessagingError(new Error('Session required.'));
+  const user = traveler.user;
   const operatorUserId = await ensureOperatorUserId();
   if (!operatorUserId) {
     throw new Error(

@@ -23,7 +23,21 @@ export type AnalyticsEventName =
   | 'banditeam_home_card_cta'
   | 'banditeam_report_submit_success'
   | 'banditeam_notification_opened'
-  | 'banditeam_session_day_active';
+  | 'banditeam_session_day_active'
+  /** Guest Trip OS — return-with-intent (not DAU scrolling) */
+  | 'lifecycle_checkout'
+  | 'lifecycle_after_trip'
+  | 'lifecycle_trip_planning'
+  | 'lifecycle_reactivated'
+  | 'lifecycle_new_booking'
+  | 'lifecycle_checked_in'
+  | 'lifecycle_new_stay'
+  | 'lifecycle_saved_place'
+  | 'lifecycle_followed_bandit'
+  | 'city_memory_opened'
+  | 'reactivation_started'
+  | 'reactivation_completed'
+  | 'bottle_planning_opened';
 
 const sessionOnceKeys = new Set<string>();
 

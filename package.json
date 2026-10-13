@@ -14,6 +14,7 @@
     "web": "expo start --web",
     "lint": "expo lint",
     "verify:signals": "node scripts/verify-network-signals.cjs",
+    "verify:experience-images": "tsx scripts/verify-experience-images.ts",
     "verify:pilot-flows": "node scripts/pilot-flows-runtime.mjs",
     "verify:pilot-e2e-345": "node scripts/pilot-flows-runtime.mjs --e2e-345",
     "verify:pilot-rows-9-10": "node scripts/pilot-flows-runtime.mjs --rows-9-10",
