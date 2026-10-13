@@ -1,11 +1,12 @@
 # Guest App QA & Regression Matrix — Owner Review Oct 13 2026
 
 **Branch:** `repair/guest-app-regression`  
-**HEAD:** `dcd786a3abc7cd318f364b9c2685cd0be590df3e`  
-**Parent chain:** `6b2a346` → `d012338` → `9a80fe8` → `2be767c` → `6d8e857` → `dcd786a`  
+**HEAD / P0 fix SHA:** `fee613065defea1f2b45492515b4f9e6c121d461`  
+**Failed RC (superseded):** `dcd786a`  
+**Parent chain:** `6b2a346` → … → `dcd786a` → … → `0080a82` → **`fee6130` (P0)**  
 **Protected baseline:** `6b2a346` — **preserved** (ancestor; not rewritten)  
 **Production:** https://bandits-two.vercel.app — **NOT deployed** this cycle  
-**Updated:** 2026-10-13 (Android AAPT fix + installable APK)
+**Updated:** 2026-10-13 (P0 iOS intro/touch + Android More crash — physical still NOT VERIFIED)
 
 ## Status legend
 | Tag | Meaning |
@@ -55,19 +56,40 @@ Physical iPhone / Android = **NOT VERIFIED** unless explicitly marked on-device.
 
 ---
 
-## Builds (EAS preview) — controlled RC install pair
+## Builds (EAS preview) — P0 same-SHA install pair
 
-**RC app code SHA:** `dcd786a3abc7cd318f364b9c2685cd0be590df3e` (play-theatrou PNG / AAPT fix)  
-**HEAD:** `b2c4fb2405bbedfafe8dc478885c7f7ce32e7ed2` — docs-only matrix commit after `dcd786a` (no app code delta)
+**P0 app code SHA:** `fee613065defea1f2b45492515b4f9e6c121d461`  
+**Commit:** `fix(p0): restore iOS intro→bandits path; harden Android More mount`  
+**Failed RC superseded:** `dcd786a` (do not use for retest)
 
 | Platform | Build ID | Status | Install / artifact |
 |----------|----------|--------|---------------------|
-| **Android** | `e8e76108-1cc6-4211-ae74-f50c7b297a79` | **FINISHED** @ `dcd786a` (versionCode 9) | Page: https://expo.dev/accounts/banditeam121275/projects/bandits/builds/e8e76108-1cc6-4211-ae74-f50c7b297a79 · **APK:** https://expo.dev/artifacts/eas/q6rUoYFcV3JjJ-94S3p8sg3sX2vay_YuxNXTXOZgeYg.apk |
-| **iOS** | `4806b4c1-6281-4c21-b9a4-c4e25e04dd01` | **FINISHED** @ `b2c4fb2` (build 32) | Page: https://expo.dev/accounts/banditeam121275/projects/bandits/builds/4806b4c1-6281-4c21-b9a4-c4e25e04dd01 · **IPA:** https://expo.dev/artifacts/eas/jqR-48qq565_hjjke-mhCMs_Ig8KmHsOvMBFKH93jo8.ipa |
+| **Android** | `6bed5ee6-28d7-4bec-8cd5-480dadef0197` | **FINISHED** @ `fee6130` (versionCode 10) | Page: https://expo.dev/accounts/banditeam121275/projects/bandits/builds/6bed5ee6-28d7-4bec-8cd5-480dadef0197 · **APK:** https://expo.dev/artifacts/eas/84XPR1doHOsmdkB5H4MTudbj-0dgcfIimvDSjm2EEYE.apk |
+| **iOS** | `46050ddd-7cd5-46b8-aa94-afbe632c1c19` | **FINISHED** @ `fee6130` (build 33) | Page: https://expo.dev/accounts/banditeam121275/projects/bandits/builds/46050ddd-7cd5-46b8-aa94-afbe632c1c19 · **IPA:** https://expo.dev/artifacts/eas/LucdJfVCsW6eiZ2jDSxeaZYHTMQMweqXm8wy4Km5148.ipa |
 
-**Pairing note:** Android @ `dcd786a` + iOS @ `b2c4fb2` = **same app binary content** (HEAD only added this matrix markdown). Treat RC pair as app SHA `dcd786a`. Physical device PASS still **NOT** claimed.
+**Pairing note:** iOS + Android both built from **identical** git SHA `fee6130`. Physical iPhone / Android remain **NOT VERIFIED** until owner retests.
 
-**Android root cause (resolved):** `assets/images/play-theatrou.png` was JPEG mislabeled as PNG → AAPT2 `file failed to compile` in `mergeReleaseResources`. Re-encoded to real PNG (`dcd786a`); `.easignore` + notification icon cleanup (`6d8e857`).
+### P0 root causes (code diagnosis — device NOT VERIFIED)
+
+| Platform | Root cause | Fix |
+|----------|------------|-----|
+| **iOS** | Post-intro redirected to `/home` (TripHome = “new experience”) instead of approved `/bandits`; boot gate could stick on dark loading; bottle `VideoView` could intercept touches with no Skip | Restore `/bandits`; AsyncStorage fail-open 2.5s; bottle Skip + 9s hard ceiling (`app/index.tsx`, `OpeningIntroScreen.tsx`) |
+| **Android** | More (`menu.tsx`) mount crash vectors: VS16 emoji (e.g. 🛎️), Yoga `%`+`gap`, Pressable `transform`+elevation, ExpoImage, uncaught lifecycle refresh | Harden menu layout/emoji/image; guard `useGuestLifecycle.refresh` — destinations kept |
+
+### Owner device retest (only these)
+
+1. **Intro** — cold open shows approved opening; can progress (Who sent it? / Skip / Enter)
+2. **First-tap** — after Enter, Local banDits / tabs / buttons respond
+3. **More** — bottom More opens; navigate a destination; back; open More again (Android: no process death)
+
+### Prior pair (superseded — AAPT era)
+
+| Platform | Build ID | SHA |
+|----------|----------|-----|
+| Android | `e8e76108-…` | `dcd786a` |
+| iOS | `4806b4c1-…` | `b2c4fb2` |
+
+**Android AAPT (still resolved):** `play-theatrou.png` JPEG-as-PNG → re-encoded in `dcd786a`.
 
 ---
 
@@ -94,11 +116,11 @@ Physical iPhone / Android = **NOT VERIFIED** unless explicitly marked on-device.
 
 ## GO / NO-GO
 
-**NO-GO for production** — install pair ready for controlled device QA only.
+**NO-GO for production** — P0 preview pair ready for owner physical retest only.
 
 Still required:
-1. Physical-device PASS on iPhone + Android (IPA + APK installable; **not** verified here)
-2. QA-19 docs + UI bindings once transfer package is provided
+1. Physical-device PASS on iPhone + Android @ `fee6130` (builds above) — **both remain NOT VERIFIED**
+2. QA-19 / screenshot work remains **ON HOLD**
 3. No production deploy
 
-Installable preview pair exists for **manual** QA — build success ≠ physical PASS.
+Build FINISHED ≠ physical PASS. Owner must retest intro, first-tap, More.
