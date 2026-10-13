@@ -1,11 +1,11 @@
 # Guest App QA & Regression Matrix — Owner Review Oct 13 2026
 
 **Branch:** `repair/guest-app-regression`  
-**HEAD:** `9a80fe85d616a627d6353924d8a4e48d2e8faf85` (+ uncommitted `bottleDiscover.tsx` QA-06 consent guard if present)  
-**Parent chain:** `6b2a346` → `d012338` → `9a80fe8`  
+**HEAD:** `dcd786a3abc7cd318f364b9c2685cd0be590df3e`  
+**Parent chain:** `6b2a346` → `d012338` → `9a80fe8` → `2be767c` → `6d8e857` → `dcd786a`  
 **Protected baseline:** `6b2a346` — **preserved** (ancestor; not rewritten)  
 **Production:** https://bandits-two.vercel.app — **NOT deployed** this cycle  
-**Updated:** 2026-10-13 (EAS poll + QA-06/19 follow-up)
+**Updated:** 2026-10-13 (Android AAPT fix + installable APK)
 
 ## Status legend
 | Tag | Meaning |
@@ -55,16 +55,17 @@ Physical iPhone / Android = **NOT VERIFIED** unless explicitly marked on-device.
 
 ---
 
-## Builds (EAS preview @ HEAD `9a80fe8`)
+## Builds (EAS preview)
 
 | Platform | Build ID | Status | Install / artifact |
 |----------|----------|--------|---------------------|
+| **Android** | `e8e76108-1cc6-4211-ae74-f50c7b297a79` | **FINISHED** @ `dcd786a` (versionCode 9) | Page: https://expo.dev/accounts/banditeam121275/projects/bandits/builds/e8e76108-1cc6-4211-ae74-f50c7b297a79 · **APK:** https://expo.dev/artifacts/eas/q6rUoYFcV3JjJ-94S3p8sg3sX2vay_YuxNXTXOZgeYg.apk |
 | **iOS** | `13632132-4186-458e-bfd5-82db4288cd69` | **FINISHED** @ `9a80fe8` (build 31) | Page: https://expo.dev/accounts/banditeam121275/projects/bandits/builds/13632132-4186-458e-bfd5-82db4288cd69 · IPA: https://expo.dev/artifacts/eas/4AW2sEsepWyCXhRXvm7ipx5BdmCghrSRfmwrtQ-vsoM.ipa |
-| **Android** | `65b3fb4e-dad8-43e0-9ce2-b88c411266d3` | **ERRORED** @ `9a80fe8` (versionCode 7) | **No APK.** `errorCode=EAS_BUILD_UNKNOWN_GRADLE_ERROR` · message: Gradle build failed — see “Run gradlew” phase. Logs page: https://expo.dev/accounts/banditeam121275/projects/bandits/builds/65b3fb4e-dad8-43e0-9ce2-b88c411266d3 |
-| iOS (prior) | `406acd3c-…` | FINISHED @ `d012338` | older IPA (pre QA-03/05 batch) |
-| Android (prior) | `b515d503-…` | ERRORED @ `d012338` | same Gradle class of failure |
+| Android (failed) | `6469a183-…` / `65b3fb4e-…` / `b515d503-…` | ERRORED | Root cause: AAPT `:app:mergeReleaseResources` — `assets_images_playtheatrou.png` was JPEG bytes with `.png` extension |
 
-**Android blocker:** Preview Android Gradle fails on EAS for this project SHA (repeated). Archive ~657MB — likely needs `.easignore` shrink + gradle log triage before a usable APK. Physical Android install **blocked** until a successful build.
+**Android root cause (resolved):** `assets/images/play-theatrou.png` was a JPEG mislabeled as PNG → AAPT2 `file failed to compile` during `mergeReleaseResources`. Fixed by re-encoding to a real PNG (`dcd786a`). Also shrunk EAS upload via `.easignore` and dropped color notification icon from `expo-notifications` plugin (`6d8e857`).
+
+**SHA drift:** iOS IPA is still @ `9a80fe8`; Android APK is @ `dcd786a` (includes PNG fix + prior QA batch). Rebuild iOS if a same-SHA install pair is required. Physical device PASS still **NOT** claimed.
 
 ---
 
