@@ -93,7 +93,6 @@
       [
         "expo-notifications",
         {
-          "icon": "./assets/images/play_athens_bg.png",
           "color": "#E85D04",
           "defaultChannel": "messages",
           "sounds": []

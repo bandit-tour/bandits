@@ -1,6 +1,42 @@
-# Shrink EAS upload archive — keep build inputs only.
-artifacts/
-.eas-build-log*.txt
-.eas-build.json
-node_modules/.cache/
+# Shrink EAS upload — exclude non-build inputs (archive was ~650MB+).
 .git/
+.eas-build.json
+.eas-build-log*.txt
+
+# Local env / secrets
+.env
+.env.*
+!.env.example
+
+# Dev / proof / export dumps
+artifacts/
+tmp/
+tmp-*/
+dist/
+dist-*/
+.vercel/
+.expo/
+.expo-*/
+.expo-check-*/
+.expo-freeze-*/
+.expo-regression-*/
+.expo-export-test/
+
+# Tooling caches
+node_modules/.cache/
+**/__pycache__/
+coverage/
+playwright-report/
+test-results/
+
+# Native local trees (CNG regenerates on EAS)
+android/
+ios/
+
+# Misc local noise
+*.log
+*.apk
+*.ipa
+*.aab
+.DS_Store
+Thumbs.db
