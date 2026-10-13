@@ -55,17 +55,19 @@ Physical iPhone / Android = **NOT VERIFIED** unless explicitly marked on-device.
 
 ---
 
-## Builds (EAS preview)
+## Builds (EAS preview) — controlled RC install pair
+
+**RC app code SHA:** `dcd786a3abc7cd318f364b9c2685cd0be590df3e` (play-theatrou PNG / AAPT fix)  
+**HEAD:** `b2c4fb2405bbedfafe8dc478885c7f7ce32e7ed2` — docs-only matrix commit after `dcd786a` (no app code delta)
 
 | Platform | Build ID | Status | Install / artifact |
 |----------|----------|--------|---------------------|
 | **Android** | `e8e76108-1cc6-4211-ae74-f50c7b297a79` | **FINISHED** @ `dcd786a` (versionCode 9) | Page: https://expo.dev/accounts/banditeam121275/projects/bandits/builds/e8e76108-1cc6-4211-ae74-f50c7b297a79 · **APK:** https://expo.dev/artifacts/eas/q6rUoYFcV3JjJ-94S3p8sg3sX2vay_YuxNXTXOZgeYg.apk |
-| **iOS** | `13632132-4186-458e-bfd5-82db4288cd69` | **FINISHED** @ `9a80fe8` (build 31) | Page: https://expo.dev/accounts/banditeam121275/projects/bandits/builds/13632132-4186-458e-bfd5-82db4288cd69 · IPA: https://expo.dev/artifacts/eas/4AW2sEsepWyCXhRXvm7ipx5BdmCghrSRfmwrtQ-vsoM.ipa |
-| Android (failed) | `6469a183-…` / `65b3fb4e-…` / `b515d503-…` | ERRORED | Root cause: AAPT `:app:mergeReleaseResources` — `assets_images_playtheatrou.png` was JPEG bytes with `.png` extension |
+| **iOS** | `4806b4c1-6281-4c21-b9a4-c4e25e04dd01` | **FINISHED** @ `b2c4fb2` (build 32) | Page: https://expo.dev/accounts/banditeam121275/projects/bandits/builds/4806b4c1-6281-4c21-b9a4-c4e25e04dd01 · **IPA:** https://expo.dev/artifacts/eas/jqR-48qq565_hjjke-mhCMs_Ig8KmHsOvMBFKH93jo8.ipa |
 
-**Android root cause (resolved):** `assets/images/play-theatrou.png` was a JPEG mislabeled as PNG → AAPT2 `file failed to compile` during `mergeReleaseResources`. Fixed by re-encoding to a real PNG (`dcd786a`). Also shrunk EAS upload via `.easignore` and dropped color notification icon from `expo-notifications` plugin (`6d8e857`).
+**Pairing note:** Android @ `dcd786a` + iOS @ `b2c4fb2` = **same app binary content** (HEAD only added this matrix markdown). Treat RC pair as app SHA `dcd786a`. Physical device PASS still **NOT** claimed.
 
-**SHA drift:** iOS IPA is still @ `9a80fe8`; Android APK is @ `dcd786a` (includes PNG fix + prior QA batch). Rebuild iOS if a same-SHA install pair is required. Physical device PASS still **NOT** claimed.
+**Android root cause (resolved):** `assets/images/play-theatrou.png` was JPEG mislabeled as PNG → AAPT2 `file failed to compile` in `mergeReleaseResources`. Re-encoded to real PNG (`dcd786a`); `.easignore` + notification icon cleanup (`6d8e857`).
 
 ---
 
@@ -92,12 +94,11 @@ Physical iPhone / Android = **NOT VERIFIED** unless explicitly marked on-device.
 
 ## GO / NO-GO
 
-**NO-GO for production** (unchanged materially).
+**NO-GO for production** — install pair ready for controlled device QA only.
 
 Still required:
-1. Successful **Android** preview APK (Gradle blocker)
-2. Physical-device PASS (iOS IPA available for ad-hoc install; Android none)
-3. QA-19 docs + UI bindings once transfer package is provided
-4. No production deploy
+1. Physical-device PASS on iPhone + Android (IPA + APK installable; **not** verified here)
+2. QA-19 docs + UI bindings once transfer package is provided
+3. No production deploy
 
-iOS HEAD IPA is installable for **manual** device QA only — does **not** equal physical PASS.
+Installable preview pair exists for **manual** QA — build success ≠ physical PASS.
