@@ -122,6 +122,7 @@ function BanditHeaderImpl({
   const [heroUriIndex, setHeroUriIndex] = useState(0);
   const [useLocalFallback, setUseLocalFallback] = useState(false);
   const [galleryPage, setGalleryPage] = useState(0);
+  const [failedGalleryUris, setFailedGalleryUris] = useState<Set<string>>(() => new Set());
   const galleryRef = useRef<ScrollView>(null);
   const [premiumVis, setPremiumVis] = useState<BanditPremiumVisibility | null>(null);
 
@@ -151,6 +152,7 @@ function BanditHeaderImpl({
     setHeroUriIndex(0);
     setUseLocalFallback(false);
     setGalleryPage(0);
+    setFailedGalleryUris(new Set());
   }, [id, isListVariant, face_image_url, image_url, galleryExtras]);
 
   useEffect(() => {
@@ -167,12 +169,34 @@ function BanditHeaderImpl({
   const showPremiumInsights = premiumVis?.showPremiumInsights === true;
   const showOctopusBadge = premiumVis?.octopusVerified === true;
 
+  /** Valid photos only — drop load failures so carousel count matches visible slides (QA-01/12). */
+  const liveGalleryUris = useMemo(
+    () => heroCandidates.filter((u) => !failedGalleryUris.has(u)),
+    [heroCandidates, failedGalleryUris],
+  );
+
+  const markGalleryUriFailed = (uri: string | null | undefined) => {
+    if (!uri) return;
+    setFailedGalleryUris((prev) => {
+      if (prev.has(uri)) return prev;
+      const next = new Set(prev);
+      next.add(uri);
+      return next;
+    });
+  };
+
   const advanceHero = () => {
-    if (heroUriIndex < heroCandidates.length - 1) {
-      setHeroUriIndex((i) => i + 1);
+    const live = heroCandidates.filter((u) => !failedGalleryUris.has(u));
+    const current = heroCandidates[heroUriIndex];
+    if (current) markGalleryUriFailed(current);
+    const nextIdx = heroCandidates.findIndex(
+      (u, i) => i > heroUriIndex && !failedGalleryUris.has(u) && u !== current,
+    );
+    if (nextIdx >= 0) {
+      setHeroUriIndex(nextIdx);
       return;
     }
-    setUseLocalFallback(true);
+    if (live.length <= 1) setUseLocalFallback(true);
   };
 
   const heroSource = (uri: string | null) =>
@@ -252,7 +276,7 @@ function BanditHeaderImpl({
   }
 
   /* ---------- PROFILE DETAIL — immersive hero ---------- */
-  const galleryUris = heroCandidates;
+  const galleryUris = liveGalleryUris;
   const mainUri = galleryUris[0] ?? null;
   const sideA = galleryUris[1] ?? null;
   const sideB = galleryUris[2] ?? galleryUris[1] ?? null;
@@ -271,7 +295,10 @@ function BanditHeaderImpl({
       recyclingKey={`bandit-detail:${id}:${key}`}
       priority="high"
       style={style}
-      onError={advanceHero}
+      onError={() => {
+        markGalleryUriFailed(uri);
+        advanceHero();
+      }}
     />
   );
 
@@ -460,9 +487,11 @@ function BanditHeaderImpl({
         style={styles.mobileGalleryScroll}
         decelerationRate="fast"
       >
-        {(galleryUris.length > 0 ? galleryUris : [null]).map((uri, i) => (
+        {(galleryUris.length > 0 ? galleryUris : ['__fallback__']).map((uri, i) => (
           <View key={`g-${i}`} style={[styles.mobileSlide, { width: slideWidth }]}>
-            {renderCoverImage(uri, `m-${i}`, styles.fillImage)}
+            {uri === '__fallback__'
+              ? renderCoverImage(null, `m-fallback`, styles.fillImage)
+              : renderCoverImage(uri, `m-${i}`, styles.fillImage)}
           </View>
         ))}
       </ScrollView>

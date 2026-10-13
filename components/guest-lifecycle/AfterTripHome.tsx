@@ -7,6 +7,7 @@ import { useRouter, type Href } from "expo-router";
 import React from "react";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 
+import { HotelCheckoutInvite } from "@/components/guest-lifecycle/HotelCheckoutInvite";
 import type { AfterTripHomeModel } from "@/lib/guest-lifecycle/city-memory";
 import type { GuestLifecycleState } from "@/lib/guest-lifecycle/types";
 
@@ -29,15 +30,18 @@ export function AfterTripHome({ model, state, onPlanNextTrip, onReactivate, comp
       </Text>
       <Text style={styles.title}>{model.memoryTitle}</Text>
       <Text style={styles.lead}>
-        Your account stays alive. Hotel services pause until a new stay is activated.
+        Your account stays alive. Hotel services pause until you Connect My New Stay with a verified
+        booking.
       </Text>
+
+      <HotelCheckoutInvite hotelName={model.memoryTitle} />
 
       <View style={styles.ctaRow}>
         <Pressable style={styles.ctaPrimary} onPress={onPlanNextTrip} accessibilityRole="button">
           <Text style={styles.ctaPrimaryText}>Plan Your Next Trip</Text>
         </Pressable>
         <Pressable style={styles.ctaSecondary} onPress={onReactivate} accessibilityRole="button">
-          <Text style={styles.ctaSecondaryText}>Add / Activate Stay</Text>
+          <Text style={styles.ctaSecondaryText}>Connect My New Stay</Text>
         </Pressable>
       </View>
 

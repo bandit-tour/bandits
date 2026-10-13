@@ -146,7 +146,7 @@ export default function PremiumConciergeScreen() {
   const entitled = entitlement ? assertConciergeOpsAllowed(entitlement) : false;
 
   const salesHeader = useAppBackScreenOptions({
-    title: "Premium Insights",
+    title: "Your Local Insider",
     fallback: "/bandits" as Href,
     escapeShortcuts: true,
     headerTintColor: color.ink,
@@ -154,7 +154,7 @@ export default function PremiumConciergeScreen() {
   });
 
   const opsHeader = useAppBackScreenOptions({
-    title: "Premium Insights",
+    title: "Your Local Insider",
     fallback: "/bandits" as Href,
     escapeShortcuts: true,
     headerTintColor: color.ink,
@@ -420,6 +420,7 @@ export default function PremiumConciergeScreen() {
               <View style={styles.salesHeroScrim} />
               <View style={styles.salesHeroCopy}>
                 <Text style={styles.kickerOnHero}>PREMIUM INSIGHTS</Text>
+                <Text style={styles.salesTitleOnHero}>Your Local Insider</Text>
                 <Text style={styles.salesTitleOnHero}>{`Unlock ${first}'s Athens`}</Text>
               </View>
             </View>

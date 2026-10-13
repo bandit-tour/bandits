@@ -54,13 +54,13 @@ export const UPPER_TAB_ORDER: { key: UpperTabKey; label: string; href: UpperTabH
   { key: "impact", label: "Impact", href: "/impact" },
 ];
 
-/** ACTIVE STAY — Bottle out of primary top nav; bandiTEAM in. */
+/** ACTIVE STAY — Bottle out of primary top nav; bandiTEAM before banDiShop (QA-03). */
 export const DISCOVERY_LANE_STAY: { key: UpperTabKey; label: string; href: UpperTabHref }[] = [
   { key: "bandits", label: "Local banDits", href: "/bandits" },
   { key: "experiences", label: "Experiences", href: "/experiences" },
   { key: "smarttraveler", label: "SmartTraveler", href: "/smarttraveler" },
-  { key: "shop", label: "banDiShop", href: "/shop" },
   { key: "banditeam", label: "bandiTEAM", href: "/alerts" },
+  { key: "shop", label: "banDiShop", href: "/shop" },
 ];
 
 /** POST-STAY / NEXT-TRIP — Bottle PRIMARY for mixed sleeping. */

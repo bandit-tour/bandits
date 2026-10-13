@@ -98,18 +98,23 @@ export default function BandiTeamHubScreen() {
         </Text>
 
         <View style={styles.actions}>
-          <Pressable style={styles.reportBtn} onPress={() => router.push('/bandiTeam/report' as never)} accessibilityRole="button">
-            <Text style={styles.reportBtnText}>Report alert</Text>
+          <Pressable style={styles.feedBtn} onPress={openFullFeed} accessibilityRole="button" accessibilityLabel="See Reports">
+            <Text style={styles.feedBtnText}>See Reports</Text>
           </Pressable>
-          <Pressable style={styles.feedBtn} onPress={openFullFeed} accessibilityRole="button">
-            <Text style={styles.feedBtnText}>Open full feed</Text>
+          <Pressable
+            style={styles.reportBtn}
+            onPress={() => router.push('/bandiTeam/report' as never)}
+            accessibilityRole="button"
+            accessibilityLabel="Upload Report"
+          >
+            <Text style={styles.reportBtnText}>Upload Report</Text>
           </Pressable>
         </View>
 
         {loading && rows.length === 0 ? <ActivityIndicator style={{ marginVertical: 16 }} color="#111" /> : null}
         {!!err && <Text style={styles.err}>{err}</Text>}
         {!loading && !err && rows.length === 0 ? (
-          <Text style={styles.empty}>No alerts yet. Report the first one with Report alert.</Text>
+          <Text style={styles.empty}>No alerts yet. Upload the first report with Upload Report.</Text>
         ) : null}
 
         {rows.map((item, idx) => (

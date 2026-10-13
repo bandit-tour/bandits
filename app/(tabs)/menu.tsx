@@ -56,7 +56,7 @@ const QUICK_ACTIONS_AFTER: { key: string; title: string; subtitle: string; emoji
   { key: "alerts", title: "Safety alerts", subtitle: "bandiTEAM", emoji: "🛡", href: "/scam-alerts" },
   { key: "impact", title: "Impact / Passport", subtitle: "Your journey trace", emoji: "🌍", href: "/impact" },
   { key: "spots", title: "My Spots", subtitle: "Saved places", emoji: "❤️", href: "/mySpots" },
-  { key: "reactivate", title: "Activate Stay", subtitle: "New booking", emoji: "🔑", href: "/reactivateStay" },
+  { key: "reactivate", title: "Connect My New Stay", subtitle: "Verified booking", emoji: "🔑", href: "/reactivateStay" },
 ];
 
 /**
@@ -82,10 +82,8 @@ const MENU_GROUPS_STAY: MenuGroup[] = [
     id: "safety",
     title: "bandiTEAM · Safety",
     cards: [
-      { key: "alerts", emoji: "🛡", title: "Scam alerts", href: "/scam-alerts" },
-      { key: "feed", emoji: "⚠", title: "Traveler alerts", href: "/alerts" },
-      { key: "team", emoji: "🤝", title: "bandiTEAM", href: "/bandiTeam" },
-      { key: "report", emoji: "📝", title: "Report unsafe", href: "/bandiTeam/report" },
+      { key: "see-reports", emoji: "🛡", title: "See Reports", href: "/scam-alerts" },
+      { key: "upload-report", emoji: "📝", title: "Upload Report", href: "/bandiTeam/report" },
     ],
   },
   {
@@ -124,7 +122,7 @@ const MENU_GROUPS_AFTER: MenuGroup[] = [
     cards: [
       { key: "memory", emoji: "🧭", title: "Between Trips Home", href: "/hotelier" },
       { key: "bottle", emoji: "🍾", title: "Travel in a Bottle", href: "/travelBottle" },
-      { key: "reactivate", emoji: "🔑", title: "Activate New Stay", href: "/reactivateStay" },
+      { key: "reactivate", emoji: "🔑", title: "Connect My New Stay", href: "/reactivateStay" },
     ],
   },
   {

@@ -1,6 +1,7 @@
 /**
- * ADD / ACTIVATE NEW STAY — booking number + identity → REACTIVATED.
+ * Connect My New Stay — booking number + identity → REACTIVATED.
  * Keeps all prior City Memory. New stay is ADDED, not reset.
+ * Hotel privileges require a verified booking — proximity alone is not enough.
  */
 
 import { Stack, useRouter, type Href } from "expo-router";
@@ -76,12 +77,12 @@ export default function ReactivateStayScreen() {
       contentContainerStyle={{ padding: 20, paddingBottom: 48 + insets.bottom, gap: 14 }}
       keyboardShouldPersistTaps="handled"
     >
-      <Stack.Screen options={{ title: "Activate Stay" }} />
-      <Text style={styles.kicker}>Same account · new stay</Text>
-      <Text style={styles.title}>Add / Activate New Stay</Text>
+      <Stack.Screen options={{ title: "Connect My New Stay" }} />
+      <Text style={styles.kicker}>Same account · verified stay</Text>
+      <Text style={styles.title}>Connect My New Stay</Text>
       <Text style={styles.lead}>
-        Enter your booking number. We attach this stay to your existing guest — City Memory, saves, and
-        follows stay intact. Hotel privileges restore on activation.
+        Enter your booking number to verify this stay. City Memory, saves, and follows stay intact.
+        Hotel unlock requires a verified reservation — being nearby is not enough.
       </Text>
 
       <Text style={styles.label}>Booking number</Text>
