@@ -82,14 +82,22 @@ export default function BottleDiscoverScreen() {
         return;
       }
 
+      /**
+       * QA-06: Moments stay mystery-first. Reveal is not chat consent —
+       * require an explicit reveal tap before opening a 2-way Chat thread.
+       * Does not touch Notifications vs Chat routing.
+       */
+      if (session.mode === "moment" && !session.revealed) {
+        const next = await revealBottleScanSender();
+        if (next) setSession(next);
+        return;
+      }
+
       const thread = await getOrCreateMomentChatThread({
         threadId: session.chatThreadId,
         peer: session.sender,
         openingQuote: session.quote,
       });
-      if (!session.revealed) {
-        await revealBottleScanSender();
-      }
       await attachChatThreadToSession(thread.id);
       /** When conversation starts, point inbox at the chat thread. */
       if (session.notificationId && /^[0-9a-f-]{36}$/i.test(session.notificationId)) {
