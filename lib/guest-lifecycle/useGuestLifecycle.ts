@@ -65,10 +65,16 @@ export function useGuestLifecycle() {
   }, []);
 
   const refresh = useCallback(async () => {
-    const next = await getGuestLifecycle();
-    setSnap(next);
-    setLoading(false);
-    return next;
+    try {
+      const next = await getGuestLifecycle();
+      setSnap(next);
+      return next;
+    } catch {
+      /* Never throw into screen mounts (Android More tab). */
+      return null;
+    } finally {
+      setLoading(false);
+    }
   }, []);
 
   useEffect(() => {

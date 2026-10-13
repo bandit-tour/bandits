@@ -1,6 +1,5 @@
 import type { User } from "@supabase/supabase-js";
 import { useFocusEffect } from "@react-navigation/native";
-import { Image as ExpoImage } from "expo-image";
 import { Stack, useRouter, type Href } from "expo-router";
 import React from "react";
 import {
@@ -41,21 +40,25 @@ type MenuGroup = {
   cards: MenuCard[];
 };
 
+/**
+ * Prefer single-codepoint / widely-supported emoji. Avoid VS16 / ZWJ sequences
+ * (e.g. bellhop 🛎️) that have crashed Android Text rendering on some devices.
+ */
 const QUICK_ACTIONS_STAY: { key: string; title: string; subtitle: string; emoji: string; href: Href }[] = [
-      { key: "stay", title: "Continue My Stay", subtitle: "Stay management", emoji: "🏨", href: "/hotelier/stayInfo" },
-      { key: "lf", title: "Local Friend", subtitle: "Meet someone local", emoji: "💬", href: "/localFriend" },
-      { key: "alerts", title: "Safety alerts", subtitle: "bandiTEAM", emoji: "🛡", href: "/scam-alerts" },
-      { key: "impact", title: "Impact / Passport", subtitle: "Your journey trace", emoji: "🌍", href: "/impact" },
-      { key: "notif", title: "Notifications", subtitle: "Inbox", emoji: "🔔", href: "/notifications" },
-    ];
+  { key: "stay", title: "Continue My Stay", subtitle: "Stay management", emoji: "🏨", href: "/hotelier/stayInfo" },
+  { key: "lf", title: "Local Friend", subtitle: "Meet someone local", emoji: "💬", href: "/localFriend" },
+  { key: "alerts", title: "Safety alerts", subtitle: "bandiTEAM", emoji: "⚠", href: "/scam-alerts" },
+  { key: "impact", title: "Impact / Passport", subtitle: "Your journey trace", emoji: "🌍", href: "/impact" },
+  { key: "notif", title: "Notifications", subtitle: "Inbox", emoji: "🔔", href: "/notifications" },
+];
 
 const QUICK_ACTIONS_AFTER: { key: string; title: string; subtitle: string; emoji: string; href: Href }[] = [
-      { key: "memory", title: "City Memory", subtitle: "Between trips home", emoji: "🧭", href: "/hotelier" },
-      { key: "bottle", title: "Next journey", subtitle: "Travel in a Bottle", emoji: "🌲", href: "/travelBottle" },
-      { key: "lf", title: "Local Friend", subtitle: "Meet someone local", emoji: "💬", href: "/localFriend" },
-  { key: "alerts", title: "Safety alerts", subtitle: "bandiTEAM", emoji: "🛡", href: "/scam-alerts" },
+  { key: "memory", title: "City Memory", subtitle: "Between trips home", emoji: "🧭", href: "/hotelier" },
+  { key: "bottle", title: "Next journey", subtitle: "Travel in a Bottle", emoji: "🌲", href: "/travelBottle" },
+  { key: "lf", title: "Local Friend", subtitle: "Meet someone local", emoji: "💬", href: "/localFriend" },
+  { key: "alerts", title: "Safety alerts", subtitle: "bandiTEAM", emoji: "⚠", href: "/scam-alerts" },
   { key: "impact", title: "Impact / Passport", subtitle: "Your journey trace", emoji: "🌍", href: "/impact" },
-  { key: "spots", title: "My Spots", subtitle: "Saved places", emoji: "❤️", href: "/mySpots" },
+  { key: "spots", title: "My Spots", subtitle: "Saved places", emoji: "♥", href: "/mySpots" },
   { key: "reactivate", title: "Connect My New Stay", subtitle: "Verified booking", emoji: "🔑", href: "/reactivateStay" },
 ];
 
@@ -70,10 +73,10 @@ const MENU_GROUPS_STAY: MenuGroup[] = [
     cards: [
       { key: "lf", emoji: "💬", title: "Local Friend", href: "/localFriend" },
       { key: "impact", emoji: "🌍", title: "Impact / Passport", href: "/impact" },
-      { key: "bookings", emoji: "🎟", title: "Bookings", href: "/bookings" },
+      { key: "bookings", emoji: "🎫", title: "Bookings", href: "/bookings" },
       { key: "following", emoji: "👥", title: "Following", href: "/following" },
-      { key: "spots", emoji: "❤️", title: "My Spots", href: "/mySpots" },
-      { key: "premium", emoji: "🎫", title: "Premium Membership", href: "/account/membership" },
+      { key: "spots", emoji: "♥", title: "My Spots", href: "/mySpots" },
+      { key: "premium", emoji: "⭐", title: "Premium Membership", href: "/account/membership" },
       { key: "bottle", emoji: "🍾", title: "Travel in a Bottle", href: "/travelBottle" },
       { key: "notif", emoji: "🔔", title: "Notifications", href: "/notifications" },
     ],
@@ -82,7 +85,7 @@ const MENU_GROUPS_STAY: MenuGroup[] = [
     id: "safety",
     title: "bandiTEAM · Safety",
     cards: [
-      { key: "see-reports", emoji: "🛡", title: "See Reports", href: "/scam-alerts" },
+      { key: "see-reports", emoji: "⚠", title: "See Reports", href: "/scam-alerts" },
       { key: "upload-report", emoji: "📝", title: "Upload Report", href: "/bandiTeam/report" },
     ],
   },
@@ -91,11 +94,11 @@ const MENU_GROUPS_STAY: MenuGroup[] = [
     title: "My Stay",
     cards: [
       { key: "hotel", emoji: "🏨", title: "Current Hotel", href: "/hotelier/welcome" },
-      { key: "room", emoji: "🛏", title: "Room Details", href: "/hotelier/stayInfo" },
-      { key: "brk", emoji: "🍽", title: "Breakfast", href: "/hotelier/breakfast" },
+      { key: "room", emoji: "🚪", title: "Room Details", href: "/hotelier/stayInfo" },
+      { key: "brk", emoji: "🍳", title: "Breakfast", href: "/hotelier/breakfast" },
       { key: "rest", emoji: "🍷", title: "Restaurant", href: "/hotelier/restaurant" },
-      { key: "spa", emoji: "🧖", title: "Spa", href: "/hotelier/spa" },
-      { key: "rs", emoji: "🛎️", title: "Room Service", href: "/hotelier/roomService" },
+      { key: "spa", emoji: "💆", title: "Spa", href: "/hotelier/spa" },
+      { key: "rs", emoji: "🔔", title: "Room Service", href: "/hotelier/roomService" },
       { key: "late", emoji: "⏰", title: "Late Checkout", href: "/hotelier/lateCheckout" },
       { key: "hev", emoji: "📅", title: "Hotel Events", href: "/hotelier/events" },
     ],
@@ -105,8 +108,8 @@ const MENU_GROUPS_STAY: MenuGroup[] = [
     title: "Account",
     cards: [
       { key: "profile", emoji: "👤", title: "Profile", href: "/profile" },
-      { key: "acct", emoji: "⚙", title: "Account Settings", href: "/account" },
-      { key: "premium", emoji: "🎫", title: "Premium Membership", href: "/account/membership" },
+      { key: "acct", emoji: "🔧", title: "Account Settings", href: "/account" },
+      { key: "premium", emoji: "⭐", title: "Premium Membership", href: "/account/membership" },
       { key: "pay", emoji: "💳", title: "Payments", href: "/account/payments" },
       { key: "lang", emoji: "🌍", title: "Language", href: "/account/language" },
       { key: "privacy", emoji: "🔒", title: "Privacy", href: "/account/privacy" },
@@ -130,8 +133,8 @@ const MENU_GROUPS_AFTER: MenuGroup[] = [
     title: "Saved · Following · Premium",
     cards: [
       { key: "following", emoji: "👥", title: "Following", href: "/following" },
-      { key: "spots", emoji: "❤️", title: "My Spots", href: "/mySpots" },
-      { key: "premium", emoji: "🎫", title: "Premium Membership", href: "/account/membership" },
+      { key: "spots", emoji: "♥", title: "My Spots", href: "/mySpots" },
+      { key: "premium", emoji: "⭐", title: "Premium Membership", href: "/account/membership" },
       { key: "moments", emoji: "✨", title: "My Moments", href: "/myMoment" },
     ],
   },
@@ -142,7 +145,7 @@ const MENU_GROUPS_AFTER: MenuGroup[] = [
     cards: [
       { key: "lf", emoji: "💬", title: "Local Friend", href: "/localFriend" },
       { key: "impact", emoji: "🌍", title: "Impact / Passport", href: "/impact" },
-      { key: "bookings", emoji: "🎟", title: "Bookings", href: "/bookings" },
+      { key: "bookings", emoji: "🎫", title: "Bookings", href: "/bookings" },
       { key: "notif", emoji: "🔔", title: "Notifications", href: "/notifications" },
     ],
   },
@@ -164,6 +167,10 @@ function applyMenuAuthFromUser(
   setters.setAuthHydrated(true);
 }
 
+function lifeStateLabel(state: string | null | undefined): string {
+  return String(state || "PRE_TRIP").replace(/_/g, " ");
+}
+
 /** Premium trip command center — not a settings list. Lifecycle-aware. */
 export default function MenuScreen() {
   const router = useRouter();
@@ -176,6 +183,8 @@ export default function MenuScreen() {
   const [authHydrated, setAuthHydrated] = React.useState(false);
   const [refreshing, setRefreshing] = React.useState(false);
   const [hotelName, setHotelName] = React.useState("");
+  const [avatarFailed, setAvatarFailed] = React.useState(false);
+
   const roomLabel = activeStay?.roomNumber
     ? `Room ${activeStay.roomNumber}`
     : isFullStay
@@ -183,7 +192,11 @@ export default function MenuScreen() {
       : "Between trips";
 
   const guestName = activeIdentity?.displayName?.trim() || "Guest";
-  const avatarUrl = activeIdentity?.avatarUrl;
+  const avatarUrl = activeIdentity?.avatarUrl?.trim() || "";
+
+  React.useEffect(() => {
+    setAvatarFailed(false);
+  }, [avatarUrl]);
 
   const authSetters = React.useMemo(
     () => ({
@@ -196,22 +209,39 @@ export default function MenuScreen() {
   const quickActions = isFullStay ? QUICK_ACTIONS_STAY : QUICK_ACTIONS_AFTER;
   const menuGroups = isFullStay ? MENU_GROUPS_STAY : MENU_GROUPS_AFTER;
 
+  /** Card width without Yoga % + gap (historically fragile on Android). */
+  const contentPad = 16;
+  const gridGap = 12;
+  const cardWidth = Math.max(140, Math.floor((Math.min(width, isDesktopWeb ? 720 : width) - contentPad * 2 - gridGap) / 2));
+
   const refreshMenuAccess = React.useCallback(async () => {
-    const { user } = await resolveMenuAuthSnapshot();
-    applyMenuAuthFromUser(user, authSetters);
-    await refreshLife();
+    try {
+      const { user } = await resolveMenuAuthSnapshot();
+      applyMenuAuthFromUser(user, authSetters);
+    } catch {
+      applyMenuAuthFromUser(null, authSetters);
+    }
+    try {
+      await refreshLife();
+    } catch {
+      /* lifecycle read must never take down More */
+    }
   }, [authSetters, refreshLife]);
 
   React.useEffect(() => {
-    void getHotelEntry().then((entry) => {
-      setHotelName(
-        liveHotelDisplayName({
-          stayName: activeStay?.hotelName,
-          entry,
-          slug: activeStay?.hotelSlug || entry?.slug,
-        }),
-      );
-    });
+    void getHotelEntry()
+      .then((entry) => {
+        setHotelName(
+          liveHotelDisplayName({
+            stayName: activeStay?.hotelName,
+            entry,
+            slug: activeStay?.hotelSlug || entry?.slug,
+          }),
+        );
+      })
+      .catch(() => {
+        setHotelName(String(activeStay?.hotelName || "").trim());
+      });
   }, [activeStay?.hotelName, activeStay?.hotelSlug]);
 
   React.useLayoutEffect(() => {
@@ -250,7 +280,13 @@ export default function MenuScreen() {
 
   const menuRefreshControl = usePremiumRefreshControl(refreshing, onRefresh);
 
-  const go = (href: Href) => router.push(href);
+  const go = (href: Href) => {
+    try {
+      router.push(href);
+    } catch {
+      /* ignore nav race */
+    }
+  };
 
   const onLogout = async () => {
     await safeSignOut();
@@ -265,130 +301,155 @@ export default function MenuScreen() {
     .join("");
 
   return (
-    <ScrollView
-      style={styles.screen}
-      contentContainerStyle={[
-        styles.content,
-        isDesktopWeb && styles.contentDesktop,
-        { paddingBottom: 48 + insets.bottom },
-      ]}
-      keyboardShouldPersistTaps="handled"
-      refreshControl={menuRefreshControl}
-    >
+    <View style={styles.screen}>
       <Stack.Screen options={{ headerShown: false }} />
-
-      {/* Header — trip identity */}
-      <View style={styles.header}>
-        <View style={styles.logoChip}>
-          <Image source={LOGO} style={styles.logo} resizeMode="contain" accessibilityLabel="bandiTour" />
-        </View>        <View style={styles.identityRow}>
-          <Pressable style={styles.avatarWrap} onPress={() => go("/profile" as Href)}>
-            {avatarUrl ? (
-              <ExpoImage source={{ uri: avatarUrl }} style={styles.avatar} contentFit="cover" />
-            ) : (
-              <View style={styles.avatarFallback}>
-                <Text style={styles.avatarInitials}>{initials || "G"}</Text>
-              </View>
-            )}
-          </Pressable>
-          <View style={styles.identityText}>
-            <Text style={styles.guestName}>{guestName}</Text>
-            <Text style={styles.hotelLine}>{hotelName}</Text>
-            <Text style={styles.metaLine}>
-              {isFullStay
-                ? `${roomLabel} · 2 nights remaining`
-                : `${lifeState.replace(/_/g, " ")} · account active`}
-            </Text>
-            <View style={styles.statusPill}>
-              <View style={styles.statusDot} />
-              <Text style={styles.statusText}>
-                {isFullStay ? "Premium Guest" : "Members Club · After Trip"}
+      <ScrollView
+        style={styles.scroll}
+        contentContainerStyle={[
+          styles.content,
+          isDesktopWeb && styles.contentDesktop,
+          { paddingBottom: 48 + insets.bottom },
+        ]}
+        keyboardShouldPersistTaps="handled"
+        nestedScrollEnabled
+        refreshControl={menuRefreshControl}
+        testID="menu-scroll"
+      >
+        {/* Header — trip identity */}
+        <View style={styles.header}>
+          <View style={styles.logoChip}>
+            <Image source={LOGO} style={styles.logo} resizeMode="contain" accessibilityLabel="bandiTour" />
+          </View>
+          <View style={styles.identityRow}>
+            <Pressable style={styles.avatarWrap} onPress={() => go("/profile" as Href)}>
+              {avatarUrl && !avatarFailed ? (
+                <Image
+                  source={{ uri: avatarUrl }}
+                  style={styles.avatar}
+                  onError={() => setAvatarFailed(true)}
+                  accessibilityLabel="Profile photo"
+                />
+              ) : (
+                <View style={styles.avatarFallback}>
+                  <Text style={styles.avatarInitials}>{initials || "G"}</Text>
+                </View>
+              )}
+            </Pressable>
+            <View style={styles.identityText}>
+              <Text style={styles.guestName}>{guestName}</Text>
+              <Text style={styles.hotelLine}>{hotelName}</Text>
+              <Text style={styles.metaLine}>
+                {isFullStay
+                  ? `${roomLabel} · 2 nights remaining`
+                  : `${lifeStateLabel(lifeState)} · account active`}
               </Text>
+              <View style={styles.statusPill}>
+                <View style={styles.statusDot} />
+                <Text style={styles.statusText}>
+                  {isFullStay ? "Premium Guest" : "Members Club · After Trip"}
+                </Text>
+              </View>
             </View>
           </View>
         </View>
-      </View>
 
-      {/* Quick actions */}
-      <Text style={styles.sectionLabel}>Quick actions</Text>
-      <ScrollView
-        horizontal
-        showsHorizontalScrollIndicator={false}
-        contentContainerStyle={styles.quickRow}
-      >
-        {quickActions.map((q) => (
-          <Pressable
-            key={q.key}
-            style={({ pressed }) => [styles.quickCard, pressed && styles.pressed]}
-            onPress={() => go(q.href)}
-          >
-            <Text style={styles.quickEmoji}>{q.emoji}</Text>
-            <Text style={styles.quickTitle} numberOfLines={2}>
-              {q.title}
-            </Text>
-            <Text style={styles.quickSub} numberOfLines={1}>
-              {q.subtitle}
-            </Text>
-          </Pressable>
+        {/* Quick actions */}
+        <Text style={styles.sectionLabel}>Quick actions</Text>
+        <ScrollView
+          horizontal
+          nestedScrollEnabled
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={styles.quickRow}
+        >
+          {quickActions.map((q, idx) => (
+            <Pressable
+              key={q.key}
+              style={({ pressed }) => [
+                styles.quickCard,
+                idx < quickActions.length - 1 ? styles.quickCardGap : null,
+                pressed && styles.pressed,
+              ]}
+              onPress={() => go(q.href)}
+            >
+              <Text style={styles.quickEmoji}>{q.emoji}</Text>
+              <Text style={styles.quickTitle} numberOfLines={2}>
+                {q.title}
+              </Text>
+              <Text style={styles.quickSub} numberOfLines={1}>
+                {q.subtitle}
+              </Text>
+            </Pressable>
+          ))}
+        </ScrollView>
+
+        {/* Grouped destination cards */}
+        {menuGroups.map((group) => (
+          <View key={group.id} style={styles.group}>
+            <Text style={styles.sectionLabel}>{group.title}</Text>
+            <View style={styles.grid}>
+              {group.cards.map((card, idx) => (
+                <Pressable
+                  key={card.key}
+                  style={({ pressed }) => [
+                    styles.card,
+                    { width: cardWidth },
+                    idx % 2 === 0 ? styles.cardGapRight : null,
+                    pressed && styles.pressed,
+                  ]}
+                  onPress={() => {
+                    if (card.href) go(card.href);
+                  }}
+                >
+                  <Text style={styles.cardEmoji}>{card.emoji}</Text>
+                  <Text style={styles.cardTitle} numberOfLines={2}>
+                    {card.title}
+                  </Text>
+                </Pressable>
+              ))}
+            </View>
+          </View>
         ))}
-      </ScrollView>
 
-      {/* Grouped destination cards */}
-      {menuGroups.map((group) => (
-        <View key={group.id} style={styles.group}>
-          <Text style={styles.sectionLabel}>{group.title}</Text>
-          <View style={styles.grid}>
-            {group.cards.map((card) => (
+        {ownerPrivateMenuAllowed ? (
+          <View style={styles.group}>
+            <Text style={styles.sectionLabel}>Owner</Text>
+            <View style={styles.grid}>
               <Pressable
-                key={card.key}
-                style={({ pressed }) => [styles.card, pressed && styles.pressed]}
-                onPress={() => {
-                  if (card.href) go(card.href);
-                }}
+                style={({ pressed }) => [
+                  styles.card,
+                  { width: cardWidth },
+                  styles.cardGapRight,
+                  pressed && styles.pressed,
+                ]}
+                onPress={() => go("/operatorDesk" as Href)}
               >
-                <Text style={styles.cardEmoji}>{card.emoji}</Text>
-                <Text style={styles.cardTitle} numberOfLines={2}>
-                  {card.title}
-                </Text>
+                <Text style={styles.cardEmoji}>🔧</Text>
+                <Text style={styles.cardTitle}>Pilot Desk</Text>
               </Pressable>
-            ))}
+              <Pressable
+                style={({ pressed }) => [styles.card, { width: cardWidth }, pressed && styles.pressed]}
+                onPress={() => go("/admin" as Href)}
+              >
+                <Text style={styles.cardEmoji}>📊</Text>
+                <Text style={styles.cardTitle}>CDesk</Text>
+              </Pressable>
+            </View>
           </View>
-        </View>
-      ))}
+        ) : null}
 
-      {ownerPrivateMenuAllowed ? (
-        <View style={styles.group}>
-          <Text style={styles.sectionLabel}>Owner</Text>
-          <View style={styles.grid}>
-            <Pressable
-              style={({ pressed }) => [styles.card, pressed && styles.pressed]}
-              onPress={() => go("/operatorDesk" as Href)}
-            >
-              <Text style={styles.cardEmoji}>🛠</Text>
-              <Text style={styles.cardTitle}>Pilot Desk</Text>
-            </Pressable>
-            <Pressable
-              style={({ pressed }) => [styles.card, pressed && styles.pressed]}
-              onPress={() => go("/admin" as Href)}
-            >
-              <Text style={styles.cardEmoji}>🎛</Text>
-              <Text style={styles.cardTitle}>CDesk</Text>
-            </Pressable>
-          </View>
-        </View>
-      ) : null}
+        <Pressable style={styles.logout} onPress={() => void onLogout()}>
+          <Text style={styles.logoutText}>Sign out</Text>
+        </Pressable>
 
-      <Pressable style={styles.logout} onPress={() => void onLogout()}>
-        <Text style={styles.logoutText}>Sign out</Text>
-      </Pressable>
-
-      {authHydrated ? null : <Text style={styles.hint}>Loading account…</Text>}
-    </ScrollView>
+        {authHydrated ? null : <Text style={styles.hint}>Loading account…</Text>}
+      </ScrollView>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: "#F6F4F0" },
+  scroll: { flex: 1 },
   content: { paddingHorizontal: 16, paddingTop: 8 },
   contentDesktop: { maxWidth: 720, alignSelf: "center", width: "100%" },
   header: {
@@ -416,8 +477,8 @@ const styles = StyleSheet.create({
     marginBottom: 16,
   },
   logo: { width: 118, height: 26 },
-  identityRow: { flexDirection: "row", alignItems: "center", gap: 14 },
-  avatarWrap: { borderRadius: 28, overflow: "hidden" },
+  identityRow: { flexDirection: "row", alignItems: "center" },
+  avatarWrap: { borderRadius: 28, overflow: "hidden", marginRight: 14 },
   avatar: { width: 56, height: 56, borderRadius: 28 },
   avatarFallback: {
     width: 56,
@@ -456,7 +517,6 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     alignSelf: "flex-start",
-    gap: 6,
     marginTop: 10,
     paddingHorizontal: 10,
     paddingVertical: 5,
@@ -468,6 +528,7 @@ const styles = StyleSheet.create({
     height: 6,
     borderRadius: 3,
     backgroundColor: "#E8A317",
+    marginRight: 6,
   },
   statusText: {
     fontSize: 11,
@@ -484,7 +545,7 @@ const styles = StyleSheet.create({
     marginBottom: 12,
     marginTop: 8,
   },
-  quickRow: { gap: 12, paddingBottom: 8, paddingRight: 40 },
+  quickRow: { paddingBottom: 8, paddingRight: 40, flexDirection: "row", alignItems: "stretch" },
   quickCard: {
     width: 148,
     backgroundColor: "#FFFFFF",
@@ -501,6 +562,7 @@ const styles = StyleSheet.create({
       default: {},
     }),
   },
+  quickCardGap: { marginRight: 12 },
   quickEmoji: { fontSize: 28, marginBottom: 10 },
   quickTitle: { fontSize: 14, fontWeight: "800", color: "#111", lineHeight: 18 },
   quickSub: { fontSize: 12, color: "#777", marginTop: 4 },
@@ -508,17 +570,14 @@ const styles = StyleSheet.create({
   grid: {
     flexDirection: "row",
     flexWrap: "wrap",
-    gap: 12,
   },
   card: {
-    width: "47.5%",
-    flexGrow: 1,
-    maxWidth: "48.5%",
     minHeight: 108,
     backgroundColor: "#FFFFFF",
     borderRadius: 20,
     padding: 16,
     justifyContent: "space-between",
+    marginBottom: 12,
     ...Platform.select({
       ios: {
         shadowColor: "#000",
@@ -530,9 +589,11 @@ const styles = StyleSheet.create({
       default: {},
     }),
   },
+  cardGapRight: { marginRight: 12 },
   cardEmoji: { fontSize: 26, marginBottom: 12 },
   cardTitle: { fontSize: 15, fontWeight: "700", color: "#1A1A1A", lineHeight: 20 },
-  pressed: { opacity: 0.88, transform: [{ scale: 0.98 }] },
+  /** Opacity only — avoid transform+elevation native crashes on Android Pressable. */
+  pressed: { opacity: 0.88 },
   logout: {
     marginTop: 28,
     marginBottom: 8,

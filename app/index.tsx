@@ -30,7 +30,8 @@ function initialGate(): Gate {
 }
 
 /**
- * Root `/`: opening intro on first visit, then **Home** at `/home` after Enter or Skip.
+ * Root `/`: opening intro on first visit, then approved Guest Home at `/bandits`
+ * after Enter or Skip (baseline path — not TripHome `/home`).
  */
 export default function Index() {
   const router = useRouter();
@@ -62,23 +63,36 @@ export default function Index() {
       return;
     }
     let a = true;
+    /** Never leave a dark unclickable boot screen if AsyncStorage hangs. */
+    const failOpen = setTimeout(() => {
+      if (a) setGate((g) => (g === 'loading' ? 'intro' : g));
+    }, 2500);
     void (async () => {
       if (forceIntroFromQuery) {
         if (a) setGate('intro');
         return;
       }
-      const seen = await hasSeenOpeningIntro();
-      if (!a) return;
-      setGate(seen ? 'redirect' : 'intro');
+      try {
+        const seen = await hasSeenOpeningIntro();
+        if (!a) return;
+        setGate(seen ? 'redirect' : 'intro');
+      } catch {
+        if (a) setGate('intro');
+      }
     })();
     return () => {
       a = false;
+      clearTimeout(failOpen);
     };
   }, [forceIntroFromQuery]);
 
   const finish = useCallback(async () => {
-    await markOpeningIntroSeen();
-    router.replace('/home' as Href);
+    try {
+      await markOpeningIntroSeen();
+    } catch {
+      /* still enter the app */
+    }
+    router.replace('/bandits' as Href);
   }, [router]);
 
   if (gate === 'loading') {
@@ -92,7 +106,7 @@ export default function Index() {
   }
 
   if (gate === 'redirect') {
-    return <Redirect href={'/home' as Href} />;
+    return <Redirect href={'/bandits' as Href} />;
   }
 
   return <OpeningIntroScreen onEnter={finish} onSkip={finish} />;

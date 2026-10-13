@@ -347,6 +347,15 @@ export default function OpeningIntroScreen({ onEnter, onSkip }: OpeningIntroScre
     runTransition('cta');
   }, [runTransition]);
 
+  /** Hard ceiling so a hung native player can never leave the intro unclickable. */
+  useEffect(() => {
+    if (step !== 'bottle') return;
+    const id = setTimeout(() => {
+      onBottleComplete();
+    }, 9000);
+    return () => clearTimeout(id);
+  }, [step, onBottleComplete]);
+
   return (
     <View style={styles.root} testID="opening-intro-root">
       <StatusBar style="light" />
@@ -413,7 +422,31 @@ export default function OpeningIntroScreen({ onEnter, onSkip }: OpeningIntroScre
 
         {step === 'bottle' ? (
           <View style={styles.bottleStepOuter} testID="opening-intro-bottle-step" accessibilityLabel="Bottle video step">
-            <IntroBottleVideo onComplete={onBottleComplete} />
+            {/**
+             * VideoView on iOS can intercept touches even when ancestors set pointerEvents="none".
+             * Keep Skip above the native surface so the bottle step is never a dead end.
+             */}
+            <View style={StyleSheet.absoluteFill} pointerEvents="none">
+              <IntroBottleVideo onComplete={onBottleComplete} />
+            </View>
+            <View
+              style={[styles.bottleSkipBar, { paddingTop: Math.max(insets.top, 12) }]}
+              pointerEvents="box-none"
+            >
+              <Pressable
+                onPress={() => {
+                  if (animatingRef.current) return;
+                  onBottleComplete();
+                }}
+                hitSlop={12}
+                testID="opening-intro-bottle-skip"
+                style={({ pressed }) => [styles.skipWrap, pressed && { opacity: 0.75 }]}
+                accessibilityRole="button"
+                accessibilityLabel="Skip bottle video"
+              >
+                <Text style={styles.skipText}>Skip</Text>
+              </Pressable>
+            </View>
           </View>
         ) : null}
 
@@ -426,6 +459,13 @@ export default function OpeningIntroScreen({ onEnter, onSkip }: OpeningIntroScre
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: '#0a0a0a' },
   bottleStepOuter: { flex: 1, minHeight: 200, backgroundColor: '#0a0a0a' },
+  bottleSkipBar: {
+    position: 'absolute',
+    top: 0,
+    right: 8,
+    zIndex: 20,
+    elevation: 20,
+  },
   bottleStepRoot: {
     flex: 1,
     backgroundColor: '#0a0a0a',
