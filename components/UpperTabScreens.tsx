@@ -50,7 +50,7 @@ export default function UpperTabScreens({ active }: Props) {
   };
 
   return (
-    <View style={styles.host}>
+    <View style={styles.host} pointerEvents="box-none" collapsable={false}>
       {pane("explore", <ExploreScreen tabActive={active === "explore"} />)}
       {pane("bandits", <BanditsScreen tabActive={active === "bandits"} />)}
       {pane("experiences", <ExperiencesScreen />)}

@@ -220,6 +220,8 @@ function IntroBottleVideo({ onComplete }: IntroBottleProps) {
           contentFit="contain"
           allowsFullscreen={false}
           allowsPictureInPicture={false}
+          // iOS native video surface can steal hits; parent is already pointerEvents=none.
+          {...({ pointerEvents: 'none' } as object)}
         />
       </View>
     </View>

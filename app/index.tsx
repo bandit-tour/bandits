@@ -30,8 +30,8 @@ function initialGate(): Gate {
 }
 
 /**
- * Root `/`: opening intro on first visit, then approved Guest Home at `/bandits`
- * after Enter or Skip (baseline path — not TripHome `/home`).
+ * Root `/`: full-screen opening intro on first visit, then modern TripHome at `/home`
+ * after Enter or Skip (owner-approved modern Guest App — not pilot `/bandits` shell).
  */
 export default function Index() {
   const router = useRouter();
@@ -92,7 +92,7 @@ export default function Index() {
     } catch {
       /* still enter the app */
     }
-    router.replace('/bandits' as Href);
+    router.replace('/home' as Href);
   }, [router]);
 
   if (gate === 'loading') {
@@ -106,7 +106,7 @@ export default function Index() {
   }
 
   if (gate === 'redirect') {
-    return <Redirect href={'/bandits' as Href} />;
+    return <Redirect href={'/home' as Href} />;
   }
 
   return <OpeningIntroScreen onEnter={finish} onSkip={finish} />;

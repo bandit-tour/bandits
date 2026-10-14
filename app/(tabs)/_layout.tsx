@@ -213,8 +213,18 @@ export default function TabsLayout() {
                 }),
               }}
             />
+            {/**
+             * Upper overlay only for Explore-lane routes — never on TripHome `/home`.
+             * Unmount (not hide) so iOS cannot keep a full-screen host intercepting Home taps
+             * after return from Explore / Local banDits / other rail destinations.
+             */}
             {showUpperOverlay && displayUpperTab ? (
-              <View style={styles.upperTabOverlay} pointerEvents="box-none">
+              <View
+                style={styles.upperTabOverlay}
+                pointerEvents="auto"
+                collapsable={false}
+                testID="guest-upper-tab-overlay"
+              >
                 <UpperTabScreens active={displayUpperTab} />
               </View>
             ) : null}
