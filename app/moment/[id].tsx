@@ -3,11 +3,17 @@ import { Stack, useLocalSearchParams, useRouter, type Href } from "expo-router";
 import React, { useMemo } from "react";
 import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 
+import AppEscapeNav from "@/components/AppEscapeNav";
 import { useAppBackScreenOptions } from "@/hooks/useAppBackScreenOptions";
+import { goToAppHome } from "@/lib/appNavigation";
 import {
   getMomentAttribution,
   getMomentById,
 } from "@/lib/guest-workspace/profileMemory";
+import {
+  banditProfileHrefSafe,
+  resolveRegisteredBanditId,
+} from "@/lib/guest-workspace/registeredBanditIds";
 
 /** Moment story detail — Open Story from Profile journal. */
 export default function MomentDetailScreen() {
@@ -15,18 +21,31 @@ export default function MomentDetailScreen() {
   const router = useRouter();
   const moment = useMemo(() => (id ? getMomentById(String(id)) : undefined), [id]);
   const attribution = moment ? getMomentAttribution(moment) : null;
+  /** Only link when a registered UUID resolves — never name-only / invented slugs. */
+  const registeredBanditId = resolveRegisteredBanditId(moment?.banditId);
+  const banditHref = banditProfileHrefSafe(moment?.banditId);
 
   const screenOptions = useAppBackScreenOptions({
     title: moment?.title ?? "Moment",
     fallback: "/profile" as Href,
     showBack: true,
+    escapeShortcuts: true,
   });
 
   if (!moment) {
     return (
-      <View style={styles.missing}>
+      <View style={styles.missing} testID="moment-missing">
         <Stack.Screen options={screenOptions} />
+        <AppEscapeNav backFallback="/profile" />
         <Text style={styles.missingText}>Moment not found</Text>
+        <Pressable
+          style={styles.homeBtn}
+          onPress={() => goToAppHome(router)}
+          accessibilityRole="button"
+          accessibilityLabel="Go Home"
+        >
+          <Text style={styles.homeBtnText}>Home</Text>
+        </Pressable>
       </View>
     );
   }
@@ -53,7 +72,7 @@ export default function MomentDetailScreen() {
         <View style={styles.attrCard}>
           <Text style={styles.attrLabel}>{attribution.label}</Text>
           <View style={styles.attrRow}>
-            {moment.banditAvatarUrl ? (
+            {moment.banditAvatarUrl && registeredBanditId ? (
               <ExpoImage
                 source={{ uri: moment.banditAvatarUrl }}
                 style={styles.avatar}
@@ -62,15 +81,18 @@ export default function MomentDetailScreen() {
             ) : null}
             <View style={styles.attrText}>
               <Text style={styles.attrName}>{attribution.name}</Text>
-              {moment.banditName && attribution.kind === "bottle_sender" ? (
+              {moment.banditName && attribution.kind === "bottle_sender" && registeredBanditId ? (
                 <Text style={styles.attrSub}>Journey also linked to {moment.banditName}</Text>
               ) : null}
             </View>
           </View>
-          {moment.banditId ? (
+          {banditHref ? (
             <Pressable
               style={styles.banditCta}
-              onPress={() => router.push(`/bandit/${moment.banditId}` as Href)}
+              onPress={() => router.push(banditHref as Href)}
+              accessibilityRole="button"
+              accessibilityLabel="Open Local banDit"
+              testID="moment-open-bandit"
             >
               <Text style={styles.banditCtaText}>Open Local banDit</Text>
             </Pressable>
@@ -84,8 +106,17 @@ export default function MomentDetailScreen() {
 const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: "#F3EFE8" },
   content: { paddingBottom: 48 },
-  missing: { flex: 1, alignItems: "center", justifyContent: "center", padding: 24 },
-  missingText: { color: "#666", fontSize: 16 },
+  missing: { flex: 1, padding: 24, gap: 12, backgroundColor: "#F3EFE8" },
+  missingText: { color: "#666", fontSize: 16, textAlign: "center", marginTop: 24 },
+  homeBtn: {
+    alignSelf: "center",
+    backgroundColor: "#111",
+    paddingHorizontal: 28,
+    paddingVertical: 12,
+    borderRadius: 12,
+    marginTop: 8,
+  },
+  homeBtnText: { color: "#FFF", fontWeight: "800", fontSize: 15 },
   hero: { width: "100%", height: 280 },
   source: {
     marginHorizontal: 20,

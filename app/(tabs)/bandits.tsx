@@ -199,6 +199,16 @@ export function BanditsScreen({ tabActive }: BanditsScreenProps = {}) {
 
   useTabActiveDataLoad(screenActive, banditsInitialFocusDoneRef, fetchRows);
 
+  /** Exit prolonged skeleton — hydrate empty/error so first-tap works without PTR (Stage 1 A3). */
+  useEffect(() => {
+    if (loadedOnce) return;
+    const t = setTimeout(() => {
+      setLoadedOnce(true);
+      setLoadError((prev) => prev || 'Taking longer than usual. Pull to refresh or try again.');
+    }, 8_000);
+    return () => clearTimeout(t);
+  }, [loadedOnce]);
+
   useGuestLiveSurface('bandits', () => {
     fetchRows(false);
   });

@@ -295,7 +295,8 @@ function UpperTabButton({
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: "#FFFFFF" },
-  content: { flex: 1, minHeight: 0 },
+  /** Clip stack hit-bleed so Home taps are not stolen by offscreen overlays (iOS). */
+  content: { flex: 1, minHeight: 0, overflow: "hidden" },
   bottomNavBar: {
     width: "100%",
     alignSelf: "stretch",

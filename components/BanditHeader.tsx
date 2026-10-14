@@ -77,6 +77,8 @@ function collectHeroUris(
   extras: string[] | undefined,
 ): string[] {
   const out: string[] = [];
+  // Identity gallery = personal portraits only (image + face).
+  // Never mix venue/PLAY terrace extras into the banDit carousel (Stage 2 B1).
   if (isList) {
     // Prefer full portrait over tight face crop — list cards need head + shoulders.
     pushUnique(out, image);
@@ -84,8 +86,8 @@ function collectHeroUris(
   } else {
     pushUnique(out, image);
     pushUnique(out, face);
-    for (const u of extras || []) pushUnique(out, u);
   }
+  void extras;
   return out;
 }
 
@@ -315,21 +317,29 @@ function BanditHeaderImpl({
           {String(name || '').trim()}
         </Text>
         {showOctopusBadge ? (
-          <View
+          <Pressable
             style={styles.verifiedInline}
-            pointerEvents="none"
-            accessibilityLabel="Octopus Verified™"
+            onPress={openPremiumInsights}
+            accessibilityRole="button"
+            accessibilityLabel="Octopus Verified™ — open Your Local Insider"
+            testID="octopus-verified-badge"
           >
             <LocalBanditOctopusIcon style={styles.verifiedIconSm} />
-          </View>
+          </Pressable>
         ) : null}
       </View>
 
       {showOctopusBadge ? (
-        <View style={styles.octopusVerifiedRow} accessibilityLabel="Octopus Verified™">
+        <Pressable
+          style={styles.octopusVerifiedRow}
+          onPress={openPremiumInsights}
+          accessibilityRole="button"
+          accessibilityLabel="Octopus Verified™ — open Your Local Insider"
+          testID="octopus-verified-row"
+        >
           <LocalBanditOctopusIcon style={styles.verifiedIconSm} />
           <Text style={styles.octopusVerifiedText}>Octopus Verified™</Text>
-        </View>
+        </Pressable>
       ) : null}
 
       <Text style={styles.profileIdentity} numberOfLines={2}>
@@ -418,16 +428,7 @@ function BanditHeaderImpl({
             <Text style={styles.athensBtnSub}>Photographic stops — not a map dump</Text>
           </Pressable>
 
-          <Pressable
-            onPress={openMap}
-            style={styles.mapWithGuide}
-            accessibilityRole="button"
-            accessibilityLabel="City map"
-          >
-            <BanditMiniMapPreview banditId={id} />
-          </Pressable>
-
-          {/* Premium Insights — exclusive layer; always show chapter when eligible */}
+          {/* Your Local Insider — eligible only; guest-facing name (not “Premium Insights”). */}
           {showPremiumInsights ? (
             <Pressable
               style={({ pressed, hovered }: any) => [
@@ -437,17 +438,17 @@ function BanditHeaderImpl({
               ]}
               onPress={openPremiumInsights}
               accessibilityRole="button"
-              accessibilityLabel={`Premium Insights · ${displayFirstName}`}
+              accessibilityLabel={`Your Local Insider · ${displayFirstName}`}
               testID="bandit-premium-insights-cta"
             >
               <LocalBanditOctopusIcon style={styles.conciergeIcon} />
               <View style={styles.conciergeCopy}>
-                <Text style={styles.conciergeEyebrow}>PREMIUM INSIGHTS</Text>
+                <Text style={styles.conciergeEyebrow}>YOUR LOCAL INSIDER</Text>
                 <Text style={styles.conciergePrimary} numberOfLines={1}>
                   {`Unlock ${displayFirstName}'s Athens`}
                 </Text>
                 <Text style={styles.conciergeSecondary} numberOfLines={1}>
-                  {`Exclusive local access · ${displayFirstName} handles it`}
+                  {`Octopus Concierge · ${displayFirstName} handles it`}
                 </Text>
               </View>
             </Pressable>
@@ -511,8 +512,20 @@ function BanditHeaderImpl({
   return (
     <View style={styles.detailRoot}>
       <View style={[styles.detailHero, isDesktop && styles.detailHeroDesktop]}>
-        <View style={[styles.galleryCol, isDesktop && styles.galleryColDesktop]}>
-          {isDesktop ? desktopGallery : mobileGallery}
+        {/* City Guide map LEFT of personal photos (Stage 2 C1) — not below Routes. */}
+        <View style={styles.heroMediaRow}>
+          <Pressable
+            onPress={openMap}
+            style={styles.mapBesideGallery}
+            accessibilityRole="button"
+            accessibilityLabel="City map"
+            testID="bandit-city-map-left"
+          >
+            <BanditMiniMapPreview banditId={id} />
+          </Pressable>
+          <View style={[styles.galleryCol, isDesktop && styles.galleryColDesktop]}>
+            {isDesktop ? desktopGallery : mobileGallery}
+          </View>
         </View>
         <View style={[styles.identityCol, isDesktop && styles.identityColDesktop]}>
           {identityPanel}
@@ -943,6 +956,17 @@ const styles = StyleSheet.create({
     width: '100%',
     marginBottom: space.md,
   },
+  heroMediaRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 10,
+    width: '100%',
+    paddingHorizontal: space.md,
+  },
+  mapBesideGallery: {
+    marginTop: 4,
+    flexShrink: 0,
+  },
   detailHero: {
     width: '100%',
     maxWidth: layout.contentMax,
@@ -958,7 +982,8 @@ const styles = StyleSheet.create({
     gap: space.lg,
   },
   galleryCol: {
-    width: '100%',
+    flex: 1,
+    minWidth: 0,
   },
   galleryColDesktop: {
     flexGrow: 0,

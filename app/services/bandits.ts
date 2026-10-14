@@ -242,17 +242,25 @@ export async function deleteBandit(id: string): Promise<void> {
   }
 }
 
+const BANDIT_UUID_RE =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
 export async function getBanditById(id: string, forUserId?: string | null): Promise<Bandit | null> {
+  const banditId = String(id || '').trim();
+  /** Non-UUID ids (legacy demo slugs) are never valid PK — do not query Postgres. */
+  if (!banditId || !BANDIT_UUID_RE.test(banditId)) return null;
+
   const uid = forUserId != null ? String(forUserId).trim() : '';
   const likedIds = uid ? await getUserLikedBanditIdsForUser(uid) : await getUserLikedBanditIds();
   const { data, error } = await supabase
     .from('bandit')
     .select('*')
-    .eq('id', id)
+    .eq('id', banditId)
     .single();
 
   if (error) {
-    if (error.code === 'PGRST116') return null;
+    /** Not found / invalid uuid — treat as missing, never throw into a dead-end screen. */
+    if (error.code === 'PGRST116' || error.code === '22P02') return null;
     console.error('Error fetching bandit:', error);
     throw error;
   }

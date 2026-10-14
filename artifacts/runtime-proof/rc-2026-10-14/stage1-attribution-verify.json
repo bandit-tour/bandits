@@ -1,0 +1,16 @@
+{
+  "at": "2026-10-14T17:01:09.515Z",
+  "tipNote": "run after commit for SHA",
+  "checks": {
+    "noFakeSlugsInProfileMemory": true,
+    "registeredIdTablePresent": true,
+    "momentUsesResolver": true,
+    "banditErrorHasEscape": true,
+    "banditLoadingHasEscape": true,
+    "getBanditRejectsNonUuid": true
+  },
+  "fakeSlugHits": [],
+  "registeredUuidCount": 8,
+  "sampleUuidsInMemory": [],
+  "verdict": "CODE PASS — Stage1 A2 attribution + escape"
+}

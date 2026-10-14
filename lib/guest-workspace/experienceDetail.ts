@@ -174,7 +174,7 @@ const KEYS: ExperienceHostProfile = {
   credentials: ["Nightlife fixer · 9 years", "Cover & guest-list access", "English & Greek"],
   yearsHosting: 9,
   languages: ["English", "Greek"],
-  banditId: "bandit_keys",
+  banditId: "d7f053c0-a4c5-4f70-a82c-037d82005808",
   messageViaLocalFriend: true,
 };
 
@@ -209,7 +209,7 @@ const NIKOS_FRAME: ExperienceHostProfile = {
   credentials: ["Documentary photographer", "Night routes", "English & Greek"],
   yearsHosting: 6,
   languages: ["English", "Greek"],
-  banditId: "bandit_nikos",
+  banditId: "2f5f4057-4f09-463f-8c08-d66d13caea1a",
   messageViaLocalFriend: true,
 };
 

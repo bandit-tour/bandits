@@ -1,12 +1,13 @@
 # Guest App QA & Regression Matrix — Owner Review Oct 13 2026
 
-**Branch:** `repair/guest-app-regression`  
-**HEAD / P0 fix SHA:** `fee613065defea1f2b45492515b4f9e6c121d461`  
-**Failed RC (superseded):** `dcd786a`  
-**Parent chain:** `6b2a346` → … → `dcd786a` → … → `0080a82` → **`fee6130` (P0)**  
-**Protected baseline:** `6b2a346` — **preserved** (ancestor; not rewritten)  
-**Production:** https://bandits-two.vercel.app — **NOT deployed** this cycle  
-**Updated:** 2026-10-13 (P0 iOS intro/touch + Android More crash — physical still NOT VERIFIED)
+**Branch:** `repair/guest-app-regression` (history preserved; not reset)  
+**Protected baseline / last working native SHA:** `6b2a3466a71951c87a0b52d39beb271bb57c4585`  
+**Last working EAS iOS (historical):** `2015cc5c-879a-4d73-b398-f5a6508d9397` @ `6b2a346` (preview/internal, Jul 2026)  
+**Broken RCs:** `dcd786a`, `fee6130` — do not use for owner retest  
+**Recovery:** fresh iOS preview rebuilt **from exact `6b2a346` tree** (worktree) — see § Recovery build  
+**Production:** https://bandits-two.vercel.app — **NOT deployed** · **NO-GO**  
+**Modern tip verified:** `278be08` (owner typo `278be88` rejected)  
+**Updated:** 2026-10-14 — Stage 1 P0 Story→banDit + nav escape + Stage 2 partial (Neo photos / map left / Octopus clickable). Physical **NOT VERIFIED**
 
 ## Status legend
 | Tag | Meaning |
@@ -25,7 +26,11 @@ Physical iPhone / Android = **NOT VERIFIED** unless explicitly marked on-device.
 
 | ID | Requirement | Classification | Root cause / notes | Fix / evidence | Web | iPhone | Android |
 |----|-------------|----------------|--------------------|----------------|-----|--------|---------|
-| **QA-01** | Neo Premium CTA + Octopus badge only when authorized; carousel valid photos | **CODE FIXED — RUNTIME NOT VERIFIED** | Workspace visibility + failed URI slides | `BanditHeader`, `premium-visibility.ts` | Partial | NOT VERIFIED | NOT VERIFIED |
+| **QA-01** | Neo Premium CTA + Octopus badge only when authorized; carousel valid photos | **CODE FIXED — RUNTIME NOT VERIFIED** | Identity gallery = image+face only (no venue extras); Octopus badge → Your Local Insider; map left of photos | `BanditHeader`, `premium-visibility.ts`, `registeredBanditIds.ts` | Partial | NOT VERIFIED | NOT VERIFIED |
+| **S1-A2** | Profile→Travel Stories→Open Local banDit trap | **CODE FIXED — RUNTIME NOT VERIFIED** | Seed used non-UUID `bandit_elena` → Postgres `22P02` → dead-end error UI without Back | `profileMemory` real UUIDs; `resolveRegisteredBanditId`; hide CTA if unresolved; `bandit/[id]` AppEscapeNav+Home on load/error; `getBanditById` rejects non-UUID | CODE PASS (`stage1-attribution-verify.json`) | NOT VERIFIED | NOT VERIFIED |
+| **S1-A1** | iOS touch/nav Back/Home/Menu | **CODE FIXED — RUNTIME NOT VERIFIED** | Missing `overflow:hidden` on tabs content; error screens omitted Stack header | `(tabs)/_layout` overflow; escape on bandit/moment error | CODE | NOT VERIFIED | NOT VERIFIED |
+| **S1-A3** | Prolonged Local banDits skeleton | **CODE FIXED — RUNTIME NOT VERIFIED** | `loadedOnce` never flips on hang | 8s skeleton timeout → empty/error+retry | CODE | NOT VERIFIED | NOT VERIFIED |
+| **S1-F** | Profile demo-as-real (Guest / 842 / 4-night) | **CODE FIXED — RUNTIME NOT VERIFIED** | PROFILE_STAY seed presented as live | Sample banner; real stay from lifecycle; fake score hidden | CODE | NOT VERIFIED | NOT VERIFIED |
 | **QA-02** | Explore map card clipped | **CODE FIXED — RUNTIME NOT VERIFIED** | Insufficient bottom pad | `explore.tsx` `+72` map pad | NOT VERIFIED | NOT VERIFIED | NOT VERIFIED |
 | **QA-03** | bandiTEAM / More / rail / checkout invite | **CODE FIXED — RUNTIME NOT VERIFIED** | Rail order + duplicate reports | `upperTab`, menu, hub, `HotelCheckoutInvite` | NOT VERIFIED | NOT VERIFIED | NOT VERIFIED |
 | **QA-04** | Between Trips Home escape + contrast | **CODE FIXED — RUNTIME NOT VERIFIED** | Dark shell trap | `hotelier/index`, `AfterTripHome` | NOT VERIFIED | NOT VERIFIED | NOT VERIFIED |
@@ -56,40 +61,38 @@ Physical iPhone / Android = **NOT VERIFIED** unless explicitly marked on-device.
 
 ---
 
-## Builds (EAS preview) — P0 same-SHA install pair
+## Recovery build (priority) — restore working native @ `6b2a346`
 
-**P0 app code SHA:** `fee613065defea1f2b45492515b4f9e6c121d461`  
-**Commit:** `fix(p0): restore iOS intro→bandits path; harden Android More mount`  
-**Failed RC superseded:** `dcd786a` (do not use for retest)
+**Strategy:** EAS iOS `preview` / `internal` from **exact** git tree `6b2a346` (detached worktree). Repair branch tip **not** reset; screenshot fixes deferred.
 
-| Platform | Build ID | Status | Install / artifact |
-|----------|----------|--------|---------------------|
-| **Android** | `6bed5ee6-28d7-4bec-8cd5-480dadef0197` | **FINISHED** @ `fee6130` (versionCode 10) | Page: https://expo.dev/accounts/banditeam121275/projects/bandits/builds/6bed5ee6-28d7-4bec-8cd5-480dadef0197 · **APK:** https://expo.dev/artifacts/eas/84XPR1doHOsmdkB5H4MTudbj-0dgcfIimvDSjm2EEYE.apk |
-| **iOS** | `46050ddd-7cd5-46b8-aa94-afbe632c1c19` | **FINISHED** @ `fee6130` (build 33) | Page: https://expo.dev/accounts/banditeam121275/projects/bandits/builds/46050ddd-7cd5-46b8-aa94-afbe632c1c19 · **IPA:** https://expo.dev/artifacts/eas/LucdJfVCsW6eiZ2jDSxeaZYHTMQMweqXm8wy4Km5148.ipa |
+| Field | Value |
+|-------|--------|
+| Working SHA | `6b2a3466a71951c87a0b52d39beb271bb57c4585` |
+| Historical working build | `2015cc5c-879a-4d73-b398-f5a6508d9397` (Jul 2026) |
+| Fresh recovery build | _(filled when EAS returns)_ |
+| Install page (CLI) | _(filled when EAS returns)_ |
+| Login | `banditeam121275` / `banditourex@gmail.com` |
+| Physical | **NOT VERIFIED** |
+| Production | **NO-GO** |
 
-**Pairing note:** iOS + Android both built from **identical** git SHA `fee6130`. Physical iPhone / Android remain **NOT VERIFIED** until owner retests.
+Full write-up: `artifacts/runtime-proof/rc-2026-10-14/native-recovery-6b2a346.md`
 
-### P0 root causes (code diagnosis — device NOT VERIFIED)
+### Owner retest (recovery)
 
-| Platform | Root cause | Fix |
-|----------|------------|-----|
-| **iOS** | Post-intro redirected to `/home` (TripHome = “new experience”) instead of approved `/bandits`; boot gate could stick on dark loading; bottle `VideoView` could intercept touches with no Skip | Restore `/bandits`; AsyncStorage fail-open 2.5s; bottle Skip + 9s hard ceiling (`app/index.tsx`, `OpeningIntroScreen.tsx`) |
-| **Android** | More (`menu.tsx`) mount crash vectors: VS16 emoji (e.g. 🛎️), Yoga `%`+`gap`, Pressable `transform`+elevation, ExpoImage, uncaught lifecycle refresh | Harden menu layout/emoji/image; guard `useGuestLifecycle.refresh` — destinations kept |
+1. Intro opens (approved opening) + Enter/Skip works  
+2. Guest App tabs/buttons responsive  
+3. Navigate Home / Explore / More without freeze  
 
-### Owner device retest (only these)
+Screenshot/QA product fixes: **ON HOLD** until physical PASS.
 
-1. **Intro** — cold open shows approved opening; can progress (Who sent it? / Skip / Enter)
-2. **First-tap** — after Enter, Local banDits / tabs / buttons respond
-3. **More** — bottom More opens; navigate a destination; back; open More again (Android: no process death)
+---
 
-### Prior pair (superseded — AAPT era)
+## Superseded broken RCs (do not retest)
 
-| Platform | Build ID | SHA |
-|----------|----------|-----|
-| Android | `e8e76108-…` | `dcd786a` |
-| iOS | `4806b4c1-…` | `b2c4fb2` |
-
-**Android AAPT (still resolved):** `play-theatrou.png` JPEG-as-PNG → re-encoded in `dcd786a`.
+| SHA | iOS build | Note |
+|-----|-----------|------|
+| `fee6130` | `46050ddd-…` | Speculative P0 on broken shell |
+| `dcd786a` / `b2c4fb2` | `4806b4c1-…` | Post-`d012338` regression window |
 
 ---
 
@@ -116,11 +119,18 @@ Physical iPhone / Android = **NOT VERIFIED** unless explicitly marked on-device.
 
 ## GO / NO-GO
 
-**NO-GO for production** — P0 preview pair ready for owner physical retest only.
+**NO-GO for production** · **NO-GO LIVE Stripe**.
 
-Still required:
-1. Physical-device PASS on iPhone + Android @ `fee6130` (builds above) — **both remain NOT VERIFIED**
-2. QA-19 / screenshot work remains **ON HOLD**
-3. No production deploy
+**Owner retest RC (after this commit’s SAME-SHA EAS builds):**
+1. Profile → Travel stories → Open Story → Back → Profile
+2. Story → Open Local banDit (real UUID) → Back → Story → Back → Profile
+3. Fabricated/missing id → recoverable error → Back + Home
+4. Neo profile: two personal photos; map left of photo; Octopus badge opens Your Local Insider
+5. Local banDits: no endless skeleton; first tap works
 
-Build FINISHED ≠ physical PASS. Owner must retest intro, first-tap, More.
+Physical iPhone/Android = **NOT VERIFIED** until owner. Build FINISHED ≠ PASS.
+
+**Workspace blockers (Stages 3–4 / C3):**
+- Set `EXPO_PUBLIC_WORKSPACE_URL` + `EXPO_PUBLIC_ORCHESTRA_OS_URL` = `https://banditour-workspace.vercel.app` in EAS **preview** env
+- Octopus Verified sampling (~10) + Stripe TEST checkout owned by Workspace
+- Guest App must not show raw env-var error strings; hide CTA if checkout origin missing

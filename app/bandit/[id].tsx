@@ -29,10 +29,13 @@ import { ensureAnonymousSession } from '@/lib/pilotSession';
 import { resolveWhyFollowText } from '@/services/whyFollowCopy';
 import { getNotificationsBackendStatus } from '@/services/localFriend';
 
+import AppEscapeNav from '@/components/AppEscapeNav';
 import BanditHeader from '@/components/BanditHeader';
 import EventCard from '@/components/EventCard';
 import ReviewCard from '@/components/ReviewCard';
 import TagChip from '@/components/TagChip';
+import { goToAppHome } from '@/lib/appNavigation';
+import { resolveRegisteredBanditId } from '@/lib/guest-workspace/registeredBanditIds';
 
 import { TAG_EMOJI_MAP } from '@/constants/tagNameToEmoji';
 import { Database } from '@/lib/database.types';
@@ -93,12 +96,14 @@ function buildFallbackReviews(banditId: string, banditName: string): DisplayRevi
 export default function BanditScreen() {
   const router = useRouter();
   const screenOptions = useAppBackScreenOptions({
-    title: '',
-    fallback: '/bandits',
+    title: 'Local banDit',
+    fallback: '/profile',
     escapeShortcuts: true,
   });
   const { id: rawId } = useLocalSearchParams<{ id?: string | string[] }>();
-  const id = routeParamString(rawId);
+  const rawParam = routeParamString(rawId);
+  /** Resolve commercial/demo aliases; never query invented non-UUID ids. */
+  const id = resolveRegisteredBanditId(rawParam) ?? (rawParam || '');
   const { width } = useWindowDimensions();
   const isDesktopWeb = Platform.OS === 'web' && width >= 1100;
   const insets = useSafeAreaInsets();
@@ -209,7 +214,13 @@ export default function BanditScreen() {
             : buildFallbackReviews(banditData.id, banditData.name).slice(0, 3),
         );
       } catch (err) {
-        setError(err instanceof Error ? err.message : 'Failed to fetch bandit');
+        const msg =
+          err instanceof Error
+            ? err.message
+            : err && typeof err === 'object' && 'message' in err
+              ? String((err as { message: unknown }).message)
+              : 'This Local banDit is unavailable.';
+        setError(msg.includes('uuid') || msg.includes('22P02') ? 'This Local banDit is unavailable.' : msg);
       } finally {
         setLoading(false);
       }
@@ -368,16 +379,49 @@ export default function BanditScreen() {
 
   if (loading) {
     return (
-      <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" />
+      <View style={styles.stateScreen} testID="bandit-profile-loading">
+        <Stack.Screen options={screenOptions} />
+        <View style={[styles.stateEscapePad, { paddingTop: Math.max(insets.top, 8) + 8 }]}>
+          <AppEscapeNav backFallback="/profile" />
+        </View>
+        <View style={styles.stateBody}>
+          <ActivityIndicator size="large" />
+          <Text style={styles.loadingHint}>Loading Local banDit…</Text>
+          <Pressable
+            style={styles.escapeHomeBtn}
+            onPress={() => goToAppHome(router)}
+            accessibilityRole="button"
+            accessibilityLabel="Go Home"
+          >
+            <Text style={styles.escapeHomeText}>Home</Text>
+          </Pressable>
+        </View>
       </View>
     );
   }
 
   if (error || !bandit) {
     return (
-      <View style={styles.errorContainer}>
-        <Text style={styles.errorText}>{error ?? 'banDit not found'}</Text>
+      <View style={styles.stateScreen} testID="bandit-profile-error">
+        <Stack.Screen options={screenOptions} />
+        <View style={[styles.stateEscapePad, { paddingTop: Math.max(insets.top, 8) + 8 }]}>
+          <AppEscapeNav backFallback="/profile" />
+        </View>
+        <View style={styles.stateBody}>
+          <Text style={styles.errorText}>{error ?? 'This Local banDit is unavailable.'}</Text>
+          <Text style={styles.errorSub}>
+            The profile link may be outdated. Go back to your story, or return Home.
+          </Text>
+          <Pressable
+            style={styles.escapeHomeBtn}
+            onPress={() => goToAppHome(router)}
+            accessibilityRole="button"
+            accessibilityLabel="Go Home"
+            testID="bandit-error-home"
+          >
+            <Text style={styles.escapeHomeText}>Home</Text>
+          </Pressable>
+        </View>
       </View>
     );
   }
@@ -848,20 +892,49 @@ const styles = StyleSheet.create({
     fontFamily: 'Caros',
   },
 
-  loadingContainer: {
+  stateScreen: {
     flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
+    backgroundColor: '#FFFFFF',
   },
-  errorContainer: {
+  stateEscapePad: {
+    paddingHorizontal: 16,
+  },
+  stateBody: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    padding: 20,
+    paddingHorizontal: 24,
+    gap: 12,
+  },
+  loadingHint: {
+    marginTop: 12,
+    fontSize: 14,
+    color: '#666',
   },
   errorText: {
-    fontSize: 16,
-    color: 'red',
+    fontSize: 17,
+    fontWeight: '700',
+    color: '#1A1A1A',
+    textAlign: 'center',
+  },
+  errorSub: {
+    fontSize: 14,
+    lineHeight: 20,
+    color: '#555',
+    textAlign: 'center',
+    maxWidth: 360,
+  },
+  escapeHomeBtn: {
+    marginTop: 8,
+    backgroundColor: '#111111',
+    paddingHorizontal: 28,
+    paddingVertical: 12,
+    borderRadius: 12,
+  },
+  escapeHomeText: {
+    color: '#FFFFFF',
+    fontWeight: '800',
+    fontSize: 15,
   },
   askModalRoot: {
     flex: 1,

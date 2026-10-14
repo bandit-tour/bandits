@@ -1,7 +1,11 @@
 /**
  * Guest Profile — travel memory journal seed.
  * Demo data until live memory / journey APIs are wired.
+ * banditId values MUST be registered Supabase UUIDs (see registeredBanditIds.ts).
+ * Never use commercial slugs like `bandit_elena` — they are not UUIDs and dead-end profiles.
  */
+
+import { REGISTERED_BANDIT } from "@/lib/guest-workspace/registeredBanditIds";
 
 export type MomentSource =
   | "qr_bottle"
@@ -133,13 +137,13 @@ export const PROFILE_MOMENTS: TravelMoment[] = [
       "https://images.unsplash.com/photo-1514933651103-005eec06c04b?auto=format&fit=crop&w=900&q=80",
     source: "bottle_message",
     sourceLabel: "Message in a bottle",
-    banditId: "bandit_elena",
-    banditName: "Elena V.",
+    banditId: REGISTERED_BANDIT.neo,
+    banditName: "Neo",
     banditAvatarUrl:
       "https://images.unsplash.com/photo-1494790108377-be9c29b29330?auto=format&fit=crop&w=200&q=80",
     bottleSenderName: "Maya · previous guest",
     bottleMessage:
-      "If you find this — take the rooftop at golden hour, then ask Elena for the courtyard table. Athens is kinder when you arrive curious.",
+      "If you find this — take the rooftop at golden hour, then ask Neo for the courtyard table. Athens is kinder when you arrive curious.",
     storyBody:
       "You scanned the bottle at reception and found a handwritten note from a guest who stayed two weeks ago. The city suddenly felt like a conversation instead of a checklist.",
   },
@@ -155,12 +159,12 @@ export const PROFILE_MOMENTS: TravelMoment[] = [
       "https://images.unsplash.com/photo-1565193566173-7a0ee3dbe261?auto=format&fit=crop&w=900&q=80",
     source: "qr_bottle",
     sourceLabel: "QR bottle scan",
-    banditId: "bandit_nikos",
-    banditName: "Nikos A.",
+    banditId: REGISTERED_BANDIT.nickolis,
+    banditName: "Nickolis",
     banditAvatarUrl:
       "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&w=200&q=80",
     storyBody:
-      "One scan from the bottle at PLAY Theatrou — hotel welcome, Local Friend channel, and your first Psyrri recommendations arrived together. Nikos curated the opening route.",
+      "One scan from the bottle at PLAY Theatrou — hotel welcome, Local Friend channel, and your first Psyrri recommendations arrived together. Nickolis curated the opening route.",
   },
   {
     id: "mom_lf_chat",
@@ -174,8 +178,8 @@ export const PROFILE_MOMENTS: TravelMoment[] = [
       "https://images.unsplash.com/photo-1414235077428-338989a2e8c0?auto=format&fit=crop&w=900&q=80",
     source: "local_friend",
     sourceLabel: "Local Friend",
-    banditId: "bandit_sofia",
-    banditName: "Sofia Markou",
+    banditId: REGISTERED_BANDIT.sofia,
+    banditName: "Sofia",
     banditAvatarUrl:
       "https://images.unsplash.com/photo-1438761681033-6461ffad8d80?auto=format&fit=crop&w=200&q=80",
     storyBody:
@@ -193,8 +197,8 @@ export const PROFILE_MOMENTS: TravelMoment[] = [
       "https://images.unsplash.com/photo-1555993539-1732b0258235?auto=format&fit=crop&w=900&q=80",
     source: "hotel_welcome",
     sourceLabel: "Hotel welcome",
-    banditId: "bandit_nikos",
-    banditName: "Nikos A.",
+    banditId: REGISTERED_BANDIT.andreas,
+    banditName: "Andreas",
     banditAvatarUrl:
       "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&w=200&q=80",
     storyBody:
@@ -212,12 +216,12 @@ export const PROFILE_MOMENTS: TravelMoment[] = [
       "https://images.unsplash.com/photo-1516450360452-9312f5e86fc7?auto=format&fit=crop&w=900&q=80",
     source: "experience",
     sourceLabel: "Experience completed",
-    banditId: "bandit_keys",
-    banditName: "Kostas “Keys”",
+    banditId: REGISTERED_BANDIT.kostas,
+    banditName: "Kostas",
     banditAvatarUrl:
       "https://images.unsplash.com/photo-1500648767791-00dcc994a43e?auto=format&fit=crop&w=200&q=80",
     storyBody:
-      "Keys led a night that never appeared on Google Maps. One drink, a basement, then a door you would have walked past. You told friends about it before you told them about the Acropolis.",
+      "Kostas led a night that never appeared on Google Maps. One drink, a basement, then a door you would have walked past. You told friends about it before you told them about the Acropolis.",
   },
   {
     id: "mom_photo_rooftop",
@@ -231,12 +235,12 @@ export const PROFILE_MOMENTS: TravelMoment[] = [
       "https://images.unsplash.com/photo-1601581875309-fafbf2d3ed3a?auto=format&fit=crop&w=900&q=80",
     source: "photo",
     sourceLabel: "Photo",
-    banditId: "bandit_elena",
-    banditName: "Elena V.",
+    banditId: REGISTERED_BANDIT.neo,
+    banditName: "Neo",
     banditAvatarUrl:
       "https://images.unsplash.com/photo-1494790108377-be9c29b29330?auto=format&fit=crop&w=200&q=80",
     storyBody:
-      "You climbed to the terrace just as the light turned warm. Elena had suggested this exact window. The photo still feels like arrival.",
+      "You climbed to the terrace just as the light turned warm. Neo had suggested this exact window. The photo still feels like arrival.",
   },
   {
     id: "mom_review",
@@ -250,8 +254,8 @@ export const PROFILE_MOMENTS: TravelMoment[] = [
       "https://images.unsplash.com/photo-1488459716781-31db52582fe9?auto=format&fit=crop&w=900&q=80",
     source: "review",
     sourceLabel: "Review",
-    banditId: "bandit_sofia",
-    banditName: "Sofia Markou",
+    banditId: REGISTERED_BANDIT.sofia,
+    banditName: "Sofia",
     banditAvatarUrl:
       "https://images.unsplash.com/photo-1438761681033-6461ffad8d80?auto=format&fit=crop&w=200&q=80",
     storyBody:
@@ -269,12 +273,12 @@ export const PROFILE_MOMENTS: TravelMoment[] = [
       "https://images.unsplash.com/photo-1517248135467-4c7edcad34c4?auto=format&fit=crop&w=900&q=80",
     source: "premium",
     sourceLabel: "Premium discovery",
-    banditId: "bandit_elena",
-    banditName: "Elena V.",
+    banditId: REGISTERED_BANDIT.neo,
+    banditName: "Neo",
     banditAvatarUrl:
       "https://images.unsplash.com/photo-1494790108377-be9c29b29330?auto=format&fit=crop&w=200&q=80",
     storyBody:
-      "Premium opened a gated courtyard on a Psyrri backstreet. Elena curated the introduction. This is why the city rewards curiosity.",
+      "Premium opened a gated courtyard on a Psyrri backstreet. Neo curated the introduction. This is why the city rewards curiosity.",
   },
   {
     id: "mom_milestone",
@@ -288,8 +292,8 @@ export const PROFILE_MOMENTS: TravelMoment[] = [
       "https://images.unsplash.com/photo-1441974231531-c6227db76b6e?auto=format&fit=crop&w=900&q=80",
     source: "milestone",
     sourceLabel: "Travel milestone",
-    banditId: "bandit_nikos",
-    banditName: "Nikos A.",
+    banditId: REGISTERED_BANDIT.andreas,
+    banditName: "Andreas",
     banditAvatarUrl:
       "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&w=200&q=80",
     storyBody:
@@ -337,11 +341,11 @@ export const JOURNEY_MAP_PLACES: JourneyMapPlace[] = [
   {
     id: "map_sofia",
     kind: "bandit",
-    title: "Sofia Markou",
+    title: "Sofia",
     subtitle: "Local banDit · met",
     imageUrl:
       "https://images.unsplash.com/photo-1438761681033-6461ffad8d80?auto=format&fit=crop&w=600&q=80",
-    href: "/bandit/bandit_sofia",
+    href: `/bandit/${REGISTERED_BANDIT.sofia}`,
   },
   {
     id: "map_athens",
@@ -365,8 +369,8 @@ export const JOURNEY_MAP_PLACES: JourneyMapPlace[] = [
 
 export const LOCAL_FRIENDS: LocalFriendCard[] = [
   {
-    id: "bandit_sofia",
-    name: "Sofia Markou",
+    id: REGISTERED_BANDIT.sofia,
+    name: "Sofia",
     city: "Athens",
     avatarUrl:
       "https://images.unsplash.com/photo-1438761681033-6461ffad8d80?auto=format&fit=crop&w=200&q=80",
@@ -375,8 +379,8 @@ export const LOCAL_FRIENDS: LocalFriendCard[] = [
     lastLine: "Garden table is free after 8 — go.",
   },
   {
-    id: "bandit_elena",
-    name: "Elena V.",
+    id: REGISTERED_BANDIT.neo,
+    name: "Neo",
     city: "Athens",
     avatarUrl:
       "https://images.unsplash.com/photo-1494790108377-be9c29b29330?auto=format&fit=crop&w=200&q=80",
@@ -385,8 +389,8 @@ export const LOCAL_FRIENDS: LocalFriendCard[] = [
     lastLine: "Courtyard unlock is waiting for you.",
   },
   {
-    id: "bandit_nikos",
-    name: "Nikos A.",
+    id: REGISTERED_BANDIT.nickolis,
+    name: "Nickolis",
     city: "Athens",
     avatarUrl:
       "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&w=200&q=80",
@@ -395,8 +399,8 @@ export const LOCAL_FRIENDS: LocalFriendCard[] = [
     lastLine: "Psyrri night route — chapter one.",
   },
   {
-    id: "bandit_anna",
-    name: "Anna K.",
+    id: REGISTERED_BANDIT.melina,
+    name: "Melina",
     city: "Athens",
     avatarUrl:
       "https://images.unsplash.com/photo-1544005313-94ddf0286df2?auto=format&fit=crop&w=200&q=80",

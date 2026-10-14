@@ -22,11 +22,12 @@ import {
   LOCAL_FRIENDS,
   MEMORY_PHOTOS,
   PROFILE_EXPERIENCES,
-  PROFILE_STAY,
   REWARD_BADGES,
   type ProfileExperience,
 } from "@/lib/guest-workspace/profileMemory";
+import { banditProfileHrefSafe } from "@/lib/guest-workspace/registeredBanditIds";
 import { getMyMomentToday, type GuestMoment } from "@/lib/guest-moment";
+import { useGuestLifecycle } from "@/lib/guest-lifecycle/useGuestLifecycle";
 import { getHotelEntry } from "@/lib/pilotSession";
 
 const EXP_FILTERS = ["upcoming", "completed", "cancelled", "favorite", "wishlist"] as const;
@@ -67,16 +68,26 @@ export default function ProfileHubScreen() {
   const router = useRouter();
   const { width } = useWindowDimensions();
   const { activeIdentity } = useAppState();
+  const { activeStay, isFullStay, isAfterTrip } = useGuestLifecycle();
   const [hotelName, setHotelName] = useState("");
   const [expFilter, setExpFilter] = useState<ExpFilter>("upcoming");
 
-  const guestName = activeIdentity?.displayName?.trim() || "Guest";
+  const guestName = activeIdentity?.displayName?.trim() || "Traveler";
   const avatarUrl = activeIdentity?.avatarUrl;
-  const initials = initialsFromName(guestName) || "G";
+  const initials = initialsFromName(guestName) || "T";
   const moments = useMemo(() => getMomentsNewestFirst(), []);
   const [todayMoment, setTodayMoment] = useState<GuestMoment | null>(null);
   const photoCols = width >= 720 ? 4 : 3;
   const photoSize = Math.floor((Math.min(width, 720) - 32 - (photoCols - 1) * 6) / photoCols);
+  /** Seed journal / score cards are SAMPLE until live memory APIs exist — never present as real stay. */
+  const showSampleJournal = true;
+  const realStayLabel = activeStay?.hotelName
+    ? isFullStay
+      ? `Stay active · ${activeStay.hotelName}`
+      : isAfterTrip
+        ? `Between trips · ${activeStay.hotelName}`
+        : `Connected · ${activeStay.hotelName}`
+    : hotelName || "No stay connected yet";
 
   React.useEffect(() => {
     void getHotelEntry().then((entry) => {
@@ -119,29 +130,34 @@ export default function ProfileHubScreen() {
           )}
           <View style={styles.heroIdentity}>
             <Text style={styles.heroName}>{guestName}</Text>
-            <Text style={styles.heroHotel}>{hotelName}</Text>
-            <Text style={styles.heroCity}>
-              {PROFILE_STAY.city} · {PROFILE_STAY.stayLabel}
-            </Text>
-            <Text style={styles.heroDays}>
-              {PROFILE_STAY.nightsRemaining} days remaining · {PROFILE_STAY.checkOutLabel}
-            </Text>
+            <Text style={styles.heroHotel}>{hotelName || activeStay?.hotelName || "bandiTour"}</Text>
+            <Text style={styles.heroCity}>{realStayLabel}</Text>
+            {!activeStay ? (
+              <Text style={styles.heroDays}>Connect My New Stay to unlock hotel stay context</Text>
+            ) : null}
           </View>
         </View>
+        {showSampleJournal ? (
+          <View style={styles.sampleBanner}>
+            <Text style={styles.sampleBannerText}>
+              SAMPLE journal preview · scores & stories below are not your live stay record
+            </Text>
+          </View>
+        ) : null}
         <View style={styles.heroStats}>
           <View style={styles.heroStat}>
-            <Text style={styles.heroStatValue}>{PROFILE_STAY.premiumStatus}</Text>
+            <Text style={styles.heroStatValue}>{isFullStay ? "During stay" : isAfterTrip ? "Between trips" : "Guest"}</Text>
             <Text style={styles.heroStatLabel}>Status</Text>
           </View>
           <View style={styles.heroStatDivider} />
           <View style={styles.heroStat}>
-            <Text style={styles.heroStatValue}>{PROFILE_STAY.travelScore}</Text>
+            <Text style={[styles.heroStatValue, styles.sampleMuted]}>—</Text>
             <Text style={styles.heroStatLabel}>Travel score</Text>
           </View>
           <View style={styles.heroStatDivider} />
           <View style={styles.heroStat}>
-            <Text style={styles.heroStatValue}>{PROFILE_STAY.travelLevel}</Text>
-            <Text style={styles.heroStatLabel}>Level {PROFILE_STAY.travelLevelRank}</Text>
+            <Text style={[styles.heroStatValue, styles.sampleMuted]}>Soon</Text>
+            <Text style={styles.heroStatLabel}>Level</Text>
           </View>
         </View>
       </View>
@@ -165,7 +181,11 @@ export default function ProfileHubScreen() {
 
       {/* Travel stories — journal (not Moments social status) */}
       <Text style={styles.sectionTitle}>Travel stories</Text>
-      <Text style={styles.sectionLead}>Your travel memory — newest first</Text>
+      <Text style={styles.sectionLead}>
+        {showSampleJournal
+          ? "Sample travel memory (preview) — newest first"
+          : "Your travel memory — newest first"}
+      </Text>
       <View style={styles.timeline}>
         {moments.map((moment, index) => {
           const attribution = getMomentAttribution(moment);
@@ -195,9 +215,12 @@ export default function ProfileHubScreen() {
                     {moment.dateLabel} · {moment.city} · {moment.hotel}
                   </Text>
                   <View style={styles.momentAttribution}>
-                    {moment.banditAvatarUrl && moment.banditId ? (
+                    {moment.banditAvatarUrl && banditProfileHrefSafe(moment.banditId) ? (
                       <Pressable
-                        onPress={() => go(`/bandit/${moment.banditId}` as Href)}
+                        onPress={() => {
+                          const href = banditProfileHrefSafe(moment.banditId);
+                          if (href) go(href as Href);
+                        }}
                         hitSlop={6}
                       >
                         <ExpoImage
@@ -279,11 +302,16 @@ export default function ProfileHubScreen() {
         showsHorizontalScrollIndicator={false}
         contentContainerStyle={styles.friendsRow}
       >
-        {LOCAL_FRIENDS.map((friend) => (
+        {LOCAL_FRIENDS.map((friend) => {
+          const friendHref = banditProfileHrefSafe(friend.id);
+          return (
           <Pressable
             key={friend.id}
             style={({ pressed }) => [styles.friendCard, pressed && styles.pressed]}
-            onPress={() => go(`/bandit/${friend.id}` as Href)}
+            onPress={() => {
+              if (friendHref) go(friendHref as Href);
+            }}
+            disabled={!friendHref}
           >
             <ExpoImage source={{ uri: friend.avatarUrl }} style={styles.friendAvatar} contentFit="cover" />
             <Text style={styles.friendName} numberOfLines={1}>
@@ -295,8 +323,11 @@ export default function ProfileHubScreen() {
             </Text>
             <View style={styles.friendActions}>
               <Pressable
-                onPress={() => go(`/bandit/${friend.id}` as Href)}
+                onPress={() => {
+                  if (friendHref) go(friendHref as Href);
+                }}
                 hitSlop={4}
+                disabled={!friendHref}
               >
                 <Text style={styles.friendLink}>Profile</Text>
               </Pressable>
@@ -306,7 +337,8 @@ export default function ProfileHubScreen() {
               </Pressable>
             </View>
           </Pressable>
-        ))}
+          );
+        })}
       </ScrollView>
 
       {/* My Experiences */}
@@ -509,6 +541,23 @@ const styles = StyleSheet.create({
   },
   heroCity: { fontSize: 14, color: "rgba(255,255,255,0.72)", marginTop: 6 },
   heroDays: { fontSize: 13, color: "rgba(255,255,255,0.55)", marginTop: 2 },
+  sampleBanner: {
+    marginTop: 12,
+    paddingVertical: 8,
+    paddingHorizontal: 10,
+    borderRadius: 10,
+    backgroundColor: "rgba(240,215,160,0.18)",
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: "rgba(240,215,160,0.35)",
+  },
+  sampleBannerText: {
+    fontSize: 11,
+    fontWeight: "700",
+    color: "rgba(240,215,160,0.95)",
+    letterSpacing: 0.2,
+    textAlign: "center",
+  },
+  sampleMuted: { opacity: 0.55 },
   heroStats: {
     flexDirection: "row",
     marginTop: 20,
