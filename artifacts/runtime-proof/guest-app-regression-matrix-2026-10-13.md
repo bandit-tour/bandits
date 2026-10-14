@@ -7,7 +7,8 @@
 **Recovery:** fresh iOS preview rebuilt **from exact `6b2a346` tree** (worktree) — see § Recovery build  
 **Production:** https://bandits-two.vercel.app — **NOT deployed** · **NO-GO**  
 **Modern tip verified:** `278be08` (owner typo `278be88` rejected)  
-**Updated:** 2026-10-14 — Stage 1 P0 Story→banDit + nav escape + Stage 2 partial (Neo photos / map left / Octopus clickable). Physical **NOT VERIFIED**
+**Stage1 fix SHA (install):** `52e878af3ea84f6bdb79186109972cb08be9450e`  
+**Updated:** 2026-10-14 — Gate 1 EAS **FINISHED** same-SHA iOS+Android @ `52e878a`. Coordination: `rc-2026-10-13/task-coordination-plan.md`. Stages 3–5 / onboarding **HOLD** until Gate 1 owner nav retest. Physical **NOT VERIFIED**
 
 ## Status legend
 | Tag | Meaning |
@@ -119,18 +120,19 @@ Screenshot/QA product fixes: **ON HOLD** until physical PASS.
 
 ## GO / NO-GO
 
-**NO-GO for production** · **NO-GO LIVE Stripe**.
+**NO-GO for production** · **NO-GO LIVE Stripe** · **GO Gate 1 owner install/retest**.
 
-**Owner retest RC (after this commit’s SAME-SHA EAS builds):**
-1. Profile → Travel stories → Open Story → Back → Profile
-2. Story → Open Local banDit (real UUID) → Back → Story → Back → Profile
-3. Fabricated/missing id → recoverable error → Back + Home
-4. Neo profile: two personal photos; map left of photo; Octopus badge opens Your Local Insider
-5. Local banDits: no endless skeleton; first tap works
+### Gate 1 SAME-SHA builds @ `52e878a` — FINISHED
 
-Physical iPhone/Android = **NOT VERIFIED** until owner. Build FINISHED ≠ PASS.
+| Platform | Detail page | Artifact |
+|----------|-------------|----------|
+| iOS | https://expo.dev/accounts/banditeam121275/projects/bandits/builds/5a1ad004-7a64-4e8d-b0c0-9eb39c8d8150 | https://expo.dev/artifacts/eas/-ymv9nd-2-vab5AywTDgy8MbzKSSbQzFajgplsiOPpg.ipa |
+| Android | https://expo.dev/accounts/banditeam121275/projects/bandits/builds/8b5f2fd3-74dc-4ff2-96e7-ac8c7e3b8093 | https://expo.dev/artifacts/eas/lAHzgMwfFAbVZTzTeYqipcUrIN26ndgDHeXGtzBMgV4.apk |
 
-**Workspace blockers (Stages 3–4 / C3):**
-- Set `EXPO_PUBLIC_WORKSPACE_URL` + `EXPO_PUBLIC_ORCHESTRA_OS_URL` = `https://banditour-workspace.vercel.app` in EAS **preview** env
-- Octopus Verified sampling (~10) + Stripe TEST checkout owned by Workspace
-- Guest App must not show raw env-var error strings; hide CTA if checkout origin missing
+Login: `banditeam121275`. Build FINISHED ≠ physical PASS.
+
+**Owner retest A–E:** Story↔banDit Back/Home; Neo photos/map/Octopus; tabs; no dead-end. Physical **NOT VERIFIED**.
+
+**HOLD until Gate 1:** Stages 3–5, onboarding impl, overlapping fix batches.  
+**Workspace-BLOCKED:** TiB hotel multi-photo + SmartTraveler coupons.  
+**Coordination:** `artifacts/runtime-proof/rc-2026-10-13/task-coordination-plan.md`
