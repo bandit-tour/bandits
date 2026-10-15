@@ -612,7 +612,7 @@ export default function ExperienceDetailScreen() {
         insetsBottom={insets.bottom}
         onViewJourney={() => {
           setBookOpen(false);
-          router.push("/profile" as Href);
+          router.push("/my-profile" as Href);
         }}
       />
     </View>

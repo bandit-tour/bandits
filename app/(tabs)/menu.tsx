@@ -108,7 +108,7 @@ const MENU_GROUPS_STAY: MenuGroup[] = [
     id: "account",
     title: "Account",
     cards: [
-      { key: "profile", emoji: "👤", title: "Profile", href: "/profile" },
+      { key: "profile", emoji: "👤", title: "See My Profile", href: "/my-profile" as Href },
       { key: "acct", emoji: "🔧", title: "Account Settings", href: "/account" },
       { key: "premium", emoji: "⭐", title: "Premium Membership", href: "/account/membership" },
       { key: "pay", emoji: "💳", title: "Payments", href: "/account/payments" },
@@ -323,7 +323,7 @@ export default function MenuScreen() {
             <Image source={LOGO} style={styles.logo} resizeMode="contain" accessibilityLabel="bandiTour" />
           </View>
           <View style={styles.identityRow}>
-            <Pressable style={styles.avatarWrap} onPress={() => go("/profile" as Href)}>
+            <Pressable style={styles.avatarWrap} onPress={() => go("/my-profile" as Href)}>
               {avatarUrl && !avatarFailed ? (
                 <Image
                   source={{ uri: avatarUrl }}

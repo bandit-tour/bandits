@@ -217,7 +217,12 @@ function ProfileInspirationStrip() {
 function ProfileBackHeaderButton() {
   const router = useRouter();
   const onBack = useCallback(() => {
-    navigateAppBack(router, PLAY_MENU_HREF);
+    // Always return to More — never leave the Guest App shell.
+    try {
+      router.replace(PLAY_MENU_HREF);
+    } catch {
+      navigateAppBack(router, PLAY_MENU_HREF);
+    }
   }, [router]);
   return (
     <Pressable
@@ -226,9 +231,31 @@ function ProfileBackHeaderButton() {
       style={({ pressed }) => [styles.navBackButton, pressed && { opacity: 0.7 }]}
       testID="profile-back-button"
       accessibilityRole="button"
-      accessibilityLabel="Back"
+      accessibilityLabel="Back to More"
     >
       <Text style={styles.navBackText}>← Back</Text>
+    </Pressable>
+  );
+}
+
+function ProfileHomeHeaderButton() {
+  const router = useRouter();
+  return (
+    <Pressable
+      onPress={() => {
+        try {
+          router.replace('/home' as import('expo-router').Href);
+        } catch {
+          /* ignore */
+        }
+      }}
+      hitSlop={14}
+      style={({ pressed }) => [styles.navBackButton, pressed && { opacity: 0.7 }]}
+      testID="profile-home-button"
+      accessibilityRole="button"
+      accessibilityLabel="Home"
+    >
+      <Text style={styles.navBackText}>Home</Text>
     </Pressable>
   );
 }
@@ -717,9 +744,10 @@ export default function ProfileScreen() {
       <Stack.Screen
         options={{
           headerShown: true,
-          title: 'Profile',
+          title: 'My Profile',
           headerBackVisible: false,
           headerLeft: () => <ProfileBackHeaderButton />,
+          headerRight: () => <ProfileHomeHeaderButton />,
           headerStyle: { backgroundColor: '#FFFCF7' },
           headerTintColor: '#1a1816',
           headerShadowVisible: true,

@@ -1,5 +1,7 @@
 # Emergency native recovery report — 15 Oct 2026
 
+> **Appended:** Build-to-source discrepancy audit + Hotel/Profile P0 inventory — see `build-to-source-discrepancy-audit.md` (same folder). Owner must stop testing `dcd786a`.
+
 **Branch:** `repair/guest-app-regression`  
 **Tip at diagnosis start:** `ca72b87` (docs) · product Gate1: `52e878a`  
 **Recovery product SHA:** `cfdd68d` (P0) · EAS gitCommitHash **`02e9fe1`** (docs tip; SAME-SHA both platforms)  

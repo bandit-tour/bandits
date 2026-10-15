@@ -40,6 +40,7 @@ export type LowerTabHref =
   | "/alerts"
   | "/notifications"
   | "/profile"
+  | "/my-profile"
   | "/menu";
 
 /**
@@ -58,6 +59,7 @@ export function getLowerTabFromPath(pathname: string | null): LowerTabKey | null
   if (pathname.includes("/notifications") || pathname.includes("/inbox")) return null;
   if (
     pathname.includes("/profile") ||
+    pathname.includes("/my-profile") ||
     pathname.includes("/mySpots") ||
     pathname.includes("/following") ||
     pathname.includes("/settings") ||
