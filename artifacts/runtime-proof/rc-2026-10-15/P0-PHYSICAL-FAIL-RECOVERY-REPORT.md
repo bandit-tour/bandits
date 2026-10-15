@@ -3,7 +3,7 @@
 **Owner verdict:** RC `4ba6f5a` FAILED physical-device acceptance.  
 **Protected baseline:** `6b2a346` (ancestor only).  
 **Canonical product:** Guest App in this repo → `bandits-two` when approved.  
-**This document tip:** _(filled at commit)_  
+**This document tip:** `9aec596`  
 **Physical iOS / Android automation:** **NOT VERIFIED** in agent environment.  
 **Production:** **NO-GO**
 
