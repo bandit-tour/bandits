@@ -2,6 +2,7 @@
 
 **Baseline ancestor:** `6b2a346` (preserved)  
 **Parent tip before this commit:** `8b33def`  
+**This repair commit:** `ef8898a79eed710c37b6ed980eb133bc9c2dd97d`  
 **Production:** **NO-GO**  
 **SAME-SHA EAS:** **HOLD** until Explore navigation/empty-feed freeze is also closed  
 **iPhone status:** **NOT VERIFIED**  
