@@ -65,22 +65,24 @@ export function getLowerTabFromPath(pathname: string | null): LowerTabKey | null
     pathname.includes("/settings") ||
     pathname.includes("/account") ||
     pathname.includes("/menu") ||
-    pathname.includes("/operatorDesk")
+    pathname.includes("/operatorDesk") ||
+    pathname.includes("/cityMemory") ||
+    pathname.includes("/travelBottle")
   ) {
     return "menu";
   }
   /** Impact / Passport — More universe, not Explore peer. */
   if (pathname.includes("/impact") || pathname.includes("/journey/")) return "menu";
   /**
-   * Explore discovery surfaces — Bandits, Experiences, SmartTraveler, Shop, Bottle,
+   * Explore discovery surfaces — Bandits, Experiences, SmartTraveler, Shop,
    * and bandiTEAM / scam-alerts (top-rail safety layer on active stay).
+   * Travel in a Bottle + City Memory live under More — not Explore peers.
    */
   if (
     pathname.includes("/explore") ||
     pathname.includes("/bandits") ||
     pathname.includes("/experiences") ||
     pathname.includes("/smarttraveler") ||
-    pathname.includes("/travelBottle") ||
     pathname.includes("/shop") ||
     pathname.includes("/alerts") ||
     pathname.includes("/scam-alerts") ||
@@ -104,8 +106,8 @@ export function getUpperTabFromPath(pathname: string | null): UpperTabKey | null
   if (pathname.includes("/impact")) return null;
   if (pathname.includes("/experiences")) return "experiences";
   if (pathname.includes("/smarttraveler")) return "smarttraveler";
-  if (pathname.includes("/travelBottle")) return "bottle";
-  if (pathname.includes("/bottle")) return null;
+  /** TiB is More / contextual — never lights a discovery-rail chip. */
+  if (pathname.includes("/travelBottle") || pathname.includes("/bottle")) return null;
   if (pathname.includes("/shop")) return "shop";
   if (
     pathname.includes("/bandiTeam") ||
@@ -120,13 +122,16 @@ export function getUpperTabFromPath(pathname: string | null): UpperTabKey | null
   return null;
 }
 
-const NAV_LOCK_MS = 280;
+/** Debounce only identical destinations — different taps must never drop (first-tap FAIL). */
+const NAV_LOCK_MS = 160;
 let lastSafeNavAt = 0;
+let lastSafeNavLabel = "";
 
-export function runSafeNavigation(_label: string, fn: () => void): boolean {
+export function runSafeNavigation(label: string, fn: () => void): boolean {
   const now = Date.now();
-  if (now - lastSafeNavAt < NAV_LOCK_MS) return false;
+  if (label === lastSafeNavLabel && now - lastSafeNavAt < NAV_LOCK_MS) return false;
   lastSafeNavAt = now;
+  lastSafeNavLabel = label;
   fn();
   return true;
 }
@@ -145,17 +150,18 @@ export function navigateAppBack(
   fallback: Href,
   navigation?: NavigationLike | null,
 ): void {
-  runSafeNavigation("back", () => {
-    if (router.canGoBack()) {
-      router.back();
-      return;
-    }
-    if (navigation?.canGoBack?.()) {
-      navigation.goBack?.();
-      return;
-    }
-    router.replace(fallback);
-  });
+  /** Back must never be swallowed by nav lock — feels like exiting the app. */
+  lastSafeNavAt = Date.now();
+  lastSafeNavLabel = "back";
+  if (router.canGoBack()) {
+    router.back();
+    return;
+  }
+  if (navigation?.canGoBack?.()) {
+    navigation.goBack?.();
+    return;
+  }
+  router.replace(fallback);
 }
 
 export function goToPlayMenu(router: AppNavigationRouter): void {

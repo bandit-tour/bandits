@@ -5,7 +5,6 @@ import { BanditsScreen } from "@/app/(tabs)/bandits";
 import { ExploreScreen } from "@/app/(tabs)/explore";
 import { ExperiencesScreen } from "@/app/(tabs)/experiences";
 import { SmartTravelerScreen } from "@/app/(tabs)/smarttraveler";
-import { BottleProductScreen } from "@/app/(tabs)/travelBottle";
 import { ShopScreen } from "@/app/(tabs)/shop";
 import BandiTeamHubScreen from "@/app/bandiTeam/index";
 import type { UpperTabKey } from "@/lib/upperTab";
@@ -17,6 +16,7 @@ type Props = {
 /**
  * Explore-lane host. Explore + Local banDits keep a warm mount (tabActive gate).
  * Other rail products mount only while active — avoids JS contention freezes.
+ * Travel in a Bottle is More / stack — never mounted here.
  */
 export default function UpperTabScreens({ active }: Props) {
   const [visitedHeavy, setVisitedHeavy] = useState<Set<UpperTabKey>>(
@@ -66,7 +66,6 @@ export default function UpperTabScreens({ active }: Props) {
       {heavyPane("bandits", <BanditsScreen tabActive={active === "bandits"} />)}
       {activeOnly("experiences", <ExperiencesScreen />)}
       {activeOnly("smarttraveler", <SmartTravelerScreen />)}
-      {activeOnly("bottle", <BottleProductScreen />)}
       {activeOnly("shop", <ShopScreen />)}
       {activeOnly("banditeam", <BandiTeamHubScreen tabActive />)}
     </View>

@@ -77,7 +77,6 @@ export default function TabsLayout() {
     path.includes("/bandits") ||
     path.includes("/experiences") ||
     path.includes("/smarttraveler") ||
-    path.includes("/travelBottle") ||
     path.includes("/shop") ||
     path.includes("/bandiTeam") ||
     path.includes("/scam-alerts") ||

@@ -115,7 +115,7 @@ export default function ReactivateStayScreen() {
         {busy ? <ActivityIndicator color="#fff" /> : <Text style={styles.ctaText}>Verify & Reactivate</Text>}
       </Pressable>
 
-      <Pressable onPress={() => router.back()}>
+      <Pressable onPress={() => router.replace("/cityMemory" as Href)}>
         <Text style={styles.back}>Keep browsing City Memory</Text>
       </Pressable>
     </ScrollView>

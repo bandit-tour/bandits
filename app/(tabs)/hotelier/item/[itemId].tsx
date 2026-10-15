@@ -4,7 +4,7 @@ import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 
 import { useAppBackScreenOptions } from "@/hooks/useAppBackScreenOptions";
 import { HOTELIER_MODULES, type HotelierModuleId } from "@/lib/guest-workspace/hotelierDashboard";
-import { claimHotelOffer } from "@/lib/workspace/actions";
+import { claimHotelOffer, submitHotelRequest } from "@/lib/workspace/actions";
 
 /** Deep Hotelier item (dish / treatment / request) — Back → module. */
 export default function HotelierItemScreen() {
@@ -76,10 +76,58 @@ export default function HotelierItemScreen() {
           </>
         ) : (
           <>
-            <Pressable style={styles.secondary} onPress={requestItem} disabled={busy || done}>
+            <Pressable
+              style={styles.secondary}
+              disabled={busy || done}
+              onPress={() => {
+                if (busy || done) return;
+                setBusy(true);
+                setError(null);
+                void submitHotelRequest({
+                  requestType: "special_note",
+                  title: displayTitle,
+                  note: "Guest special note",
+                  objectId: String(itemId || displayTitle),
+                }).then((r) => {
+                  setBusy(false);
+                  if (!r.ok) {
+                    setError(
+                      String(r.detail || "") ||
+                        "Hotel request needs a verified stay and Workspace. Use Connect My New Stay.",
+                    );
+                    return;
+                  }
+                  setDone(true);
+                });
+              }}
+            >
               <Text style={styles.secondaryText}>Add a special note</Text>
             </Pressable>
-            <Pressable style={styles.secondary} onPress={requestItem} disabled={busy || done}>
+            <Pressable
+              style={styles.secondary}
+              disabled={busy || done}
+              onPress={() => {
+                if (busy || done) return;
+                setBusy(true);
+                setError(null);
+                void submitHotelRequest({
+                  requestType: "message_reception",
+                  title: displayTitle,
+                  note: "Message reception",
+                  objectId: String(itemId || displayTitle),
+                }).then((r) => {
+                  setBusy(false);
+                  if (!r.ok) {
+                    setError(
+                      String(r.detail || "") ||
+                        "Hotel request needs a verified stay and Workspace. Use Connect My New Stay.",
+                    );
+                    return;
+                  }
+                  setDone(true);
+                });
+              }}
+            >
               <Text style={styles.secondaryText}>Message reception</Text>
             </Pressable>
           </>

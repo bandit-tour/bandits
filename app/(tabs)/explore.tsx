@@ -195,7 +195,8 @@ export function ExploreScreen({ tabActive }: ExploreScreenProps = {}) {
   const [banditsByEventId, setBanditsByEventId] = useState<Map<string, EventBanditRecommendation[]>>(
     () => new Map(),
   );
-  const [banditsBulkVersion, setBanditsBulkVersion] = useState(0);
+  /** FlatList extraData only — bumps when bandit bulk loads (not on hero URI writes). */
+  const [banditsEpoch, setBanditsEpoch] = useState(0);
   /** Cards that exhausted gallery + Places recovery — omit from feed (never "Photo unavailable"). */
   const [hiddenHeroEventIds, setHiddenHeroEventIds] = useState<Set<string>>(() => new Set());
   /** Live Place Details heroes for rows whose stored image_url/gallery are expired Places resources. */
@@ -213,7 +214,17 @@ export function ExploreScreen({ tabActive }: ExploreScreenProps = {}) {
     // New city / genre list → allow previously hidden rows to retry.
     setHiddenHeroEventIds(new Set());
     setLiveHeroByEventId({});
+    setLiveRecoveryDoneIds({});
   }, [exploreCacheKey]);
+
+  const liveHeroByEventIdRef = useRef(liveHeroByEventId);
+  liveHeroByEventIdRef.current = liveHeroByEventId;
+  const liveRecoveryDoneIdsRef = useRef(liveRecoveryDoneIds);
+  liveRecoveryDoneIdsRef.current = liveRecoveryDoneIds;
+  const failedHeroUrisRef = useRef(failedHeroUris);
+  failedHeroUrisRef.current = failedHeroUris;
+  /** Bump when a live URI dies so parent can retry without depending on hero maps. */
+  const [recoveryKick, setRecoveryKick] = useState(0);
 
   useEffect(() => {
     if (openMapParam === 'map') {
@@ -423,27 +434,30 @@ export function ExploreScreen({ tabActive }: ExploreScreenProps = {}) {
 
   /**
    * Prefer durable heroes; live-refresh missing / ephemeral / Google-derived / failed URLs.
-   * Sequential batches of 4 (no Promise.all storm) — drain until eligible queue empty.
+   * Sequential batches of 4 — cancel on category / inactive so switches never overlap storms.
+   * Do not depend on liveHero / done maps (that restarts recovery after every URI write).
    */
   useEffect(() => {
     if (!screenActive) return;
     let cancelled = false;
     const needLive = filteredEvents.filter((e) => {
-      if (liveRecoveryDoneIds[e.id]) return false;
+      if (liveRecoveryDoneIdsRef.current[e.id]) return false;
       return eventNeedsLivePlacesHeroRecovery(e, {
-        liveUri: liveHeroByEventId[e.id],
+        liveUri: liveHeroByEventIdRef.current[e.id],
         approvedUri: approvedHeroById[e.id],
-        failedUris: failedHeroUris,
+        failedUris: failedHeroUrisRef.current,
       });
     });
-    if (needLive.length === 0) return;
+    /** Cap first wave per filter change — rest drains on next kick / scroll settle. */
+    const wave = needLive.slice(0, 12);
+    if (wave.length === 0) return;
 
     void (async () => {
       const heroUpdates: Record<string, string> = {};
       const doneUpdates: Record<string, true> = {};
-      for (let i = 0; i < needLive.length; i += 4) {
+      for (let i = 0; i < wave.length; i += 4) {
         if (cancelled) return;
-        const batch = needLive.slice(i, i + 4);
+        const batch = wave.slice(i, i + 4);
         for (const event of batch) {
           if (cancelled) return;
           doneUpdates[event.id] = true;
@@ -460,9 +474,10 @@ export function ExploreScreen({ tabActive }: ExploreScreenProps = {}) {
                 limit: 4,
               });
             }
+            const failed = failedHeroUrisRef.current;
             const cleaned = urls
               .map((u) => normalizeEventImageUri(u) ?? u)
-              .filter((u) => /^https?:\/\//i.test(u) && !failedHeroUris[u]);
+              .filter((u) => /^https?:\/\//i.test(u) && !failed[u]);
             if (cleaned.length === 0) continue;
             heroUpdates[event.id] = cleaned[0];
           } catch {
@@ -476,20 +491,15 @@ export function ExploreScreen({ tabActive }: ExploreScreenProps = {}) {
           setLiveRecoveryDoneIds((prev) => ({ ...prev, ...doneUpdates }));
         }
       }
+      if (!cancelled && needLive.length > wave.length) {
+        setRecoveryKick((k) => k + 1);
+      }
     })();
 
     return () => {
       cancelled = true;
     };
-  }, [
-    screenActive,
-    filteredEventIdsKey,
-    filteredEvents,
-    approvedHeroById,
-    liveHeroByEventId,
-    failedHeroUris,
-    liveRecoveryDoneIds,
-  ]);
+  }, [screenActive, filteredEventIdsKey, filteredEvents, approvedHeroById, recoveryKick]);
 
   useEffect(() => {
     if (viewMode !== 'map') return;
@@ -513,7 +523,7 @@ export function ExploreScreen({ tabActive }: ExploreScreenProps = {}) {
             for (const [id, rows] of map.entries()) next.set(id, rows);
             return next;
           });
-          setBanditsBulkVersion((v) => v + 1);
+          setBanditsEpoch((v) => v + 1);
           if (Platform.OS === 'android' && ids.length > loadIds.length) {
             const rest = ids.slice(loadIds.length);
             void getEventBanditRecommendationsBulk(rest).then((restMap) => {
@@ -523,7 +533,7 @@ export function ExploreScreen({ tabActive }: ExploreScreenProps = {}) {
                 for (const [id, rows] of restMap.entries()) next.set(id, rows);
                 return next;
               });
-              setBanditsBulkVersion((v) => v + 1);
+              setBanditsEpoch((v) => v + 1);
             });
           }
         })
@@ -577,6 +587,7 @@ export function ExploreScreen({ tabActive }: ExploreScreenProps = {}) {
       delete next[id];
       return next;
     });
+    setRecoveryKick((k) => k + 1);
   }, []);
 
   const goBackToBanditHome = useCallback(() => {
@@ -726,8 +737,8 @@ export function ExploreScreen({ tabActive }: ExploreScreenProps = {}) {
           <FlatList
             style={styles.listFlex}
             data={listEvents}
-            key={`explore-list-${columns}`}
-            extraData={{ categoryChip, likesEpoch, banditsBulkVersion }}
+            key={columns > 1 ? 'explore-list-multi' : 'explore-list-single'}
+            extraData={`${categoryChip}:${likesEpoch}:${banditsEpoch}`}
             keyExtractor={keyExtractor}
             numColumns={columns}
             refreshControl={exploreRefreshControl}

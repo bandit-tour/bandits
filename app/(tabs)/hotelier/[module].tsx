@@ -20,7 +20,7 @@ import {
 import { useGuestLifecycle } from "@/lib/guest-lifecycle/useGuestLifecycle";
 import { liveHotelDisplayName } from "@/lib/stay/liveHotelIdentity";
 import { ImageRatio, imageFocusStyle } from "@/lib/imageRatios";
-import { claimHotelOffer } from "@/lib/workspace/actions";
+import { claimHotelOffer, submitHotelRequest } from "@/lib/workspace/actions";
 
 function isModuleId(v: string): v is HotelierModuleId {
   return v in HOTELIER_MODULES;
@@ -179,11 +179,29 @@ function HotelierModuleBody() {
       ) : content.secondaryCta ? (
         <Pressable
           style={styles.secondary}
-          onPress={() =>
-            setClaimed(
-              'Request noted locally — live hotel fulfillment requires a verified stay and Workspace.',
-            )
-          }
+          disabled={claimBusy}
+          onPress={() => {
+            if (claimBusy) return;
+            setClaimBusy(true);
+            setClaimError(null);
+            void submitHotelRequest({
+              requestType: moduleId,
+              title: content.secondaryCta,
+              objectId: `${moduleId}:secondary`,
+            }).then((r) => {
+              setClaimBusy(false);
+              if (!r.ok) {
+                setClaimError(
+                  String(r.detail || '') ||
+                    'Hotel request needs a verified stay and Workspace. Use Connect My New Stay.',
+                );
+                return;
+              }
+              setClaimed(`${content.secondaryCta} · confirmed`);
+            });
+          }}
+          accessibilityRole="button"
+          testID="hotel-module-secondary-cta"
         >
           <Text style={styles.secondaryText}>{content.secondaryCta}</Text>
         </Pressable>
