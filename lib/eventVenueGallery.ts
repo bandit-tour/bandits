@@ -178,7 +178,28 @@ export function getSpotDetailHeroUri(event: Event): string | null {
     const approved = getManualApprovedHeroUri(eventRowForSpotDetailGallery(event));
     if (approved) return approved;
   }
-  return getStoredVenueGalleryOrdered(eventRowForSpotDetailGallery(event))[0] ?? null;
+  const fromRow = getStoredVenueGalleryOrdered(eventRowForSpotDetailGallery(event))[0] ?? null;
+  if (fromRow && isDurableVenuePhotoUri(fromRow) && !isEphemeralPlacesMediaUrl(fromRow)) {
+    return fromRow;
+  }
+  // List-time merges may hold durable Google CDN redirects while image_url is ephemeral /media.
+  // Prefer those for viewport resolution — never treat Places /media?key= as permanent.
+  const mergeCandidates = [
+    (event as { google_photo_url?: string | null }).google_photo_url,
+    (event as { recommendation_place_photo_url?: string | null }).recommendation_place_photo_url,
+  ];
+  for (const raw of mergeCandidates) {
+    const n = normalizeEventImageUri(raw ?? '');
+    if (
+      n &&
+      isDurableVenuePhotoUri(n) &&
+      !isEphemeralPlacesMediaUrl(n) &&
+      /^https?:\/\//i.test(n)
+    ) {
+      return n;
+    }
+  }
+  return fromRow;
 }
 
 /** Resolves hero from stored/approved media; Google live fetch remains optional at call sites. */

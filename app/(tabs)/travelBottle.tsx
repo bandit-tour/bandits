@@ -54,6 +54,33 @@ function cardWidthFor(width: number, mode: LayoutMode): number {
   return Math.max(280, Math.min(400, raw));
 }
 
+/** Workspace-backed cabin hero — never invent stock; onError drops broken URI. */
+function BottleHero({ imageUrl, wide }: { imageUrl?: string | null; wide?: boolean }) {
+  const [failed, setFailed] = React.useState(false);
+  React.useEffect(() => {
+    setFailed(false);
+  }, [imageUrl]);
+  const ok = Boolean(imageUrl && /^https?:\/\//i.test(imageUrl) && !failed);
+  return (
+    <View style={[styles.heroFrame, wide && styles.heroFrameMin]}>
+      {ok ? (
+        <ExpoImage
+          source={{ uri: imageUrl! }}
+          style={styles.heroImage}
+          contentFit="cover"
+          transition={200}
+          priority="high"
+          onError={() => setFailed(true)}
+        />
+      ) : (
+        <View style={[styles.heroImage, styles.heroPending]}>
+          <Text style={styles.heroPendingText}>Photo pending from hotel partner</Text>
+        </View>
+      )}
+    </View>
+  );
+}
+
 /**
  * Paired journey card — hotel + second stay as one curated trip.
  * Second-stay photo is a premium 4:3 accommodation hero (never a thin banner).
@@ -81,21 +108,7 @@ function JourneyMatchCard({
         accessibilityLabel={`${second.name}. ${journeyNightsLabel(match)}. ${match.cta}`}
         style={({ pressed }) => pressed && styles.cardPressed}
       >
-        <View style={[styles.heroFrame, width >= 360 && styles.heroFrameMin]}>
-          {second.imageUrl && /^https?:\/\//i.test(second.imageUrl) ? (
-            <ExpoImage
-              source={{ uri: second.imageUrl }}
-              style={styles.heroImage}
-              contentFit="cover"
-              transition={200}
-              priority="high"
-            />
-          ) : (
-            <View style={[styles.heroImage, { backgroundColor: "#2A241C", alignItems: "center", justifyContent: "center" }]}>
-              <Text style={{ color: "#C4B8A0", fontWeight: "700", fontSize: 13 }}>Photo pending</Text>
-            </View>
-          )}
-        </View>
+        <BottleHero imageUrl={second.imageUrl} wide={width >= 360} />
 
         <View style={styles.cardBody}>
           <Text style={styles.stayType} numberOfLines={1}>
@@ -668,10 +681,22 @@ const styles = StyleSheet.create({
   heroFrame: {
     width: "100%",
     aspectRatio: 4 / 3,
-    backgroundColor: "#1A1510",
+    backgroundColor: "#2A241C",
     borderTopLeftRadius: 18,
     borderTopRightRadius: 18,
     overflow: "hidden",
+  },
+  heroPending: {
+    alignItems: "center",
+    justifyContent: "center",
+    paddingHorizontal: 16,
+    backgroundColor: "#2A241C",
+  },
+  heroPendingText: {
+    color: "#C4B8A0",
+    fontWeight: "700",
+    fontSize: 13,
+    textAlign: "center",
   },
   heroFrameMin: {
     minHeight: 280,

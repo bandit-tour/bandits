@@ -67,26 +67,28 @@ const QUICK_ACTIONS_AFTER: { key: string; title: string; subtitle: string; emoji
  * MORE (canonical): Local Friend | Impact / Passport | Bookings | Following |
  * My Spots | Notifications | Account | Alerts / bandiTEAM safety
  */
+/**
+ * Stay groups: destinations not already in QUICK_ACTIONS_STAY
+ * (Continue My Stay / Local Friend / Safety / Impact / Notifications).
+ * Underlying routes remain reachable from Hotel tab + Account.
+ */
 const MENU_GROUPS_STAY: MenuGroup[] = [
   {
     id: "journey",
     title: "Your journey",
     cards: [
-      { key: "lf", emoji: "💬", title: "Local Friend", href: "/localFriend" },
-      { key: "impact", emoji: "🌍", title: "Impact / Passport", href: "/impact" },
       { key: "bookings", emoji: "🎫", title: "Bookings", href: "/bookings" },
       { key: "following", emoji: "👥", title: "Following", href: "/following" },
       { key: "spots", emoji: "♥", title: "My Spots", href: "/mySpots" },
       { key: "premium", emoji: "⭐", title: "Your Local Insider", href: "/account/membership" },
       { key: "bottle", emoji: "🍾", title: "Travel in a Bottle", href: "/travelBottle" },
-      { key: "notif", emoji: "🔔", title: "Notifications", href: "/notifications" },
     ],
   },
   {
     id: "safety",
     title: "bandiTEAM · Safety",
     cards: [
-      { key: "see-reports", emoji: "⚠", title: "See Reports", href: "/scam-alerts" },
+      // See Reports = same route as Quick “Safety alerts”; keep upload-only here.
       { key: "upload-report", emoji: "📝", title: "Upload Report", href: "/bandiTeam/report" },
     ],
   },
@@ -110,7 +112,6 @@ const MENU_GROUPS_STAY: MenuGroup[] = [
     cards: [
       { key: "profile", emoji: "👤", title: "See My Profile", href: "/my-profile" as Href },
       { key: "acct", emoji: "🔧", title: "Account Settings", href: "/account" },
-      { key: "premium", emoji: "⭐", title: "Your Local Insider", href: "/account/membership" },
       { key: "pay", emoji: "💳", title: "Payments", href: "/account/payments" },
       { key: "lang", emoji: "🌍", title: "Language", href: "/account/language" },
       { key: "privacy", emoji: "🔒", title: "Privacy", href: "/account/privacy" },
@@ -119,33 +120,43 @@ const MENU_GROUPS_STAY: MenuGroup[] = [
   },
 ];
 
+/**
+ * After / pre-stay groups: no repeat of QUICK_ACTIONS_AFTER destinations
+ * (City Memory, Next journey/TiB, Local Friend, Safety, Impact, My Spots, Connect Stay).
+ */
 const MENU_GROUPS_AFTER: MenuGroup[] = [
-  {
-    id: "memory",
-    title: "City Memory",
-    cards: [
-      { key: "memory", emoji: "🧭", title: "City Memory", href: "/cityMemory" as Href },
-      { key: "bottle", emoji: "🍾", title: "Travel in a Bottle", href: "/travelBottle" },
-      { key: "reactivate", emoji: "🔑", title: "Connect My New Stay", href: "/reactivateStay" },
-    ],
-  },
   {
     id: "saved",
     title: "Saved · Following · Premium",
     cards: [
       { key: "following", emoji: "👥", title: "Following", href: "/following" },
-      { key: "spots", emoji: "♥", title: "My Spots", href: "/mySpots" },
       { key: "premium", emoji: "⭐", title: "Your Local Insider", href: "/account/membership" },
       { key: "moments", emoji: "✨", title: "My Moments", href: "/myMoment" },
     ],
   },
-  ...MENU_GROUPS_STAY.filter((g) => g.id !== "stay" && g.id !== "journey"),
+  {
+    id: "safety",
+    title: "bandiTEAM · Safety",
+    cards: [
+      { key: "upload-report", emoji: "📝", title: "Upload Report", href: "/bandiTeam/report" },
+    ],
+  },
+  {
+    id: "account",
+    title: "Account",
+    cards: [
+      { key: "profile", emoji: "👤", title: "See My Profile", href: "/my-profile" as Href },
+      { key: "acct", emoji: "🔧", title: "Account Settings", href: "/account" },
+      { key: "pay", emoji: "💳", title: "Payments", href: "/account/payments" },
+      { key: "lang", emoji: "🌍", title: "Language", href: "/account/language" },
+      { key: "privacy", emoji: "🔒", title: "Privacy", href: "/account/privacy" },
+      { key: "help", emoji: "❓", title: "Help", href: "/account/faq" },
+    ],
+  },
   {
     id: "journey-after",
     title: "Your journey",
     cards: [
-      { key: "lf", emoji: "💬", title: "Local Friend", href: "/localFriend" },
-      { key: "impact", emoji: "🌍", title: "Impact / Passport", href: "/impact" },
       { key: "bookings", emoji: "🎫", title: "Bookings", href: "/bookings" },
       { key: "notif", emoji: "🔔", title: "Notifications", href: "/notifications" },
     ],

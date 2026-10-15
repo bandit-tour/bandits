@@ -27,12 +27,15 @@ import { eventHasVenueMediaSource, getSpotDetailHeroUri } from '@/lib/eventVenue
 import {
   fetchGooglePlacePhotoUrls,
   fetchTrustedPlaceIdPhotoUrls,
-  isDurableVenuePhotoUri,
-  isEphemeralPlacesMediaUrl,
-  isGooglePlacesDerivedPhotoUrl,
   normalizeEventImageUri,
 } from '@/lib/placePhoto';
 import { resolveApprovedListHeroUrisByEventId } from '@/lib/recommendationImages';
+import {
+  eventNeedsLivePlacesHeroRecovery,
+  isPreservedApprovedDurableHero,
+  markHeroUriFailed,
+  selectViewportVenueHeroUri,
+} from '@/lib/venueHeroRecovery';
 import { logNativeNav } from '@/lib/nativeNavLog';
 import { perfMark } from '@/lib/perfTiming';
 import { useLocalSearchParams, useRouter } from 'expo-router';
@@ -74,6 +77,7 @@ type ExploreRowProps = {
   resolvedRecommendationImageUri?: string | null;
   recommendationHeroResolverReady?: boolean;
   onHeroUnavailable?: (eventId: string) => void;
+  onHeroUriFailed?: (eventId: string, uri: string) => void;
 };
 
 const ExploreEventRow = React.memo(function ExploreEventRow({
@@ -89,15 +93,11 @@ const ExploreEventRow = React.memo(function ExploreEventRow({
   resolvedRecommendationImageUri,
   recommendationHeroResolverReady,
   onHeroUnavailable,
+  onHeroUriFailed,
 }: ExploreRowProps) {
   const resolved = resolvedRecommendationImageUri ?? null;
-  // Only skip per-card Places when parent already has a durable (non-Google-ephemeral) hero.
-  const skipGoogle =
-    Boolean(resolved) &&
-    /^https?:\/\//i.test(resolved!) &&
-    isDurableVenuePhotoUri(resolved) &&
-    !isEphemeralPlacesMediaUrl(resolved) &&
-    !isGooglePlacesDerivedPhotoUrl(resolved);
+  // Only skip per-card Places when parent already has a preserved approved durable hero.
+  const skipGoogle = isPreservedApprovedDurableHero(resolved);
 
   return (
     <View style={[styles.cardWrap, columns > 1 && styles.cardWrapMulti]}>
@@ -111,6 +111,7 @@ const ExploreEventRow = React.memo(function ExploreEventRow({
         skipGooglePhotoFetch={skipGoogle}
         omitWhenNoHero
         onHeroUnavailable={onHeroUnavailable}
+        onHeroUriFailed={onHeroUriFailed}
         splitTouchTargets={Platform.OS !== 'web'}
         preloadedRecommendingBandits={recommendingBandits ?? []}
         onBanditPress={onBanditPress}
@@ -142,6 +143,7 @@ const ExploreEventRow = React.memo(function ExploreEventRow({
     prev.resolvedRecommendationImageUri === next.resolvedRecommendationImageUri &&
     prev.recommendationHeroResolverReady === next.recommendationHeroResolverReady &&
     prev.onHeroUnavailable === next.onHeroUnavailable &&
+    prev.onHeroUriFailed === next.onHeroUriFailed &&
     banditsEqual
   );
 });
@@ -198,6 +200,10 @@ export function ExploreScreen({ tabActive }: ExploreScreenProps = {}) {
   const [hiddenHeroEventIds, setHiddenHeroEventIds] = useState<Set<string>>(() => new Set());
   /** Live Place Details heroes for rows whose stored image_url/gallery are expired Places resources. */
   const [liveHeroByEventId, setLiveHeroByEventId] = useState<Record<string, string>>({});
+  /** Broken URIs must never be re-selected or re-fetched indefinitely. */
+  const [failedHeroUris, setFailedHeroUris] = useState<Record<string, true>>({});
+  /** Events whose Places recovery batch already ran (success or empty). */
+  const [liveRecoveryDoneIds, setLiveRecoveryDoneIds] = useState<Record<string, true>>({});
 
   useEffect(() => {
     setCategoryChip(exploreChipFromGenreParam(selectedGenre));
@@ -405,54 +411,42 @@ export function ExploreScreen({ tabActive }: ExploreScreenProps = {}) {
   const resolvedRecommendationImageById = useMemo(() => {
     const out: Record<string, string | null> = {};
     for (const e of filteredEvents) {
-      // Live Places refresh wins over stored ephemeral/Google URLs that probes may 200.
-      const live = liveHeroByEventId[e.id];
-      if (live) {
-        out[e.id] = live;
-        continue;
-      }
-      const approved = approvedHeroById[e.id];
-      if (approved && isDurableVenuePhotoUri(approved)) {
-        out[e.id] = approved;
-        continue;
-      }
-      const stored = getSpotDetailHeroUri(e);
-      if (stored && isDurableVenuePhotoUri(stored) && !isGooglePlacesDerivedPhotoUrl(stored)) {
-        out[e.id] = stored;
-        continue;
-      }
-      out[e.id] = stored ?? approved ?? null;
+      out[e.id] = selectViewportVenueHeroUri({
+        liveUri: liveHeroByEventId[e.id],
+        approvedUri: approvedHeroById[e.id],
+        storedUri: getSpotDetailHeroUri(e),
+        failedUris: failedHeroUris,
+      });
     }
     return out;
-  }, [filteredEvents, approvedHeroById, liveHeroByEventId]);
+  }, [filteredEvents, approvedHeroById, liveHeroByEventId, failedHeroUris]);
 
   /**
-   * Prefer durable heroes; live-refresh missing / ephemeral / Google-derived URLs.
-   * Sequential batches of 4 (no Promise.all storm) — drain until queue empty.
+   * Prefer durable heroes; live-refresh missing / ephemeral / Google-derived / failed URLs.
+   * Sequential batches of 4 (no Promise.all storm) — drain until eligible queue empty.
    */
   useEffect(() => {
     if (!screenActive) return;
     let cancelled = false;
     const needLive = filteredEvents.filter((e) => {
-      if (liveHeroByEventId[e.id]) return false;
-      const approved = approvedHeroById[e.id];
-      if (approved && isDurableVenuePhotoUri(approved) && !isGooglePlacesDerivedPhotoUrl(approved)) {
-        return false;
-      }
-      const stored = getSpotDetailHeroUri(e);
-      if (!stored) return true;
-      if (isEphemeralPlacesMediaUrl(stored) || isGooglePlacesDerivedPhotoUrl(stored)) return true;
-      return !isDurableVenuePhotoUri(stored);
+      if (liveRecoveryDoneIds[e.id]) return false;
+      return eventNeedsLivePlacesHeroRecovery(e, {
+        liveUri: liveHeroByEventId[e.id],
+        approvedUri: approvedHeroById[e.id],
+        failedUris: failedHeroUris,
+      });
     });
     if (needLive.length === 0) return;
 
     void (async () => {
       const heroUpdates: Record<string, string> = {};
+      const doneUpdates: Record<string, true> = {};
       for (let i = 0; i < needLive.length; i += 4) {
         if (cancelled) return;
         const batch = needLive.slice(i, i + 4);
         for (const event of batch) {
           if (cancelled) return;
+          doneUpdates[event.id] = true;
           try {
             const placeId = (event as { google_place_id?: string | null }).google_place_id ?? null;
             let urls = placeId ? await fetchTrustedPlaceIdPhotoUrls(placeId, 4) : [];
@@ -468,15 +462,18 @@ export function ExploreScreen({ tabActive }: ExploreScreenProps = {}) {
             }
             const cleaned = urls
               .map((u) => normalizeEventImageUri(u) ?? u)
-              .filter((u) => /^https?:\/\//i.test(u));
+              .filter((u) => /^https?:\/\//i.test(u) && !failedHeroUris[u]);
             if (cleaned.length === 0) continue;
             heroUpdates[event.id] = cleaned[0];
           } catch {
             /* EventCard may still recover */
           }
         }
-        if (!cancelled && Object.keys(heroUpdates).length > 0) {
-          setLiveHeroByEventId((prev) => ({ ...prev, ...heroUpdates }));
+        if (!cancelled) {
+          if (Object.keys(heroUpdates).length > 0) {
+            setLiveHeroByEventId((prev) => ({ ...prev, ...heroUpdates }));
+          }
+          setLiveRecoveryDoneIds((prev) => ({ ...prev, ...doneUpdates }));
         }
       }
     })();
@@ -484,7 +481,15 @@ export function ExploreScreen({ tabActive }: ExploreScreenProps = {}) {
     return () => {
       cancelled = true;
     };
-  }, [screenActive, filteredEventIdsKey, filteredEvents, approvedHeroById, liveHeroByEventId]);
+  }, [
+    screenActive,
+    filteredEventIdsKey,
+    filteredEvents,
+    approvedHeroById,
+    liveHeroByEventId,
+    failedHeroUris,
+    liveRecoveryDoneIds,
+  ]);
 
   useEffect(() => {
     if (viewMode !== 'map') return;
@@ -554,6 +559,26 @@ export function ExploreScreen({ tabActive }: ExploreScreenProps = {}) {
     });
   }, []);
 
+  const handleHeroUriFailed = useCallback((eventId: string, uri: string) => {
+    const id = String(eventId || '').trim();
+    const n = normalizeEventImageUri(uri) ?? uri;
+    if (!n) return;
+    setFailedHeroUris((prev) => markHeroUriFailed(prev, n));
+    setLiveHeroByEventId((prev) => {
+      if (prev[id] !== n && normalizeEventImageUri(prev[id] ?? '') !== n) return prev;
+      const next = { ...prev };
+      delete next[id];
+      return next;
+    });
+    // Allow one more parent recovery pass after a live URI dies.
+    setLiveRecoveryDoneIds((prev) => {
+      if (!prev[id]) return prev;
+      const next = { ...prev };
+      delete next[id];
+      return next;
+    });
+  }, []);
+
   const goBackToBanditHome = useCallback(() => {
     if (!banditId) return;
     router.push(`/bandits?focusBanditId=${encodeURIComponent(banditId)}` as any);
@@ -604,9 +629,19 @@ export function ExploreScreen({ tabActive }: ExploreScreenProps = {}) {
         resolvedRecommendationImageUri={resolvedHeroRef.current[item.id] ?? null}
         recommendationHeroResolverReady={recoHeroReadyRef.current}
         onHeroUnavailable={handleHeroUnavailable}
+        onHeroUriFailed={handleHeroUriFailed}
       />
     ),
-    [columns, likesEpoch, banditId, toggleLike, handleNavigateToSpot, handleBanditPress, handleHeroUnavailable],
+    [
+      columns,
+      likesEpoch,
+      banditId,
+      toggleLike,
+      handleNavigateToSpot,
+      handleBanditPress,
+      handleHeroUnavailable,
+      handleHeroUriFailed,
+    ],
   );
 
   const handleCategorySelect = useCallback((chip: ExploreCategoryChip) => {
@@ -744,6 +779,7 @@ export function ExploreScreen({ tabActive }: ExploreScreenProps = {}) {
               onBanditPress={handleBanditPress}
               banditsByEventId={banditsByEventId}
               heroUriByEventId={resolvedRecommendationImageById}
+              onHeroUriFailed={handleHeroUriFailed}
               listBottomPad={Math.max(insets.bottom, 8) + 72}
               isLiked={(eventId) => likedEventIds.has(eventId)}
               onLike={(eventId) => void toggleLike(eventId)}

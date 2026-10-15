@@ -228,6 +228,9 @@ export function isGooglePlacesDerivedPhotoUrl(uri: string | null | undefined): b
  *
  * Treat both as ephemeral so gallery mappers skip them and call sites live-refresh via
  * `google_place_id` (same photography source as the original MVP Places pipeline).
+ *
+ * IMPORTANT: `/media?key=` URLs are NEVER permanent approved photographs — do not
+ * persist them as durable heroes or skip live recovery because an HTTP probe once 200'd.
  */
 export function isEphemeralPlacesMediaUrl(uri: string | null | undefined): boolean {
   const t = String(uri ?? '').trim().toLowerCase();

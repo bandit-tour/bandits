@@ -4,10 +4,14 @@ import { ThemedView } from '@/components/ThemedView';
 import { Database } from '@/lib/database.types';
 import {
   fetchGooglePlacePhotoUrl,
+  fetchGooglePlacePhotoUrls,
+  fetchTrustedPlaceIdPhotoUrls,
+  isEphemeralPlacesMediaUrl,
   isGooglePlacesDerivedPhotoUrl,
   normalizeEventImageUri,
 } from '@/lib/placePhoto';
 import { getEventVenueGalleryOrdered } from '@/lib/eventVenueGallery';
+import { isStaleOrEphemeralVenueHero } from '@/lib/venueHeroRecovery';
 import { supabase } from '@/lib/supabase';
 import { useLocalSearchParams, useRouter, Stack } from 'expo-router';
 import { VenueScamWarningsSection } from '@/components/VenueScamWarningsSection';
@@ -43,12 +47,42 @@ export default function EventDetailScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [isLiked, setIsLiked] = useState(false);
   const [imageFailed, setImageFailed] = useState(false);
+  const [failedUris, setFailedUris] = useState<Record<string, true>>({});
   const [verifiedGallery, setVerifiedGallery] = useState<string[]>([]);
   const [galleryResolving, setGalleryResolving] = useState(false);
+  const recoveryStarted = React.useRef(false);
   const screenOptions = useAppBackScreenOptions({
     title: '',
     fallback: '/explore',
   });
+
+  const recoverLiveGallery = useCallback(async (eventData: Event, exclude: Record<string, true> = {}) => {
+    const placeId = (eventData as { google_place_id?: string | null }).google_place_id ?? null;
+    let urls = placeId ? await fetchTrustedPlaceIdPhotoUrls(placeId, 6) : [];
+    if (urls.length === 0) {
+      urls = await fetchGooglePlacePhotoUrls({
+        placeId,
+        name: String(eventData.name ?? ''),
+        address: String(eventData.address ?? ''),
+        city: String(eventData.city ?? ''),
+        neighborhood: String(eventData.neighborhood ?? ''),
+        limit: 6,
+      });
+    }
+    if (urls.length === 0) {
+      const single = await fetchGooglePlacePhotoUrl({
+        placeId,
+        name: String(eventData.name ?? ''),
+        address: String(eventData.address ?? ''),
+        city: String(eventData.city ?? ''),
+        neighborhood: String(eventData.neighborhood ?? ''),
+      });
+      if (single) urls = [single];
+    }
+    return urls
+      .map((u) => normalizeEventImageUri(u) ?? u)
+      .filter((u) => /^https?:\/\//i.test(u) && !exclude[u]);
+  }, []);
 
   const loadEventData = useCallback(
     async (opts?: { silent?: boolean }) => {
@@ -58,6 +92,9 @@ export default function EventDetailScreen() {
       try {
         if (silent) setRefreshing(true);
         else setLoading(true);
+        recoveryStarted.current = false;
+        setFailedUris({});
+        setImageFailed(false);
 
         const { data: eventData, error: eventError } = await supabase
           .from('event')
@@ -69,26 +106,23 @@ export default function EventDetailScreen() {
         setEvent(eventData);
 
         const stored = getEventVenueGalleryOrdered(eventData);
-        setVerifiedGallery(stored);
-        if (stored.length === 0) {
+        const needsLive =
+          stored.length === 0 || stored.some((u) => isStaleOrEphemeralVenueHero(u));
+        setVerifiedGallery(stored.filter((u) => !isEphemeralPlacesMediaUrl(u)));
+        if (needsLive) {
           setGalleryResolving(true);
           try {
-            const placeUrl = await fetchGooglePlacePhotoUrl({
-              placeId: (eventData as any).google_place_id ?? null,
-              name: String(eventData.name ?? ''),
-              address: String(eventData.address ?? ''),
-              city: String(eventData.city ?? ''),
-              neighborhood: String(eventData.neighborhood ?? ''),
-            });
-            const norm = placeUrl ? normalizeEventImageUri(placeUrl) ?? placeUrl : null;
-            if (norm && isGooglePlacesDerivedPhotoUrl(norm)) {
-              setVerifiedGallery([norm]);
-            } else {
-              setVerifiedGallery([]);
+            recoveryStarted.current = true;
+            const live = await recoverLiveGallery(eventData);
+            const durableStored = stored.filter((u) => !isStaleOrEphemeralVenueHero(u));
+            const merged = [...durableStored];
+            for (const u of live) {
+              if (!merged.includes(u)) merged.push(u);
             }
+            setVerifiedGallery(merged);
           } catch (err) {
             console.warn('[EventDetail] google photo fetch failed', err instanceof Error ? err.message : err);
-            setVerifiedGallery([]);
+            if (stored.length === 0) setVerifiedGallery([]);
           } finally {
             setGalleryResolving(false);
           }
@@ -124,7 +158,7 @@ export default function EventDetailScreen() {
         else setLoading(false);
       }
     },
-    [id, banditId],
+    [id, banditId, recoverLiveGallery],
   );
 
   useEffect(() => {
@@ -138,7 +172,41 @@ export default function EventDetailScreen() {
 
   useEffect(() => {
     setImageFailed(false);
+    setFailedUris({});
   }, [event?.id]);
+
+  const handleHeroError = useCallback(
+    (failedUri: string) => {
+      const n = normalizeEventImageUri(failedUri) ?? failedUri;
+      setFailedUris((prev) => ({ ...prev, [n]: true }));
+      setVerifiedGallery((prev) => {
+        const next = prev.filter((u) => (normalizeEventImageUri(u) ?? u) !== n);
+        if (next.length > 0) {
+          setImageFailed(false);
+          return next;
+        }
+        if (event && !recoveryStarted.current) {
+          recoveryStarted.current = true;
+          setGalleryResolving(true);
+          void recoverLiveGallery(event, { ...failedUris, [n]: true })
+            .then((live) => {
+              if (live.length > 0) {
+                setVerifiedGallery(live);
+                setImageFailed(false);
+              } else {
+                setImageFailed(true);
+              }
+            })
+            .catch(() => setImageFailed(true))
+            .finally(() => setGalleryResolving(false));
+        } else {
+          setImageFailed(true);
+        }
+        return next;
+      });
+    },
+    [event, failedUris, recoverLiveGallery],
+  );
 
   const handleLikePress = async () => {
     try {
@@ -178,7 +246,7 @@ export default function EventDetailScreen() {
   }
 
   // Real venue photos only — never stock category pools.
-  const galleryImages = verifiedGallery;
+  const galleryImages = verifiedGallery.filter((u) => !failedUris[normalizeEventImageUri(u) ?? u]);
   const heroUri = !imageFailed && galleryImages[0] ? galleryImages[0] : null;
 
   return (
@@ -213,7 +281,9 @@ export default function EventDetailScreen() {
               cachePolicy="memory-disk"
               recyclingKey={`event-hero:${event.id}`}
               priority="high"
-              onError={() => setImageFailed(true)}
+              onError={() => {
+                if (heroUri) handleHeroError(heroUri);
+              }}
             />
           ) : galleryResolving ? (
             <View style={[styles.mainImage, styles.heroPending]}>

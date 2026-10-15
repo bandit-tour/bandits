@@ -13,6 +13,7 @@ type Props = {
   bandits?: EventBanditRecommendation[];
   onOpen: () => void;
   onDismiss?: () => void;
+  onImageError?: (uri: string) => void;
   compact?: boolean;
 };
 
@@ -25,6 +26,7 @@ export default function MapPlacePreviewCard({
   bandits,
   onOpen,
   onDismiss,
+  onImageError,
   compact = true,
 }: Props) {
   const tip = String(recommendation || '').trim();
@@ -51,10 +53,15 @@ export default function MapPlacePreviewCard({
             source={{ uri: imageUri! }}
             style={styles.image}
             contentFit="cover"
-            onError={() => setImageFailed(true)}
+            onError={() => {
+              setImageFailed(true);
+              if (imageUri) onImageError?.(imageUri);
+            }}
           />
         ) : (
-          <View style={[styles.image, styles.imageFallback]} />
+          <View style={[styles.image, styles.imageFallback]}>
+            <Text style={styles.imageFallbackText}>Open</Text>
+          </View>
         )}
       </View>
       <View style={styles.body}>
@@ -126,7 +133,12 @@ const styles = StyleSheet.create({
   pressed: { opacity: 0.94 },
   media: { width: 96, alignSelf: 'stretch', backgroundColor: '#e8edf1' },
   image: { width: '100%', height: '100%', minHeight: 96 },
-  imageFallback: { backgroundColor: '#d5dde4' },
+  imageFallback: {
+    backgroundColor: '#e8edf1',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  imageFallbackText: { fontSize: 12, fontWeight: '700', color: '#64748b' },
   body: { flex: 1, minWidth: 0, paddingHorizontal: 12, paddingVertical: 10, gap: 4 },
   name: { fontSize: 15, fontWeight: '700', color: '#1f2937' },
   metaRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },

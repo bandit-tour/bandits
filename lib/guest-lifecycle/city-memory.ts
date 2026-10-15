@@ -96,9 +96,14 @@ export function buildAfterTripHome(snap: GuestLifecycleSnapshot): AfterTripHomeM
     },
   ];
 
+  const cityLabel = city.trim() || "city";
+  const memoryTitle = /^your\b/i.test(cityLabel)
+    ? `${cityLabel.replace(/\bmemory\b/i, "").trim()} Memory`.replace(/\s+/g, " ")
+    : `Your ${cityLabel} Memory`;
+
   return {
-    cityLabel: city,
-    memoryTitle: `Your ${city} Memory`,
+    cityLabel,
+    memoryTitle,
     savedPlaces,
     mySpots,
     followedBandits,

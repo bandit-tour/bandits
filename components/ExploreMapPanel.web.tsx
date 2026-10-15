@@ -31,6 +31,7 @@ type Props = {
   onBanditPress?: (banditId: string) => void;
   banditsByEventId?: Map<string, EventBanditRecommendation[]>;
   heroUriByEventId?: Record<string, string | null | undefined>;
+  onHeroUriFailed?: (eventId: string, uri: string) => void;
   listBottomPad?: number;
   isLiked?: (eventId: string) => boolean;
   onLike?: (eventId: string) => void;
@@ -111,6 +112,7 @@ export default function ExploreMapPanelWeb({
   onBanditPress,
   banditsByEventId,
   heroUriByEventId,
+  onHeroUriFailed,
   listBottomPad = 24,
   isLiked,
   onLike,
@@ -304,13 +306,14 @@ export default function ExploreMapPanelWeb({
             variant="horizontal"
             fillHorizontalCell
             showRecommendations
-            skipGooglePhotoFetch={Boolean(heroUriByEventId?.[item.id])}
+            skipGooglePhotoFetch={false}
             preloadedRecommendingBandits={banditsByEventId?.get(item.id) ?? []}
             onBanditPress={onBanditPress}
             banditId={banditId}
             resolvedRecommendationImageUri={heroUriByEventId?.[item.id] ?? null}
             recommendationHeroResolverReady
             strictRecommendationImagePolicy={false}
+            onHeroUriFailed={onHeroUriFailed}
             onPress={() => {
               applySelection(item.id, false, true);
               openSelected(item.id);
@@ -329,6 +332,7 @@ export default function ExploreMapPanelWeb({
       like,
       liked,
       onBanditPress,
+      onHeroUriFailed,
       openSelected,
       selectedId,
     ],
@@ -348,6 +352,7 @@ export default function ExploreMapPanelWeb({
             rating={(item as { rating?: number | null }).rating}
             imageUri={heroUriByEventId?.[item.id] ?? null}
             bandits={banditsByEventId?.get(item.id)}
+            onImageError={(uri) => onHeroUriFailed?.(item.id, uri)}
             onOpen={() => {
               applySelection(item.id, false, true);
               openSelected(item.id);
@@ -356,7 +361,7 @@ export default function ExploreMapPanelWeb({
         </Pressable>
       );
     },
-    [applySelection, banditsByEventId, heroUriByEventId, openSelected, selectedId],
+    [applySelection, banditsByEventId, heroUriByEventId, onHeroUriFailed, openSelected, selectedId],
   );
 
   if (!visible) return <View style={styles.root} />;

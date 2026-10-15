@@ -1,0 +1,125 @@
+{
+  "generatedAt": "2026-10-15T17:20:52.947Z",
+  "surface": "expo-web :8082",
+  "iosStatus": "NOT VERIFIED (no physical device in agent env)",
+  "androidStatus": "NOT VERIFIED (no physical device in agent env)",
+  "exploreStats": {
+    "imgTotal": 1,
+    "placeLike": 0,
+    "placeLoaded": 0,
+    "sample": [],
+    "foundNames": {
+      "Spook": false,
+      "Ergon": false,
+      "Kick": false,
+      "Brunchers": false,
+      "Tragos": false,
+      "Fixers": false,
+      "Avioti": false,
+      "BeQueer": false
+    },
+    "loadingPhotoCount": 0,
+    "emptyTransparentBlocks": 10,
+    "noPlaces": true
+  },
+  "guideStats": {
+    "loaded": 14,
+    "placeLoaded": 14,
+    "loadingPhotoCount": 3,
+    "photoUnavailable": 0,
+    "foundNames": {
+      "Spook": false,
+      "Ergon": false,
+      "Kick": false,
+      "Brunchers": true,
+      "Tragos": true,
+      "Fixers": true,
+      "Avioti": true,
+      "BeQueer": true
+    },
+    "sample": [
+      {
+        "src": "https://zubcakeamyfqatdmleqx.supabase.co/storage/v1/object/public/banditsassets4/bandit_d76cb120-018d-4a2e-8b5f-0578a71fd8f9_1758788593080.j",
+        "w": 1024,
+        "h": 1536
+      },
+      {
+        "src": "https://places.googleapis.com/v1/places/ChIJi6DPjVO9oRQRirqGAIiWfuA/photos/Aa-ngMZXnWkG6_HzbeaH7PARcbL8Eas3_1xc0zhM3iW8rWPYNyxraRGLhp1Udivca",
+        "w": 900,
+        "h": 1200
+      },
+      {
+        "src": "https://places.googleapis.com/v1/places/ChIJG9l7gga9oRQRWjFiHWCSO5Y/photos/Aa-ngMbX_vI-a-sliOo7pnEU6mYmhiXGH63AZgOu0cxTw2DSzIG_ZYX5sXFY6Hf_P",
+        "w": 1600,
+        "h": 1065
+      },
+      {
+        "src": "https://places.googleapis.com/v1/places/ChIJ65zg5vbroRQRI_Ntn4xnh34/photos/Aa-ngMbK9Vzc760AAS2x2VDla7fZfyMuchErMCk05Nc4SB6aUa5HSvUvlDXLghknC",
+        "w": 560,
+        "h": 1200
+      },
+      {
+        "src": "https://places.googleapis.com/v1/places/ChIJffSQZVO9oRQR0cl_iUxeuPA/photos/Aa-ngMZ6pj0TowW2KlbMD0LlWfpw9WIphTSWQ47VnwkQjPRE9AhOo6tP4-_1LGqJ2",
+        "w": 900,
+        "h": 1200
+      },
+      {
+        "src": "https://places.googleapis.com/v1/places/ChIJ3QGottO7oRQRqwyrJCT5KMU/photos/Aa-ngMbaPuOqC7fMEAG10a2ACEklwRMY5OEPa35FseyL-gvRdkXbAsC12hTsL7zUj",
+        "w": 1600,
+        "h": 901
+      },
+      {
+        "src": "https://places.googleapis.com/v1/places/ChIJu5kH3jy9oRQR7Dtd2RR8_XA/photos/Aa-ngMab_c1zThjbjqmEgPOlVoAyrikzH41EVWPw0ZOztUKiZ6Adu1k7Ss-HthwW5",
+        "w": 1600,
+        "h": 1068
+      },
+      {
+        "src": "https://places.googleapis.com/v1/places/ChIJ-wjAIC_roRQR4p2a07h-CxY/photos/Aa-ngMZkt2JVeFPjrnWhM7jmcft8bCFBYsbiq8Y7LGIDOoxaUJchZKx0qPnCjpjRe",
+        "w": 1600,
+        "h": 1067
+      }
+    ]
+  },
+  "spotStats": {
+    "url": "http://localhost:8082/spot/5aef456b-364a-426d-8d74-fa8bd881a658?banditId=d76cb120-018d-4a2e-8b5f-0578a71fd8f9&heroUri=https%3A%2F%2Fplaces.googleapis.com%2Fv1%2Fplaces%2FChIJi6DPjVO9oRQRirqGAIiWfuA%2Fphotos%2FAa-ngMZXnWkG6_HzbeaH7PARcbL8Eas3_1xc0zhM3iW8rWPYNyxraRGLhp1UdivcaoLwWz7kGDqWgTSAziDVDQnWkzcS0XfBH2IBgO5vqqJj_fH0ohsgpJGbEfb9TBFQKYvDlMBF5RfBo32i_Xf0e73K9VlDGqJJjJFrOF1UdD2pR4mKUTmLGbdAqi2C1mH7uRzRZHXutkURGcSgLvNjFGBJHl5u-f5SVJaD_tnsePLKa4YjXXf9Lue5IEuneqwT5oQEwiciiY-V8ljM9rcaA8LMU60j0X4em5sDkwazRLZafDaKdpXiUIKi5SDljbLj1dVr5-wPRFOgvPlywmzkKsOSptvuIjPEtlC0rFDwP662HVzEu93sgSXUTMDUHA5stj7-6TId6D6tCOTcJUJ7mEQULVITNB6tNDw%2Fmedia%3FmaxWidthPx%3D1600%26maxHeightPx%3D1200%26key%3DAIzaSyDSzrKrLTMkbo2Zy4BE49XRfHETfyxChqQ",
+    "loaded": 24,
+    "sample": [
+      {
+        "src": "https://zubcakeamyfqatdmleqx.supabase.co/storage/v1/object/public/banditsassets4/bandit_d76cb120-018d-4a2e-8b5f-0578a71fd8f9_1758788593080.j",
+        "w": 1024,
+        "h": 1536
+      },
+      {
+        "src": "https://places.googleapis.com/v1/places/ChIJi6DPjVO9oRQRirqGAIiWfuA/photos/Aa-ngMZXnWkG6_HzbeaH7PARcbL8Eas3_1xc0zhM3iW8rWPYNyxraRGLhp1Udivca",
+        "w": 900,
+        "h": 1200
+      },
+      {
+        "src": "https://places.googleapis.com/v1/places/ChIJG9l7gga9oRQRWjFiHWCSO5Y/photos/Aa-ngMbX_vI-a-sliOo7pnEU6mYmhiXGH63AZgOu0cxTw2DSzIG_ZYX5sXFY6Hf_P",
+        "w": 1600,
+        "h": 1065
+      },
+      {
+        "src": "https://places.googleapis.com/v1/places/ChIJ65zg5vbroRQRI_Ntn4xnh34/photos/Aa-ngMbK9Vzc760AAS2x2VDla7fZfyMuchErMCk05Nc4SB6aUa5HSvUvlDXLghknC",
+        "w": 560,
+        "h": 1200
+      }
+    ],
+    "textHead": [
+      "← Back",
+      "‹",
+      "1 / 9",
+      "›",
+      "The Brunchers",
+      "↗",
+      "Share",
+      "🤍",
+      "Save",
+      "Food",
+      "★ 4.0",
+      "Athina"
+    ]
+  },
+  "recoveryLogs": [],
+  "note": "Viewport render proof on web only — not device PASS; not HTTP-only PASS."
+}

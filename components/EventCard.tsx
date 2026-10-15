@@ -11,6 +11,8 @@ import {
   fetchGooglePlacePhotoUrl,
   fetchGooglePlacePhotoUrls,
   fetchTrustedPlaceIdPhotoUrls,
+  isDurableVenuePhotoUri,
+  isEphemeralPlacesMediaUrl,
   isGooglePlacesDerivedPhotoUrl,
   isLikelyLogoOrBadPlaceImage,
   normalizeEventImageUri,
@@ -154,6 +156,8 @@ interface EventCardProps {
   omitWhenNoHero?: boolean;
   /** Fired once when the card has no loadable hero after gallery + Places recovery. */
   onHeroUnavailable?: (eventId: string) => void;
+  /** Fired whenever a hero URI fails so parents can drop it from future selection. */
+  onHeroUriFailed?: (eventId: string, uri: string) => void;
 }
 
 function EventCardImpl({
@@ -181,6 +185,7 @@ function EventCardImpl({
   splitTouchTargets = false,
   omitWhenNoHero = false,
   onHeroUnavailable,
+  onHeroUriFailed,
 }: EventCardProps) {
   const router = useRouter();
   const isHorizontal = variant === 'horizontal';
@@ -231,12 +236,15 @@ function EventCardImpl({
     return normalizeEventImageUri(resolvedRecommendationImageUri ?? '');
   }, [recommendationHeroResolverReady, resolvedRecommendationImageUri]);
 
-  /** Skip list-time Places fetch when parent already supplied a usable https hero (incl. live-refreshed). */
+  /** Skip list-time Places only when parent supplied a preserved durable non-Places hero that has not failed. */
   const shouldSkipGoogleInListScope =
     skipGooglePhotoFetch &&
     Boolean(parentResolvedNormalized) &&
+    !failedUris[parentResolvedNormalized!] &&
     /^https?:\/\//i.test(parentResolvedNormalized!) &&
-    !failedUris[parentResolvedNormalized!];
+    isDurableVenuePhotoUri(parentResolvedNormalized) &&
+    !isEphemeralPlacesMediaUrl(parentResolvedNormalized) &&
+    !isGooglePlacesDerivedPhotoUrl(parentResolvedNormalized);
 
   const resolveLivePlacePhotoUrls = useCallback(
     async (limit: number) => {
@@ -335,7 +343,9 @@ function EventCardImpl({
       for (const photoUrl of urls) {
         if (!photoUrl || isLogoLikeImageUri(photoUrl)) continue;
         const claimed = claimVerifiedHeroPhotoUrl(photoUrl, meta) ?? photoUrl;
-        if (claimed && !accepted.includes(claimed)) accepted.push(claimed);
+        const n = normalizeEventImageUri(claimed) ?? claimed;
+        if (!n || failedUris[n] || accepted.includes(n)) continue;
+        accepted.push(n);
       }
       if (accepted.length > 0) {
         photoUrlCache.set(event.id, accepted[0]);
@@ -343,7 +353,7 @@ function EventCardImpl({
       }
       return accepted;
     },
-    [event.id, (event as any).google_place_id, photoUrlCache],
+    [event.id, (event as any).google_place_id, photoUrlCache, failedUris],
   );
 
   /** List-time Places fetch — trusted google_place_id path (City Guide parity). */
@@ -399,13 +409,16 @@ function EventCardImpl({
       const n = normalizeEventImageUri(failedUri) ?? failedUri;
       photoUrlCache.delete(event.id);
       setFailedUris((prev) => (prev[n] ? prev : { ...prev, [n]: true }));
+      onHeroUriFailed?.(event.id, n);
+      // Drop failed URI from live list so we advance to the next candidate.
+      setLivePhotoUris((prev) => prev.filter((u) => (normalizeEventImageUri(u) ?? u) !== n));
 
       if (!recoveryFetchStarted.current) {
         recoveryFetchStarted.current = true;
         void (async () => {
           try {
             const urls = await resolveLivePlacePhotoUrls(8);
-            applyLivePhotoUrls(urls);
+            applyLivePhotoUrls(urls.filter((u) => (normalizeEventImageUri(u) ?? u) !== n));
           } catch (e) {
             console.warn('[EventCard] hero recovery fetch failed', { eventId: event.id, e });
           } finally {
@@ -414,7 +427,7 @@ function EventCardImpl({
         })();
       }
     },
-    [event.id, resolveLivePlacePhotoUrls, applyLivePhotoUrls, photoUrlCache],
+    [event.id, resolveLivePlacePhotoUrls, applyLivePhotoUrls, photoUrlCache, onHeroUriFailed],
   );
 
   useEffect(() => {
@@ -561,11 +574,14 @@ function EventCardImpl({
             <View style={styles.heroPendingApproval}>
               <Text style={styles.heroPendingApprovalText}>Hero pending approval</Text>
             </View>
+          ) : !googleFetchFinished ? (
+            <View style={styles.heroPendingApproval}>
+              <Text style={styles.heroPendingApprovalText}>Loading photo…</Text>
+            </View>
           ) : (
-            <View style={styles.imageLoadingSpacer} />
-          )}
-          {!strictRecommendationImagePolicy && !heroUri && !googleFetchFinished && (
-            <View style={styles.imageLoadingSpacer} />
+            <View style={styles.heroPendingApproval}>
+              <Text style={styles.heroPendingApprovalText}>Photo unavailable</Text>
+            </View>
           )}
           <View style={styles.ratingContainer} pointerEvents="none">
             <Text style={styles.ratingText}>{(event.rating || 0).toFixed(1)}</Text>
@@ -642,11 +658,14 @@ function EventCardImpl({
             <View style={styles.heroPendingApproval}>
               <Text style={styles.heroPendingApprovalText}>Hero pending approval</Text>
             </View>
+          ) : !googleFetchFinished ? (
+            <View style={styles.heroPendingApproval}>
+              <Text style={styles.heroPendingApprovalText}>Loading photo…</Text>
+            </View>
           ) : (
-            <View style={styles.imageLoadingSpacer} />
-          )}
-          {!strictRecommendationImagePolicy && !heroUri && !googleFetchFinished && (
-            <View style={styles.imageLoadingSpacer} />
+            <View style={styles.heroPendingApproval}>
+              <Text style={styles.heroPendingApprovalText}>Photo unavailable</Text>
+            </View>
           )}
           <View style={styles.ratingContainer} pointerEvents="none">
             <Text style={styles.ratingText}>{(event.rating || 0).toFixed(1)}</Text>
@@ -904,7 +923,8 @@ function areEventCardPropsEqual(prev: EventCardProps, next: EventCardProps): boo
     prev.skipGooglePhotoFetch === next.skipGooglePhotoFetch &&
     prev.splitTouchTargets === next.splitTouchTargets &&
     prev.omitWhenNoHero === next.omitWhenNoHero &&
-    prev.onHeroUnavailable === next.onHeroUnavailable
+    prev.onHeroUnavailable === next.onHeroUnavailable &&
+    prev.onHeroUriFailed === next.onHeroUriFailed
     // Note: onLike/onPress are intentionally NOT compared. Parents should
     // pass stable callbacks via useCallback; if they don't, we'd thrash here.
     // In practice these handlers only read the row's `event.id`, so a stale

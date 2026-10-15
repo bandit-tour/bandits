@@ -25,8 +25,10 @@ import {
   fetchTrustedPlaceIdPhotoUrls,
   isEphemeralPlacesMediaUrl,
   isGooglePlacesDerivedPhotoUrl,
+  isDurableVenuePhotoUri,
   normalizeEventImageUri,
 } from '@/lib/placePhoto';
+import { isStaleOrEphemeralVenueHero } from '@/lib/venueHeroRecovery';
 import { supabase } from '@/lib/supabase';
 import ReviewCard from '@/components/ReviewCard';
 import { VenueScamWarningsSection } from '@/components/VenueScamWarningsSection';
@@ -154,19 +156,23 @@ export default function SpotDetailScreen() {
         setVisibleGallery(gallery);
         setGalleryIndex(0);
 
-        const onlyEphemeral =
-          gallery.length > 0 && gallery.every((u) => isEphemeralPlacesMediaUrl(u));
-        const needsLiveRefresh = gallery.length === 0 || onlyEphemeral;
+        const hasStaleOrMissing =
+          gallery.length === 0 ||
+          gallery.some((u) => isStaleOrEphemeralVenueHero(u)) ||
+          !gallery.some((u) => isDurableVenuePhotoUri(u) && !isEphemeralPlacesMediaUrl(u));
+        const needsLiveRefresh = hasStaleOrMissing;
         setGalleryLoading(needsLiveRefresh);
 
-        // Stored Places `/media` URLs expire (400). Refresh Place Details whenever
-        // the row has no gallery or only ephemeral media — keep durable URLs first.
+        // Stored Places `/media` URLs expire (400). Refresh whenever any gallery URI is
+        // missing / ephemeral / Google-derived / non-durable — keep durable URLs first.
         if (needsLiveRefresh) {
           try {
             placesRecoveryStarted.current = true;
             const live = await fetchLivePlacesGallery(data, heroSeed);
             if (live.length > 0) {
-              const durable = gallery.filter((u) => !isEphemeralPlacesMediaUrl(u));
+              const durable = gallery.filter(
+                (u) => isDurableVenuePhotoUri(u) && !isEphemeralPlacesMediaUrl(u) && !isGooglePlacesDerivedPhotoUrl(u),
+              );
               gallery = mergeGallery([...durable, ...live], heroSeed);
               setVisibleGallery(gallery);
             }
@@ -373,9 +379,12 @@ export default function SpotDetailScreen() {
             ) : galleryLoading ? (
               <View style={[styles.imageLoadingOverlay, { width: heroWidth }]}>
                 <ActivityIndicator size="small" />
+                <Text style={{ marginTop: 8, color: '#666', fontWeight: '600' }}>Loading photo…</Text>
               </View>
             ) : (
-              <View style={[styles.imageLoadingOverlay, { width: heroWidth }]} />
+              <View style={[styles.imageLoadingOverlay, { width: heroWidth, alignItems: 'center', justifyContent: 'center' }]}>
+                <Text style={{ color: '#666', fontWeight: '600' }}>Photo unavailable</Text>
+              </View>
             )}
           </ScrollView>
           {visibleGallery.length > 1 ? (

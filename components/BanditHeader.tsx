@@ -77,8 +77,9 @@ function collectHeroUris(
   extras: string[] | undefined,
 ): string[] {
   const out: string[] = [];
-  // Identity gallery = personal portraits only (image + face).
-  // Never mix venue/PLAY terrace extras into the banDit carousel (Stage 2 B1).
+  // Identity gallery = approved banDit portraits only (image + face).
+  // Venue extras are intentionally unused here — product design keeps the carousel
+  // as people, not venue mosaic. Venue imagery belongs on Explore / City Guide / spot.
   if (isList) {
     // Prefer full portrait over tight face crop — list cards need head + shoulders.
     pushUnique(out, image);

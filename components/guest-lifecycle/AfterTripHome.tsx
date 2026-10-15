@@ -34,7 +34,7 @@ export function AfterTripHome({ model, state, onPlanNextTrip, onReactivate, comp
         booking.
       </Text>
 
-      <HotelCheckoutInvite hotelName={model.memoryTitle} />
+      <HotelCheckoutInvite hotelName={model.cityLabel} />
 
       <View style={styles.ctaRow}>
         <Pressable style={styles.ctaPrimary} onPress={onPlanNextTrip} accessibilityRole="button">

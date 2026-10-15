@@ -38,6 +38,7 @@ type Props = {
   onBanditPress?: (banditId: string) => void;
   banditsByEventId?: Map<string, EventBanditRecommendation[]>;
   heroUriByEventId?: Record<string, string | null | undefined>;
+  onHeroUriFailed?: (eventId: string, uri: string) => void;
   listBottomPad: number;
   isLiked: (eventId: string) => boolean;
   onLike: (eventId: string) => void;
@@ -54,6 +55,7 @@ export default function ExploreMapPanel({
   onBanditPress,
   banditsByEventId,
   heroUriByEventId,
+  onHeroUriFailed,
   listBottomPad,
   isLiked,
   onLike,
@@ -287,6 +289,7 @@ export default function ExploreMapPanel({
               rating={(item as { rating?: number | null }).rating}
               imageUri={heroUriByEventId?.[item.id] ?? null}
               bandits={banditsByEventId?.get(item.id)}
+              onImageError={(uri) => onHeroUriFailed?.(item.id, uri)}
               onOpen={() => {
                 applySelection(item.id, false, true);
                 openSelected(item.id);
@@ -312,6 +315,7 @@ export default function ExploreMapPanel({
             recommendationHeroResolverReady
             strictRecommendationImagePolicy={false}
             skipGooglePhotoFetch={false}
+            onHeroUriFailed={onHeroUriFailed}
             onPress={() => {
               applySelection(item.id, false, true);
               openSelected(item.id);
@@ -329,6 +333,7 @@ export default function ExploreMapPanel({
       heroUriByEventId,
       isLiked,
       onBanditPress,
+      onHeroUriFailed,
       onLike,
       openSelected,
       selectedId,

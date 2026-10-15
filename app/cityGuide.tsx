@@ -22,6 +22,11 @@ import {
   fetchTrustedPlaceIdPhotoUrls,
   normalizeEventImageUri,
 } from '@/lib/placePhoto';
+import {
+  eventNeedsLivePlacesHeroRecovery,
+  markHeroUriFailed,
+  selectViewportVenueHeroUri,
+} from '@/lib/venueHeroRecovery';
 import { repairDisplayText } from '@/lib/repairTextEncoding';
 import { useAppBackScreenOptions } from '@/hooks/useAppBackScreenOptions';
 import type { Href } from 'expo-router';
@@ -106,6 +111,9 @@ export default function CityGuideScreen() {
   const [hiddenHeroEventIds, setHiddenHeroEventIds] = useState<Set<string>>(new Set());
   /** Live Places refresh when MVP rows only store expired/incomplete Places resource URLs. */
   const [liveHeroByEventId, setLiveHeroByEventId] = useState<Record<string, string>>({});
+  const [failedHeroUris, setFailedHeroUris] = useState<Record<string, true>>({});
+  const [liveRecoveryDoneIds, setLiveRecoveryDoneIds] = useState<Record<string, true>>({});
+  const [heroRecoveryFailedIds, setHeroRecoveryFailedIds] = useState<Record<string, true>>({});
   const recommendationScrollRef = useRef<ScrollView>(null);
 
   const refreshLikedIds = useCallback(async () => {
@@ -274,34 +282,35 @@ export default function CityGuideScreen() {
   const cityGuideHeroUriById = useMemo(() => {
     const out: Record<string, string | null> = {};
     for (const e of filteredEvents) {
-      const live = liveHeroByEventId[e.id];
-      if (live) {
-        out[e.id] = live;
-        continue;
-      }
-      out[e.id] = getSpotDetailHeroUri(e) ?? null;
+      out[e.id] = selectViewportVenueHeroUri({
+        liveUri: liveHeroByEventId[e.id],
+        storedUri: getSpotDetailHeroUri(e),
+        failedUris: failedHeroUris,
+      });
     }
     return out;
-  }, [filteredEvents, liveHeroByEventId]);
+  }, [filteredEvents, liveHeroByEventId, failedHeroUris]);
 
   useEffect(() => {
     let cancelled = false;
     const needLive = filteredEvents.filter((e) => {
-      if (liveHeroByEventId[e.id]) return false;
-      const stored = getSpotDetailHeroUri(e);
-      if (!stored) return true;
-      // Stored Places media often 200 in probes but fail in ExpoImage — refresh.
-      return /places\.googleapis\.com|maps\.googleapis\.com/i.test(stored);
+      if (liveRecoveryDoneIds[e.id]) return false;
+      return eventNeedsLivePlacesHeroRecovery(e, {
+        liveUri: liveHeroByEventId[e.id],
+        failedUris: failedHeroUris,
+      });
     });
     if (needLive.length === 0) return;
 
     void (async () => {
       const heroUpdates: Record<string, string> = {};
+      const doneUpdates: Record<string, true> = {};
       for (let i = 0; i < needLive.length; i += 4) {
         if (cancelled) return;
         const batch = needLive.slice(i, i + 4);
         for (const event of batch) {
           if (cancelled) return;
+          doneUpdates[event.id] = true;
           try {
             const placeId = (event as { google_place_id?: string | null }).google_place_id ?? null;
             let urls = placeId ? await fetchTrustedPlaceIdPhotoUrls(placeId, 4) : [];
@@ -317,15 +326,21 @@ export default function CityGuideScreen() {
             }
             const cleaned = urls
               .map((u) => normalizeEventImageUri(u) ?? u)
-              .filter((u) => /^https?:\/\//i.test(u));
-            if (cleaned.length === 0) continue;
+              .filter((u) => /^https?:\/\//i.test(u) && !failedHeroUris[u]);
+            if (cleaned.length === 0) {
+              setHeroRecoveryFailedIds((prev) => ({ ...prev, [event.id]: true }));
+              continue;
+            }
             heroUpdates[event.id] = cleaned[0];
           } catch {
-            /* keep card without inventing stock */
+            setHeroRecoveryFailedIds((prev) => ({ ...prev, [event.id]: true }));
           }
         }
-        if (!cancelled && Object.keys(heroUpdates).length > 0) {
-          setLiveHeroByEventId((prev) => ({ ...prev, ...heroUpdates }));
+        if (!cancelled) {
+          if (Object.keys(heroUpdates).length > 0) {
+            setLiveHeroByEventId((prev) => ({ ...prev, ...heroUpdates }));
+          }
+          setLiveRecoveryDoneIds((prev) => ({ ...prev, ...doneUpdates }));
         }
       }
     })();
@@ -333,7 +348,7 @@ export default function CityGuideScreen() {
     return () => {
       cancelled = true;
     };
-  }, [filteredEvents, liveHeroByEventId]);
+  }, [filteredEvents, liveHeroByEventId, failedHeroUris, liveRecoveryDoneIds]);
 
   useEffect(() => {
     if (activeRecommendationIndex >= filteredEvents.length) {
@@ -451,8 +466,10 @@ export default function CityGuideScreen() {
             sourceUri={fromGallery}
             eventId={event.id}
             onInvalid={() => {
-              // Drop this frame and let live Places refresh replace it — never fall back to
-              // the raw incomplete Places resource URL stored on image_url.
+              const failed = fromGallery;
+              if (failed) {
+                setFailedHeroUris((prev) => markHeroUriFailed(prev, failed));
+              }
               setHiddenHeroEventIds((prev) => {
                 const next = new Set(prev);
                 next.add(event.id);
@@ -477,8 +494,13 @@ export default function CityGuideScreen() {
                     limit: 4,
                   });
                 }
-                const n = urls[0] ? normalizeEventImageUri(urls[0]) ?? urls[0] : null;
-                if (!n || !/^https?:\/\//i.test(n)) return;
+                const n = urls
+                  .map((u) => normalizeEventImageUri(u) ?? u)
+                  .find((u) => /^https?:\/\//i.test(u) && u !== failed);
+                if (!n) {
+                  setHeroRecoveryFailedIds((prev) => ({ ...prev, [event.id]: true }));
+                  return;
+                }
                 setHiddenHeroEventIds((prev) => {
                   const next = new Set(prev);
                   next.delete(event.id);
@@ -488,6 +510,10 @@ export default function CityGuideScreen() {
               })();
             }}
           />
+        ) : heroRecoveryFailedIds[event.id] ? (
+          <View style={styles.heroPendingApproval}>
+            <Text style={styles.heroPendingApprovalText}>Photo unavailable</Text>
+          </View>
         ) : (
           <View style={styles.heroPendingApproval}>
             <Text style={styles.heroPendingApprovalText}>Loading photo…</Text>
