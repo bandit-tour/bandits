@@ -50,9 +50,11 @@ function placeLine(b: Bandit): string {
 type Props = {
   onMeet: (banditId: string) => void;
   onSeeAll?: () => void;
+  /** Exclude featured Home hero so Neo is not repeated in the lane. */
+  excludeBanditId?: string | null;
 };
 
-export default function ExploreBanditLane({ onMeet, onSeeAll }: Props) {
+export default function ExploreBanditLane({ onMeet, onSeeAll, excludeBanditId }: Props) {
   const { width } = useWindowDimensions();
   const cardW = Math.min(width - 40, 340);
   const [bandits, setBandits] = useState<Bandit[]>([]);
@@ -65,7 +67,11 @@ export default function ExploreBanditLane({ onMeet, onSeeAll }: Props) {
       try {
         const list = (await getBanditsWithTags().catch(() => [])) as Bandit[];
         if (cancelled) return;
-        const slice = list.slice(0, 8);
+        const exclude = String(excludeBanditId || '').trim();
+        const filtered = exclude
+          ? list.filter((b) => String(b.id) !== exclude)
+          : list;
+        const slice = filtered.slice(0, 8);
         setBandits(slice);
         const vis = await Promise.all(
           slice.map(async (b) => {
@@ -85,7 +91,7 @@ export default function ExploreBanditLane({ onMeet, onSeeAll }: Props) {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [excludeBanditId]);
 
   const lead = useMemo(
     () => (bandits[0] ? firstNameOf(bandits[0].name) : 'a Local banDit'),

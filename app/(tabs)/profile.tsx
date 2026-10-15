@@ -1,6 +1,6 @@
 import { Image as ExpoImage } from "expo-image";
 import { Stack, useRouter, type Href } from "expo-router";
-import React, { useMemo, useState } from "react";
+import React, { useCallback, useMemo, useState } from "react";
 import {
   Platform,
   Pressable,
@@ -28,6 +28,7 @@ import {
 import { banditProfileHrefSafe } from "@/lib/guest-workspace/registeredBanditIds";
 import { getMyMomentToday, type GuestMoment } from "@/lib/guest-moment";
 import { useGuestLifecycle } from "@/lib/guest-lifecycle/useGuestLifecycle";
+import { usePremiumRefreshControl } from "@/lib/mobilePullToRefresh";
 import { getHotelEntry } from "@/lib/pilotSession";
 
 const EXP_FILTERS = ["upcoming", "completed", "cancelled", "favorite", "wishlist"] as const;
@@ -79,8 +80,11 @@ export default function ProfileHubScreen() {
   const [todayMoment, setTodayMoment] = useState<GuestMoment | null>(null);
   const photoCols = width >= 720 ? 4 : 3;
   const photoSize = Math.floor((Math.min(width, 720) - 32 - (photoCols - 1) * 6) / photoCols);
-  /** Seed journal / score cards are SAMPLE until live memory APIs exist — never present as real stay. */
-  const showSampleJournal = true;
+  /** SAMPLE journal only for Pilot/demo — ordinary guests see an empty authentic journal. */
+  const showSampleJournal = Boolean(
+    (typeof process !== "undefined" && process.env?.EXPO_PUBLIC_SHOW_SAMPLE_JOURNAL === "1") ||
+      false,
+  );
   const realStayLabel = activeStay?.hotelName
     ? isFullStay
       ? `Stay active · ${activeStay.hotelName}`
@@ -89,19 +93,30 @@ export default function ProfileHubScreen() {
         : `Connected · ${activeStay.hotelName}`
     : hotelName || "No stay connected yet";
 
-  React.useEffect(() => {
-    void getHotelEntry().then((entry) => {
-      setHotelName(liveHotelDisplayName({ entry, slug: entry?.slug }));
-    });
-    void getMyMomentToday({
+  const reloadProfile = useCallback(async () => {
+    const entry = await getHotelEntry();
+    setHotelName(liveHotelDisplayName({ entry, slug: entry?.slug }));
+    const moment = await getMyMomentToday({
       id: activeIdentity?.userId || "self",
       displayName: guestName,
       city: "Athens",
       stayHint: hotelName,
       avatarInitials: initials,
       kind: "guest",
-    }).then(setTodayMoment);
+    });
+    setTodayMoment(moment);
   }, [activeIdentity?.userId, guestName, hotelName, initials]);
+
+  React.useEffect(() => {
+    void reloadProfile();
+  }, [reloadProfile]);
+
+  const [refreshing, setRefreshing] = useState(false);
+  const onRefresh = useCallback(() => {
+    setRefreshing(true);
+    void reloadProfile().finally(() => setRefreshing(false));
+  }, [reloadProfile]);
+  const profileRefreshControl = usePremiumRefreshControl(refreshing, onRefresh);
 
   const filteredExperiences = useMemo(
     () => PROFILE_EXPERIENCES.filter((e) => e.status === expFilter),
@@ -115,6 +130,7 @@ export default function ProfileHubScreen() {
       style={styles.screen}
       contentContainerStyle={styles.content}
       showsVerticalScrollIndicator={false}
+      refreshControl={profileRefreshControl}
     >
       <Stack.Screen options={{ headerShown: true, title: "Profile" }} />
 
@@ -184,10 +200,19 @@ export default function ProfileHubScreen() {
       <Text style={styles.sectionLead}>
         {showSampleJournal
           ? "Sample travel memory (preview) — newest first"
-          : "Your travel memory — newest first"}
+          : "Your travel memory grows from real discoveries, stays and connections"}
       </Text>
+      {!showSampleJournal ? (
+        <View style={styles.emptyJournal} testID="profile-journal-empty">
+          <Text style={styles.emptyJournalTitle}>Your journal starts here</Text>
+          <Text style={styles.emptyJournalBody}>
+            Bottle discoveries, saved places, Moments and verified stays will appear as you travel —
+            never invented sample stories.
+          </Text>
+        </View>
+      ) : null}
       <View style={styles.timeline}>
-        {moments.map((moment, index) => {
+        {(showSampleJournal ? moments : []).map((moment, index) => {
           const attribution = getMomentAttribution(moment);
           const isLast = index === moments.length - 1;
           return (
@@ -541,6 +566,26 @@ const styles = StyleSheet.create({
   },
   heroCity: { fontSize: 14, color: "rgba(255,255,255,0.72)", marginTop: 6 },
   heroDays: { fontSize: 13, color: "rgba(255,255,255,0.55)", marginTop: 2 },
+  emptyJournal: {
+    marginTop: 8,
+    marginBottom: 8,
+    padding: 16,
+    borderRadius: 14,
+    backgroundColor: "#F4F0E8",
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: "rgba(28,24,20,0.12)",
+  },
+  emptyJournalTitle: {
+    fontSize: 16,
+    fontWeight: "800",
+    color: "#1C1814",
+    marginBottom: 6,
+  },
+  emptyJournalBody: {
+    fontSize: 13,
+    lineHeight: 19,
+    color: "rgba(28,24,20,0.72)",
+  },
   sampleBanner: {
     marginTop: 12,
     paddingVertical: 8,

@@ -92,6 +92,12 @@ export default function Index() {
     } catch {
       /* still enter the app */
     }
+    try {
+      const { ensureIntroMysteryChatSeed } = await import('@/lib/openingIntroChat');
+      await ensureIntroMysteryChatSeed();
+    } catch {
+      /* Chat seed best-effort — never block Enter */
+    }
     router.replace('/home' as Href);
   }, [router]);
 

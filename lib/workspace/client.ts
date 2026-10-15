@@ -101,21 +101,38 @@ export async function workspacePost<T>(
   }
 }
 
+/** Guest-facing commerce errors — never leak env var names. */
+function guestCommerceDetail(raw: string): string {
+  const s = String(raw || "");
+  if (/ORCHESTRA|WORKSPACE_URL|EXPO_PUBLIC_|unset/i.test(s)) {
+    return "Purchases aren’t available yet. City Guide and Ask Me stay free.";
+  }
+  return s || "Commerce temporarily unavailable.";
+}
+
 /** Commerce GET — Orchestra OS preferred. */
 export async function commerceGet<T>(
   path: string,
   guestEmail?: string | null,
 ): Promise<WorkspaceFetchResult<T>> {
   const origin = commerceOrigin();
-  if (!origin) return { ok: false, detail: "ORCHESTRA_OS_URL / WORKSPACE_URL unset" };
+  if (!origin) {
+    return {
+      ok: false,
+      detail: "Purchases aren’t available yet. City Guide and Ask Me stay free.",
+    };
+  }
   try {
     const res = await fetch(`${origin}${path.startsWith("/") ? path : `/${path}`}`, {
       headers: guestBridgeHeaders(guestEmail),
     });
-    if (!res.ok) return { ok: false, detail: `${res.status} ${path}` };
+    if (!res.ok) return { ok: false, detail: guestCommerceDetail(`${res.status} ${path}`) };
     return { ok: true, data: (await res.json()) as T, origin };
   } catch (e) {
-    return { ok: false, detail: e instanceof Error ? e.message : "fetch failed" };
+    return {
+      ok: false,
+      detail: guestCommerceDetail(e instanceof Error ? e.message : "fetch failed"),
+    };
   }
 }
 
@@ -126,7 +143,12 @@ export async function commercePost<T>(
   guestEmail?: string | null,
 ): Promise<WorkspaceFetchResult<T>> {
   const origin = commerceOrigin();
-  if (!origin) return { ok: false, detail: "ORCHESTRA_OS_URL / WORKSPACE_URL unset" };
+  if (!origin) {
+    return {
+      ok: false,
+      detail: "Purchases aren’t available yet. City Guide and Ask Me stay free.",
+    };
+  }
   try {
     const res = await fetch(`${origin}${path.startsWith("/") ? path : `/${path}`}`, {
       method: "POST",
@@ -135,18 +157,19 @@ export async function commercePost<T>(
     });
     if (!res.ok) {
       const err = await res.json().catch(() => ({}));
-      return {
-        ok: false,
-        detail:
-          (err as { error?: string; errors?: string[] }).error ||
-          (Array.isArray((err as { errors?: string[] }).errors) &&
-            (err as { errors: string[] }).errors.join("; ")) ||
-          `${res.status} ${path}`,
-      };
+      const raw =
+        (err as { error?: string; errors?: string[] }).error ||
+        (Array.isArray((err as { errors?: string[] }).errors) &&
+          (err as { errors: string[] }).errors.join("; ")) ||
+        `${res.status} ${path}`;
+      return { ok: false, detail: guestCommerceDetail(String(raw)) };
     }
     return { ok: true, data: (await res.json()) as T, origin };
   } catch (e) {
-    return { ok: false, detail: e instanceof Error ? e.message : "fetch failed" };
+    return {
+      ok: false,
+      detail: guestCommerceDetail(e instanceof Error ? e.message : "fetch failed"),
+    };
   }
 }
 

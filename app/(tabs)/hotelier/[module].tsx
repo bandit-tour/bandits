@@ -154,7 +154,11 @@ function HotelierModuleBody() {
           }).then((r) => {
             setClaimBusy(false);
             if (!r.ok) {
-              setClaimError(r.detail);
+              const detail = String(r.detail || '');
+              setClaimError(
+                detail ||
+                  'This hotel action needs a verified stay. Use Connect My New Stay from More.',
+              );
               return;
             }
             setClaimed(`${content.primaryCta} · confirmed`);
@@ -163,8 +167,24 @@ function HotelierModuleBody() {
       >
         <Text style={styles.primaryText}>{content.primaryCta}</Text>
       </Pressable>
-      {content.secondaryCta ? (
-        <Pressable style={styles.secondary} onPress={() => setClaimed(content.secondaryCta!)}>
+      {claimError ? (
+        <Pressable
+          style={styles.secondary}
+          onPress={() => router.push('/reactivateStay' as Href)}
+          accessibilityRole="button"
+          testID="hotel-module-connect-stay"
+        >
+          <Text style={styles.secondaryText}>Connect My New Stay</Text>
+        </Pressable>
+      ) : content.secondaryCta ? (
+        <Pressable
+          style={styles.secondary}
+          onPress={() =>
+            setClaimed(
+              'Request noted locally — live hotel fulfillment requires a verified stay and Workspace.',
+            )
+          }
+        >
           <Text style={styles.secondaryText}>{content.secondaryCta}</Text>
         </Pressable>
       ) : null}

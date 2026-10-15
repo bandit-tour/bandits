@@ -388,17 +388,23 @@ export default function PremiumConciergeScreen() {
       <View style={styles.salesScreen}>
         <Stack.Screen options={salesHeader} />
         <View style={[styles.salesContent, { width: contentWidth, paddingTop: 48 }]}>
-          <Text style={styles.salesTitle}>Premium Insights not available</Text>
+          <Text style={styles.salesTitle}>Your Local Insider not available</Text>
           <Text style={styles.salesBody}>
-            {`${first} still offers free City Guide and Ask Me. Premium Insights appears only when this Local banDit is Octopus-authorized with Premium enabled.`}
+            {`${first} still offers free City Guide and Ask Me. Octopus Concierge appears only when this Local banDit is Octopus Verified.`}
           </Text>
         </View>
       </View>
     );
   }
 
-  // ─── SALES / UNLOCK (not entitled) — experience first, then price + Unlock ────
+  // ─── SALES — concise: headline, price, ≤3 benefits, one CTA, brief terms ────
   if (!entitled) {
+    const commerceReady = entitlement?.state !== "unavailable";
+    const compactBenefits = [
+      `Up to 5 requests with ${first} this stay`,
+      "Tables, tickets and transfers handled for you",
+      "City Guide stays free — this is paid execution",
+    ] as const;
     return (
       <View style={styles.salesScreen}>
         <Stack.Screen options={salesHeader} />
@@ -407,95 +413,62 @@ export default function PremiumConciergeScreen() {
           keyboardShouldPersistTaps="handled"
           showsVerticalScrollIndicator={false}
         >
-          {banditPortrait ? (
-            <View style={styles.salesHero}>
-              <ExpoImage
-                source={{ uri: banditPortrait }}
-                style={styles.salesHeroImage}
-                contentFit="cover"
-                contentPosition={{ top: 0, left: "50%" }}
-                transition={200}
-                cachePolicy="memory-disk"
-              />
-              <View style={styles.salesHeroScrim} />
-              <View style={styles.salesHeroCopy}>
-                <Text style={styles.kickerOnHero}>PREMIUM INSIGHTS</Text>
-                <Text style={styles.salesTitleOnHero}>Your Local Insider</Text>
-                <Text style={styles.salesTitleOnHero}>{`Unlock ${first}'s Athens`}</Text>
-              </View>
-            </View>
-          ) : (
-            <View style={styles.brandRow}>
-              <LocalBanditOctopusIcon style={styles.brandIcon} />
-              <Text style={styles.kicker}>PREMIUM INSIGHTS</Text>
-            </View>
-          )}
-
-          {!banditPortrait ? (
-            <Text style={styles.salesTitle}>{`Unlock ${first}'s Athens`}</Text>
-          ) : null}
-          <Text style={styles.salesLead}>
-            {`${first} becomes your personal local operator — not another list of places.`}
-          </Text>
+          <View style={styles.brandRow}>
+            <LocalBanditOctopusIcon style={styles.brandIcon} />
+            <Text style={styles.kicker}>OCTOPUS CONCIERGE</Text>
+          </View>
+          <Text style={styles.salesTitle}>Your Local Insider</Text>
+          <Text style={styles.salesLead}>Your city. Your insider.</Text>
           <Text style={styles.salesPersuade}>
-            {`You ask. ${first} gets it done — hard-to-get tables, tickets, rides, and the nights you’d never find alone.`}
+            {`Go beyond recommendations. ${first} helps make things happen.`}
           </Text>
 
-          <View style={styles.distinctionBox}>
-            <Text style={styles.distinctionLabel}>Free vs Premium</Text>
-            <Text style={styles.distinction}>
-              {`${first}'s Athens (City Guide) is free discovery. Premium Insights is execution — ${first} actually helps get things done.`}
-            </Text>
+          <View style={styles.priceBlock}>
+            <Text style={styles.price}>{OCTOPUS_CONCIERGE_OFFER.priceLabel}</Text>
+            <Text style={styles.pricePeriod}>{OCTOPUS_CONCIERGE_OFFER.periodLabel}</Text>
           </View>
 
           <View style={styles.outcomeList}>
-            {(
-              [
-                `Tables and nights ${first} can actually open`,
-                'Tickets and entry handled end-to-end',
-                'Rides, transfers, and local errands coordinated',
-                'One ask — they run with it',
-              ] as const
-            ).map((line) => (
+            {compactBenefits.map((line) => (
               <Text key={line} style={styles.outcomeLine}>
                 {`· ${line}`}
               </Text>
             ))}
           </View>
 
-          <View style={styles.priceBlock}>
-            <Text style={styles.price}>{OCTOPUS_CONCIERGE_OFFER.priceLabel}</Text>
-            <Text style={styles.pricePeriod}>{OCTOPUS_CONCIERGE_OFFER.periodLabel}</Text>
-          </View>
-          <Text style={styles.unlockSupport}>{OCTOPUS_CONCIERGE_OFFER.unlockSupport}</Text>
-
-          <Pressable
-            style={[styles.unlockCta, checkoutBusy && styles.unlockCtaBusy]}
-            onPress={() => void onUnlock()}
-            disabled={checkoutBusy}
-            accessibilityRole="button"
-          >
-            <Text style={styles.unlockCtaText}>
-              {checkoutBusy ? "Processing…" : `Unlock ${first}'s Athens — ${OCTOPUS_CONCIERGE_OFFER.priceLabel}`}
-            </Text>
-          </Pressable>
+          {commerceReady ? (
+            <Pressable
+              style={[styles.unlockCta, checkoutBusy && styles.unlockCtaBusy]}
+              onPress={() => void onUnlock()}
+              disabled={checkoutBusy}
+              accessibilityRole="button"
+              testID="local-insider-unlock-cta"
+            >
+              <Text style={styles.unlockCtaText}>
+                {checkoutBusy
+                  ? "Processing…"
+                  : `Unlock Your Local Insider — ${OCTOPUS_CONCIERGE_OFFER.priceLabel}`}
+              </Text>
+            </Pressable>
+          ) : (
+            <View style={styles.distinctionBox} testID="local-insider-checkout-gated">
+              <Text style={styles.distinctionLabel}>Checkout unavailable</Text>
+              <Text style={styles.distinction}>
+                {entitlement?.detail ||
+                  "Purchases open after Workspace commerce and a verified stay are ready. City Guide and Ask Me stay free."}
+              </Text>
+            </View>
+          )}
 
           <Text style={styles.secureHint}>
-            Secure payment · unlocks only after payment confirms
+            Payment unlocks only after confirmation · third-party costs billed separately · terms in details
           </Text>
 
           {checkoutMsg ? <Text style={styles.checkoutMsg}>{checkoutMsg}</Text> : null}
-          {entitlement?.state === "unavailable" && entitlement.detail ? (
-            <Text style={styles.checkoutMsg}>{entitlement.detail}</Text>
-          ) : null}
 
           <Pressable onPress={() => void refreshEntitlement()} style={styles.verifyLink} accessibilityRole="button">
             <Text style={styles.verifyLinkText}>Already paid? Verify access</Text>
           </Pressable>
-
-          <Text style={styles.afterUnlockHint}>
-            After unlock you’ll see everything {first} can handle — restaurants, tickets, transfers, and more.
-          </Text>
         </ScrollView>
       </View>
     );

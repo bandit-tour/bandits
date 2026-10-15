@@ -303,35 +303,24 @@ export default function TripHomeScreen() {
         )}
       </View>
 
-      {/* 3 — Local banDits ecosystem lane (core of Home — not Neo alone) */}
+      {/* 3 — Diverse Local banDits (excludes featured hero — one primary Home appearance) */}
       <View testID="home-local-bandits-lane">
         <ExploreBanditLane
+          excludeBanditId={featured?.id ? String(featured.id) : null}
           onMeet={(id) => router.push(`/bandit/${encodeURIComponent(id)}` as Href)}
           onSeeAll={() => router.push('/bandits' as Href)}
         />
       </View>
 
-      {/* 4 — Today / what’s next */}
+      {/* 4 — Today / what’s next (no duplicate City Guide / routes for featured banDit) */}
       <View style={styles.section} testID="home-today">
         <Text style={styles.sectionKicker}>Today</Text>
         <Text style={styles.sectionTitle}>What’s next</Text>
         <SectionRow
-          title={featured ? `${first}'s City Guide` : 'Open City Guide'}
-          sub={featured ? `${first}'s places · ${first}'s voice` : 'Local places with a human voice'}
-          onPress={() =>
-            featured
-              ? router.push(`/cityGuide?banditId=${encodeURIComponent(featured.id)}` as Href)
-              : router.push('/cityGuide' as Href)
-          }
+          title="Explore places"
+          sub="Cafés, food, nightlife and shops near you"
+          onPress={() => router.push('/explore' as Href)}
         />
-        {featured ? (
-          <SectionRow
-            title={`${first}'s routes`}
-            sub="Walk the city through their night"
-            accent={color.ink}
-            onPress={() => router.push(`/vibe/${encodeURIComponent(featured.id)}` as Href)}
-          />
-        ) : null}
         <SectionRow
           title="Book with a host"
           sub="Experiences · real faces · tonight"

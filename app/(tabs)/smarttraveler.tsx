@@ -124,20 +124,16 @@ export function SmartTravelerScreen() {
     <ScrollView style={styles.screen} contentContainerStyle={styles.content}>
       <View style={styles.header}>
         <Text style={styles.title}>SmartTraveler</Text>
-        <Text style={styles.subtitle}>Places locals pass to each other.</Text>
-        <Text style={styles.lead}>
-          Independent shops, galleries, makers, cafés and bars chosen by local
-          banDits.
+        <Text style={styles.subtitle}>
+          Exclusive local discounts for guests of partner hotels. Discover handpicked places, unlock
+          your offer, and show your coupon code at the business.
         </Text>
-        {!stayPerks ? (
-          <Text style={[styles.lead, { marginTop: 8 }]}>
-            Browsing is open. Hotel-stay perks unlock when a stay is active
-            {!isFullStay ? " — activate a stay anytime from Menu." : "."}
-          </Text>
-        ) : null}
+        <Text style={styles.subtitleSecondary}>
+          Independent shops, galleries, makers, cafés and bars chosen by local banDits.
+        </Text>
         {showingDemo ? (
           <Text style={[styles.lead, { marginTop: 8 }]}>
-            A few curated samples while live finds load.
+            Sample listings while live partner offers load — not purchasable inventory.
           </Text>
         ) : null}
       </View>
@@ -311,6 +307,13 @@ const styles = StyleSheet.create({
     color: color.inkSoft,
     marginTop: 6,
     lineHeight: 22,
+  },
+  subtitleSecondary: {
+    fontSize: 13,
+    fontWeight: "500",
+    color: color.muted,
+    marginTop: 8,
+    lineHeight: 19,
   },
   lead: {
     fontSize: 13,

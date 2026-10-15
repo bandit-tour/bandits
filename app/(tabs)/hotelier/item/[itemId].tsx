@@ -1,12 +1,14 @@
-import { Stack, useLocalSearchParams, type Href } from "expo-router";
+import { Stack, useLocalSearchParams, useRouter, type Href } from "expo-router";
 import React, { useState } from "react";
 import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 
 import { useAppBackScreenOptions } from "@/hooks/useAppBackScreenOptions";
 import { HOTELIER_MODULES, type HotelierModuleId } from "@/lib/guest-workspace/hotelierDashboard";
+import { claimHotelOffer } from "@/lib/workspace/actions";
 
 /** Deep Hotelier item (dish / treatment / request) — Back → module. */
 export default function HotelierItemScreen() {
+  const router = useRouter();
   const { itemId, module, title, detail } = useLocalSearchParams<{
     itemId: string;
     module?: string;
@@ -19,12 +21,34 @@ export default function HotelierItemScreen() {
   const displayDetail = String(detail || "");
   const parent = isModule(moduleId) ? HOTELIER_MODULES[moduleId] : null;
   const [done, setDone] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   const screenOptions = useAppBackScreenOptions({
     title: displayTitle,
     fallback,
     showBack: true,
   });
+
+  const requestItem = () => {
+    if (busy || done) return;
+    setBusy(true);
+    setError(null);
+    void claimHotelOffer({
+      offerId: `item:${String(itemId || displayTitle)}`,
+      title: displayTitle,
+    }).then((r) => {
+      setBusy(false);
+      if (!r.ok) {
+        setError(
+          String(r.detail || "") ||
+            "This hotel action needs a verified stay. Use Connect My New Stay from More.",
+        );
+        return;
+      }
+      setDone(true);
+    });
+  };
 
   return (
     <ScrollView style={styles.screen} contentContainerStyle={styles.content}>
@@ -34,15 +58,32 @@ export default function HotelierItemScreen() {
       <Text style={styles.detail}>{displayDetail || "Guest-facing hotel service detail."}</Text>
       <View style={styles.card}>
         <Text style={styles.cardTitle}>For your stay</Text>
-        <Pressable style={styles.cta} onPress={() => setDone(true)}>
-          <Text style={styles.ctaText}>{done ? "Requested" : "Request this"}</Text>
+        <Pressable style={styles.cta} onPress={requestItem} disabled={busy || done}>
+          <Text style={styles.ctaText}>
+            {done ? "Requested" : busy ? "Sending…" : "Request this"}
+          </Text>
         </Pressable>
-        <Pressable style={styles.secondary} onPress={() => setDone(true)}>
-          <Text style={styles.secondaryText}>Add a special note</Text>
-        </Pressable>
-        <Pressable style={styles.secondary} onPress={() => setDone(true)}>
-          <Text style={styles.secondaryText}>Message reception</Text>
-        </Pressable>
+        {error ? (
+          <>
+            <Text style={styles.errorText}>{error}</Text>
+            <Pressable
+              style={styles.secondary}
+              onPress={() => router.push("/reactivateStay" as Href)}
+              testID="hotel-item-connect-stay"
+            >
+              <Text style={styles.secondaryText}>Connect My New Stay</Text>
+            </Pressable>
+          </>
+        ) : (
+          <>
+            <Pressable style={styles.secondary} onPress={requestItem} disabled={busy || done}>
+              <Text style={styles.secondaryText}>Add a special note</Text>
+            </Pressable>
+            <Pressable style={styles.secondary} onPress={requestItem} disabled={busy || done}>
+              <Text style={styles.secondaryText}>Message reception</Text>
+            </Pressable>
+          </>
+        )}
       </View>
     </ScrollView>
   );
@@ -83,4 +124,11 @@ const styles = StyleSheet.create({
   ctaText: { color: "#0A0908", fontWeight: "800" },
   secondary: { paddingVertical: 12, alignItems: "center" },
   secondaryText: { color: "#F0D7A0", fontWeight: "700" },
+  errorText: {
+    color: "#F0B0A0",
+    fontSize: 13,
+    lineHeight: 18,
+    marginBottom: 4,
+    textAlign: "center",
+  },
 });

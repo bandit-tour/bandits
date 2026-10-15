@@ -57,7 +57,7 @@ export default function UpperTabScreens({ active }: Props) {
       {pane("smarttraveler", <SmartTravelerScreen />)}
       {pane("bottle", <BottleProductScreen />)}
       {pane("shop", <ShopScreen />)}
-      {pane("banditeam", <BandiTeamHubScreen />)}
+      {pane("banditeam", <BandiTeamHubScreen tabActive={active === "banditeam"} />)}
     </View>
   );
 }

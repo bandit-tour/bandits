@@ -80,6 +80,7 @@ export function useAppBackScreenOptions({
   headerStyle,
   headerTintColor,
 }: AppBackScreenOptionsArgs): NativeStackNavigationOptions {
+  const navigation = useNavigation();
   const handleBack = useAppBackNavigation(fallback);
 
   useFocusEffect(
@@ -91,6 +92,16 @@ export function useAppBackScreenOptions({
       });
       return () => sub.remove();
     }, [handleBack, showBack]),
+  );
+
+  /** Clear stale titles (e.g. bandiTEAM) when leaving so the next screen never inherits them. */
+  useFocusEffect(
+    useCallback(() => {
+      navigation.setOptions({ title, headerShown });
+      return () => {
+        navigation.setOptions({ title: "", headerShown: false });
+      };
+    }, [headerShown, navigation, title]),
   );
 
   const mergedHeaderRight = useMemo((): NativeStackNavigationOptions["headerRight"] => {

@@ -27,6 +27,9 @@ import { eventHasVenueMediaSource, getSpotDetailHeroUri } from '@/lib/eventVenue
 import {
   fetchGooglePlacePhotoUrls,
   fetchTrustedPlaceIdPhotoUrls,
+  isDurableVenuePhotoUri,
+  isEphemeralPlacesMediaUrl,
+  isGooglePlacesDerivedPhotoUrl,
   normalizeEventImageUri,
 } from '@/lib/placePhoto';
 import { resolveApprovedListHeroUrisByEventId } from '@/lib/recommendationImages';
@@ -407,12 +410,20 @@ export function ExploreScreen({ tabActive }: ExploreScreenProps = {}) {
     return out;
   }, [filteredEvents, approvedHeroById, liveHeroByEventId]);
 
-  // City Guide parity: when stored heroes are expired Places resources, live-refresh
-  // from google_place_id via fetchTrustedPlaceIdPhotoUrls (no English name re-match).
+  // City Guide parity: when stored heroes are missing OR Google Places / non-durable
+  // (expired Places `/media` or legacy photo URLs that 400), live-refresh from
+  // google_place_id via fetchTrustedPlaceIdPhotoUrls (no English name re-match).
   useEffect(() => {
     if (!screenActive) return;
     let cancelled = false;
-    const needLive = filteredEvents.filter((e) => !getSpotDetailHeroUri(e) && !approvedHeroById[e.id]);
+    const needLive = filteredEvents.filter((e) => {
+      const approved = approvedHeroById[e.id];
+      if (approved && isDurableVenuePhotoUri(approved)) return false;
+      const stored = getSpotDetailHeroUri(e);
+      if (!stored) return true;
+      if (isEphemeralPlacesMediaUrl(stored) || isGooglePlacesDerivedPhotoUrl(stored)) return true;
+      return !isDurableVenuePhotoUri(stored);
+    });
     if (needLive.length === 0) return;
 
     void (async () => {

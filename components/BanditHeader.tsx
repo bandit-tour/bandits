@@ -476,6 +476,22 @@ function BanditHeaderImpl({
     </View>
   );
 
+  const cityGuidePhotoOverlay = (
+    <Pressable
+      onPress={openCityGuide}
+      style={styles.cityGuideOnPhoto}
+      accessibilityRole="button"
+      accessibilityLabel={`City Guide map · ${displayFirstName}`}
+      testID="bandit-city-guide-on-photo"
+      hitSlop={8}
+    >
+      <View style={styles.cityGuideOnPhotoInner} pointerEvents="none">
+        <BanditMiniMapPreview banditId={id} />
+        <Text style={styles.cityGuideOnPhotoLabel}>+ City Guide</Text>
+      </View>
+    </Pressable>
+  );
+
   const mobileGallery = (
     <View style={styles.mobileGalleryWrap}>
       <ScrollView
@@ -506,26 +522,23 @@ function BanditHeaderImpl({
           ))}
         </View>
       ) : null}
+      {cityGuidePhotoOverlay}
     </View>
   );
 
   return (
     <View style={styles.detailRoot}>
       <View style={[styles.detailHero, isDesktop && styles.detailHeroDesktop]}>
-        {/* City Guide map LEFT of personal photos (Stage 2 C1) — not below Routes. */}
-        <View style={styles.heroMediaRow}>
-          <Pressable
-            onPress={openMap}
-            style={styles.mapBesideGallery}
-            accessibilityRole="button"
-            accessibilityLabel="City map"
-            testID="bandit-city-map-left"
-          >
-            <BanditMiniMapPreview banditId={id} />
-          </Pressable>
-          <View style={[styles.galleryCol, isDesktop && styles.galleryColDesktop]}>
-            {isDesktop ? desktopGallery : mobileGallery}
-          </View>
+        {/* City Guide = corner overlay ON the profile photograph (owner QA). */}
+        <View style={[styles.galleryCol, isDesktop && styles.galleryColDesktop]}>
+          {isDesktop ? (
+            <View style={styles.desktopGalleryHost}>
+              {desktopGallery}
+              {cityGuidePhotoOverlay}
+            </View>
+          ) : (
+            mobileGallery
+          )}
         </View>
         <View style={[styles.identityCol, isDesktop && styles.identityColDesktop]}>
           {identityPanel}
@@ -956,16 +969,34 @@ const styles = StyleSheet.create({
     width: '100%',
     marginBottom: space.md,
   },
-  heroMediaRow: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    gap: 10,
+  desktopGalleryHost: {
     width: '100%',
-    paddingHorizontal: space.md,
+    height: '100%',
+    position: 'relative',
   },
-  mapBesideGallery: {
-    marginTop: 4,
-    flexShrink: 0,
+  cityGuideOnPhoto: {
+    position: 'absolute',
+    left: 10,
+    bottom: 14,
+    zIndex: 6,
+    borderRadius: 14,
+    overflow: 'hidden',
+    backgroundColor: 'rgba(0,0,0,0.55)',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.35)',
+    maxWidth: 132,
+  },
+  cityGuideOnPhotoInner: {
+    padding: 6,
+    alignItems: 'center',
+    gap: 4,
+  },
+  cityGuideOnPhotoLabel: {
+    color: '#FFFFFF',
+    fontSize: 11,
+    fontWeight: '800',
+    letterSpacing: 0.2,
+    paddingBottom: 2,
   },
   detailHero: {
     width: '100%',
@@ -1045,6 +1076,7 @@ const styles = StyleSheet.create({
   },
   mobileGalleryWrap: {
     width: '100%',
+    position: 'relative',
   },
   mobileGalleryScroll: {
     width: '100%',

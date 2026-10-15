@@ -86,7 +86,7 @@ export async function resolveOctopusConciergeEntitlement(input: {
       state: "unavailable",
       entitled: false,
       source: "none",
-      detail: "Commerce origin unset — set EXPO_PUBLIC_ORCHESTRA_OS_URL or WORKSPACE_URL",
+      detail: "Purchases aren’t available in this build yet. Your Local Insider stays free to browse — try again after Workspace commerce is connected.",
       expiresAt: null,
     };
   }
@@ -152,7 +152,7 @@ export type OctopusCheckoutResult =
     };
 
 /**
- * Start real Commerce checkout for Octopus Concierge (€29).
+ * Start real Commerce checkout for Octopus Concierge (€19).
  * Never marks entitlement ACTIVE locally — only Commerce ACTIVE unlocks Concierge OS.
  * Does not surface “payments not live” — always attempts checkout.
  */
@@ -177,7 +177,7 @@ export async function startOctopusConciergeCheckout(input: {
     return {
       ok: false,
       reason: "missing_origin",
-      detail: "Commerce origin not configured. Set EXPO_PUBLIC_ORCHESTRA_OS_URL to complete payment.",
+      detail: "Checkout isn’t ready yet. Connect a verified stay, then unlock Your Local Insider when payment is available.",
     };
   }
   if (!banditId) {

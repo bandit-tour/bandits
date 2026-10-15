@@ -77,7 +77,7 @@ const MENU_GROUPS_STAY: MenuGroup[] = [
       { key: "bookings", emoji: "🎫", title: "Bookings", href: "/bookings" },
       { key: "following", emoji: "👥", title: "Following", href: "/following" },
       { key: "spots", emoji: "♥", title: "My Spots", href: "/mySpots" },
-      { key: "premium", emoji: "⭐", title: "Premium Membership", href: "/account/membership" },
+      { key: "premium", emoji: "⭐", title: "Your Local Insider", href: "/account/membership" },
       { key: "bottle", emoji: "🍾", title: "Travel in a Bottle", href: "/travelBottle" },
       { key: "notif", emoji: "🔔", title: "Notifications", href: "/notifications" },
     ],
@@ -110,7 +110,7 @@ const MENU_GROUPS_STAY: MenuGroup[] = [
     cards: [
       { key: "profile", emoji: "👤", title: "See My Profile", href: "/my-profile" as Href },
       { key: "acct", emoji: "🔧", title: "Account Settings", href: "/account" },
-      { key: "premium", emoji: "⭐", title: "Premium Membership", href: "/account/membership" },
+      { key: "premium", emoji: "⭐", title: "Your Local Insider", href: "/account/membership" },
       { key: "pay", emoji: "💳", title: "Payments", href: "/account/payments" },
       { key: "lang", emoji: "🌍", title: "Language", href: "/account/language" },
       { key: "privacy", emoji: "🔒", title: "Privacy", href: "/account/privacy" },
@@ -135,7 +135,7 @@ const MENU_GROUPS_AFTER: MenuGroup[] = [
     cards: [
       { key: "following", emoji: "👥", title: "Following", href: "/following" },
       { key: "spots", emoji: "♥", title: "My Spots", href: "/mySpots" },
-      { key: "premium", emoji: "⭐", title: "Premium Membership", href: "/account/membership" },
+      { key: "premium", emoji: "⭐", title: "Your Local Insider", href: "/account/membership" },
       { key: "moments", emoji: "✨", title: "My Moments", href: "/myMoment" },
     ],
   },
@@ -304,7 +304,7 @@ export default function MenuScreen() {
 
   return (
     <View style={styles.screen}>
-      <Stack.Screen options={{ headerShown: false }} />
+      <Stack.Screen options={{ headerShown: false, title: "More" }} />
       <ScrollView
         style={styles.scroll}
         contentContainerStyle={[

@@ -1,0 +1,53 @@
+{
+  "status": "PASS",
+  "rows": [
+    {
+      "want": "Spook",
+      "name": "Spook",
+      "id": "87719c39-67ee-44ed-8737-8bbe70f2c73d",
+      "status": "LOAD_OK",
+      "httpStatus": 200,
+      "bytes": 320052
+    },
+    {
+      "want": "Ergon House",
+      "name": "Ergon House",
+      "id": "361a3390-89bb-4496-ad4c-2b7f0736bacf",
+      "status": "LOAD_OK",
+      "httpStatus": 200,
+      "bytes": 556926
+    },
+    {
+      "want": "Kick Cafe",
+      "name": "Kick Cafe",
+      "id": "b2ac2aa7-9b67-4332-9a62-5aabfc410afc",
+      "status": "LOAD_OK",
+      "httpStatus": 200,
+      "bytes": 2303185
+    },
+    {
+      "want": "Brunchers",
+      "name": "The Brunchers",
+      "id": "5aef456b-364a-426d-8d74-fa8bd881a658",
+      "status": "LOAD_OK",
+      "httpStatus": 200,
+      "bytes": 445448
+    },
+    {
+      "want": "Tragos",
+      "name": "Tragos Modern Kafeneio",
+      "id": "ef70510e-96f7-4710-9bc7-cc1bfce74b1a",
+      "status": "LOAD_OK",
+      "httpStatus": 200,
+      "bytes": 612200
+    },
+    {
+      "want": "Fixers",
+      "name": "Fixers Coffee",
+      "id": "6481eef5-21ef-4b7e-ade3-815b0e572108",
+      "status": "LOAD_OK",
+      "httpStatus": 200,
+      "bytes": 257868
+    }
+  ]
+}

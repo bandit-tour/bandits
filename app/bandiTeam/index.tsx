@@ -24,7 +24,12 @@ import { fetchScamAlerts, type ScamAlertRow } from '@/services/scamAlerts';
 
 const PREVIEW_MAX = 20;
 
-export default function BandiTeamHubScreen() {
+type HubProps = {
+  /** When hosted under Explore upper-rail, only apply header while this pane is active. */
+  tabActive?: boolean;
+};
+
+export default function BandiTeamHubScreen({ tabActive = true }: HubProps) {
   const router = useRouter();
   const { selectedCity } = useCity();
   const previewCity = useMemo(() => renderSafeText(selectedCity, '').trim(), [selectedCity]);
@@ -77,14 +82,15 @@ export default function BandiTeamHubScreen() {
   };
 
   const screenOptions = useAppBackScreenOptions({
-    title: 'bandiTEAM',
+    title: tabActive ? 'bandiTEAM' : '',
     fallback: '/menu',
     escapeShortcuts: true,
+    headerShown: tabActive,
   });
 
   return (
     <>
-      <Stack.Screen options={screenOptions} />
+      {tabActive ? <Stack.Screen options={screenOptions} /> : null}
       <ScrollView
         contentContainerStyle={styles.scroll}
         refreshControl={hubRefreshControl}
