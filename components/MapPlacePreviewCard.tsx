@@ -1,7 +1,7 @@
 import type { EventBanditRecommendation } from '@/app/services/events';
 import { Image as ExpoImage } from 'expo-image';
 import { repairDisplayText } from '@/lib/repairTextEncoding';
-import React from 'react';
+import React, { useState } from 'react';
 import { Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 
 type Props = {
@@ -31,6 +31,12 @@ export default function MapPlacePreviewCard({
   const cat = String(category || '').trim();
   const rate = typeof rating === 'number' && Number.isFinite(rating) ? rating : null;
   const avatar = bandits?.[0];
+  const [imageFailed, setImageFailed] = useState(false);
+  const showImage = Boolean(imageUri && /^https?:\/\//i.test(imageUri) && !imageFailed);
+
+  React.useEffect(() => {
+    setImageFailed(false);
+  }, [imageUri]);
 
   return (
     <Pressable
@@ -40,8 +46,13 @@ export default function MapPlacePreviewCard({
       accessibilityLabel={`Open ${name}`}
     >
       <View style={styles.media}>
-        {imageUri && /^https?:\/\//i.test(imageUri) ? (
-          <ExpoImage source={{ uri: imageUri }} style={styles.image} contentFit="cover" />
+        {showImage ? (
+          <ExpoImage
+            source={{ uri: imageUri! }}
+            style={styles.image}
+            contentFit="cover"
+            onError={() => setImageFailed(true)}
+          />
         ) : (
           <View style={[styles.image, styles.imageFallback]} />
         )}

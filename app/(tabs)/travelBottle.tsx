@@ -82,13 +82,19 @@ function JourneyMatchCard({
         style={({ pressed }) => pressed && styles.cardPressed}
       >
         <View style={[styles.heroFrame, width >= 360 && styles.heroFrameMin]}>
-          <ExpoImage
-            source={{ uri: second.imageUrl }}
-            style={styles.heroImage}
-            contentFit="cover"
-            transition={200}
-            priority="high"
-          />
+          {second.imageUrl && /^https?:\/\//i.test(second.imageUrl) ? (
+            <ExpoImage
+              source={{ uri: second.imageUrl }}
+              style={styles.heroImage}
+              contentFit="cover"
+              transition={200}
+              priority="high"
+            />
+          ) : (
+            <View style={[styles.heroImage, { backgroundColor: "#2A241C", alignItems: "center", justifyContent: "center" }]}>
+              <Text style={{ color: "#C4B8A0", fontWeight: "700", fontSize: 13 }}>Photo pending</Text>
+            </View>
+          )}
         </View>
 
         <View style={styles.cardBody}>

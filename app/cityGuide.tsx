@@ -274,23 +274,37 @@ export default function CityGuideScreen() {
   const cityGuideHeroUriById = useMemo(() => {
     const out: Record<string, string | null> = {};
     for (const e of filteredEvents) {
-      out[e.id] = getSpotDetailHeroUri(e) ?? liveHeroByEventId[e.id] ?? null;
+      const live = liveHeroByEventId[e.id];
+      if (live) {
+        out[e.id] = live;
+        continue;
+      }
+      out[e.id] = getSpotDetailHeroUri(e) ?? null;
     }
     return out;
   }, [filteredEvents, liveHeroByEventId]);
 
   useEffect(() => {
     let cancelled = false;
-    const needLive = filteredEvents.filter((e) => !getSpotDetailHeroUri(e));
+    const needLive = filteredEvents.filter((e) => {
+      if (liveHeroByEventId[e.id]) return false;
+      const stored = getSpotDetailHeroUri(e);
+      if (!stored) return true;
+      // Stored Places media often 200 in probes but fail in ExpoImage — refresh.
+      return /places\.googleapis\.com|maps\.googleapis\.com/i.test(stored);
+    });
     if (needLive.length === 0) return;
 
     void (async () => {
       const heroUpdates: Record<string, string> = {};
-      await Promise.all(
-        needLive.map(async (event) => {
+      for (let i = 0; i < needLive.length; i += 4) {
+        if (cancelled) return;
+        const batch = needLive.slice(i, i + 4);
+        for (const event of batch) {
+          if (cancelled) return;
           try {
             const placeId = (event as { google_place_id?: string | null }).google_place_id ?? null;
-            let urls = placeId ? await fetchTrustedPlaceIdPhotoUrls(placeId, 8) : [];
+            let urls = placeId ? await fetchTrustedPlaceIdPhotoUrls(placeId, 4) : [];
             if (urls.length === 0) {
               urls = await fetchGooglePlacePhotoUrls({
                 placeId,
@@ -298,29 +312,28 @@ export default function CityGuideScreen() {
                 address: String(event.address ?? ''),
                 city: String(event.city ?? ''),
                 neighborhood: String(event.neighborhood ?? ''),
-                limit: 8,
+                limit: 4,
               });
             }
             const cleaned = urls
               .map((u) => normalizeEventImageUri(u) ?? u)
               .filter((u) => /^https?:\/\//i.test(u));
-            if (cleaned.length === 0) return;
+            if (cleaned.length === 0) continue;
             heroUpdates[event.id] = cleaned[0];
           } catch {
             /* keep card without inventing stock */
           }
-        }),
-      );
-      if (cancelled) return;
-      if (Object.keys(heroUpdates).length > 0) {
-        setLiveHeroByEventId((prev) => ({ ...prev, ...heroUpdates }));
+        }
+        if (!cancelled && Object.keys(heroUpdates).length > 0) {
+          setLiveHeroByEventId((prev) => ({ ...prev, ...heroUpdates }));
+        }
       }
     })();
 
     return () => {
       cancelled = true;
     };
-  }, [filteredEvents]);
+  }, [filteredEvents, liveHeroByEventId]);
 
   useEffect(() => {
     if (activeRecommendationIndex >= filteredEvents.length) {

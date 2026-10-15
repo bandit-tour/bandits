@@ -304,14 +304,14 @@ export default function ExploreMapPanel({
             variant="horizontal"
             fillHorizontalCell
             showRecommendations
-            skipGooglePhotoFetch
             splitTouchTargets={Platform.OS !== 'web'}
             preloadedRecommendingBandits={banditsByEventId?.get(item.id) ?? []}
             onBanditPress={onBanditPress}
             banditId={banditId}
             resolvedRecommendationImageUri={heroUriByEventId?.[item.id] ?? null}
             recommendationHeroResolverReady
-            strictRecommendationImagePolicy
+            strictRecommendationImagePolicy={false}
+            skipGooglePhotoFetch={false}
             onPress={() => {
               applySelection(item.id, false, true);
               openSelected(item.id);

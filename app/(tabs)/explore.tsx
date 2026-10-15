@@ -27,6 +27,9 @@ import { eventHasVenueMediaSource, getSpotDetailHeroUri } from '@/lib/eventVenue
 import {
   fetchGooglePlacePhotoUrls,
   fetchTrustedPlaceIdPhotoUrls,
+  isDurableVenuePhotoUri,
+  isEphemeralPlacesMediaUrl,
+  isGooglePlacesDerivedPhotoUrl,
   normalizeEventImageUri,
 } from '@/lib/placePhoto';
 import { resolveApprovedListHeroUrisByEventId } from '@/lib/recommendationImages';
@@ -88,9 +91,13 @@ const ExploreEventRow = React.memo(function ExploreEventRow({
   onHeroUnavailable,
 }: ExploreRowProps) {
   const resolved = resolvedRecommendationImageUri ?? null;
-  // Skip per-card Places fetch when Explore already resolved a usable https hero
-  // (durable storage OR live-refreshed Places media from the list pipeline).
-  const skipGoogle = Boolean(resolved) && /^https?:\/\//i.test(resolved);
+  // Only skip per-card Places when parent already has a durable (non-Google-ephemeral) hero.
+  const skipGoogle =
+    Boolean(resolved) &&
+    /^https?:\/\//i.test(resolved!) &&
+    isDurableVenuePhotoUri(resolved) &&
+    !isEphemeralPlacesMediaUrl(resolved) &&
+    !isGooglePlacesDerivedPhotoUrl(resolved);
 
   return (
     <View style={[styles.cardWrap, columns > 1 && styles.cardWrapMulti]}>
@@ -398,20 +405,30 @@ export function ExploreScreen({ tabActive }: ExploreScreenProps = {}) {
   const resolvedRecommendationImageById = useMemo(() => {
     const out: Record<string, string | null> = {};
     for (const e of filteredEvents) {
-      out[e.id] =
-        approvedHeroById[e.id] ??
-        getSpotDetailHeroUri(e) ??
-        liveHeroByEventId[e.id] ??
-        null;
+      // Live Places refresh wins over stored ephemeral/Google URLs that probes may 200.
+      const live = liveHeroByEventId[e.id];
+      if (live) {
+        out[e.id] = live;
+        continue;
+      }
+      const approved = approvedHeroById[e.id];
+      if (approved && isDurableVenuePhotoUri(approved)) {
+        out[e.id] = approved;
+        continue;
+      }
+      const stored = getSpotDetailHeroUri(e);
+      if (stored && isDurableVenuePhotoUri(stored) && !isGooglePlacesDerivedPhotoUrl(stored)) {
+        out[e.id] = stored;
+        continue;
+      }
+      out[e.id] = stored ?? approved ?? null;
     }
     return out;
   }, [filteredEvents, approvedHeroById, liveHeroByEventId]);
 
   /**
-   * P0 freeze fix: never Promise.all Places Details for every Google-hosted URL.
-   * Stored Places `/media` heroes are shown first; EventCard recovers on error.
-   * List pipeline only fills rows that have **no** usable stored hero — max 4,
-   * sequential batches — so category switches stay responsive.
+   * Prefer durable heroes; live-refresh missing / ephemeral / Google-derived URLs.
+   * Sequential batches of 4 (no Promise.all storm) — drain until queue empty.
    */
   useEffect(() => {
     if (!screenActive) return;
@@ -419,42 +436,48 @@ export function ExploreScreen({ tabActive }: ExploreScreenProps = {}) {
     const needLive = filteredEvents.filter((e) => {
       if (liveHeroByEventId[e.id]) return false;
       const approved = approvedHeroById[e.id];
-      if (approved && /^https?:\/\//i.test(approved)) return false;
+      if (approved && isDurableVenuePhotoUri(approved) && !isGooglePlacesDerivedPhotoUrl(approved)) {
+        return false;
+      }
       const stored = getSpotDetailHeroUri(e);
-      return !stored;
+      if (!stored) return true;
+      if (isEphemeralPlacesMediaUrl(stored) || isGooglePlacesDerivedPhotoUrl(stored)) return true;
+      return !isDurableVenuePhotoUri(stored);
     });
     if (needLive.length === 0) return;
 
-    const batch = needLive.slice(0, 4);
     void (async () => {
       const heroUpdates: Record<string, string> = {};
-      for (const event of batch) {
+      for (let i = 0; i < needLive.length; i += 4) {
         if (cancelled) return;
-        try {
-          const placeId = (event as { google_place_id?: string | null }).google_place_id ?? null;
-          let urls = placeId ? await fetchTrustedPlaceIdPhotoUrls(placeId, 4) : [];
-          if (urls.length === 0) {
-            urls = await fetchGooglePlacePhotoUrls({
-              placeId,
-              name: String(event.name ?? ''),
-              address: String(event.address ?? ''),
-              city: String(event.city ?? ''),
-              neighborhood: String(event.neighborhood ?? ''),
-              limit: 4,
-            });
+        const batch = needLive.slice(i, i + 4);
+        for (const event of batch) {
+          if (cancelled) return;
+          try {
+            const placeId = (event as { google_place_id?: string | null }).google_place_id ?? null;
+            let urls = placeId ? await fetchTrustedPlaceIdPhotoUrls(placeId, 4) : [];
+            if (urls.length === 0) {
+              urls = await fetchGooglePlacePhotoUrls({
+                placeId,
+                name: String(event.name ?? ''),
+                address: String(event.address ?? ''),
+                city: String(event.city ?? ''),
+                neighborhood: String(event.neighborhood ?? ''),
+                limit: 4,
+              });
+            }
+            const cleaned = urls
+              .map((u) => normalizeEventImageUri(u) ?? u)
+              .filter((u) => /^https?:\/\//i.test(u));
+            if (cleaned.length === 0) continue;
+            heroUpdates[event.id] = cleaned[0];
+          } catch {
+            /* EventCard may still recover */
           }
-          const cleaned = urls
-            .map((u) => normalizeEventImageUri(u) ?? u)
-            .filter((u) => /^https?:\/\//i.test(u));
-          if (cleaned.length === 0) continue;
-          heroUpdates[event.id] = cleaned[0];
-        } catch {
-          /* EventCard may still recover */
         }
-      }
-      if (cancelled) return;
-      if (Object.keys(heroUpdates).length > 0) {
-        setLiveHeroByEventId((prev) => ({ ...prev, ...heroUpdates }));
+        if (!cancelled && Object.keys(heroUpdates).length > 0) {
+          setLiveHeroByEventId((prev) => ({ ...prev, ...heroUpdates }));
+        }
       }
     })();
 
@@ -669,7 +692,7 @@ export function ExploreScreen({ tabActive }: ExploreScreenProps = {}) {
             style={styles.listFlex}
             data={listEvents}
             key={`explore-list-${columns}`}
-            extraData={{ categoryChip, likesEpoch, banditsBulkVersion, resolvedRecommendationImageById }}
+            extraData={{ categoryChip, likesEpoch, banditsBulkVersion }}
             keyExtractor={keyExtractor}
             numColumns={columns}
             refreshControl={exploreRefreshControl}

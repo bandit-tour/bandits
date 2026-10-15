@@ -15,15 +15,17 @@ type Props = {
 };
 
 /**
- * Instant Explore-lane product switch. Stack routes stay in sync via router.replace.
- * Impact is More-only — not mounted in this rail host.
- * bandiTEAM mounts the full safety/community hub (Scam Alerts + report).
+ * Explore-lane host. Explore + Local banDits keep a warm mount (tabActive gate).
+ * Other rail products mount only while active — avoids JS contention freezes.
  */
 export default function UpperTabScreens({ active }: Props) {
-  const [visited, setVisited] = useState<Set<UpperTabKey>>(() => new Set(["explore"]));
+  const [visitedHeavy, setVisitedHeavy] = useState<Set<UpperTabKey>>(
+    () => new Set(["explore"]),
+  );
 
   useEffect(() => {
-    setVisited((prev) => {
+    if (active !== "explore" && active !== "bandits") return;
+    setVisitedHeavy((prev) => {
       if (prev.has(active)) return prev;
       const next = new Set(prev);
       next.add(active);
@@ -31,14 +33,14 @@ export default function UpperTabScreens({ active }: Props) {
     });
   }, [active]);
 
-  const tabsToMount = useMemo(() => {
-    const next = new Set(visited);
+  const heavyMounted = useMemo(() => {
+    const next = new Set(visitedHeavy);
     next.add(active);
     return next;
-  }, [active, visited]);
+  }, [active, visitedHeavy]);
 
-  const pane = (key: UpperTabKey, child: React.ReactNode) => {
-    if (!tabsToMount.has(key)) return null;
+  const heavyPane = (key: "explore" | "bandits", child: React.ReactNode) => {
+    if (!heavyMounted.has(key)) return null;
     return (
       <View
         style={[styles.pane, active === key ? styles.paneVisible : styles.paneHidden]}
@@ -49,15 +51,24 @@ export default function UpperTabScreens({ active }: Props) {
     );
   };
 
+  const activeOnly = (key: UpperTabKey, child: React.ReactNode) => {
+    if (active !== key) return null;
+    return (
+      <View style={[styles.pane, styles.paneVisible]} pointerEvents="auto">
+        {child}
+      </View>
+    );
+  };
+
   return (
     <View style={styles.host} pointerEvents="box-none" collapsable={false}>
-      {pane("explore", <ExploreScreen tabActive={active === "explore"} />)}
-      {pane("bandits", <BanditsScreen tabActive={active === "bandits"} />)}
-      {pane("experiences", <ExperiencesScreen />)}
-      {pane("smarttraveler", <SmartTravelerScreen />)}
-      {pane("bottle", <BottleProductScreen />)}
-      {pane("shop", <ShopScreen />)}
-      {pane("banditeam", <BandiTeamHubScreen tabActive={active === "banditeam"} />)}
+      {heavyPane("explore", <ExploreScreen tabActive={active === "explore"} />)}
+      {heavyPane("bandits", <BanditsScreen tabActive={active === "bandits"} />)}
+      {activeOnly("experiences", <ExperiencesScreen />)}
+      {activeOnly("smarttraveler", <SmartTravelerScreen />)}
+      {activeOnly("bottle", <BottleProductScreen />)}
+      {activeOnly("shop", <ShopScreen />)}
+      {activeOnly("banditeam", <BandiTeamHubScreen tabActive />)}
     </View>
   );
 }
