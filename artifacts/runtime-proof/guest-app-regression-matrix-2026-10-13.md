@@ -145,17 +145,17 @@ Login: `banditeam121275`. Build FINISHED ≠ physical PASS.
 |-------|--------|
 | Owner-cited FAIL SHA | **`dcd786a`** (broken RC — **do not retest**) |
 | Gate1 pair @ `52e878a` | iOS `5a1ad004…` / Android `8b5f2fd3…` — **never confirmed installed by owner** |
-| Recovery product SHA | **`cfdd68d`** |
+| Recovery product SHA | **`cfdd68d`** (P0 code) · EAS git **`02e9fe1`** (docs tip; same tree) |
 | Report | `artifacts/runtime-proof/rc-2026-10-15/emergency-native-recovery-report.md` |
 | P0 code | Home Between Trips trap removed; Explore InteractionManager defer removed; More spa emoji; Hotel/guest escapes → `/home` |
-| iOS EAS | _(pending)_ |
-| Android EAS | _(pending)_ |
+| iOS EAS | https://expo.dev/accounts/banditeam121275/projects/bandits/builds/07278794-6886-49f1-bd90-69d63993c799 · IPA https://expo.dev/artifacts/eas/9Gchf2rktttq64GoA9NB8kZ74Vy-yk0vODQrVJ1KZEk.ipa |
+| Android EAS | https://expo.dev/accounts/banditeam121275/projects/bandits/builds/2984ce18-987a-4d5f-a9d0-30140be4dbbf · APK https://expo.dev/artifacts/eas/bM2WRDQBD6TsQ5lqetqQXXUUiMUZQo-rv1wbA9p8GEo.apk |
 | Physical | **NOT VERIFIED** |
 | Verdict | **NO-GO** production · builds ≠ product proof |
 
-### Owner retest (recovery pair only)
+### Owner retest (recovery pair only — SAME-SHA `02e9fe1`)
 
-1. Delete app → install **new** SAME-SHA iOS+Android (not `dcd786a`, not Gate1 unless reissued).  
+1. Delete app → install **this** pair only (not `dcd786a`, not Gate1 `52e878a`).  
 2. Intro → Home; all bottom tabs; More (no eject); Explore categories/venues (no freeze); Hotel ← Home.  
 3. Story → Local banDit → Back/Home.  
 4. Report with **build detail URL + platform**.

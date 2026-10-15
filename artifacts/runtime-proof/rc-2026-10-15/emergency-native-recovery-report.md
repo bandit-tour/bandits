@@ -2,7 +2,7 @@
 
 **Branch:** `repair/guest-app-regression`  
 **Tip at diagnosis start:** `ca72b87` (docs) · product Gate1: `52e878a`  
-**Recovery product SHA:** `cfdd68d` (`cfdd68daef00525c71dc1025307a6affb73aec17`)  
+**Recovery product SHA:** `cfdd68d` (P0) · EAS gitCommitHash **`02e9fe1`** (docs tip; SAME-SHA both platforms)  
 **Baseline protected:** `6b2a346` (historical only — no pilot rollback)  
 **Customer:** https://bandits-two.vercel.app — **NO production deploy**  
 **Workspace:** https://banditour-workspace.vercel.app  
@@ -114,9 +114,17 @@ Separate: agent **cannot** claim physical parity. New recovery builds required a
 | `278be08` | Intro → `/home` + overlay unmount |
 | `52e878a` | Stage1 Story→banDit + overflow + escapes |
 | `ca72b87` | Coordination docs only |
-| `cfdd68d` | **Emergency P0 recovery** (this build SHA) |
+| `cfdd68d` | **Emergency P0 recovery** (product code) |
+| `02e9fe1` | Docs tip · **EAS SAME-SHA** iOS+Android |
 
 EAS login: `banditeam121275` · preview profile.
+
+| Platform | Build detail | Artifact | Status |
+|----------|--------------|----------|--------|
+| Android | https://expo.dev/accounts/banditeam121275/projects/bandits/builds/2984ce18-987a-4d5f-a9d0-30140be4dbbf | https://expo.dev/artifacts/eas/bM2WRDQBD6TsQ5lqetqQXXUUiMUZQo-rv1wbA9p8GEo.apk | **FINISHED** @ `02e9fe1` |
+| iOS | https://expo.dev/accounts/banditeam121275/projects/bandits/builds/07278794-6886-49f1-bd90-69d63993c799 | https://expo.dev/artifacts/eas/9Gchf2rktttq64GoA9NB8kZ74Vy-yk0vODQrVJ1KZEk.ipa | **FINISHED** @ `02e9fe1` |
+
+Build FINISHED ≠ physical PASS.
 
 ---
 
@@ -165,4 +173,4 @@ EAS login: `banditeam121275` · preview profile.
 
 **Physical:** still **NOT VERIFIED**. Do not claim PASS from this table alone.
 
-**EAS:** fill build IDs in matrix after FINISHED — same git SHA for both platforms.
+**EAS:** BOTH platforms **FINISHED** @ `02e9fe1` — Android APK + iOS IPA linked in §8. Physical **NOT VERIFIED**.
