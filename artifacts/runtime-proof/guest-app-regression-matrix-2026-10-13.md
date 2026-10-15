@@ -145,7 +145,7 @@ Login: `banditeam121275`. Build FINISHED ≠ physical PASS.
 |-------|--------|
 | Owner-cited FAIL SHA | **`dcd786a`** (broken RC — **do not retest**) |
 | Gate1 pair @ `52e878a` | iOS `5a1ad004…` / Android `8b5f2fd3…` — **never confirmed installed by owner** |
-| Recovery product SHA | _(filled after commit)_ |
+| Recovery product SHA | **`cfdd68d`** |
 | Report | `artifacts/runtime-proof/rc-2026-10-15/emergency-native-recovery-report.md` |
 | P0 code | Home Between Trips trap removed; Explore InteractionManager defer removed; More spa emoji; Hotel/guest escapes → `/home` |
 | iOS EAS | _(pending)_ |

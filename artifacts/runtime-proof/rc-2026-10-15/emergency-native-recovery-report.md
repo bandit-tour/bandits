@@ -2,7 +2,7 @@
 
 **Branch:** `repair/guest-app-regression`  
 **Tip at diagnosis start:** `ca72b87` (docs) · product Gate1: `52e878a`  
-**Recovery product SHA:** _(filled after commit — see matrix § Emergency recovery 15 Oct)_  
+**Recovery product SHA:** `cfdd68d` (`cfdd68daef00525c71dc1025307a6affb73aec17`)  
 **Baseline protected:** `6b2a346` (historical only — no pilot rollback)  
 **Customer:** https://bandits-two.vercel.app — **NO production deploy**  
 **Workspace:** https://banditour-workspace.vercel.app  
@@ -114,6 +114,7 @@ Separate: agent **cannot** claim physical parity. New recovery builds required a
 | `278be08` | Intro → `/home` + overlay unmount |
 | `52e878a` | Stage1 Story→banDit + overflow + escapes |
 | `ca72b87` | Coordination docs only |
+| `cfdd68d` | **Emergency P0 recovery** (this build SHA) |
 
 EAS login: `banditeam121275` · preview profile.
 
