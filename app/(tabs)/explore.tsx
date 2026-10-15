@@ -22,6 +22,7 @@ import { useScreenFocused } from '@/lib/useScreenFocused';
 import { useGuestLiveSurface } from '@/lib/orchestra/useGuestLiveSurface';
 import { usePremiumRefreshControl } from '@/lib/mobilePullToRefresh';
 import { navigateToBanditProfile, runSafeNavigation } from '@/lib/appNavigation';
+import { invalidateAppDataCache } from '@/lib/appDataCache';
 import { buildEventListImagePlan, type EventListImageScope } from '@/lib/eventListImagePlan';
 import { eventHasVenueMediaSource, getSpotDetailHeroUri } from '@/lib/eventVenueGallery';
 import {
@@ -279,6 +280,11 @@ export function ExploreScreen({ tabActive }: ExploreScreenProps = {}) {
       if (asRefresh) setRefreshing(true);
       setError(null);
       const cacheKey = exploreEventsCacheKey(selectedCity, banditId, selectedGenre);
+      const staleCached = readCacheStale<Event[]>(cacheKey) ?? [];
+      /** Empty arrays from pre-auth RLS misses must not block a real feed forever. */
+      if (Array.isArray(staleCached) && staleCached.length === 0) {
+        invalidateAppDataCache(cacheKey);
+      }
       const hadCache = (readCacheStale<Event[]>(cacheKey) ?? []).length > 0;
       if (!hadCache) setBackgroundLoading(true);
 
@@ -295,7 +301,7 @@ export function ExploreScreen({ tabActive }: ExploreScreenProps = {}) {
           setEvents(rows);
           setBackgroundLoading(false);
           setRefreshing(false);
-          if (!meta.fromCache) {
+          if (!meta.fromCache && rows.length > 0) {
             void persistExploreEventsSnapshot(cacheKey, rows);
           }
         },

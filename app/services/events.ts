@@ -1,6 +1,7 @@
 import { EVENT_GENRES } from '@/constants/Genres';
 import { getCachedAuthUser, invalidateAuthUserCache } from '@/lib/authUserCache';
 import { Database } from '@/lib/database.types';
+import { ensureAnonymousSession } from '@/lib/pilotSession';
 import { isAuthOrMissingError } from '@/lib/postgrestAuth';
 import { resolveGooglePlaceBusinessData } from '@/lib/placePhoto';
 import { supabase } from '@/lib/supabase';
@@ -149,6 +150,9 @@ export async function getEvents(filters: EventFilters = {}): Promise<Event[]> {
   let query;
   let data;
   let error;
+
+  /** RLS on `event` requires a traveler session — never query as logged-out anon. */
+  await ensureAnonymousSession().catch(() => undefined);
 
   // If bandit filter is applied, use the bandit_event linking table
   if (filters.banditId) {
