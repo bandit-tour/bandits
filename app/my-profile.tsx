@@ -1,7 +1,7 @@
 import { Image as ExpoImage } from 'expo-image';
 import { useFocusEffect } from '@react-navigation/native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { Stack, useRouter } from 'expo-router';
+import { Link, Stack, useRouter, type Href } from 'expo-router';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
@@ -21,7 +21,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { readGuestProfileLocal, writeGuestProfileLocal } from '@/lib/guestProfileLocal';
 import { getHotelWhiteLabelOrDefault } from '@/lib/hotelWhiteLabel';
 import { usePremiumRefreshControl } from '@/lib/mobilePullToRefresh';
-import { navigateAppBack, PLAY_MENU_HREF } from '@/lib/appNavigation';
+import { PLAY_MENU_HREF } from '@/lib/appNavigation';
 import { ensureAnonymousSession, getHotelEntry, syncPilotHotelProfileIfNeeded } from '@/lib/pilotSession';
 import { supabase } from '@/lib/supabase';
 import {
@@ -216,47 +216,44 @@ function ProfileInspirationStrip() {
 
 function ProfileBackHeaderButton() {
   const router = useRouter();
-  const onBack = useCallback(() => {
-    // Always return to More — never leave the Guest App shell.
-    try {
-      router.replace(PLAY_MENU_HREF);
-    } catch {
-      navigateAppBack(router, PLAY_MENU_HREF);
-    }
+  /** Link+replace is reliable on web; never stack-back out of the Guest shell. */
+  const goMore = useCallback(() => {
+    router.replace(PLAY_MENU_HREF);
   }, [router]);
   return (
-    <Pressable
-      onPress={onBack}
-      hitSlop={14}
-      style={({ pressed }) => [styles.navBackButton, pressed && { opacity: 0.7 }]}
-      testID="profile-back-button"
-      accessibilityRole="button"
-      accessibilityLabel="Back to More"
-    >
-      <Text style={styles.navBackText}>← Back</Text>
-    </Pressable>
+    <Link href={PLAY_MENU_HREF as Href} replace asChild>
+      <Pressable
+        onPress={goMore}
+        hitSlop={14}
+        style={({ pressed }) => [styles.navBackButton, pressed && { opacity: 0.7 }]}
+        testID="profile-back-button"
+        accessibilityRole="link"
+        accessibilityLabel="Back to More"
+      >
+        <Text style={styles.navBackText}>← Back</Text>
+      </Pressable>
+    </Link>
   );
 }
 
 function ProfileHomeHeaderButton() {
   const router = useRouter();
+  const goHome = useCallback(() => {
+    router.replace('/home' as Href);
+  }, [router]);
   return (
-    <Pressable
-      onPress={() => {
-        try {
-          router.replace('/home' as import('expo-router').Href);
-        } catch {
-          /* ignore */
-        }
-      }}
-      hitSlop={14}
-      style={({ pressed }) => [styles.navBackButton, pressed && { opacity: 0.7 }]}
-      testID="profile-home-button"
-      accessibilityRole="button"
-      accessibilityLabel="Home"
-    >
-      <Text style={styles.navBackText}>Home</Text>
-    </Pressable>
+    <Link href={'/home' as Href} replace asChild>
+      <Pressable
+        onPress={goHome}
+        hitSlop={14}
+        style={({ pressed }) => [styles.navBackButton, pressed && { opacity: 0.7 }]}
+        testID="profile-home-button"
+        accessibilityRole="link"
+        accessibilityLabel="Home"
+      >
+        <Text style={styles.navBackText}>Home</Text>
+      </Pressable>
+    </Link>
   );
 }
 
