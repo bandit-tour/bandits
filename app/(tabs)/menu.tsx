@@ -22,6 +22,7 @@ import { useGuestLifecycle } from "@/lib/guest-lifecycle/useGuestLifecycle";
 import { usePremiumRefreshControl } from "@/lib/mobilePullToRefresh";
 import { resolveMenuAuthSnapshot } from "@/lib/pilotDeskGate";
 import { getHotelEntry } from "@/lib/pilotSession";
+import { logNativeNav } from "@/lib/nativeNavLog";
 import { supabase } from "@/lib/supabase";
 
 const LOGO = require("@/assets/icons/logobanditourapp.png");
@@ -97,7 +98,7 @@ const MENU_GROUPS_STAY: MenuGroup[] = [
       { key: "room", emoji: "🚪", title: "Room Details", href: "/hotelier/stayInfo" },
       { key: "brk", emoji: "🍳", title: "Breakfast", href: "/hotelier/breakfast" },
       { key: "rest", emoji: "🍷", title: "Restaurant", href: "/hotelier/restaurant" },
-      { key: "spa", emoji: "💆", title: "Spa", href: "/hotelier/spa" },
+      { key: "spa", emoji: "✦", title: "Spa", href: "/hotelier/spa" },
       { key: "rs", emoji: "🔔", title: "Room Service", href: "/hotelier/roomService" },
       { key: "late", emoji: "⏰", title: "Late Checkout", href: "/hotelier/lateCheckout" },
       { key: "hev", emoji: "📅", title: "Hotel Events", href: "/hotelier/events" },
@@ -282,6 +283,7 @@ export default function MenuScreen() {
 
   const go = (href: Href) => {
     try {
+      logNativeNav("menu.go", { href: String(href) });
       router.push(href);
     } catch {
       /* ignore nav race */
@@ -290,7 +292,7 @@ export default function MenuScreen() {
 
   const onLogout = async () => {
     await safeSignOut();
-    router.replace("/bandits" as Href);
+    router.replace("/home" as Href);
   };
 
   const initials = guestName

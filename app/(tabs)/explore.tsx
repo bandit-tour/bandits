@@ -37,7 +37,6 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   ActivityIndicator,
   FlatList,
-  InteractionManager,
   Platform,
   Pressable,
   ScrollView,
@@ -503,10 +502,9 @@ export function ExploreScreen({ tabActive }: ExploreScreenProps = {}) {
       const trimmed = String(id || '').trim();
       if (!trimmed) return;
       logNativeNav('explore.bandit.press', { banditId: trimmed });
-      InteractionManager.runAfterInteractions(() => {
-        runSafeNavigation('explore-bandit-profile', () => {
-          navigateToBanditProfile(router, trimmed);
-        });
+      /** P0 Android: do not defer behind InteractionManager — feels like Explore freeze. */
+      runSafeNavigation('explore-bandit-profile', () => {
+        navigateToBanditProfile(router, trimmed);
       });
     },
     [router],

@@ -33,7 +33,7 @@ export default function BottleDiscoverScreen() {
 
   const header = useAppBackScreenOptions({
     title: session?.mode === "local_friend" ? "Local Friend" : "Moment",
-    fallback: "/bandits" as Href,
+    fallback: "/home" as Href,
     escapeShortcuts: true,
     headerTintColor: color.ink,
     headerStyle: { backgroundColor: color.surface },

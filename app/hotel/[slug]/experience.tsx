@@ -21,7 +21,7 @@ export default function HotelSlugExperienceScreen() {
     void (async () => {
       const done = await getAlumaOnboardingComplete();
       if (cancelled) return;
-      if (done) router.replace('/bandits');
+      if (done) router.replace('/home');
       else router.replace('/hotel/aluma-athens');
     })();
     return () => {

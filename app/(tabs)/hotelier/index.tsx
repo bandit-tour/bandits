@@ -226,7 +226,7 @@ export default function HotelierGuestHomeScreen() {
           }}
         />
         <Pressable
-          onPress={() => router.replace("/bandits" as Href)}
+          onPress={() => router.replace("/home" as Href)}
           style={styles.betweenTripsHomeLink}
           accessibilityRole="button"
           accessibilityLabel="Back to Home"

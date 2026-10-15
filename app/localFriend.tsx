@@ -181,7 +181,7 @@ export default function LocalFriendScreen() {
           <TouchableOpacity
             style={styles.exitButton}
             onPress={() => {
-              router.replace('/bandits');
+              router.replace('/home');
             }}
           >
             <Text style={styles.exitButtonText}>Back to Home</Text>

@@ -8,7 +8,7 @@
 **Production:** https://bandits-two.vercel.app — **NOT deployed** · **NO-GO**  
 **Modern tip verified:** `278be08` (owner typo `278be88` rejected)  
 **Stage1 fix SHA (install):** `52e878af3ea84f6bdb79186109972cb08be9450e`  
-**Updated:** 2026-10-14 — Gate 1 EAS **FINISHED** same-SHA iOS+Android @ `52e878a`. Coordination: `rc-2026-10-13/task-coordination-plan.md`. Stages 3–5 / onboarding **HOLD** until Gate 1 owner nav retest. Physical **NOT VERIFIED**
+**Updated:** 2026-10-15 — Emergency native recovery after owner FAIL on **`dcd786a`** (not Gate1 `52e878a`). Report: `rc-2026-10-15/emergency-native-recovery-report.md`. Stages 3–5 / onboarding **HOLD**. Physical **NOT VERIFIED**
 
 ## Status legend
 | Tag | Meaning |
@@ -133,6 +133,29 @@ Login: `banditeam121275`. Build FINISHED ≠ physical PASS.
 
 **Owner retest A–E:** Story↔banDit Back/Home; Neo photos/map/Octopus; tabs; no dead-end. Physical **NOT VERIFIED**.
 
-**HOLD until Gate 1:** Stages 3–5, onboarding impl, overlapping fix batches.  
+**HOLD until recovery physical PASS:** Stages 3–5, onboarding impl, overlapping fix batches.  
 **Workspace-BLOCKED:** TiB hotel multi-photo + SmartTraveler coupons.  
 **Coordination:** `artifacts/runtime-proof/rc-2026-10-13/task-coordination-plan.md`
+
+---
+
+## Emergency recovery 15 Oct 2026 — owner FAIL on `dcd786a`
+
+| Field | Value |
+|-------|--------|
+| Owner-cited FAIL SHA | **`dcd786a`** (broken RC — **do not retest**) |
+| Gate1 pair @ `52e878a` | iOS `5a1ad004…` / Android `8b5f2fd3…` — **never confirmed installed by owner** |
+| Recovery product SHA | _(filled after commit)_ |
+| Report | `artifacts/runtime-proof/rc-2026-10-15/emergency-native-recovery-report.md` |
+| P0 code | Home Between Trips trap removed; Explore InteractionManager defer removed; More spa emoji; Hotel/guest escapes → `/home` |
+| iOS EAS | _(pending)_ |
+| Android EAS | _(pending)_ |
+| Physical | **NOT VERIFIED** |
+| Verdict | **NO-GO** production · builds ≠ product proof |
+
+### Owner retest (recovery pair only)
+
+1. Delete app → install **new** SAME-SHA iOS+Android (not `dcd786a`, not Gate1 unless reissued).  
+2. Intro → Home; all bottom tabs; More (no eject); Explore categories/venues (no freeze); Hotel ← Home.  
+3. Story → Local banDit → Back/Home.  
+4. Report with **build detail URL + platform**.

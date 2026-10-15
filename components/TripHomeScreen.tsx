@@ -31,7 +31,6 @@ import {
 import { getBanditsWithTags } from '@/app/services/bandits';
 import ExploreBanditLane from '@/components/ExploreBanditLane';
 import LocalBanditOctopusIcon from '@/components/LocalBanditOctopusIcon';
-import { AfterTripHome } from '@/components/guest-lifecycle/AfterTripHome';
 import { useCity } from '@/contexts/CityContext';
 import { Database } from '@/lib/database.types';
 import { color, firstNameOf, shortIntro, space } from '@/lib/guestDesign';
@@ -95,8 +94,7 @@ export default function TripHomeScreen() {
   const router = useRouter();
   const { height } = useWindowDimensions();
   const { selectedCity } = useCity();
-  const { isAfterTrip, afterTripHome, state: lifeState, activeStay, isFullStay, refresh } =
-    useGuestLifecycle();
+  const { isAfterTrip, state: lifeState, activeStay, isFullStay, refresh } = useGuestLifecycle();
   const [hotel, setHotel] = useState<HotelEntry | null>(null);
   const [bandits, setBandits] = useState<Bandit[]>([]);
   const [loadingBandits, setLoadingBandits] = useState(true);
@@ -182,23 +180,10 @@ export default function TripHomeScreen() {
     }
   }, [lifeState]);
 
-  if (isAfterTrip && afterTripHome) {
-    return (
-      <ScrollView
-        style={styles.screen}
-        contentContainerStyle={{ paddingBottom: 48 }}
-        refreshControl={refreshControl}
-      >
-        <AfterTripHome
-          model={afterTripHome}
-          state={lifeState}
-          onPlanNextTrip={() => router.push('/travelBottle' as Href)}
-          onReactivate={() => router.push('/reactivateStay' as Href)}
-        />
-      </ScrollView>
-    );
-  }
-
+  /**
+   * P0: Home must NEVER trap in Between Trips (full AfterTripHome).
+   * Between Trips lives on Hotel tab; Home stays trip brain with a soft CTA.
+   */
   return (
     <ScrollView
       style={styles.screen}
@@ -206,6 +191,34 @@ export default function TripHomeScreen() {
       refreshControl={refreshControl}
       testID="trip-home-scroll"
     >
+      {isAfterTrip ? (
+        <View style={styles.betweenTripsBanner} testID="home-between-trips-banner">
+          <Text style={styles.betweenTripsKicker}>Between trips</Text>
+          <Text style={styles.betweenTripsTitle}>Your journey continues</Text>
+          <Text style={styles.betweenTripsLead}>
+            City memory and Connect My New Stay live under Hotel — Home stays open for discovery.
+          </Text>
+          <View style={styles.betweenTripsRow}>
+            <Pressable
+              style={({ pressed }) => [styles.betweenTripsBtn, pressed && styles.pressed]}
+              onPress={() => router.push('/hotelier' as Href)}
+              accessibilityRole="button"
+              accessibilityLabel="Open Between Trips on Hotel"
+            >
+              <Text style={styles.betweenTripsBtnText}>Open Between Trips</Text>
+            </Pressable>
+            <Pressable
+              style={({ pressed }) => [styles.betweenTripsBtnGhost, pressed && styles.pressed]}
+              onPress={() => router.push('/reactivateStay' as Href)}
+              accessibilityRole="button"
+              accessibilityLabel="Connect My New Stay"
+            >
+              <Text style={styles.betweenTripsBtnGhostText}>Connect My New Stay</Text>
+            </Pressable>
+          </View>
+        </View>
+      ) : null}
+
       {/* 1 — Destination / stay context (brand lives in GuestChromeBar) */}
       <View style={styles.contextBar} testID="home-destination-context">
         <View style={styles.contextLeft}>
@@ -501,6 +514,42 @@ export default function TripHomeScreen() {
 
 const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: '#0B0B0B' },
+  betweenTripsBanner: {
+    marginHorizontal: space.lg,
+    marginTop: 12,
+    marginBottom: 4,
+    padding: 14,
+    borderRadius: 14,
+    backgroundColor: '#1A1814',
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: 'rgba(240,215,160,0.35)',
+    gap: 8,
+  },
+  betweenTripsKicker: {
+    fontSize: 10,
+    fontWeight: '800',
+    letterSpacing: 0.8,
+    textTransform: 'uppercase',
+    color: 'rgba(240,215,160,0.9)',
+  },
+  betweenTripsTitle: { fontSize: 18, fontWeight: '800', color: '#FFF' },
+  betweenTripsLead: { fontSize: 13, lineHeight: 18, color: 'rgba(255,255,255,0.7)' },
+  betweenTripsRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 4 },
+  betweenTripsBtn: {
+    backgroundColor: color.brand,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    borderRadius: 10,
+  },
+  betweenTripsBtnText: { color: '#FFF', fontWeight: '800', fontSize: 13 },
+  betweenTripsBtnGhost: {
+    borderWidth: 1,
+    borderColor: 'rgba(240,215,160,0.55)',
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    borderRadius: 10,
+  },
+  betweenTripsBtnGhostText: { color: '#F0D7A0', fontWeight: '700', fontSize: 13 },
   contextBar: {
     backgroundColor: '#0B0B0B',
     paddingHorizontal: space.lg,

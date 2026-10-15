@@ -119,7 +119,7 @@ export default function QuickProfileScreen() {
     if (saving) return;
     setError(null);
     if (!isSupabaseConfigured()) {
-      router.replace('/bandits');
+      router.replace('/home');
       return;
     }
     setSaving(true);
@@ -138,7 +138,7 @@ export default function QuickProfileScreen() {
         hotelId,
         entrySource,
       });
-      router.replace('/bandits');
+      router.replace('/home');
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Could not save.');
     } finally {
