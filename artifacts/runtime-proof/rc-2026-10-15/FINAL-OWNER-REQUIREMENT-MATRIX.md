@@ -1,7 +1,7 @@
 # FINAL OWNER REQUIREMENT-BY-REQUIREMENT MATRIX — 15 Oct 2026
 
 **Branch:** `repair/guest-app-regression`  
-**Product tip (this RC):** _(filled after commit)_  
+**Product tip (this RC):** `d33cb57`  
 **Protected baseline (ancestor only):** `6b2a346` — not product target; no pilot rollback  
 **Canonical Guest App:** this Expo repo only (`@banditeam121275/bandits`)  
 **Production deploy:** **NOT DONE · NO-GO**  
