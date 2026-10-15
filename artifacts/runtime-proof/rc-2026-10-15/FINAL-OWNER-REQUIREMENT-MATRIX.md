@@ -1,7 +1,7 @@
 # FINAL OWNER REQUIREMENT-BY-REQUIREMENT MATRIX — 15 Oct 2026
 
 **Branch:** `repair/guest-app-regression`  
-**Product tip (this RC):** `d5f011d` (product batch `d33cb57` + matrix stamp)  
+**Product tip (this RC):** `4ba6f5a` (product batch `d33cb57`)  
 **Protected baseline (ancestor only):** `6b2a346` — not product target; no pilot rollback  
 **Canonical Guest App:** this Expo repo only (`@banditeam121275/bandits`)  
 **Production deploy:** **NOT DONE · NO-GO**  
@@ -88,23 +88,26 @@ Workspace handoffs: `workspace-handoffs.md` (same folder).
 
 ---
 
-## E. Release candidate (SAME-SHA)
+## E. Release candidate (SAME-SHA) — FINISHED
 
 | Field | Value |
 |-------|--------|
 | Build profile | EAS `preview` (internal) |
 | Env embedded | `EXPO_PUBLIC_WORKSPACE_URL` + `EXPO_PUBLIC_ORCHESTRA_OS_URL` → Workspace |
-| iOS detail | _(filled when EAS FINISHED)_ |
-| Android detail | _(filled when EAS FINISHED)_ |
-| gitCommitHash | Must match tip SHA on both |
+| gitCommitHash | **`4ba6f5a65eab8c557cdc183ab394ce3a2e371aa3`** (both platforms) |
+| Product batch | `d33cb57` |
+| iOS detail | https://expo.dev/accounts/banditeam121275/projects/bandits/builds/d3111fbf-ed7a-4977-96b5-8831a153f666 |
+| iOS IPA | https://expo.dev/artifacts/eas/4ExCsAATGLKwFJtmGkS3JJyuzic7hm0x4UPICqcyUII.ipa |
+| Android detail | https://expo.dev/accounts/banditeam121275/projects/bandits/builds/6039547d-a000-425a-ae1f-129b23413779 |
+| Android APK | https://expo.dev/artifacts/eas/Y0O6lNCM_kv6AfBCNB3vSzuOP-zTMqx3c-4CTVAS7ys.apk |
 | Physical | **NOT VERIFIED** |
 | Production | **NO-GO** without approval |
 
-### Owner install (after this RC FINISHED)
+### Owner install (this RC only)
 
 1. Delete installed app (clears intro + stale `dcd786a`).  
 2. Expo login `banditeam121275`.  
-3. Install **this** SAME-SHA pair only.  
+3. Install **this** SAME-SHA pair only (`4ba6f5a`).  
 4. Report with build URL + platform + SHA.
 
 ---
