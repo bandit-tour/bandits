@@ -182,11 +182,11 @@ export function ShopScreen() {
         </Text>
         {usingDemoFallback ? (
           <Text style={styles.demoLine} testID="shop-demo-label">
-            DEMO catalog — no published seller inventory in Workspace yet
+            Sample local finds for browsing — not available to buy yet
           </Text>
         ) : liveListings.length ? (
           <Text style={styles.liveLine} testID="shop-live-label">
-            Live from Workspace · {liveVia}
+            Nearby makers · {liveVia}
           </Text>
         ) : null}
       </View>

@@ -303,7 +303,7 @@ export function BanditsScreen({ tabActive }: BanditsScreenProps = {}) {
     <Pressable
       onPress={() => {
         void trackEvent({ eventName: 'city_memory_opened' });
-        router.push('/hotelier' as never);
+        router.push('/cityMemory' as never);
       }}
       style={{
         marginHorizontal: 16,

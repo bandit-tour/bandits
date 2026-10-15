@@ -15,7 +15,6 @@ import {
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
-import { AfterTripHome } from "@/components/guest-lifecycle/AfterTripHome";
 import {
   GUEST_STAY,
   HOTEL_CAMPAIGNS,
@@ -30,10 +29,6 @@ import {
   type HotelServiceCard,
   type HotelierModuleId,
 } from "@/lib/guest-workspace/hotelierDashboard";
-import {
-  transitionCheckout,
-  transitionStartTripPlanning,
-} from "@/lib/guest-lifecycle";
 import { useGuestLifecycle } from "@/lib/guest-lifecycle/useGuestLifecycle";
 import { liveHotelDisplayName, isIsolatedPlaySandboxSlug } from "@/lib/stay/liveHotelIdentity";
 import { imageFocusStyle } from "@/lib/imageRatios";
@@ -41,8 +36,8 @@ import { getHotelEntry } from "@/lib/pilotSession";
 import { radius } from "@/lib/guestDesign";
 
 /**
- * Hotelier guest home — personal stay companion.
- * AFTER_TRIP → City Memory (no Room / Breakfast / Late checkout).
+ * Guest Hotel tab — personal stay companion (not Hotelier OS staff).
+ * AFTER_TRIP → pause services + link to City Memory / Connect stay.
  * Compact hero + card grids; never hotel-ops KPIs or brochure banners.
  */
 export default function HotelierGuestHomeScreen() {
@@ -57,10 +52,7 @@ export default function HotelierGuestHomeScreen() {
     loading: lifeLoading,
     isFullStay,
     isAfterTrip,
-    state: lifeState,
-    afterTripHome,
     activeStay,
-    refresh: refreshLifecycle,
   } = useGuestLifecycle();
 
   const isMobile = width < 720;
@@ -205,8 +197,8 @@ export default function HotelierGuestHomeScreen() {
       ? require("@/assets/images/play-theatrou.png")
       : { uri: "https://images.unsplash.com/photo-1566073771259-6a8506099945?auto=format&fit=crop&w=1200&q=80" };
 
-  // AFTER_TRIP only — never hide in-stay / PRE_TRIP hotel companion behind City Memory.
-  if (!lifeLoading && isAfterTrip && afterTripHome) {
+  // AFTER_TRIP — Hotel tab pauses services; City Memory is its own traveler route.
+  if (!lifeLoading && isAfterTrip) {
     return (
       <ScrollView
         style={[styles.screenBetweenTrips, Platform.OS === "web" && styles.screenWeb]}
@@ -218,7 +210,7 @@ export default function HotelierGuestHomeScreen() {
       >
         <Stack.Screen
           options={{
-            title: "Between Trips",
+            title: "Hotel",
             headerStyle: { backgroundColor: "#F7F4EE" },
             headerTintColor: "#121212",
             headerLeft: () => null,
@@ -233,17 +225,41 @@ export default function HotelierGuestHomeScreen() {
         >
           <Text style={styles.betweenTripsHomeLinkText}>← Home</Text>
         </Pressable>
-        <AfterTripHome
-          model={afterTripHome}
-          state={lifeState}
-          onPlanNextTrip={() => {
-            void transitionStartTripPlanning({ intent: "Plan next trip" }).then(() => {
-              void refreshLifecycle();
-              router.push("/travelBottle" as Href);
-            });
+        <Text style={{ fontSize: 12, fontWeight: "800", color: "#6B5A3A", marginTop: 8 }}>
+          BETWEEN TRIPS
+        </Text>
+        <Text style={{ fontSize: 26, fontWeight: "800", color: "#121212", marginTop: 6 }}>
+          Hotel services pause
+        </Text>
+        <Text style={{ fontSize: 15, lineHeight: 22, color: "#444", marginTop: 10 }}>
+          Connect a verified stay to unlock room, breakfast and hotel requests. Your trip memory
+          lives separately.
+        </Text>
+        <Pressable
+          style={{
+            marginTop: 20,
+            backgroundColor: "#121212",
+            borderRadius: 14,
+            paddingVertical: 14,
+            alignItems: "center",
           }}
-          onReactivate={() => router.push("/reactivateStay" as Href)}
-        />
+          onPress={() => router.push("/reactivateStay" as Href)}
+        >
+          <Text style={{ color: "#FFF", fontWeight: "800" }}>Connect My New Stay</Text>
+        </Pressable>
+        <Pressable
+          style={{ marginTop: 12, paddingVertical: 12, alignItems: "center" }}
+          onPress={() => router.push("/cityMemory" as Href)}
+          testID="hotel-open-city-memory"
+        >
+          <Text style={{ color: "#121212", fontWeight: "700" }}>Open City Memory</Text>
+        </Pressable>
+        <Pressable
+          style={{ marginTop: 4, paddingVertical: 12, alignItems: "center" }}
+          onPress={() => router.push("/travelBottle" as Href)}
+        >
+          <Text style={{ color: "#6B5A3A", fontWeight: "700" }}>Plan next journey</Text>
+        </Pressable>
       </ScrollView>
     );
   }
@@ -262,7 +278,7 @@ export default function HotelierGuestHomeScreen() {
     >
       <Stack.Screen
         options={{
-          title: "Hotelier",
+          title: "Hotel",
           headerLeft: () => null,
           headerBackVisible: false,
         }}
@@ -276,17 +292,6 @@ export default function HotelierGuestHomeScreen() {
         <Text style={styles.identityMeta} numberOfLines={1}>
           {identityMeta || hotelName || "Your stay"}
         </Text>
-        <Pressable
-          onPress={() => {
-            void transitionCheckout({ confirmedByHotel: true }).then(() => refreshLifecycle());
-          }}
-          accessibilityRole="button"
-          style={{ marginTop: 8, alignSelf: "flex-start" }}
-        >
-          <Text style={{ fontSize: 12, fontWeight: "700", color: "#6B5A3A" }}>
-            Simulate checkout → After Trip
-          </Text>
-        </Pressable>
       </View>
 
       {/* Compact hero — section, not landing page */}

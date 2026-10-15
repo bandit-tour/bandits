@@ -48,7 +48,9 @@ export default function JourneyDetailScreen() {
   React.useEffect(() => {
     if (typeof id !== "string") return;
     void fetchLiveBottleStay(id).then((row) => {
-      if (row) setLiveMatch(mapWorkspaceBottleStay(row, hotelName));
+      if (!row) return;
+      const mapped = mapWorkspaceBottleStay(row, hotelName);
+      if (mapped) setLiveMatch(mapped);
     });
   }, [id, hotelName]);
 

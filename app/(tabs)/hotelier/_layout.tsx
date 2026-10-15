@@ -22,7 +22,7 @@ export default function HotelierLayout() {
       <Stack.Screen
         name="index"
         options={{
-          title: "Hotelier",
+          title: "Hotel",
           headerLeft: () => null,
           headerBackVisible: false,
         }}

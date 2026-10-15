@@ -32,9 +32,12 @@ function euros(cents: number) {
   return `From €${Math.round(cents / 100)}`;
 }
 
-export function mapWorkspaceBottleStay(row: WorkspaceBottleStay, hotelName?: string): BottleMatch {
+export function mapWorkspaceBottleStay(row: WorkspaceBottleStay, hotelName?: string): BottleMatch | null {
   const photos = (row.photos || []).filter((u) => /^https?:\/\//i.test(u));
-  const cover = row.coverPhoto && /^https?:\/\//i.test(row.coverPhoto) ? row.coverPhoto : photos[0] || DEFAULT_BOTTLE_HOTEL.imageUrl;
+  const cover =
+    row.coverPhoto && /^https?:\/\//i.test(row.coverPhoto) ? row.coverPhoto : photos[0] || "";
+  // No invented hotel/cabin stock — incomplete supplier photography stays out of bookable UI.
+  if (!cover) return null;
   const nights = 1;
   const typeLabel = (row.natureType || "cabin").replace(/_/g, " ");
   return {

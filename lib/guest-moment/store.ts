@@ -408,6 +408,14 @@ export async function loadMomentChatThread(threadId: string): Promise<MomentChat
   return map[threadId] || null;
 }
 
+/** Local Mode A threads for Chat inbox merge (durable notifications may lag). */
+export async function listMomentChatThreads(): Promise<MomentChatThread[]> {
+  const map = await readThreads();
+  return Object.values(map).sort(
+    (a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime(),
+  );
+}
+
 export async function appendMomentChatReply(threadId: string, body: string): Promise<MomentChatThread> {
   const map = await readThreads();
   const thread = map[threadId];

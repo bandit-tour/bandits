@@ -80,13 +80,27 @@ function threadKeyForRow(n: NotifRow): string | null {
     return `ask:${ref}`;
   }
 
+  /** Mode A Moments / bottle discover — must appear in Chat, not Notifications-only. */
+  if (
+    t === 'guest_moment' ||
+    rt === 'guest_moment_thread' ||
+    rt === 'guest_moment_discovery'
+  ) {
+    if (ref) return `moment:${ref}`;
+    return `moment-notif:${n.id}`;
+  }
+
   return null;
 }
 
 function titleForThread(n: NotifRow): string {
   const t = String(n.title || '').trim();
   if (t && !/^message in a bottle$/i.test(t) && t !== 'You') return t;
-  if (isLocalFriendBottleInboxType(n.type) || isSignalBottleInboxType(n.type)) {
+  if (
+    isLocalFriendBottleInboxType(n.type) ||
+    isSignalBottleInboxType(n.type) ||
+    String(n.type || '').trim() === 'guest_moment'
+  ) {
     return 'Message in a bottle';
   }
   return t || 'Chat';
@@ -213,7 +227,48 @@ export async function loadChatThreadSummaries(userId: string): Promise<ChatThrea
   const rows = ((data || []) as NotifRow[]).filter((n) => isEligibleChatRow(n, dismissed));
   let summaries = buildSummariesFromRows(rows);
   summaries = await mergeGuestBottleThreads(uid, summaries, dismissed);
+  summaries = await mergeLocalMomentThreads(summaries);
   return summaries;
+}
+
+/** Mode A bottle/moment threads stored locally must surface in Chat. */
+async function mergeLocalMomentThreads(
+  summaries: ChatThreadSummary[],
+): Promise<ChatThreadSummary[]> {
+  try {
+    const { listMomentChatThreads } = await import('@/lib/guest-moment/store');
+    const { GUEST_MOMENT_CHAT_TYPE, GUEST_MOMENT_THREAD_REF } = await import(
+      '@/lib/guest-moment/types'
+    );
+    const local = await listMomentChatThreads();
+    if (!local.length) return summaries;
+    const existing = new Set(summaries.map((s) => s.threadKey));
+    const extras: ChatThreadSummary[] = [];
+    for (const t of local) {
+      const key = `moment:${t.id}`;
+      if (existing.has(key)) continue;
+      const last = t.messages[t.messages.length - 1];
+      extras.push({
+        threadKey: key,
+        title: t.peer.displayName || 'Message in a bottle',
+        preview: last?.body || t.openingQuote || 'Message in a bottle',
+        lastAt: t.updatedAt,
+        unreadCount: 0,
+        openNotificationId: t.id,
+        openNotificationType: GUEST_MOMENT_CHAT_TYPE,
+        openReferenceId: t.id,
+        openReferenceType: GUEST_MOMENT_THREAD_REF,
+        openTitle: t.peer.displayName || 'Message in a bottle',
+        openMessage: t.openingQuote || '',
+      });
+    }
+    if (!extras.length) return summaries;
+    return [...extras, ...summaries].sort(
+      (a, b) => new Date(b.lastAt).getTime() - new Date(a.lastAt).getTime(),
+    );
+  } catch {
+    return summaries;
+  }
 }
 
 export async function loadChatTabUnreadCount(userId: string): Promise<number> {

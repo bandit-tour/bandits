@@ -27,9 +27,6 @@ import { eventHasVenueMediaSource, getSpotDetailHeroUri } from '@/lib/eventVenue
 import {
   fetchGooglePlacePhotoUrls,
   fetchTrustedPlaceIdPhotoUrls,
-  isDurableVenuePhotoUri,
-  isEphemeralPlacesMediaUrl,
-  isGooglePlacesDerivedPhotoUrl,
   normalizeEventImageUri,
 } from '@/lib/placePhoto';
 import { resolveApprovedListHeroUrisByEventId } from '@/lib/recommendationImages';
@@ -410,49 +407,51 @@ export function ExploreScreen({ tabActive }: ExploreScreenProps = {}) {
     return out;
   }, [filteredEvents, approvedHeroById, liveHeroByEventId]);
 
-  // City Guide parity: when stored heroes are missing OR Google Places / non-durable
-  // (expired Places `/media` or legacy photo URLs that 400), live-refresh from
-  // google_place_id via fetchTrustedPlaceIdPhotoUrls (no English name re-match).
+  /**
+   * P0 freeze fix: never Promise.all Places Details for every Google-hosted URL.
+   * Stored Places `/media` heroes are shown first; EventCard recovers on error.
+   * List pipeline only fills rows that have **no** usable stored hero — max 4,
+   * sequential batches — so category switches stay responsive.
+   */
   useEffect(() => {
     if (!screenActive) return;
     let cancelled = false;
     const needLive = filteredEvents.filter((e) => {
+      if (liveHeroByEventId[e.id]) return false;
       const approved = approvedHeroById[e.id];
-      if (approved && isDurableVenuePhotoUri(approved)) return false;
+      if (approved && /^https?:\/\//i.test(approved)) return false;
       const stored = getSpotDetailHeroUri(e);
-      if (!stored) return true;
-      if (isEphemeralPlacesMediaUrl(stored) || isGooglePlacesDerivedPhotoUrl(stored)) return true;
-      return !isDurableVenuePhotoUri(stored);
+      return !stored;
     });
     if (needLive.length === 0) return;
 
+    const batch = needLive.slice(0, 4);
     void (async () => {
       const heroUpdates: Record<string, string> = {};
-      await Promise.all(
-        needLive.map(async (event) => {
-          try {
-            const placeId = (event as { google_place_id?: string | null }).google_place_id ?? null;
-            let urls = placeId ? await fetchTrustedPlaceIdPhotoUrls(placeId, 8) : [];
-            if (urls.length === 0) {
-              urls = await fetchGooglePlacePhotoUrls({
-                placeId,
-                name: String(event.name ?? ''),
-                address: String(event.address ?? ''),
-                city: String(event.city ?? ''),
-                neighborhood: String(event.neighborhood ?? ''),
-                limit: 8,
-              });
-            }
-            const cleaned = urls
-              .map((u) => normalizeEventImageUri(u) ?? u)
-              .filter((u) => /^https?:\/\//i.test(u));
-            if (cleaned.length === 0) return;
-            heroUpdates[event.id] = cleaned[0];
-          } catch {
-            /* keep card without inventing stock — EventCard may still recover */
+      for (const event of batch) {
+        if (cancelled) return;
+        try {
+          const placeId = (event as { google_place_id?: string | null }).google_place_id ?? null;
+          let urls = placeId ? await fetchTrustedPlaceIdPhotoUrls(placeId, 4) : [];
+          if (urls.length === 0) {
+            urls = await fetchGooglePlacePhotoUrls({
+              placeId,
+              name: String(event.name ?? ''),
+              address: String(event.address ?? ''),
+              city: String(event.city ?? ''),
+              neighborhood: String(event.neighborhood ?? ''),
+              limit: 4,
+            });
           }
-        }),
-      );
+          const cleaned = urls
+            .map((u) => normalizeEventImageUri(u) ?? u)
+            .filter((u) => /^https?:\/\//i.test(u));
+          if (cleaned.length === 0) continue;
+          heroUpdates[event.id] = cleaned[0];
+        } catch {
+          /* EventCard may still recover */
+        }
+      }
       if (cancelled) return;
       if (Object.keys(heroUpdates).length > 0) {
         setLiveHeroByEventId((prev) => ({ ...prev, ...heroUpdates }));
@@ -462,7 +461,7 @@ export function ExploreScreen({ tabActive }: ExploreScreenProps = {}) {
     return () => {
       cancelled = true;
     };
-  }, [screenActive, filteredEventIdsKey, filteredEvents, approvedHeroById]);
+  }, [screenActive, filteredEventIdsKey, filteredEvents, approvedHeroById, liveHeroByEventId]);
 
   useEffect(() => {
     if (viewMode !== 'map') return;

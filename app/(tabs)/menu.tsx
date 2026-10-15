@@ -54,7 +54,7 @@ const QUICK_ACTIONS_STAY: { key: string; title: string; subtitle: string; emoji:
 ];
 
 const QUICK_ACTIONS_AFTER: { key: string; title: string; subtitle: string; emoji: string; href: Href }[] = [
-  { key: "memory", title: "City Memory", subtitle: "Between trips home", emoji: "🧭", href: "/hotelier" },
+  { key: "memory", title: "City Memory", subtitle: "Your trip memory", emoji: "🧭", href: "/cityMemory" as Href },
   { key: "bottle", title: "Next journey", subtitle: "Travel in a Bottle", emoji: "🌲", href: "/travelBottle" },
   { key: "lf", title: "Local Friend", subtitle: "Meet someone local", emoji: "💬", href: "/localFriend" },
   { key: "alerts", title: "Safety alerts", subtitle: "bandiTEAM", emoji: "⚠", href: "/scam-alerts" },
@@ -124,7 +124,7 @@ const MENU_GROUPS_AFTER: MenuGroup[] = [
     id: "memory",
     title: "City Memory",
     cards: [
-      { key: "memory", emoji: "🧭", title: "Between Trips Home", href: "/hotelier" },
+      { key: "memory", emoji: "🧭", title: "City Memory", href: "/cityMemory" as Href },
       { key: "bottle", emoji: "🍾", title: "Travel in a Bottle", href: "/travelBottle" },
       { key: "reactivate", emoji: "🔑", title: "Connect My New Stay", href: "/reactivateStay" },
     ],

@@ -400,20 +400,7 @@ function BanditHeaderImpl({
             </Pressable>
           ) : null}
 
-          <Pressable
-            style={({ pressed, hovered }: any) => [
-              styles.journeyChapter,
-              (pressed || hovered) && styles.btnPressed,
-            ]}
-            onPress={openCityGuide}
-            accessibilityRole="button"
-            accessibilityLabel={`City Guide · ${displayFirstName}'s Athens`}
-          >
-            <Text style={styles.journeyChapterEyebrow}>City Guide</Text>
-            <Text style={styles.athensBtnText}>{`${displayFirstName}'s Athens`}</Text>
-            <Text style={styles.athensBtnSub}>{`Photo-led places ${displayFirstName} actually goes`}</Text>
-          </Pressable>
-
+          {/* City Guide entry = photo overlay only (owner QA). Compact Routes below. */}
           <Pressable
             style={({ pressed, hovered }: any) => [
               styles.journeyChapter,
@@ -422,10 +409,11 @@ function BanditHeaderImpl({
             onPress={() => router.push(`/vibe/${encodeURIComponent(String(id))}` as any)}
             accessibilityRole="button"
             accessibilityLabel="Routes"
+            testID="bandit-routes-entry"
           >
             <Text style={styles.journeyChapterEyebrow}>Routes</Text>
             <Text style={styles.athensBtnText}>{`${displayFirstName}'s route`}</Text>
-            <Text style={styles.athensBtnSub}>Photographic stops — not a map dump</Text>
+            <Text style={styles.athensBtnSub}>Photographic stops</Text>
           </Pressable>
 
           {/* Your Local Insider — eligible only; guest-facing name (not “Premium Insights”). */}

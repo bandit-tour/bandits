@@ -125,15 +125,14 @@ export function SmartTravelerScreen() {
       <View style={styles.header}>
         <Text style={styles.title}>SmartTraveler</Text>
         <Text style={styles.subtitle}>
-          Exclusive local discounts for guests of partner hotels. Discover handpicked places, unlock
-          your offer, and show your coupon code at the business.
+          Secret local discounts for partner-hotel guests — show your code at the door.
         </Text>
         <Text style={styles.subtitleSecondary}>
-          Independent shops, galleries, makers, cafés and bars chosen by local banDits.
+          Cafés, shops and makers locals actually recommend.
         </Text>
         {showingDemo ? (
           <Text style={[styles.lead, { marginTop: 8 }]}>
-            Sample listings while live partner offers load — not purchasable inventory.
+            Sample places for browsing — offers unlock with a partner stay.
           </Text>
         ) : null}
       </View>

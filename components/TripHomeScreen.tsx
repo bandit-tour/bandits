@@ -194,18 +194,15 @@ export default function TripHomeScreen() {
       {isAfterTrip ? (
         <View style={styles.betweenTripsBanner} testID="home-between-trips-banner">
           <Text style={styles.betweenTripsKicker}>Between trips</Text>
-          <Text style={styles.betweenTripsTitle}>Your journey continues</Text>
-          <Text style={styles.betweenTripsLead}>
-            City memory and Connect My New Stay live under Hotel — Home stays open for discovery.
-          </Text>
+          <Text style={styles.betweenTripsTitle}>Keep discovering</Text>
           <View style={styles.betweenTripsRow}>
             <Pressable
               style={({ pressed }) => [styles.betweenTripsBtn, pressed && styles.pressed]}
-              onPress={() => router.push('/hotelier' as Href)}
+              onPress={() => router.push('/cityMemory' as Href)}
               accessibilityRole="button"
-              accessibilityLabel="Open Between Trips on Hotel"
+              accessibilityLabel="Open City Memory"
             >
-              <Text style={styles.betweenTripsBtnText}>Open Between Trips</Text>
+              <Text style={styles.betweenTripsBtnText}>City Memory</Text>
             </Pressable>
             <Pressable
               style={({ pressed }) => [styles.betweenTripsBtnGhost, pressed && styles.pressed]}
@@ -213,7 +210,7 @@ export default function TripHomeScreen() {
               accessibilityRole="button"
               accessibilityLabel="Connect My New Stay"
             >
-              <Text style={styles.betweenTripsBtnGhostText}>Connect My New Stay</Text>
+              <Text style={styles.betweenTripsBtnGhostText}>Connect stay</Text>
             </Pressable>
           </View>
         </View>
@@ -329,36 +326,18 @@ export default function TripHomeScreen() {
         />
       </View>
 
-      {/* 5 — Hotel signals */}
+      {/* 5 — Stay (single compact entry — no jargon) */}
       <View style={[styles.section, styles.sectionAlt]} testID="home-hotel-signals">
-        <Text style={styles.sectionKicker}>Your stay</Text>
-        <Text style={styles.sectionTitle}>Hotel signals</Text>
+        <Text style={styles.sectionKicker}>Stay</Text>
         <SectionRow
           title={hotelName}
-          sub={
-            isFullStay
-              ? `${roomLabel || 'Room'} · breakfast · events · late checkout`
-              : 'Stay services · welcome · activate when ready'
-          }
+          sub={isFullStay ? `${roomLabel || 'Your room'} · hotel services` : 'Connect a stay when you’re ready'}
           accent="#1A3A4A"
-          onPress={() => router.push('/hotelier' as Href)}
-          testLabel="Open hotelier"
+          onPress={() =>
+            router.push((isFullStay ? '/hotelier' : '/reactivateStay') as Href)
+          }
+          testLabel="Open hotel"
         />
-        {isFullStay ? (
-          <SectionRow
-            title="Hotel events today"
-            sub="What’s on at the property"
-            accent="#2A4A3A"
-            onPress={() => router.push('/hotelier/events' as Href)}
-          />
-        ) : (
-          <SectionRow
-            title="Activate stay"
-            sub="Unlock hotel privileges for this trip"
-            accent="#2A4A3A"
-            onPress={() => router.push('/reactivateStay' as Href)}
-          />
-        )}
       </View>
 
       {/* 6 — Safety / bandiTEAM (preview — does NOT replace top-rail bandiTEAM) */}

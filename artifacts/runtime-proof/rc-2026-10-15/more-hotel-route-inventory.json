@@ -1,0 +1,414 @@
+{
+  "generatedAt": "2026-10-15T15:45:33.593Z",
+  "cityMemoryRoutesToTravelerMemory": true,
+  "moreActions": [
+    {
+      "surface": "more",
+      "key": "stay",
+      "title": "Continue My Stay",
+      "href": "/hotelier/stayInfo"
+    },
+    {
+      "surface": "more",
+      "key": "lf",
+      "title": "Local Friend",
+      "href": "/localFriend"
+    },
+    {
+      "surface": "more",
+      "key": "alerts",
+      "title": "Safety alerts",
+      "href": "/scam-alerts"
+    },
+    {
+      "surface": "more",
+      "key": "impact",
+      "title": "Impact / Passport",
+      "href": "/impact"
+    },
+    {
+      "surface": "more",
+      "key": "notif",
+      "title": "Notifications",
+      "href": "/notifications"
+    },
+    {
+      "surface": "more",
+      "key": "memory",
+      "title": "City Memory",
+      "href": "/cityMemory"
+    },
+    {
+      "surface": "more",
+      "key": "bottle",
+      "title": "Next journey",
+      "href": "/travelBottle"
+    },
+    {
+      "surface": "more",
+      "key": "lf",
+      "title": "Local Friend",
+      "href": "/localFriend"
+    },
+    {
+      "surface": "more",
+      "key": "alerts",
+      "title": "Safety alerts",
+      "href": "/scam-alerts"
+    },
+    {
+      "surface": "more",
+      "key": "impact",
+      "title": "Impact / Passport",
+      "href": "/impact"
+    },
+    {
+      "surface": "more",
+      "key": "spots",
+      "title": "My Spots",
+      "href": "/mySpots"
+    },
+    {
+      "surface": "more",
+      "key": "reactivate",
+      "title": "Connect My New Stay",
+      "href": "/reactivateStay"
+    },
+    {
+      "surface": "more",
+      "key": "lf",
+      "title": "Local Friend",
+      "href": "/localFriend"
+    },
+    {
+      "surface": "more",
+      "key": "impact",
+      "title": "Impact / Passport",
+      "href": "/impact"
+    },
+    {
+      "surface": "more",
+      "key": "bookings",
+      "title": "Bookings",
+      "href": "/bookings"
+    },
+    {
+      "surface": "more",
+      "key": "following",
+      "title": "Following",
+      "href": "/following"
+    },
+    {
+      "surface": "more",
+      "key": "spots",
+      "title": "My Spots",
+      "href": "/mySpots"
+    },
+    {
+      "surface": "more",
+      "key": "premium",
+      "title": "Your Local Insider",
+      "href": "/account/membership"
+    },
+    {
+      "surface": "more",
+      "key": "bottle",
+      "title": "Travel in a Bottle",
+      "href": "/travelBottle"
+    },
+    {
+      "surface": "more",
+      "key": "notif",
+      "title": "Notifications",
+      "href": "/notifications"
+    },
+    {
+      "surface": "more",
+      "key": "see-reports",
+      "title": "See Reports",
+      "href": "/scam-alerts"
+    },
+    {
+      "surface": "more",
+      "key": "upload-report",
+      "title": "Upload Report",
+      "href": "/bandiTeam/report"
+    },
+    {
+      "surface": "more",
+      "key": "hotel",
+      "title": "Current Hotel",
+      "href": "/hotelier/welcome"
+    },
+    {
+      "surface": "more",
+      "key": "room",
+      "title": "Room Details",
+      "href": "/hotelier/stayInfo"
+    },
+    {
+      "surface": "more",
+      "key": "brk",
+      "title": "Breakfast",
+      "href": "/hotelier/breakfast"
+    },
+    {
+      "surface": "more",
+      "key": "rest",
+      "title": "Restaurant",
+      "href": "/hotelier/restaurant"
+    },
+    {
+      "surface": "more",
+      "key": "spa",
+      "title": "Spa",
+      "href": "/hotelier/spa"
+    },
+    {
+      "surface": "more",
+      "key": "rs",
+      "title": "Room Service",
+      "href": "/hotelier/roomService"
+    },
+    {
+      "surface": "more",
+      "key": "late",
+      "title": "Late Checkout",
+      "href": "/hotelier/lateCheckout"
+    },
+    {
+      "surface": "more",
+      "key": "hev",
+      "title": "Hotel Events",
+      "href": "/hotelier/events"
+    },
+    {
+      "surface": "more",
+      "key": "profile",
+      "title": "See My Profile",
+      "href": "/my-profile"
+    },
+    {
+      "surface": "more",
+      "key": "acct",
+      "title": "Account Settings",
+      "href": "/account"
+    },
+    {
+      "surface": "more",
+      "key": "premium",
+      "title": "Your Local Insider",
+      "href": "/account/membership"
+    },
+    {
+      "surface": "more",
+      "key": "pay",
+      "title": "Payments",
+      "href": "/account/payments"
+    },
+    {
+      "surface": "more",
+      "key": "lang",
+      "title": "Language",
+      "href": "/account/language"
+    },
+    {
+      "surface": "more",
+      "key": "privacy",
+      "title": "Privacy",
+      "href": "/account/privacy"
+    },
+    {
+      "surface": "more",
+      "key": "help",
+      "title": "Help",
+      "href": "/account/faq"
+    },
+    {
+      "surface": "more",
+      "key": "memory",
+      "title": "City Memory",
+      "href": "/cityMemory"
+    },
+    {
+      "surface": "more",
+      "key": "bottle",
+      "title": "Travel in a Bottle",
+      "href": "/travelBottle"
+    },
+    {
+      "surface": "more",
+      "key": "reactivate",
+      "title": "Connect My New Stay",
+      "href": "/reactivateStay"
+    },
+    {
+      "surface": "more",
+      "key": "following",
+      "title": "Following",
+      "href": "/following"
+    },
+    {
+      "surface": "more",
+      "key": "spots",
+      "title": "My Spots",
+      "href": "/mySpots"
+    },
+    {
+      "surface": "more",
+      "key": "premium",
+      "title": "Your Local Insider",
+      "href": "/account/membership"
+    },
+    {
+      "surface": "more",
+      "key": "moments",
+      "title": "My Moments",
+      "href": "/myMoment"
+    },
+    {
+      "surface": "more",
+      "key": "lf",
+      "title": "Local Friend",
+      "href": "/localFriend"
+    },
+    {
+      "surface": "more",
+      "key": "impact",
+      "title": "Impact / Passport",
+      "href": "/impact"
+    },
+    {
+      "surface": "more",
+      "key": "bookings",
+      "title": "Bookings",
+      "href": "/bookings"
+    },
+    {
+      "surface": "more",
+      "key": "notif",
+      "title": "Notifications",
+      "href": "/notifications"
+    }
+  ],
+  "hotelActions": [
+    {
+      "id": "root",
+      "route": "/hotelier",
+      "note": "Guest stay companion (title Hotel)"
+    },
+    {
+      "id": "after_trip_pause",
+      "route": "/hotelier",
+      "note": "AFTER_TRIP: Connect stay + City Memory link — not Hotelier OS"
+    },
+    {
+      "id": "module:sections",
+      "route": "/hotelier/sections",
+      "note": "claimHotelOffer or Connect My New Stay gate"
+    },
+    {
+      "id": "module:breakfast",
+      "route": "/hotelier/breakfast",
+      "note": "claimHotelOffer or Connect My New Stay gate"
+    },
+    {
+      "id": "module:restaurant",
+      "route": "/hotelier/restaurant",
+      "note": "claimHotelOffer or Connect My New Stay gate"
+    },
+    {
+      "id": "module:spa",
+      "route": "/hotelier/spa",
+      "note": "claimHotelOffer or Connect My New Stay gate"
+    },
+    {
+      "id": "module:lateCheckout",
+      "route": "/hotelier/lateCheckout",
+      "note": "claimHotelOffer or Connect My New Stay gate"
+    },
+    {
+      "id": "module:roomService",
+      "route": "/hotelier/roomService",
+      "note": "claimHotelOffer or Connect My New Stay gate"
+    },
+    {
+      "id": "module:concierge",
+      "route": "/hotelier/concierge",
+      "note": "claimHotelOffer or Connect My New Stay gate"
+    },
+    {
+      "id": "module:taxi",
+      "route": "/hotelier/taxi",
+      "note": "claimHotelOffer or Connect My New Stay gate"
+    },
+    {
+      "id": "module:guestServices",
+      "route": "/hotelier/guestServices",
+      "note": "claimHotelOffer or Connect My New Stay gate"
+    },
+    {
+      "id": "module:events",
+      "route": "/hotelier/events",
+      "note": "claimHotelOffer or Connect My New Stay gate"
+    },
+    {
+      "id": "module:campaigns",
+      "route": "/hotelier/campaigns",
+      "note": "claimHotelOffer or Connect My New Stay gate"
+    },
+    {
+      "id": "module:askHotel",
+      "route": "/hotelier/askHotel",
+      "note": "claimHotelOffer or Connect My New Stay gate"
+    },
+    {
+      "id": "module:messages",
+      "route": "/hotelier/messages",
+      "note": "claimHotelOffer or Connect My New Stay gate"
+    },
+    {
+      "id": "module:stayInfo",
+      "route": "/hotelier/stayInfo",
+      "note": "claimHotelOffer or Connect My New Stay gate"
+    },
+    {
+      "id": "module:reservation",
+      "route": "/hotelier/reservation",
+      "note": "claimHotelOffer or Connect My New Stay gate"
+    },
+    {
+      "id": "module:welcome",
+      "route": "/hotelier/welcome",
+      "note": "claimHotelOffer or Connect My New Stay gate"
+    },
+    {
+      "id": "module:tv",
+      "route": "/hotelier/tv",
+      "note": "claimHotelOffer or Connect My New Stay gate"
+    },
+    {
+      "id": "module:push",
+      "route": "/hotelier/push",
+      "note": "claimHotelOffer or Connect My New Stay gate"
+    },
+    {
+      "id": "module:createOffer",
+      "route": "/hotelier/createOffer",
+      "note": "claimHotelOffer or Connect My New Stay gate"
+    },
+    {
+      "id": "module:ctx",
+      "route": "/hotelier/ctx",
+      "note": "claimHotelOffer or Connect My New Stay gate"
+    }
+  ],
+  "hotelIndexMentionsSimulateCheckout": false,
+  "upperRailExpected": [
+    "Local banDits",
+    "Experiences",
+    "SmartTraveler",
+    "bandiTEAM",
+    "banDiShop"
+  ]
+}

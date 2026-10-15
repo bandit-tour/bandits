@@ -220,7 +220,11 @@ export function BottleProductScreen() {
   React.useEffect(() => {
     void (async () => {
       const rows = await fetchLiveBottleStays();
-      setLiveMatches(rows.map((r) => mapWorkspaceBottleStay(r, hotelName)));
+      setLiveMatches(
+        rows
+          .map((r) => mapWorkspaceBottleStay(r, hotelName))
+          .filter((m): m is BottleMatch => Boolean(m)),
+      );
     })();
   }, [hotelName]);
 

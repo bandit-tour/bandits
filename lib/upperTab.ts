@@ -54,7 +54,11 @@ export const UPPER_TAB_ORDER: { key: UpperTabKey; label: string; href: UpperTabH
   { key: "impact", label: "Impact", href: "/impact" },
 ];
 
-/** ACTIVE STAY — Bottle out of primary top nav; bandiTEAM before banDiShop (QA-03). */
+/**
+ * Owner-approved upper rail (locked):
+ * Local banDits → Experiences → SmartTraveler → bandiTEAM → banDiShop
+ * Travel in a Bottle lives under More + contextual next-trip entry — never replaces bandiTEAM.
+ */
 export const DISCOVERY_LANE_STAY: { key: UpperTabKey; label: string; href: UpperTabHref }[] = [
   { key: "bandits", label: "Local banDits", href: "/bandits" },
   { key: "experiences", label: "Experiences", href: "/experiences" },
@@ -63,44 +67,38 @@ export const DISCOVERY_LANE_STAY: { key: UpperTabKey; label: string; href: Upper
   { key: "shop", label: "banDiShop", href: "/shop" },
 ];
 
-/** POST-STAY / NEXT-TRIP — Bottle PRIMARY for mixed sleeping. */
-export const DISCOVERY_LANE_NEXT_TRIP: { key: UpperTabKey; label: string; href: UpperTabHref }[] = [
-  { key: "bandits", label: "Local banDits", href: "/bandits" },
-  { key: "experiences", label: "Experiences", href: "/experiences" },
-  { key: "smarttraveler", label: "SmartTraveler", href: "/smarttraveler" },
-  { key: "bottle", label: "Travel in a Bottle", href: "/travelBottle" },
-  { key: "shop", label: "banDiShop", href: "/shop" },
-];
+/** @deprecated Alias — owner rail is lifecycle-invariant (no TiB in top rail). */
+export const DISCOVERY_LANE_NEXT_TRIP = DISCOVERY_LANE_STAY;
 
 /**
  * Default export for deep-link registry / legacy callers.
  * Prefer discoveryLaneForLifecycle() at chrome time.
  */
-export const DISCOVERY_LANE_ORDER = DISCOVERY_LANE_NEXT_TRIP;
+export const DISCOVERY_LANE_ORDER = DISCOVERY_LANE_STAY;
 
 /** @deprecated Prefer discoveryLaneForLifecycle */
 export const ACCESS_UPPER_TABS = DISCOVERY_LANE_ORDER;
 
 /**
- * ACTIVE stay → bandiTEAM in rail, Bottle not.
- * PRE_TRIP / AFTER_TRIP / PLANNING / NEXT_TRIP → Bottle in rail (primary).
+ * Owner constitution: same discovery rail for every lifecycle.
+ * TiB is More / contextual — never a rail peer that displaces bandiTEAM.
  */
-export function discoveryLaneForLifecycle(opts: {
+export function discoveryLaneForLifecycle(_opts: {
   isFullStay?: boolean;
   state?: string | null;
 }): { key: UpperTabKey; label: string; href: UpperTabHref }[] {
-  const state = String(opts.state || "");
-  const activeStay =
-    opts.isFullStay === true || state === "ACTIVE_STAY" || state === "REACTIVATED";
-  return activeStay ? DISCOVERY_LANE_STAY : DISCOVERY_LANE_NEXT_TRIP;
+  return DISCOVERY_LANE_STAY;
 }
 
-/** Bottle is a next-trip product — promote on Home when not mid-stay. */
+/** Bottle is a next-trip product — promote on Home when not mid-stay (not in upper rail). */
 export function bottleIsPrimaryInvite(opts: {
   isFullStay?: boolean;
   state?: string | null;
 }): boolean {
-  return discoveryLaneForLifecycle(opts).some((t) => t.key === "bottle");
+  const state = String(opts.state || "");
+  const midStay =
+    opts.isFullStay === true || state === "ACTIVE_STAY" || state === "REACTIVATED";
+  return !midStay;
 }
 
 export function bottlePrimaryInviteCopy(opts: {
