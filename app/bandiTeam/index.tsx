@@ -96,31 +96,44 @@ export default function BandiTeamHubScreen({ tabActive = true }: HubProps) {
         refreshControl={hubRefreshControl}
       >
         <AppEscapeNav />
-        <Text style={styles.title}>Community safety alerts</Text>
-        <Text style={styles.hint}>
-          {previewCity
-            ? `Preview for ${previewCity} (from your destination). Tap a row for full details.`
-            : 'Preview across destinations. Set your city in the app to narrow, or open the full feed.'}
+
+        <Text style={styles.brand}>bandiTEAM</Text>
+        <Text style={styles.title}>Good locals look out for each other.</Text>
+        <Text style={styles.subtitle}>
+          Scams, tourist traps, and things worth knowing — shared by people who've been there.
         </Text>
 
         <View style={styles.actions}>
-          <Pressable style={styles.feedBtn} onPress={openFullFeed} accessibilityRole="button" accessibilityLabel="See Reports">
+          <Pressable
+            style={styles.feedBtn}
+            onPress={openFullFeed}
+            accessibilityRole="button"
+            accessibilityLabel="See Reports"
+            testID="banditeam-see-reports"
+          >
             <Text style={styles.feedBtnText}>See Reports</Text>
           </Pressable>
           <Pressable
             style={styles.reportBtn}
             onPress={() => router.push('/bandiTeam/report' as never)}
             accessibilityRole="button"
-            accessibilityLabel="Upload Report"
+            accessibilityLabel="Share a Warning"
+            testID="banditeam-share-warning"
           >
-            <Text style={styles.reportBtnText}>Upload Report</Text>
+            <Text style={styles.reportBtnText}>Share a Warning</Text>
           </Pressable>
         </View>
 
-        {loading && rows.length === 0 ? <ActivityIndicator style={{ marginVertical: 16 }} color="#111" /> : null}
+        {loading && rows.length === 0 ? <ActivityIndicator style={{ marginVertical: 20 }} color="#111" /> : null}
         {!!err && <Text style={styles.err}>{err}</Text>}
+
         {!loading && !err && rows.length === 0 ? (
-          <Text style={styles.empty}>No alerts yet. Upload the first report with Upload Report.</Text>
+          <View style={styles.emptyBox} testID="banditeam-empty">
+            <Text style={styles.emptyTitle}>Nothing shared here yet</Text>
+            <Text style={styles.empty}>
+              When someone nearby shares a warning, it will show up here. Be the first to look out for others.
+            </Text>
+          </View>
         ) : null}
 
         {rows.map((item, idx) => (
@@ -151,38 +164,77 @@ export default function BandiTeamHubScreen({ tabActive = true }: HubProps) {
             </Text>
           </Pressable>
         ))}
+
+        <Text style={styles.closing}>Real stories. Safer travels. Stronger community.</Text>
       </ScrollView>
     </>
   );
 }
 
 const styles = StyleSheet.create({
-  scroll: { padding: 16, paddingBottom: 40 },
-  title: { fontSize: 20, fontWeight: '800', color: '#111', marginBottom: 8 },
-  hint: { fontSize: 13, color: '#555', lineHeight: 19, marginBottom: 14 },
-  actions: { flexDirection: 'row', flexWrap: 'wrap', gap: 10, marginBottom: 16 },
+  scroll: { paddingHorizontal: 20, paddingTop: 12, paddingBottom: 48 },
+  brand: {
+    fontSize: 12,
+    fontWeight: '800',
+    letterSpacing: 1.2,
+    textTransform: 'uppercase',
+    color: '#C62828',
+    marginBottom: 10,
+  },
+  title: {
+    fontSize: 26,
+    fontWeight: '800',
+    color: '#111',
+    lineHeight: 32,
+    marginBottom: 10,
+    maxWidth: 340,
+  },
+  subtitle: {
+    fontSize: 15,
+    color: '#444',
+    lineHeight: 22,
+    marginBottom: 22,
+    maxWidth: 360,
+  },
+  actions: {
+    flexDirection: 'column',
+    gap: 10,
+    marginBottom: 24,
+  },
   reportBtn: {
     backgroundColor: '#FFD54F',
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    borderRadius: 12,
+    paddingHorizontal: 18,
+    paddingVertical: 14,
+    borderRadius: 14,
+    alignItems: 'center',
   },
-  reportBtnText: { color: '#111', fontSize: 14, fontWeight: '900' },
+  reportBtnText: { color: '#111', fontSize: 15, fontWeight: '900' },
   feedBtn: {
-    borderWidth: 1,
+    borderWidth: 1.5,
     borderColor: '#111',
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    borderRadius: 12,
+    paddingHorizontal: 18,
+    paddingVertical: 14,
+    borderRadius: 14,
     backgroundColor: '#111',
+    alignItems: 'center',
   },
-  feedBtnText: { color: '#FFF', fontSize: 14, fontWeight: '800' },
-  err: { color: '#C62828', marginBottom: 8 },
-  empty: { fontSize: 14, color: '#666', lineHeight: 20 },
+  feedBtnText: { color: '#FFF', fontSize: 15, fontWeight: '800' },
+  err: { color: '#C62828', marginBottom: 12, fontSize: 14, lineHeight: 20 },
+  emptyBox: {
+    paddingVertical: 8,
+    marginBottom: 8,
+  },
+  emptyTitle: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#111',
+    marginBottom: 6,
+  },
+  empty: { fontSize: 14, color: '#666', lineHeight: 21 },
   card: {
     borderWidth: 1,
     borderColor: '#E8E8E8',
-    borderRadius: 12,
+    borderRadius: 14,
     padding: 14,
     marginBottom: 12,
     backgroundColor: '#FAFAFA',
@@ -192,4 +244,12 @@ const styles = StyleSheet.create({
   meta: { flexDirection: 'row', justifyContent: 'space-between' },
   metaText: { fontSize: 12, color: '#666', fontWeight: '600' },
   area: { marginTop: 6, fontSize: 13, color: '#444', fontWeight: '600' },
+  closing: {
+    marginTop: 20,
+    fontSize: 13,
+    color: '#888',
+    lineHeight: 19,
+    fontWeight: '600',
+    textAlign: 'center',
+  },
 });

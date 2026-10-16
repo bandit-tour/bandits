@@ -109,9 +109,9 @@ export default function BandiTeamLiveAlertsCard() {
           onPress={openReport}
           style={({ pressed }) => [styles.btnSecondary, pressed && styles.pressed]}
           accessibilityRole="button"
-          accessibilityLabel="Report alert"
+          accessibilityLabel="Share a Warning"
         >
-          <Text style={styles.btnSecondaryText}>Report Alert</Text>
+          <Text style={styles.btnSecondaryText}>Share a Warning</Text>
         </Pressable>
       </View>
     </View>

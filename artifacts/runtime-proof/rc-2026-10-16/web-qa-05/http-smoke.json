@@ -1,0 +1,86 @@
+[
+    {
+        "route":  "/",
+        "name":  "home",
+        "status":  200,
+        "overlaySuspect":  false
+    },
+    {
+        "route":  "/explore",
+        "name":  "explore",
+        "status":  200,
+        "overlaySuspect":  false
+    },
+    {
+        "route":  "/hotelier",
+        "name":  "hotelier",
+        "status":  200,
+        "overlaySuspect":  false
+    },
+    {
+        "route":  "/experiences",
+        "name":  "experiences",
+        "status":  200,
+        "overlaySuspect":  false
+    },
+    {
+        "route":  "/smarttraveler",
+        "name":  "smarttraveler",
+        "status":  200,
+        "overlaySuspect":  false
+    },
+    {
+        "route":  "/alerts",
+        "name":  "banditeam",
+        "status":  200,
+        "overlaySuspect":  false
+    },
+    {
+        "route":  "/shop",
+        "name":  "bandishop",
+        "status":  200,
+        "overlaySuspect":  false
+    },
+    {
+        "route":  "/menu",
+        "name":  "more",
+        "status":  200,
+        "overlaySuspect":  false
+    },
+    {
+        "route":  "/bandits",
+        "name":  "bandits",
+        "status":  200,
+        "overlaySuspect":  false
+    },
+    {
+        "route":  "/product/lst_table",
+        "name":  "product",
+        "status":  200,
+        "overlaySuspect":  false
+    },
+    {
+        "route":  "/experience/exp_546eba723199",
+        "name":  "experience",
+        "status":  200,
+        "overlaySuspect":  false
+    },
+    {
+        "route":  "/bandiTeam/report",
+        "name":  "report",
+        "status":  200,
+        "overlaySuspect":  false
+    },
+    {
+        "route":  "/localFriend",
+        "name":  "localFriend",
+        "status":  200,
+        "overlaySuspect":  false
+    },
+    {
+        "route":  "/community",
+        "name":  "chat",
+        "status":  200,
+        "overlaySuspect":  false
+    }
+]

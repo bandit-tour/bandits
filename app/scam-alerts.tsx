@@ -49,9 +49,9 @@ function ReportAlertHeaderButton() {
       onPress={() => router.push('/bandiTeam/report' as never)}
       style={styles.headerReportBtn}
       accessibilityRole="button"
-      accessibilityLabel="Report a new safety alert"
+      accessibilityLabel="Share a Warning"
     >
-      <Text style={styles.headerReportBtnText}>Report Alert</Text>
+      <Text style={styles.headerReportBtnText}>Share a Warning</Text>
     </Pressable>
   );
 }
@@ -373,20 +373,18 @@ export default function ScamAlertsScreen() {
         <View style={styles.listHeaderBlock}>
           <Text style={styles.poweredBy}>bandiTEAM</Text>
           <View style={styles.reportHero}>
-            <Text style={styles.reportHeroTitle}>Community safety alerts</Text>
+            <Text style={styles.reportHeroTitle}>Good locals look out for each other.</Text>
             <Text style={styles.reportHeroSub}>
-              Real travelers helping real travelers stay safe.{'\n\n'}
-              Report scams, fake taxis, tourist traps, pickpocket zones, and unsafe situations.{'\n\n'}
-              Together we protect the holiday experience.
+              Scams, tourist traps, and things worth knowing — shared by people who've been there.
             </Text>
             <View style={styles.heroButtonsRow}>
               <Pressable
                 style={styles.reportHeroBtn}
                 onPress={() => router.push('/bandiTeam/report' as never)}
                 accessibilityRole="button"
-                accessibilityLabel="Report Alert"
+                accessibilityLabel="Share a Warning"
               >
-                <Text style={styles.reportHeroBtnText}>Report Alert</Text>
+                <Text style={styles.reportHeroBtnText}>Share a Warning</Text>
               </Pressable>
               <Pressable
                 style={styles.openFeedBtn}

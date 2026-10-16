@@ -27,8 +27,15 @@ import {
   haversineKm,
   resolveHotelOrigin,
 } from "@/lib/guest-workspace/shopGeo";
+import { openPickupDirections } from "@/lib/maps/openDirections";
 import { useGuestLifecycle } from "@/lib/guest-lifecycle/useGuestLifecycle";
 import { messageShopSeller, reserveShopListing, saveGuestObject } from "@/lib/workspace/actions";
+
+/** Editorial seed ids — never enter real Workspace payment. */
+function isSampleShopListing(item: ShopListing, liveResolved: boolean): boolean {
+  if (liveResolved) return false;
+  return String(item.id || "").startsWith("lst_");
+}
 
 /** Full marketplace product detail — gallery, seller, fulfill, save / message / reserve. */
 export default function ProductDetailScreen() {
@@ -40,6 +47,7 @@ export default function ProductDetailScreen() {
   const [liveItem, setLiveItem] = useState<ShopListing | null>(null);
   const [liveRelated, setLiveRelated] = useState<ShopListing[]>([]);
   const item = liveItem || seedItem;
+  const samplePreview = !!item && isSampleShopListing(item, !!liveItem);
   const related = useMemo(() => {
     if (liveRelated.length) return liveRelated.filter((r) => r.id !== id);
     return id ? getRelatedShopListings(id, 6) : [];
@@ -55,8 +63,10 @@ export default function ProductDetailScreen() {
   const liveDistance = useMemo(() => {
     if (!item?.lat || !item?.lng) return item?.distanceLabel || "";
     const km = haversineKm(origin, { lat: item.lat, lng: item.lng });
-    return distanceLabelFor(km, { originLabel: origin.label });
+    return distanceLabelFor(km);
   }, [item, origin]);
+  const hasVerifiedPickup =
+    !!item && Number.isFinite(item.lat) && Number.isFinite(item.lng);
   const [galleryIndex, setGalleryIndex] = useState(0);
   const [saved, setSaved] = useState(false);
   const [reserved, setReserved] = useState(false);
@@ -72,6 +82,7 @@ export default function ProductDetailScreen() {
     setSaved(false);
     setReserved(false);
     setMessageSent(false);
+    setActionError(null);
     setRelatedHidden(new Set());
     setLiveItem(null);
     if (!id) return;
@@ -119,7 +130,7 @@ export default function ProductDetailScreen() {
     try {
       await Share.share({
         title: item.title,
-        message: `${item.title} Â· ${formatEuro(item.priceCents)} on banDiShop Â· ${item.neighborhood}`,
+        message: `${item.title} · ${formatEuro(item.priceCents)} on banDiShop · ${item.neighborhood}`,
       });
     } catch {
       /* user cancelled */
@@ -150,7 +161,22 @@ export default function ProductDetailScreen() {
             }}
           />
           <View style={styles.galleryActions}>
-            <Pressable style={styles.iconBtn} onPress={() => setSaved((s) => !s)} hitSlop={6}>
+            <Pressable
+              style={styles.iconBtn}
+              hitSlop={6}
+              accessibilityLabel={saved ? "Unsave" : "Save"}
+              onPress={() => {
+                const wasSaved = saved;
+                setSaved(!wasSaved);
+                void saveGuestObject({
+                  objectType: "shop_listing",
+                  objectId: item.id,
+                  title: item.title,
+                  source: "bandishop",
+                  saved: wasSaved,
+                });
+              }}
+            >
               <Ionicons
                 name={saved ? "heart" : "heart-outline"}
                 size={20}
@@ -213,6 +239,12 @@ export default function ProductDetailScreen() {
             </View>
           </View>
 
+          {samplePreview ? (
+            <Text style={styles.previewNote} testID="product-preview-note">
+              Preview listing — not open to buy yet
+            </Text>
+          ) : null}
+
           <View style={styles.infoBlock}>
             <InfoRow icon="location-outline" label="Distance" value={liveDistance} />
             <InfoRow icon="navigate-outline" label="Pickup address" value={item.pickupAddress} />
@@ -230,6 +262,23 @@ export default function ProductDetailScreen() {
             />
             <InfoRow icon="shield-checkmark-outline" label="Condition" value={item.condition} />
           </View>
+
+          {hasVerifiedPickup ? (
+            <Pressable
+              style={styles.directionsBtn}
+              testID="product-directions"
+              accessibilityRole="button"
+              accessibilityLabel="Directions to pickup"
+              onPress={() => {
+                void openPickupDirections(item.lat, item.lng).then((ok) => {
+                  if (!ok) setActionError("Couldn’t open maps for this pickup spot.");
+                });
+              }}
+            >
+              <Ionicons name="navigate" size={18} color="#FAF7F2" />
+              <Text style={styles.directionsBtnText}>Directions</Text>
+            </Pressable>
+          ) : null}
 
           <View style={styles.availRow}>
             {item.availability.map((a) => (
@@ -270,58 +319,82 @@ export default function ProductDetailScreen() {
       </ScrollView>
 
       <View style={styles.footer}>
-        <Pressable
-          style={styles.footerSecondary}
-          disabled={actionBusy}
-          onPress={() => {
-            if (!item || actionBusy) return;
-            setActionBusy(true);
-            setActionError(null);
-            void messageShopSeller({
-              listingId: item.id,
-              text: `Hi! Interested in "${item.title}" — can we meet near ${item.pickupArea}?`,
-            }).then((r) => {
-              setActionBusy(false);
-              if (!r.ok) {
-                setActionError(r.detail);
+        {actionError ? (
+          <Text style={styles.footerError} testID="product-action-error">
+            {actionError}
+          </Text>
+        ) : null}
+        <View style={styles.footerRow}>
+          <Pressable
+            style={styles.footerSecondary}
+            disabled={actionBusy}
+            accessibilityLabel="Message seller"
+            onPress={() => {
+              if (!item || actionBusy) return;
+              if (samplePreview) {
+                setActionError("Messaging isn’t available on preview listings.");
                 return;
               }
-              setMessageSent(true);
-            });
-          }}
-        >
-          <Ionicons name="chatbubble-outline" size={18} color="#1C1917" />
-          <Text style={styles.footerSecondaryText}>
-            {messageSent ? "Message sent" : "Message"}
-          </Text>
-        </Pressable>
-        <Pressable
-          style={[styles.footerPrimary, reserved && styles.footerPrimaryDone]}
-          disabled={actionBusy || reserved}
-          onPress={() => {
-            if (!item || reserved || actionBusy) return;
-            setActionBusy(true);
-            setActionError(null);
-            void reserveShopListing({ listingId: item.id }).then((r) => {
-              setActionBusy(false);
-              if (!r.ok) {
-                setActionError(r.detail);
+              setActionBusy(true);
+              setActionError(null);
+              void messageShopSeller({
+                listingId: item.id,
+                text: `Hi! Interested in "${item.title}" — can we meet near ${item.pickupArea}?`,
+              }).then((r) => {
+                setActionBusy(false);
+                if (!r.ok) {
+                  setActionError(r.detail);
+                  return;
+                }
+                setMessageSent(true);
+              });
+            }}
+          >
+            <Ionicons name="chatbubble-outline" size={18} color="#1C1917" />
+            <Text style={styles.footerSecondaryText}>
+              {messageSent ? "Message sent" : "Message"}
+            </Text>
+          </Pressable>
+          <Pressable
+            style={[
+              styles.footerPrimary,
+              reserved && styles.footerPrimaryDone,
+              samplePreview && styles.footerPrimaryMuted,
+            ]}
+            disabled={actionBusy || reserved}
+            accessibilityLabel={samplePreview ? "Not available to buy" : "Buy or reserve"}
+            testID="product-buy-reserve"
+            onPress={() => {
+              if (!item || reserved || actionBusy) return;
+              if (samplePreview) {
+                setActionError("This listing isn’t available to buy yet.");
                 return;
               }
-              setReserved(true);
-            });
-          }}
-        >
-          <Text style={styles.footerPrimaryText}>
-            {reserved
-              ? item.category === "Experiences"
-                ? "Reserved"
-                : "Reserved Â· pickup"
-              : item.category === "Experiences"
-                ? "Reserve seats"
-                : "Buy / Reserve"}
-          </Text>
-        </Pressable>
+              setActionBusy(true);
+              setActionError(null);
+              void reserveShopListing({ listingId: item.id }).then((r) => {
+                setActionBusy(false);
+                if (!r.ok) {
+                  setActionError(r.detail);
+                  return;
+                }
+                setReserved(true);
+              });
+            }}
+          >
+            <Text style={styles.footerPrimaryText}>
+              {samplePreview
+                ? "Not for sale yet"
+                : reserved
+                  ? item.category === "Experiences"
+                    ? "Reserved"
+                    : "Reserved · pickup"
+                  : item.category === "Experiences"
+                    ? "Reserve seats"
+                    : "Buy / Reserve"}
+            </Text>
+          </Pressable>
+        </View>
       </View>
     </View>
   );
@@ -569,19 +642,44 @@ const styles = StyleSheet.create({
     marginTop: 2,
     lineHeight: 16,
   },
+  previewNote: {
+    marginTop: 12,
+    fontSize: 13,
+    fontWeight: "700",
+    color: "#8A6A3A",
+  },
+  directionsBtn: {
+    marginTop: 14,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
+    backgroundColor: "#1C1917",
+    borderRadius: 14,
+    paddingVertical: 14,
+  },
+  directionsBtnText: { fontSize: 15, fontWeight: "800", color: "#FAF7F2" },
   footer: {
     position: "absolute",
     left: 0,
     right: 0,
     bottom: 0,
-    flexDirection: "row",
-    gap: 10,
     paddingHorizontal: 16,
-    paddingTop: 12,
+    paddingTop: 10,
     paddingBottom: 20,
     backgroundColor: "rgba(247,244,239,0.96)",
     borderTopWidth: StyleSheet.hairlineWidth,
     borderTopColor: "#E4DED4",
+  },
+  footerError: {
+    fontSize: 12,
+    fontWeight: "600",
+    color: "#B42318",
+    marginBottom: 8,
+  },
+  footerRow: {
+    flexDirection: "row",
+    gap: 10,
   },
   footerSecondary: {
     flexDirection: "row",
@@ -605,5 +703,6 @@ const styles = StyleSheet.create({
     backgroundColor: "#1C1917",
   },
   footerPrimaryDone: { backgroundColor: "#2A4A3A" },
+  footerPrimaryMuted: { backgroundColor: "#6B6560" },
   footerPrimaryText: { fontSize: 15, fontWeight: "800", color: "#FAF7F2" },
 });

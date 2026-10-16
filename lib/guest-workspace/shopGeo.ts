@@ -1,29 +1,49 @@
 /**
  * banDiShop geo — real distance from traveler origin.
- * Origin priority: (A) device if permitted (B) active hotel (C) manual map pick.
- * Never invent walk times from thin air — prefer km labels unless routing exists.
+ * Origin modes: device (Near me) · hotel · manual neighbourhood · Athens browse.
+ * Never invent walk times or GPS status copy for customers.
+ * Maps open helpers live in `@/lib/maps/openDirections` (keeps this module RN-Linking free).
  */
 
 export type GeoPoint = { lat: number; lng: number };
 
-/** PLAY Theatrou · Psyrri — default in-stay hotel origin when GPS denied. */
+/** PLAY Theatrou · Psyrri — verified sandbox hotel pin. */
 export const PLAY_THEATROU_ORIGIN: GeoPoint & { label: string } = {
   lat: 37.9778,
   lng: 23.7245,
   label: "PLAY Theatrou",
 };
 
+/** City centre reference for All Athens browse distance sort. */
+export const ATHENS_CITY_ORIGIN: GeoPoint & { label: string } = {
+  lat: 37.9838,
+  lng: 23.7275,
+  label: "Athens",
+};
+
 export const SHOP_RADIUS_BANDS_KM = [1, 2, 5, 10, 25] as const;
 export type ShopRadiusKm = (typeof SHOP_RADIUS_BANDS_KM)[number];
 
-export type TravelerOriginMode = "device" | "hotel" | "manual";
+export type TravelerOriginMode = "device" | "hotel" | "manual" | "city";
 
 export type TravelerOrigin = GeoPoint & {
   mode: TravelerOriginMode;
   label: string;
-  /** Precise GPS only when device granted; else hotel/manual. */
+  /** Precise GPS only when device granted; else hotel/manual/city. */
   precise: boolean;
 };
+
+/** Manual fallback neighbourhoods when Near me permission is denied. */
+export const SHOP_MANUAL_ORIGINS: TravelerOrigin[] = [
+  { ...ATHENS_CITY_ORIGIN, mode: "manual", precise: false, label: "Athens centre" },
+  { lat: 37.9775, lng: 23.7248, mode: "manual", label: "Psyrri", precise: false },
+  { lat: 37.9763, lng: 23.7258, mode: "manual", label: "Monastiraki", precise: false },
+  { lat: 37.9865, lng: 23.7345, mode: "manual", label: "Exarchia", precise: false },
+  { lat: 37.9735, lng: 23.7295, mode: "manual", label: "Plaka", precise: false },
+  { lat: 37.9782, lng: 23.7425, mode: "manual", label: "Kolonaki", precise: false },
+  { lat: 37.9655, lng: 23.7245, mode: "manual", label: "Koukaki", precise: false },
+  { lat: 37.9782, lng: 23.7145, mode: "manual", label: "Gazi", precise: false },
+];
 
 /** Haversine distance in kilometres. */
 export function haversineKm(a: GeoPoint, b: GeoPoint): number {
@@ -73,6 +93,13 @@ export function resolveHotelOrigin(opts?: {
   lat?: number | null;
   lng?: number | null;
 }): TravelerOrigin {
+  const slug = String(opts?.hotelSlug || "").trim().toLowerCase();
+  const name = String(opts?.hotelName || "").trim();
+  const label =
+    name ||
+    (slug === "play-theatrou" || slug === "play-athens" ? PLAY_THEATROU_ORIGIN.label : "") ||
+    "Your hotel";
+
   if (
     opts?.lat != null &&
     opts?.lng != null &&
@@ -83,17 +110,47 @@ export function resolveHotelOrigin(opts?: {
       lat: opts.lat,
       lng: opts.lng,
       mode: "hotel",
-      label: opts.hotelName || opts.hotelSlug || "Your hotel",
+      label,
       precise: false,
     };
   }
+
+  /** Known verified hotel pins only — never invent coordinates for unknown hotels. */
+  if (slug === "play-theatrou" || slug === "play-athens" || /play theatrou/i.test(name)) {
+    return {
+      lat: PLAY_THEATROU_ORIGIN.lat,
+      lng: PLAY_THEATROU_ORIGIN.lng,
+      mode: "hotel",
+      label: name || PLAY_THEATROU_ORIGIN.label,
+      precise: false,
+    };
+  }
+
   return {
     lat: PLAY_THEATROU_ORIGIN.lat,
     lng: PLAY_THEATROU_ORIGIN.lng,
     mode: "hotel",
-    label: opts?.hotelName || opts?.hotelSlug || "Your hotel",
+    label,
     precise: false,
   };
+}
+
+export function athensCityOrigin(): TravelerOrigin {
+  return {
+    lat: ATHENS_CITY_ORIGIN.lat,
+    lng: ATHENS_CITY_ORIGIN.lng,
+    mode: "city",
+    label: ATHENS_CITY_ORIGIN.label,
+    precise: false,
+  };
+}
+
+/** Customer-facing origin line — no GPS/diagnostic jargon. */
+export function originCustomerLabel(origin: TravelerOrigin): string {
+  if (origin.mode === "device") return "Near you";
+  if (origin.mode === "hotel") return `From ${origin.label}`;
+  if (origin.mode === "manual") return `Near ${origin.label}`;
+  return "Across Athens";
 }
 
 /** Athens neighbourhood seed coords for marketplace listings (real map pins). */

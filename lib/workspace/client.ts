@@ -9,6 +9,21 @@ function env(key: string): string {
 }
 
 export function workspaceOrigin(): string | null {
+  /**
+   * Web localhost: same-origin Metro/Vercel proxy avoids CORS emptying
+   * Experiences / public inventories in the browser (Workspace blocks localhost origins).
+   */
+  try {
+    if (typeof window !== "undefined" && window.location?.origin) {
+      const host = String(window.location.hostname || "");
+      if (host === "localhost" || host === "127.0.0.1") {
+        return `${window.location.origin}/__workspace`;
+      }
+    }
+  } catch {
+    /* SSR / native */
+  }
+
   const raw =
     env("WORKSPACE_URL") ||
     env("EXPO_PUBLIC_WORKSPACE_URL") ||

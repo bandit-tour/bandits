@@ -34,15 +34,50 @@ export type WorkspaceLocalExperience = {
 
 const FALLBACK_COVER = experienceCover("1516483638261-f4dbaf036963");
 
+/** Workspace sometimes returns asset keys, not https URLs — map known keys, else fallback. */
+const ASSET_KEY_COVERS: Record<string, string> = {
+  "cover-courtyard": experienceCover("1516483638261-f4dbaf036963"),
+  "hands-in-clay": experienceCover("1493106647003-8b6ddb8e9f5b"),
+  "street-stop": experienceCover("1469474968028-56623f02e42e"),
+};
+
+function resolveExperiencePhoto(keyOrUrl: string | undefined): string | null {
+  const raw = String(keyOrUrl || "").trim();
+  if (!raw) return null;
+  if (isValidExperienceImageUrl(raw)) return raw;
+  if (ASSET_KEY_COVERS[raw]) return ASSET_KEY_COVERS[raw];
+  return FALLBACK_COVER;
+}
+
+function inferCategory(row: WorkspaceLocalExperience): GuestExperience["category"] {
+  const blob = `${row.title || ""} ${row.description || ""}`.toLowerCase();
+  if (/clay|workshop|atelier|make|cook|fragrance|jewellery|jewelry/.test(blob)) return "Workshops";
+  if (/night|dj|club|bar|midnight/.test(blob)) return "Nightlife";
+  if (/art|gallery|graffiti|photo/.test(blob)) return "Art";
+  if (/fashion|vintage|clothes|costume/.test(blob)) return "Fashion";
+  if (/queer|drag|lgbt/.test(blob)) return "Queer";
+  if (/food|chef|market|bakery|lunch|dinner/.test(blob)) return "Food";
+  if (/music|jazz|vinyl|dj/.test(blob)) return "Music";
+  return "Workshops";
+}
+
 export function mapWorkspaceExperience(row: WorkspaceLocalExperience): GuestExperience | null {
-  const photos = (row.photos || []).filter((u) => isValidExperienceImageUrl(u));
+  const status = String(row.status || "").toLowerCase();
+  /** Do not list draft / unpublished provider inventory as bookable. */
+  if (status && /draft|unpublished|hidden|private|archived/.test(status)) return null;
+
+  const photos = (row.photos || [])
+    .map((u) => resolveExperiencePhoto(u))
+    .filter((u): u is string => !!u && isValidExperienceImageUrl(u));
   const imageUrl = photos[0] || FALLBACK_COVER;
   if (!isValidExperienceImageUrl(imageUrl)) return null;
+
+  const category = inferCategory(row);
   return {
     id: row.id,
     title: row.title,
-    category: "Workshops",
-    categoryLabel: "Local experience",
+    category,
+    categoryLabel: category === "Workshops" ? "Local experience" : category,
     duration: row.duration || row.when || "Session",
     area: row.neighborhood || row.city || "Athens",
     distance: row.location || row.neighborhood || row.city || "Athens",
@@ -61,7 +96,9 @@ export function mapWorkspaceExperience(row: WorkspaceLocalExperience): GuestExpe
 }
 
 export function mapWorkspaceDetail(row: WorkspaceLocalExperience, base: GuestExperience): ExperienceDetail {
-  const photos = (row.photos || []).filter((u) => isValidExperienceImageUrl(u));
+  const photos = (row.photos || [])
+    .map((u) => resolveExperiencePhoto(u))
+    .filter((u): u is string => !!u && isValidExperienceImageUrl(u));
   const gallery = photos.length ? photos : [base.imageUrl];
   const slot: ExperienceAvailabilitySlot = {
     id: row.sessionId || `sess_${row.id}`,
@@ -128,12 +165,23 @@ export function mapWorkspaceDetail(row: WorkspaceLocalExperience, base: GuestExp
   };
 }
 
-export async function fetchLiveLocalExperiences(): Promise<WorkspaceLocalExperience[]> {
+export type LiveExperiencesFetch = {
+  experiences: WorkspaceLocalExperience[];
+  detail?: string;
+  origin?: string;
+};
+
+export async function fetchLiveLocalExperiences(): Promise<LiveExperiencesFetch> {
   const result = await workspaceGet<{ ok?: boolean; experiences?: WorkspaceLocalExperience[] }>(
     "/api/public/experiences",
   );
-  if (!result.ok) return [];
-  return (result.data.experiences || []).filter((e) => e.source === "provider_record" || e.partnerId || e.hostEmail);
+  if (!result.ok) {
+    return { experiences: [], detail: result.detail || "Workspace experiences unavailable" };
+  }
+  const published = (result.data.experiences || []).filter(
+    (e) => e.source === "provider_record" || e.partnerId || e.hostEmail,
+  );
+  return { experiences: published, origin: result.origin };
 }
 
 export async function fetchLiveExperienceDetail(id: string): Promise<ExperienceDetail | null> {

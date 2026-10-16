@@ -1,8 +1,9 @@
 import { Ionicons } from "@expo/vector-icons";
 import { Image as ExpoImage } from "expo-image";
 import { useRouter, type Href } from "expo-router";
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
 import {
+  ActivityIndicator,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -23,20 +24,25 @@ import {
 } from "@/lib/guest-workspace/productWorlds";
 import { fetchLiveShopListings } from "@/lib/guest-workspace/liveShop";
 import {
+  athensCityOrigin,
   distanceLabelFor,
   haversineKm,
-  PLAY_THEATROU_ORIGIN,
+  originCustomerLabel,
   resolveHotelOrigin,
+  SHOP_MANUAL_ORIGINS,
   SHOP_RADIUS_BANDS_KM,
   type ShopRadiusKm,
   type TravelerOrigin,
   withinRadius,
 } from "@/lib/guest-workspace/shopGeo";
+import { getPilotCurrentLocation } from "@/lib/currentLocation";
 import { useGuestLifecycle } from "@/lib/guest-lifecycle/useGuestLifecycle";
 import { cardWidthForColumns, shopMarketplaceColumns } from "@/lib/imageRatios";
 
 const GRID_GAP = 12;
 const GRID_PAD = 16;
+
+type PlaceMode = "near" | "hotel" | "athens";
 
 function matchesCategory(item: ShopListing, cat: ShopCategoryChip): boolean {
   if (cat === "All") return true;
@@ -47,7 +53,7 @@ type Listed = ShopListing & { distanceKm: number; liveDistanceLabel: string };
 
 /**
  * banDiShop — cool things near me.
- * Origin: hotel default for in-stay (when GPS denied) · never invent walk times.
+ * Visual identity preserved; location modes use real coords only.
  */
 export function ShopScreen() {
   const router = useRouter();
@@ -55,7 +61,7 @@ export function ShopScreen() {
   const { isFullStay, activeStay } = useGuestLifecycle();
   const [cat, setCat] = useState<ShopCategoryChip>("All");
   const [query, setQuery] = useState("");
-  const [nearMe, setNearMe] = useState(true);
+  const [placeMode, setPlaceMode] = useState<PlaceMode>(isFullStay ? "hotel" : "athens");
   const [radiusKm, setRadiusKm] = useState<ShopRadiusKm>(5);
   const [mapMode, setMapMode] = useState(false);
   const [filtersOpen, setFiltersOpen] = useState(false);
@@ -65,16 +71,52 @@ export function ShopScreen() {
   const [imageFailedIds, setImageFailedIds] = useState<Set<string>>(() => new Set());
   const [liveListings, setLiveListings] = useState<ShopListing[]>([]);
   const [liveReady, setLiveReady] = useState(false);
-  const [liveVia, setLiveVia] = useState<"public" | "discover" | "none" | "demo">("none");
 
-  const origin: TravelerOrigin = useMemo(
+  const [deviceOrigin, setDeviceOrigin] = useState<TravelerOrigin | null>(null);
+  const [manualOrigin, setManualOrigin] = useState<TravelerOrigin | null>(null);
+  const [locBusy, setLocBusy] = useState(false);
+  const [locHint, setLocHint] = useState<string | null>(null);
+  const [manualPickerOpen, setManualPickerOpen] = useState(false);
+
+  const hotelOrigin = useMemo(
     () =>
       resolveHotelOrigin({
         hotelSlug: activeStay?.hotelSlug,
-        hotelName: activeStay?.hotelName || "Your hotel",
+        hotelName: activeStay?.hotelName || (isFullStay ? "Your hotel" : null),
       }),
-    [activeStay?.hotelSlug, activeStay?.hotelName],
+    [activeStay?.hotelSlug, activeStay?.hotelName, isFullStay],
   );
+
+  const origin: TravelerOrigin = useMemo(() => {
+    if (placeMode === "near") {
+      return deviceOrigin || manualOrigin || athensCityOrigin();
+    }
+    if (placeMode === "hotel") return hotelOrigin;
+    return athensCityOrigin();
+  }, [placeMode, deviceOrigin, manualOrigin, hotelOrigin]);
+
+  const applyNearMe = useCallback(async () => {
+    setPlaceMode("near");
+    setLocBusy(true);
+    setLocHint(null);
+    const pos = await getPilotCurrentLocation();
+    setLocBusy(false);
+    if (pos) {
+      setDeviceOrigin({
+        lat: pos.lat,
+        lng: pos.lng,
+        mode: "device",
+        label: "You",
+        precise: true,
+      });
+      setManualOrigin(null);
+      setManualPickerOpen(false);
+      return;
+    }
+    setDeviceOrigin(null);
+    setManualPickerOpen(true);
+    setLocHint("Location unavailable — choose an area below.");
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
@@ -82,18 +124,17 @@ export function ShopScreen() {
     void fetchLiveShopListings({
       lat: origin.lat,
       lng: origin.lng,
-      radiusKm: nearMe ? radiusKm : null,
+      radiusKm: placeMode === "athens" ? null : radiusKm,
       originLabel: origin.label,
     }).then((result) => {
       if (cancelled) return;
       setLiveListings(result.listings);
-      setLiveVia(result.listings.length ? result.via : "none");
       setLiveReady(true);
     });
     return () => {
       cancelled = true;
     };
-  }, [origin.lat, origin.lng, origin.label, nearMe, radiusKm]);
+  }, [origin.lat, origin.lng, origin.label, placeMode, radiusKm]);
 
   const columns = shopMarketplaceColumns(width);
   const cardW = cardWidthForColumns(width, columns, GRID_PAD, GRID_GAP);
@@ -116,7 +157,9 @@ export function ShopScreen() {
         return {
           ...item,
           distanceKm,
-          liveDistanceLabel: distanceLabelFor(distanceKm, { originLabel: origin.label }),
+          liveDistanceLabel: distanceLabelFor(distanceKm, {
+            originLabel: origin.mode === "city" ? undefined : origin.label,
+          }),
         };
       })
       .sort((a, b) => a.distanceKm - b.distanceKm);
@@ -126,7 +169,7 @@ export function ShopScreen() {
     const q = query.trim().toLowerCase();
     return listed.filter((item) => {
       if (!matchesCategory(item, cat)) return false;
-      if (nearMe && !withinRadius(item.distanceKm, radiusKm)) return false;
+      if (placeMode !== "athens" && !withinRadius(item.distanceKm, radiusKm)) return false;
       if (pickupOnly && item.fulfillment === "delivery") return false;
       if (guestDealOnly && !item.badges?.includes("Guest deal")) return false;
       if (!q) return true;
@@ -144,7 +187,7 @@ export function ShopScreen() {
         .toLowerCase();
       return hay.includes(q);
     });
-  }, [listed, cat, query, nearMe, radiusKm, pickupOnly, guestDealOnly]);
+  }, [listed, cat, query, placeMode, radiusKm, pickupOnly, guestDealOnly]);
 
   const hideListingForMissingImage = (id: string) => {
     setImageFailedIds((prev) => {
@@ -166,6 +209,14 @@ export function ShopScreen() {
     });
   };
 
+  const selectManual = (pick: TravelerOrigin) => {
+    setManualOrigin(pick);
+    setDeviceOrigin(null);
+    setPlaceMode("near");
+    setManualPickerOpen(false);
+    setLocHint(null);
+  };
+
   return (
     <ScrollView
       style={styles.screen}
@@ -176,17 +227,11 @@ export function ShopScreen() {
         <Text style={styles.brand}>banDiShop</Text>
         <Text style={styles.lead}>Cool things near me — local pickup, real distance</Text>
         <Text style={styles.originLine} testID="shop-origin">
-          {origin.precise
-            ? `From your location · ${origin.label}`
-            : `From ${origin.label}${isFullStay ? " (hotel stay)" : ""} · GPS not used`}
+          {originCustomerLabel(origin)}
         </Text>
         {usingDemoFallback ? (
-          <Text style={styles.demoLine} testID="shop-demo-label">
-            Sample local finds for browsing — not available to buy yet
-          </Text>
-        ) : liveListings.length ? (
-          <Text style={styles.liveLine} testID="shop-live-label">
-            Nearby makers · {liveVia}
+          <Text style={styles.demoLine} testID="shop-preview-label">
+            Preview only — not open to buy yet
           </Text>
         ) : null}
       </View>
@@ -204,18 +249,45 @@ export function ShopScreen() {
 
       <View style={styles.modeRow}>
         <Pressable
-          style={[styles.modeChip, nearMe && styles.modeChipOn]}
-          onPress={() => setNearMe(true)}
+          style={[styles.modeChip, placeMode === "near" && styles.modeChipOn]}
+          onPress={() => void applyNearMe()}
           accessibilityRole="button"
           accessibilityLabel="Near me"
+          testID="shop-mode-near"
         >
-          <Text style={[styles.modeChipText, nearMe && styles.modeChipTextOn]}>Near me</Text>
+          <Text style={[styles.modeChipText, placeMode === "near" && styles.modeChipTextOn]}>
+            Near me
+          </Text>
         </Pressable>
         <Pressable
-          style={[styles.modeChip, !nearMe && styles.modeChipOn]}
-          onPress={() => setNearMe(false)}
+          style={[styles.modeChip, placeMode === "hotel" && styles.modeChipOn]}
+          onPress={() => {
+            setPlaceMode("hotel");
+            setManualPickerOpen(false);
+            setLocHint(null);
+          }}
+          accessibilityRole="button"
+          accessibilityLabel="From my hotel"
+          testID="shop-mode-hotel"
         >
-          <Text style={[styles.modeChipText, !nearMe && styles.modeChipTextOn]}>All Athens</Text>
+          <Text style={[styles.modeChipText, placeMode === "hotel" && styles.modeChipTextOn]}>
+            From my hotel
+          </Text>
+        </Pressable>
+        <Pressable
+          style={[styles.modeChip, placeMode === "athens" && styles.modeChipOn]}
+          onPress={() => {
+            setPlaceMode("athens");
+            setManualPickerOpen(false);
+            setLocHint(null);
+          }}
+          accessibilityRole="button"
+          accessibilityLabel="All Athens"
+          testID="shop-mode-athens"
+        >
+          <Text style={[styles.modeChipText, placeMode === "athens" && styles.modeChipTextOn]}>
+            All Athens
+          </Text>
         </Pressable>
         <Pressable
           style={[styles.modeChip, mapMode && styles.modeChipOn]}
@@ -230,7 +302,42 @@ export function ShopScreen() {
         </Pressable>
       </View>
 
-      {nearMe ? (
+      {locBusy ? (
+        <View style={styles.locBusyRow}>
+          <ActivityIndicator color="#111" />
+          <Text style={styles.locHint}>Finding your location…</Text>
+        </View>
+      ) : null}
+      {locHint ? <Text style={styles.locHint}>{locHint}</Text> : null}
+
+      {manualPickerOpen ? (
+        <View style={styles.manualBox} testID="shop-manual-location">
+          <Text style={styles.manualTitle}>Choose an area</Text>
+          <Text style={styles.manualSub}>
+            We won’t use your hotel location unless you pick From my hotel.
+          </Text>
+          <View style={styles.manualChips}>
+            {SHOP_MANUAL_ORIGINS.map((pick) => {
+              const on = manualOrigin?.label === pick.label && placeMode === "near";
+              return (
+                <Pressable
+                  key={pick.label}
+                  style={[styles.manualChip, on && styles.manualChipOn]}
+                  onPress={() => selectManual(pick)}
+                  accessibilityRole="button"
+                  accessibilityLabel={`Use ${pick.label}`}
+                >
+                  <Text style={[styles.manualChipText, on && styles.manualChipTextOn]}>
+                    {pick.label}
+                  </Text>
+                </Pressable>
+              );
+            })}
+          </View>
+        </View>
+      ) : null}
+
+      {placeMode !== "athens" ? (
         <ScrollView
           horizontal
           showsHorizontalScrollIndicator={false}
@@ -245,6 +352,7 @@ export function ShopScreen() {
                 onPress={() => setRadiusKm(km)}
                 accessibilityRole="button"
                 accessibilityLabel={`${km} kilometer radius`}
+                testID={`shop-radius-${km}`}
               >
                 <Text style={[styles.radiusChipText, on && styles.radiusChipTextOn]}>
                   {km} km
@@ -291,17 +399,16 @@ export function ShopScreen() {
         })}
       </ScrollView>
 
-      <Text style={styles.count}>
-        {rows.length} nearby · sorted by distance from {origin.label}
+      <Text style={styles.count} testID="shop-result-count">
+        {rows.length} {rows.length === 1 ? "find" : "finds"}
+        {placeMode === "athens" ? " · Athens" : ` · within ${radiusKm} km`}
+        {" · closest first"}
       </Text>
 
       {mapMode ? (
         <View style={styles.mapPanel} testID="shop-map">
-          <Text style={styles.mapTitle}>Map · fulfillment pins</Text>
-          <Text style={styles.mapHint}>
-            Origin {origin.label} ({origin.lat.toFixed(4)}, {origin.lng.toFixed(4)})
-            {origin.precise ? "" : " · hotel / manual — not device GPS"}
-          </Text>
+          <Text style={styles.mapTitle}>Pickup pins</Text>
+          <Text style={styles.mapHint}>{originCustomerLabel(origin)} · tap a row for details</Text>
           {rows.slice(0, 12).map((item) => (
             <Pressable
               key={item.id}
@@ -333,6 +440,7 @@ export function ShopScreen() {
                 onPress={() => open(item.id)}
                 accessibilityRole="button"
                 accessibilityLabel={`${item.title}, ${item.liveDistanceLabel}`}
+                testID={`shop-card-${item.id}`}
               >
                 <ExpoImage
                   source={{ uri }}
@@ -348,6 +456,7 @@ export function ShopScreen() {
                 </Text>
                 <Text style={styles.cardSeller} numberOfLines={1}>
                   {item.shopName} · {item.fulfillment === "delivery" ? "Delivery" : "Pickup"}
+                  {usingDemoFallback ? " · Preview" : ""}
                 </Text>
                 <View style={styles.cardFooter}>
                   <Text style={styles.cardPrice}>{formatEuro(item.priceCents)}</Text>
@@ -369,17 +478,20 @@ export function ShopScreen() {
         </View>
       )}
 
-      {rows.length === 0 ? (
+      {rows.length === 0 && liveReady ? (
         <Text style={styles.empty}>
-          Nothing within {radiusKm} km of {origin.label}. Expand the radius or switch to All Athens.
+          {placeMode === "athens"
+            ? "Nothing to show right now. Try another search."
+            : `Nothing within ${radiusKm} km. Expand the radius or try All Athens.`}
         </Text>
       ) : null}
     </ScrollView>
   );
 }
 
+/** Route entry — listing UI is hosted by UpperTabScreens for instant tab switch. */
 export default function ShopRoute() {
-  return <ShopScreen />;
+  return null;
 }
 
 const styles = StyleSheet.create({
@@ -388,9 +500,8 @@ const styles = StyleSheet.create({
   top: { paddingHorizontal: GRID_PAD, paddingTop: 12 },
   brand: { fontSize: 28, fontWeight: "800", color: "#111", fontFamily: "Caros" },
   lead: { marginTop: 4, fontSize: 14, color: "#6B6B6B" },
-  originLine: { marginTop: 8, fontSize: 12, fontWeight: "600", color: "#E03131" },
-  demoLine: { marginTop: 6, fontSize: 11, fontWeight: "700", color: "#9A6B2F" },
-  liveLine: { marginTop: 6, fontSize: 11, fontWeight: "700", color: "#2F6B4F" },
+  originLine: { marginTop: 8, fontSize: 13, fontWeight: "600", color: "#333" },
+  demoLine: { marginTop: 6, fontSize: 12, fontWeight: "600", color: "#8A6A3A" },
   searchRow: {
     marginTop: 14,
     marginHorizontal: GRID_PAD,
@@ -421,6 +532,43 @@ const styles = StyleSheet.create({
   modeChipOn: { backgroundColor: "#111", borderColor: "#111" },
   modeChipText: { fontSize: 13, fontWeight: "700", color: "#111" },
   modeChipTextOn: { color: "#FFF" },
+  locBusyRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    paddingHorizontal: GRID_PAD,
+    marginTop: 10,
+  },
+  locHint: {
+    marginTop: 8,
+    marginHorizontal: GRID_PAD,
+    fontSize: 12,
+    color: "#6B6B6B",
+    lineHeight: 18,
+  },
+  manualBox: {
+    marginTop: 10,
+    marginHorizontal: GRID_PAD,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: "#E8E8E8",
+    padding: 12,
+    backgroundColor: "#FAFAFA",
+  },
+  manualTitle: { fontSize: 14, fontWeight: "800", color: "#111" },
+  manualSub: { marginTop: 4, fontSize: 12, color: "#6B6B6B", lineHeight: 17, marginBottom: 10 },
+  manualChips: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
+  manualChip: {
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: "#E0E0E0",
+    paddingHorizontal: 12,
+    paddingVertical: 7,
+    backgroundColor: "#FFF",
+  },
+  manualChipOn: { backgroundColor: "#111", borderColor: "#111" },
+  manualChipText: { fontSize: 12, fontWeight: "700", color: "#333" },
+  manualChipTextOn: { color: "#FFF" },
   radiusRow: { paddingHorizontal: GRID_PAD, gap: 8, marginTop: 10 },
   radiusChip: {
     borderRadius: 999,

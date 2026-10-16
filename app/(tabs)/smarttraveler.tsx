@@ -29,6 +29,7 @@ import {
   imageFocusStyle,
   offerMarketplaceColumns,
 } from "@/lib/imageRatios";
+import { useUpperTabHost } from "@/contexts/UpperTabHostContext";
 
 const GRID_GAP = 14;
 const GRID_PAD = 16;
@@ -279,7 +280,10 @@ function LocalFindCard({
   );
 }
 
+/** Route entry — listing UI is hosted by UpperTabScreens when the rail is active. */
 export default function SmartTravelerRoute() {
+  const { enabled } = useUpperTabHost();
+  if (enabled) return null;
   return <SmartTravelerScreen />;
 }
 

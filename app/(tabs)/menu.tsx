@@ -89,7 +89,7 @@ const MENU_GROUPS_STAY: MenuGroup[] = [
     title: "bandiTEAM · Safety",
     cards: [
       // See Reports = same route as Quick “Safety alerts”; keep upload-only here.
-      { key: "upload-report", emoji: "📝", title: "Upload Report", href: "/bandiTeam/report" },
+      { key: "upload-report", emoji: "📝", title: "Share a Warning", href: "/bandiTeam/report" },
     ],
   },
   {
@@ -138,7 +138,7 @@ const MENU_GROUPS_AFTER: MenuGroup[] = [
     id: "safety",
     title: "bandiTEAM · Safety",
     cards: [
-      { key: "upload-report", emoji: "📝", title: "Upload Report", href: "/bandiTeam/report" },
+      { key: "upload-report", emoji: "📝", title: "Share a Warning", href: "/bandiTeam/report" },
     ],
   },
   {
