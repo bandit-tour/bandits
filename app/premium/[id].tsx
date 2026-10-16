@@ -122,6 +122,7 @@ export default function PremiumConciergeScreen() {
   const { getCurrentUser, activeIdentity } = useAppState();
   const [guestId, setGuestId] = useState<string | null>(activeIdentity?.userId ?? null);
   const [guestEmail, setGuestEmail] = useState<string | null>(null);
+  const [identityReady, setIdentityReady] = useState(false);
 
   const [banditName, setBanditName] = useState<string>("Local banDit");
   const [banditPortrait, setBanditPortrait] = useState<string | null>(null);
@@ -177,6 +178,7 @@ export default function PremiumConciergeScreen() {
 
   useEffect(() => {
     let cancelled = false;
+    setIdentityReady(false);
     (async () => {
       const fromIdentity = activeIdentity?.userId ? String(activeIdentity.userId).trim() : "";
       if (fromIdentity) {
@@ -186,7 +188,8 @@ export default function PremiumConciergeScreen() {
       if (cancelled) return;
       if (!fromIdentity) setGuestId(u?.id ? String(u.id).trim() : null);
       const email = (u as { email?: string } | null)?.email;
-      if (email) setGuestEmail(String(email).trim());
+      setGuestEmail(email ? String(email).trim() : null);
+      setIdentityReady(true);
     })();
     return () => {
       cancelled = true;
@@ -194,9 +197,11 @@ export default function PremiumConciergeScreen() {
   }, [activeIdentity?.userId, getCurrentUser]);
 
   const refreshEntitlement = useCallback(async () => {
-    if (!id) {
-      setEntitlement(null);
-      setEntitlementLoading(false);
+    if (!id || !identityReady) {
+      if (!id) {
+        setEntitlement(null);
+        setEntitlementLoading(false);
+      }
       return;
     }
     setEntitlementLoading(true);
@@ -211,7 +216,7 @@ export default function PremiumConciergeScreen() {
     } finally {
       setEntitlementLoading(false);
     }
-  }, [guestEmail, guestId, id]);
+  }, [guestEmail, guestId, id, identityReady]);
 
   useEffect(() => {
     if (!id) {
@@ -251,11 +256,7 @@ export default function PremiumConciergeScreen() {
 
   /** Return from Commerce success URL (?paid=1&order=…) → claim entitlement → open ops. */
   useEffect(() => {
-    if (!id || paidFlag !== "1" || !orderFromUrl || claimingPaid) return;
-    if (!guestEmail) {
-      setCheckoutMsg("Sign in with the same account you paid with to unlock Your Local Insider.");
-      return;
-    }
+    if (!id || paidFlag !== "1" || !orderFromUrl || claimingPaid || !guestEmail) return;
     let cancelled = false;
     (async () => {
       setClaimingPaid(true);
@@ -406,7 +407,13 @@ export default function PremiumConciergeScreen() {
   const statusTasks = tasks.filter((t) => t.status !== "cancelled");
   const completedTasks = tasks.filter((t) => t.status === "completed");
 
-  if (banditAuthorized === null || entitlementLoading || loadingBandit || claimingPaid) {
+  if (
+    banditAuthorized === null ||
+    !identityReady ||
+    entitlementLoading ||
+    loadingBandit ||
+    claimingPaid
+  ) {
     return (
       <View style={styles.salesScreen}>
         <Stack.Screen options={salesHeader} />
@@ -426,7 +433,7 @@ export default function PremiumConciergeScreen() {
         <Stack.Screen options={salesHeader} />
         <View style={[styles.salesContent, { width: contentWidth, paddingTop: 48 }]}>
           <Text style={styles.salesTitle}>Your Local Insider not available</Text>
-          <Text style={styles.salesBody}>
+          <Text style={styles.salesLead}>
             {`${first} still offers free City Guide and Ask Me. Octopus Concierge appears only when this Local banDit is Octopus Verified.`}
           </Text>
         </View>
@@ -434,13 +441,12 @@ export default function PremiumConciergeScreen() {
     );
   }
 
-  // ─── SALES — concise: headline, price, ≤3 benefits, one CTA, brief terms ────
+  const entitlementEnded =
+    entitlement?.state === "exhausted" || entitlement?.state === "expired";
+
+  // ─── SALES / RENEWAL — concise: headline, price, ≤3 benefits, one CTA ────
   if (!entitled) {
-    const commerceReady = entitlement?.state !== "unavailable";
-    const renewState =
-      entitlement?.state === "exhausted" || entitlement?.state === "expired"
-        ? entitlement.state
-        : null;
+    const commerceReady = entitlement?.state !== "unavailable" && Boolean(guestEmail);
     const compactBenefits = [
       `Up to 5 requests with ${first} this stay`,
       "Tables, tickets and transfers handled for you",
@@ -461,11 +467,11 @@ export default function PremiumConciergeScreen() {
           <Text style={styles.salesTitle}>Your Local Insider</Text>
           <Text style={styles.salesLead}>Your city. Your insider.</Text>
           <Text style={styles.salesPersuade}>
-            {renewState === "exhausted"
-              ? `Your Stay Pass with ${first} used all 5 requests. Renew for another stay.`
-              : renewState === "expired"
-                ? `Your Stay Pass with ${first} expired. Renew to unlock Concierge again.`
-                : `Go beyond recommendations. ${first} helps make things happen.`}
+            {entitlementEnded
+              ? entitlement?.state === "exhausted"
+                ? `Your Stay Pass with ${first} has no requests left. Renew to keep going.`
+                : `Your Stay Pass with ${first} has ended. Renew for this stay.`
+              : `Go beyond recommendations. ${first} helps make things happen.`}
           </Text>
 
           <View style={styles.priceBlock}>
@@ -492,15 +498,21 @@ export default function PremiumConciergeScreen() {
               <Text style={styles.unlockCtaText}>
                 {checkoutBusy
                   ? "Processing…"
-                  : `Unlock Your Local Insider — ${OCTOPUS_CONCIERGE_OFFER.priceLabel}`}
+                  : entitlementEnded
+                    ? `Renew Stay Pass — ${OCTOPUS_CONCIERGE_OFFER.priceLabel}`
+                    : `Unlock Your Local Insider — ${OCTOPUS_CONCIERGE_OFFER.priceLabel}`}
               </Text>
             </Pressable>
           ) : (
             <View style={styles.distinctionBox} testID="local-insider-checkout-gated">
-              <Text style={styles.distinctionLabel}>Checkout unavailable</Text>
+              <Text style={styles.distinctionLabel}>
+                {guestEmail ? "Checkout unavailable" : "Sign in required"}
+              </Text>
               <Text style={styles.distinction}>
-                {entitlement?.detail ||
-                  "Purchases open after Workspace commerce and a verified stay are ready. City Guide and Ask Me stay free."}
+                {guestEmail
+                  ? entitlement?.detail ||
+                    "Purchases open after Workspace commerce and a verified stay are ready. City Guide and Ask Me stay free."
+                  : "Sign in with your Guest account to purchase Stay Pass. City Guide and Ask Me stay free."}
               </Text>
             </View>
           )}
@@ -519,11 +531,9 @@ export default function PremiumConciergeScreen() {
     );
   }
 
-  // ─── CONCIERGE OS (entitled only — Octopus Verified alone never reaches here) ──
-  const remainingLabel =
-    typeof entitlement?.requestsRemaining === "number"
-      ? `${entitlement.requestsRemaining} of ${entitlement.requestsIncluded ?? 5} requests left`
-      : "Stay Pass active";
+  // ─── CONCIERGE OS (entitled only) ──────────────────────────────────────
+  const remaining =
+    typeof entitlement?.requestsRemaining === "number" ? entitlement.requestsRemaining : null;
   return (
     <View style={styles.opsScreen}>
       <Stack.Screen options={opsHeader} />
@@ -537,14 +547,13 @@ export default function PremiumConciergeScreen() {
         </View>
         <Text style={styles.opsIdentity}>{banditName}</Text>
         <Text style={styles.opsTagline}>
-          {`${first}'s Athens is unlocked — ask anything, or pick what ${first} can handle.`}
+          {remaining != null
+            ? `${first}'s Athens is unlocked — ${remaining} request${remaining === 1 ? "" : "s"} left this stay.`
+            : `${first}'s Athens is unlocked — ask anything, or pick what ${first} can handle.`}
         </Text>
-        <View style={styles.passBadge} testID="stay-pass-remaining">
-          <Text style={styles.passBadgeText}>{`Stay Pass · ${remainingLabel}`}</Text>
-        </View>
 
         <View style={styles.askCard}>
-          <Text style={styles.askTitle}>{`Ask ${first}`}</Text>
+          <Text style={styles.askTitle}>Ask My banDit</Text>
           <Text style={styles.askLead}>Need something arranged?</Text>
           <TextInput
             style={styles.askInput}
@@ -911,25 +920,10 @@ const styles = StyleSheet.create({
   },
   opsTagline: {
     marginTop: 8,
-    marginBottom: 12,
+    marginBottom: 20,
     color: color.inkSoft,
     fontSize: 15,
     lineHeight: 22,
-  },
-  passBadge: {
-    alignSelf: "flex-start",
-    marginBottom: 20,
-    paddingHorizontal: 12,
-    paddingVertical: 7,
-    borderRadius: radius.md,
-    backgroundColor: "rgba(27, 42, 74, 0.08)",
-    borderWidth: 1,
-    borderColor: "rgba(27, 42, 74, 0.12)",
-  },
-  passBadgeText: {
-    color: NAVY_SOFT,
-    fontSize: 13,
-    fontWeight: "700",
   },
   askCard: {
     backgroundColor: color.surface,
