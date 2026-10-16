@@ -1,10 +1,8 @@
-import { Ionicons } from "@expo/vector-icons";
 import { Image as ExpoImage } from "expo-image";
 import { Stack, useRouter, type Href } from "expo-router";
-import React, { useRef } from "react";
+import React from "react";
 import {
-  NativeScrollEvent,
-  NativeSyntheticEvent,
+  Image,
   Platform,
   Pressable,
   ScrollView,
@@ -17,23 +15,21 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import {
   GUEST_STAY,
-  HOTEL_CAMPAIGNS,
-  HOTEL_EVENTS,
-  HOTEL_OFFERS,
-  HOTEL_SERVICES,
   HOTELIER_QUICK_ACTIONS,
   PERSONAL_STAY_FACTS,
-  TODAY_AT_HOTEL,
+  buildHappeningFeed,
   rewritePlaySandboxCopy,
-  type CampaignCard,
-  type HotelServiceCard,
+  type HappeningFeedItem,
   type HotelierModuleId,
 } from "@/lib/guest-workspace/hotelierDashboard";
+import {
+  loadHotelBottleListing,
+  type HotelBottleListing,
+} from "@/lib/guest-workspace/hotelBottleListing";
 import { useGuestLifecycle } from "@/lib/guest-lifecycle/useGuestLifecycle";
 import { liveHotelDisplayName, isIsolatedPlaySandboxSlug } from "@/lib/stay/liveHotelIdentity";
 import { imageFocusStyle } from "@/lib/imageRatios";
 import { getHotelEntry } from "@/lib/pilotSession";
-import { radius } from "@/lib/guestDesign";
 
 /**
  * Guest Hotel tab = Hotelier boutique experience (not Hotelier OS staff).
@@ -44,11 +40,11 @@ export default function HotelierGuestHomeScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const { width } = useWindowDimensions();
-  const todayRef = useRef<ScrollView>(null);
   const [hotelName, setHotelName] = React.useState("");
   const [heroUri, setHeroUri] = React.useState<string | null>(null);
   const [hotelSlug, setHotelSlug] = React.useState("");
-  const [todayX, setTodayX] = React.useState(0);
+  const [hotelListing, setHotelListing] = React.useState<HotelBottleListing | null>(null);
+  const happeningItems = React.useMemo(() => buildHappeningFeed(6), []);
   const {
     loading: lifeLoading,
     isFullStay,
@@ -68,19 +64,6 @@ export default function HotelierGuestHomeScreen() {
     ? Math.min(220, Math.max(190, Math.round(contentW / 2.6)))
     : Math.min(300, Math.max(260, Math.round(Math.min(contentW, 920) / 3.2)));
 
-  const todayCardW = isMobile
-    ? Math.min(240, Math.max(220, width * 0.72))
-    : Math.min(260, Math.max(220, 240));
-  const todayGap = 12;
-  const todayStep = todayCardW + todayGap;
-
-  const serviceCols = width >= 1100 ? 3 : width >= 720 ? 2 : 1;
-  const serviceCardW =
-    serviceCols === 1
-      ? Math.min(320, contentW * 0.88)
-      : Math.min(320, Math.max(280, (contentW - 14 * (serviceCols - 1)) / serviceCols));
-  const serviceImgH = Math.min(240, Math.max(180, Math.round(serviceCardW * (3 / 4))));
-
   React.useEffect(() => {
     let cancelled = false;
     void (async () => {
@@ -97,8 +80,12 @@ export default function HotelierGuestHomeScreen() {
       setHotelSlug(slug);
       if (!slug) {
         setHeroUri(null);
+        setHotelListing(null);
         return;
       }
+      void loadHotelBottleListing(slug).then((listing) => {
+        if (!cancelled) setHotelListing(listing);
+      });
       // Live hotels: remote tenant hero only — never PLAY local asset fallback.
       if (isIsolatedPlaySandboxSlug(slug)) {
         setHeroUri(null);
@@ -127,20 +114,8 @@ export default function HotelierGuestHomeScreen() {
     router.push(`/hotelier/${id}` as Href);
   };
 
-  const onTodayScroll = (e: NativeSyntheticEvent<NativeScrollEvent>) => {
-    setTodayX(e.nativeEvent.contentOffset.x);
-  };
-
-  const scrollToday = (dir: -1 | 1) => {
-    const maxX = Math.max(0, TODAY_AT_HOTEL.length * todayStep - contentW);
-    const next = Math.min(maxX, Math.max(0, todayX + dir * todayStep));
-    todayRef.current?.scrollTo({ x: next, animated: true });
-    setTodayX(next);
-  };
-
   const actionCols = width >= 1100 ? 4 : width >= 720 ? 3 : 2;
-  const actionW =
-    (contentW - 12 * (actionCols - 1)) / actionCols;
+  const actionW = (contentW - 12 * (actionCols - 1)) / actionCols;
 
   const offerCols = width >= 1000 ? 3 : width >= 640 ? 2 : 1;
   const offerCardW =
@@ -158,53 +133,33 @@ export default function HotelierGuestHomeScreen() {
     roomNumber,
     hotelSlug: hotelSlug || activeStay?.hotelSlug,
   };
-  const hasHotelContext = Boolean(hotelName || hotelSlug || playSandbox);
   const lifecyclePhase =
     isFullStay || state === "ACTIVE_STAY" || state === "REACTIVATED"
       ? "during"
       : isAfterTrip || state === "AFTER_TRIP" || state === "NEXT_TRIP_PLANNING"
         ? "after"
         : "before";
-  const todaySectionLabel =
-    lifecyclePhase === "during"
-      ? "Today at your hotel"
-      : lifecyclePhase === "after"
-        ? "At your hotel"
-        : "Discover your hotel";
   const heroKicker =
     lifecyclePhase === "during"
-      ? "What can your hotel do for you right now?"
+      ? "Your boutique hotel lobby"
       : lifecyclePhase === "after"
         ? "Browse your hotel — reconnect when you book again"
         : "Explore the hotel before you arrive";
 
-  const stayFacts = (playSandbox ? PERSONAL_STAY_FACTS : PERSONAL_STAY_FACTS.filter((f) => !["wifi", "addr", "desk"].includes(f.id))).map(
-    (fact) => ({
-      ...fact,
-      value:
-        fact.id === "room" && !playSandbox
-          ? roomNumber
-            ? `Room ${roomNumber}`
-            : "Ask reception"
-          : rewritePlaySandboxCopy(fact.value, copyCtx),
-    }),
-  );
-  const serviceItems = HOTEL_SERVICES.map((s) => ({
-    ...s,
-    title: rewritePlaySandboxCopy(s.title, copyCtx),
-    detail: rewritePlaySandboxCopy(s.detail, copyCtx),
+  const stayFacts = (playSandbox
+    ? PERSONAL_STAY_FACTS
+    : PERSONAL_STAY_FACTS.filter((f) => !["wifi", "addr", "desk"].includes(f.id))
+  ).map((fact) => ({
+    ...fact,
+    value:
+      fact.id === "room" && !playSandbox
+        ? roomNumber
+          ? `Room ${roomNumber}`
+          : "Ask reception"
+        : rewritePlaySandboxCopy(fact.value, copyCtx),
   }));
-  const offerItems = HOTEL_OFFERS.map((s) => ({
-    ...s,
-    title: rewritePlaySandboxCopy(s.title, copyCtx),
-    detail: rewritePlaySandboxCopy(s.detail, copyCtx),
-  }));
-  const eventItems = HOTEL_EVENTS.map((s) => ({
-    ...s,
-    title: rewritePlaySandboxCopy(s.title, copyCtx),
-    detail: rewritePlaySandboxCopy(s.detail, copyCtx),
-  }));
-  const campaignItems = HOTEL_CAMPAIGNS.map((s) => ({
+
+  const happeningCards: HappeningFeedItem[] = happeningItems.map((s) => ({
     ...s,
     title: rewritePlaySandboxCopy(s.title, copyCtx),
     detail: rewritePlaySandboxCopy(s.detail, copyCtx),
@@ -226,11 +181,23 @@ export default function HotelierGuestHomeScreen() {
     .filter(Boolean)
     .join(" · ");
 
-  const heroSource = heroUri
-    ? { uri: heroUri }
-    : playSandbox || hasHotelContext
-      ? require("@/assets/images/play-theatrou.png")
-      : { uri: "https://images.unsplash.com/photo-1566073771259-6a8506099945?auto=format&fit=crop&w=1200&q=80" };
+  const displayHotel =
+    hotelListing?.whiteLabel?.title || hotelListing?.displayName || hotelName || "this hotel";
+  const stockHero = Boolean(heroUri && /images\.unsplash\.com|images\.pexels\.com|picsum\.photos/i.test(heroUri));
+  /** Hero belongs to the selected tenant. Stock URLs are not property photography. */
+  const heroSource =
+    heroUri && !stockHero
+      ? { uri: heroUri }
+      : hotelListing?.whiteLabel?.introHeroSource
+        ? hotelListing.whiteLabel.introHeroSource
+        : playSandbox
+          ? require("@/assets/images/play-theatrou.png")
+          : null;
+
+  const galleryRemote = (hotelListing?.remoteGalleryUrls || []).filter(
+    (uri) => !/images\.unsplash\.com/i.test(uri),
+  );
+  const galleryLocal = hotelListing?.localGallery || [];
 
   if (lifeLoading) {
     return (
@@ -262,14 +229,16 @@ export default function HotelierGuestHomeScreen() {
         }}
       />
 
-      {/* Compact stay identity — above hero */}
-      <View style={styles.identity}>
-        <Text style={styles.identityKicker}>Hotelier</Text>
+      {/* 1 — YOUR HOTEL */}
+      <View style={styles.identity} testID="hotelier-section-your-hotel">
+        <Text style={styles.identityKicker}>Your hotel</Text>
         <Text style={styles.identityHotel} numberOfLines={1}>
-          {hotelName || "Your hotel"}
+          {displayHotel}
         </Text>
-        <Text style={styles.identityMeta} numberOfLines={1}>
-          {identityMeta || "Boutique hotel experience"}
+        <Text style={styles.identityMeta} numberOfLines={2}>
+          {hotelListing?.location
+            ? `${hotelListing.location}${identityMeta ? ` · ${identityMeta}` : ""}`
+            : identityMeta || "Boutique hotel experience"}
         </Text>
       </View>
 
@@ -277,12 +246,12 @@ export default function HotelierGuestHomeScreen() {
         <View style={styles.lifecycleBanner} testID="hotelier-lifecycle-banner">
           <Text style={styles.lifecycleBannerTitle}>
             {lifecyclePhase === "after"
-              ? "Between trips? Your next stay is waiting."
+              ? "Your stay may have ended. Your journey hasn't."
               : "Connect your stay to unlock room requests."}
           </Text>
           <Text style={styles.lifecycleBannerBody}>
             {lifecyclePhase === "after"
-              ? "Browse hotel stories and services anytime. Requests need a verified booking."
+              ? "Browse hotel services anytime. Requests need a verified booking."
               : "Explore the hotel before you arrive. Breakfast, spa and room requests unlock with a verified stay."}
           </Text>
           <View style={styles.lifecycleBannerActions}>
@@ -296,95 +265,63 @@ export default function HotelierGuestHomeScreen() {
                 {lifecyclePhase === "after" ? "Connect My New Stay" : "Connect My Stay"}
               </Text>
             </Pressable>
-            <Pressable
-              style={styles.lifecycleGhost}
-              onPress={() =>
-                router.push((lifecyclePhase === "after" ? "/travelBottle" : "/explore") as Href)
-              }
-              accessibilityRole="button"
-            >
-              <Text style={styles.lifecycleGhostText}>
-                {lifecyclePhase === "after" ? "Explore your next stay" : "Explore the city"}
-              </Text>
-            </Pressable>
           </View>
         </View>
       ) : null}
 
-      {/* Compact hero — boutique photography */}
       <View style={[styles.hero, { height: heroH, maxHeight: isMobile ? 220 : 300 }]}>
-        <ExpoImage
-          source={heroSource}
-          style={[StyleSheet.absoluteFillObject, imageFocusStyle("center")]}
-          contentFit="cover"
-        />
+        {heroSource ? (
+          <ExpoImage
+            source={heroSource}
+            style={[StyleSheet.absoluteFillObject, imageFocusStyle("center")]}
+            contentFit="cover"
+          />
+        ) : (
+          <View style={[StyleSheet.absoluteFillObject, styles.heroFallback]} testID="hotelier-hero-fallback">
+            <Text style={styles.heroFallbackName}>{displayHotel}</Text>
+          </View>
+        )}
         <View style={styles.heroScrim} />
         <Text style={styles.heroKicker}>{heroKicker}</Text>
       </View>
 
-      {/* TODAY / DISCOVER */}
-      <View style={styles.sectionRow}>
-        <Text style={styles.sectionInline}>{todaySectionLabel}</Text>
-        <View style={styles.carouselControls}>
-          <Pressable
-            style={styles.carouselBtn}
-            onPress={() => scrollToday(-1)}
-            hitSlop={10}
-            accessibilityRole="button"
-            accessibilityLabel="Previous today cards"
+      {galleryRemote.length || galleryLocal.length ? (
+        <View testID="hotelier-own-gallery">
+          <Text style={styles.galleryLabel}>Photos</Text>
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={styles.hotelGalleryRow}
+            testID="hotelier-hotel-gallery"
           >
-            <Ionicons name="chevron-back" size={18} color="#F0D7A0" />
-          </Pressable>
-          <Pressable
-            style={styles.carouselBtn}
-            onPress={() => scrollToday(1)}
-            hitSlop={10}
-            accessibilityRole="button"
-            accessibilityLabel="Next today cards"
-          >
-            <Ionicons name="chevron-forward" size={18} color="#F0D7A0" />
-          </Pressable>
+            {galleryRemote.slice(0, 6).map((uri) => (
+              <ExpoImage key={uri} source={{ uri }} style={styles.hotelGalleryImage} contentFit="cover" />
+            ))}
+            {galleryLocal.slice(0, 4).map((src, idx) => (
+              <Image key={`loc-${idx}`} source={src} style={styles.hotelGalleryImage} resizeMode="cover" />
+            ))}
+          </ScrollView>
         </View>
-      </View>
-      <ScrollView
-        ref={todayRef}
-        horizontal
-        nestedScrollEnabled
-        showsHorizontalScrollIndicator={false}
-        contentContainerStyle={[styles.todayRow, { gap: todayGap }]}
-        onScroll={onTodayScroll}
-        scrollEventThrottle={16}
-        decelerationRate="fast"
-        snapToInterval={todayStep}
-        disableIntervalMomentum
-        {...Platform.select({
-          web: { style: styles.todayScrollWeb } as object,
-          default: {},
-        })}
-      >
-        {TODAY_AT_HOTEL.map((item) => (
-          <Pressable
-            key={item.id}
-            style={({ pressed }) => [
-              styles.todayCard,
-              { width: todayCardW },
-              pressed && styles.pressed,
-            ]}
-            onPress={() => openModule(item.module)}
-          >
-            <View style={[styles.todayAccent, { backgroundColor: item.accent ?? "#E03131" }]} />
-            <Text style={styles.todayTitle} numberOfLines={2}>
-              {rewritePlaySandboxCopy(item.title, copyCtx)}
-            </Text>
-            <Text style={styles.todayDetail} numberOfLines={2}>
-              {rewritePlaySandboxCopy(item.detail, copyCtx)}
-            </Text>
-          </Pressable>
-        ))}
-      </ScrollView>
+      ) : null}
 
-      {/* QUICK ACTIONS */}
-      <Text style={styles.section}>Quick actions</Text>
+      <View testID="hotelier-guest-copy">
+        <Text style={styles.welcomeTitle}>
+          {isFullStay
+            ? `Make yourself at home at ${displayHotel}.`
+            : `Discover ${displayHotel}.`}
+        </Text>
+        <Text style={styles.welcomeLine}>
+          {isFullStay
+            ? "Discover what's happening, explore hotel services, and make the most of your stay."
+            : "Explore the hotel and its experiences. Connect your stay to unlock personal guest services."}
+        </Text>
+      </View>
+
+      {/* 2 — WHAT CAN WE DO FOR YOU? */}
+      <Text style={styles.section} testID="hotelier-section-services">
+        What can we do for you?
+      </Text>
+      <Text style={styles.sectionLead}>One service directory — each opens its full hotel page.</Text>
       <View style={styles.actions}>
         {HOTELIER_QUICK_ACTIONS.map((a) => (
           <Pressable
@@ -395,6 +332,9 @@ export default function HotelierGuestHomeScreen() {
               pressed && styles.pressed,
             ]}
             onPress={() => openModule(a.id)}
+            accessibilityRole="button"
+            accessibilityLabel={a.title}
+            testID={`hotelier-service-${a.id}`}
           >
             <Text style={styles.actionEmoji}>{a.emoji}</Text>
             <Text style={styles.actionTitle} numberOfLines={2}>
@@ -407,8 +347,26 @@ export default function HotelierGuestHomeScreen() {
         ))}
       </View>
 
-      {/* YOUR STAY */}
-      <Text style={styles.section}>Your stay</Text>
+      {/* 3 — HAPPENING AT YOUR HOTEL (deduped feed) */}
+      <Text style={styles.section} testID="hotelier-section-happening">
+        Happening at your hotel
+      </Text>
+      <Text style={styles.sectionLead}>
+        Curated offers, events and campaigns — each theme once.
+      </Text>
+      <OfferGrid
+        items={happeningCards}
+        cardW={offerCardW}
+        imgH={offerImgH}
+        cols={offerCols}
+        isMobile={isMobile}
+        onOpen={openModule}
+      />
+
+      {/* 4 — YOUR STAY & NEXT JOURNEY */}
+      <Text style={styles.section} testID="hotelier-section-stay-next">
+        Your stay & next journey
+      </Text>
       <View style={styles.stayCard}>
         {stayFacts.map((fact, i) => (
           <Pressable
@@ -423,122 +381,29 @@ export default function HotelierGuestHomeScreen() {
         ))}
       </View>
 
-      {/* HOTEL SERVICES — 4:3 cards */}
-      <Text style={styles.section}>Hotel services</Text>
-      <ServiceGrid
-        items={serviceItems}
-        cardW={serviceCardW}
-        imgH={serviceImgH}
-        cols={serviceCols}
-        isMobile={isMobile}
-        onOpen={openModule}
-      />
-
-      {/* OFFERS */}
-      <Text style={styles.section}>Hotel offers</Text>
-      <OfferGrid
-        items={offerItems}
-        cardW={offerCardW}
-        imgH={offerImgH}
-        cols={offerCols}
-        isMobile={isMobile}
-        onOpen={openModule}
-      />
-
-      {/* EVENTS */}
-      <Text style={styles.section}>Hotel events</Text>
-      <OfferGrid
-        items={eventItems}
-        cardW={offerCardW}
-        imgH={offerImgH}
-        cols={offerCols}
-        isMobile={isMobile}
-        onOpen={openModule}
-      />
-
-      {/* CAMPAIGNS */}
-      <Text style={styles.section}>Campaigns</Text>
-      <OfferGrid
-        items={campaignItems}
-        cardW={offerCardW}
-        imgH={offerImgH}
-        cols={offerCols}
-        isMobile={isMobile}
-        onOpen={openModule}
-      />
+      <View style={styles.nextJourneyRow}>
+        <Pressable
+          style={({ pressed }) => [styles.nextJourneyCard, pressed && styles.pressed]}
+          onPress={() => router.push("/cityMemory" as Href)}
+          accessibilityRole="button"
+          testID="hotelier-city-memory"
+        >
+          <Text style={styles.nextJourneyKicker}>Always yours</Text>
+          <Text style={styles.nextJourneyTitle}>City Memory</Text>
+          <Text style={styles.nextJourneyDetail}>Places, people and moments — beyond this stay.</Text>
+        </Pressable>
+        <Pressable
+          style={({ pressed }) => [styles.nextJourneyCard, pressed && styles.pressed]}
+          onPress={() => router.push("/travelBottle" as Href)}
+          accessibilityRole="button"
+          testID="hotelier-travel-bottle"
+        >
+          <Text style={styles.nextJourneyKicker}>Plan ahead</Text>
+          <Text style={styles.nextJourneyTitle}>Travel in a Bottle</Text>
+          <Text style={styles.nextJourneyDetail}>Hotel nights + a second place to sleep.</Text>
+        </Pressable>
+      </View>
     </ScrollView>
-  );
-}
-
-function ServiceGrid({
-  items,
-  cardW,
-  imgH,
-  cols,
-  isMobile,
-  onOpen,
-}: {
-  items: HotelServiceCard[];
-  cardW: number;
-  imgH: number;
-  cols: number;
-  isMobile: boolean;
-  onOpen: (id: HotelierModuleId) => void;
-}) {
-  if (isMobile || cols === 1) {
-    return (
-      <ScrollView
-        horizontal
-        nestedScrollEnabled
-        showsHorizontalScrollIndicator={false}
-        contentContainerStyle={styles.cardRow}
-        decelerationRate="fast"
-        snapToInterval={cardW + 12}
-      >
-        {items.map((c) => (
-          <ServiceCard key={c.id} item={c} cardW={cardW} imgH={imgH} onOpen={onOpen} />
-        ))}
-      </ScrollView>
-    );
-  }
-  return (
-    <View style={styles.cardGrid}>
-      {items.map((c) => (
-        <ServiceCard key={c.id} item={c} cardW={cardW} imgH={imgH} onOpen={onOpen} />
-      ))}
-    </View>
-  );
-}
-
-function ServiceCard({
-  item,
-  cardW,
-  imgH,
-  onOpen,
-}: {
-  item: HotelServiceCard;
-  cardW: number;
-  imgH: number;
-  onOpen: (id: HotelierModuleId) => void;
-}) {
-  return (
-    <Pressable
-      style={({ pressed }) => [styles.mediaCard, { width: cardW, maxWidth: 320 }, pressed && styles.pressed]}
-      onPress={() => onOpen(item.module)}
-    >
-      <View style={[styles.mediaImageWrap, { height: imgH }]}>
-        <ExpoImage
-          source={{ uri: item.imageUrl }}
-          style={[styles.mediaImage, imageFocusStyle("center")]}
-          contentFit="cover"
-          transition={160}
-        />
-      </View>
-      <View style={styles.mediaBody}>
-        <Text style={styles.mediaTitle}>{item.title}</Text>
-        <Text style={styles.mediaDetail}>{item.detail}</Text>
-      </View>
-    </Pressable>
   );
 }
 
@@ -550,7 +415,7 @@ function OfferGrid({
   isMobile,
   onOpen,
 }: {
-  items: CampaignCard[];
+  items: HappeningFeedItem[];
   cardW: number;
   imgH: number;
   cols: number;
@@ -568,7 +433,7 @@ function OfferGrid({
         snapToInterval={cardW + 12}
       >
         {items.map((c) => (
-          <OfferCard key={c.id} item={c} cardW={cardW} imgH={imgH} onOpen={onOpen} />
+          <OfferCard key={c.contentKey} item={c} cardW={cardW} imgH={imgH} onOpen={onOpen} />
         ))}
       </ScrollView>
     );
@@ -576,7 +441,7 @@ function OfferGrid({
   return (
     <View style={styles.cardGrid}>
       {items.map((c) => (
-        <OfferCard key={c.id} item={c} cardW={cardW} imgH={imgH} onOpen={onOpen} />
+        <OfferCard key={c.contentKey} item={c} cardW={cardW} imgH={imgH} onOpen={onOpen} />
       ))}
     </View>
   );
@@ -588,15 +453,20 @@ function OfferCard({
   imgH,
   onOpen,
 }: {
-  item: CampaignCard;
+  item: HappeningFeedItem;
   cardW: number;
   imgH: number;
   onOpen: (id: HotelierModuleId) => void;
 }) {
+  const kindLabel =
+    item.kind === "event" ? "Event" : item.kind === "campaign" ? "Campaign" : item.kind === "offer" ? "Offer" : "Today";
   return (
     <Pressable
       style={({ pressed }) => [styles.mediaCard, { width: cardW, maxWidth: 320 }, pressed && styles.pressed]}
       onPress={() => onOpen(item.module)}
+      accessibilityRole="button"
+      accessibilityLabel={`${item.title}. ${item.cta}`}
+      testID={`hotelier-happening-${item.contentKey}`}
     >
       <View style={[styles.mediaImageWrap, { height: imgH }]}>
         <ExpoImage
@@ -605,6 +475,14 @@ function OfferCard({
           contentFit="cover"
           transition={160}
         />
+        <View style={styles.kindPill}>
+          <Text style={styles.kindPillText}>{kindLabel}</Text>
+        </View>
+        {/images\.unsplash\.com|images\.pexels\.com|picsum\.photos/i.test(item.imageUrl) ? (
+          <View style={styles.illustrationPill}>
+            <Text style={styles.kindPillText}>Illustration</Text>
+          </View>
+        ) : null}
       </View>
       <View style={styles.mediaBody}>
         <Text style={styles.mediaTitle}>{item.title}</Text>
@@ -741,6 +619,116 @@ const styles = StyleSheet.create({
     textShadowColor: "rgba(0,0,0,0.4)",
     textShadowOffset: { width: 0, height: 1 },
     textShadowRadius: 3,
+  },
+  heroFallback: {
+    backgroundColor: "#2A2620",
+    alignItems: "center",
+    justifyContent: "center",
+    padding: 20,
+  },
+  heroFallbackName: {
+    color: "#F7F2E8",
+    fontSize: 22,
+    fontWeight: "700",
+    textAlign: "center",
+  },
+  galleryLabel: {
+    color: "rgba(247,242,232,0.55)",
+    fontSize: 12,
+    fontWeight: "700",
+    letterSpacing: 0.4,
+    marginTop: 12,
+  },
+  welcomeTitle: {
+    color: "#F7F2E8",
+    fontSize: 18,
+    fontWeight: "700",
+    lineHeight: 24,
+    marginTop: 8,
+    marginBottom: 4,
+  },
+  hotelGalleryRow: {
+    gap: 8,
+    paddingVertical: 10,
+  },
+  hotelGalleryImage: {
+    width: 140,
+    height: 96,
+    borderRadius: 12,
+    backgroundColor: "#2A2620",
+  },
+  welcomeLine: {
+    color: "rgba(247,242,232,0.72)",
+    fontSize: 13,
+    lineHeight: 19,
+    marginBottom: 4,
+  },
+  sectionLead: {
+    color: "rgba(247,242,232,0.55)",
+    fontSize: 12,
+    lineHeight: 17,
+    marginTop: -6,
+    marginBottom: 10,
+  },
+  illustrationPill: {
+    position: "absolute",
+    right: 8,
+    bottom: 8,
+    backgroundColor: "rgba(0,0,0,0.55)",
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 999,
+  },
+  kindPill: {
+    position: "absolute",
+    left: 8,
+    top: 8,
+    backgroundColor: "rgba(0,0,0,0.55)",
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 999,
+  },
+  kindPillText: {
+    color: "#F0D7A0",
+    fontSize: 10,
+    fontWeight: "800",
+    letterSpacing: 0.4,
+    textTransform: "uppercase",
+  },
+  nextJourneyRow: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 12,
+    marginTop: 4,
+    marginBottom: 8,
+  },
+  nextJourneyCard: {
+    flexGrow: 1,
+    flexBasis: 160,
+    backgroundColor: "#1A1814",
+    borderRadius: 16,
+    padding: 14,
+    borderWidth: 1,
+    borderColor: "rgba(240,215,160,0.14)",
+  },
+  nextJourneyKicker: {
+    fontSize: 10,
+    fontWeight: "800",
+    letterSpacing: 0.8,
+    textTransform: "uppercase",
+    color: "rgba(240,215,160,0.85)",
+  },
+  nextJourneyTitle: {
+    marginTop: 6,
+    fontSize: 16,
+    fontWeight: "800",
+    color: "#F7F2E8",
+  },
+  nextJourneyDetail: {
+    marginTop: 4,
+    fontSize: 12,
+    lineHeight: 17,
+    color: "rgba(247,242,232,0.6)",
   },
   sectionRow: {
     flexDirection: "row",
@@ -881,7 +869,7 @@ const styles = StyleSheet.create({
   },
   mediaCard: {
     backgroundColor: "#1F1C18",
-    borderRadius: radius.xxl,
+    borderRadius: 24,
     overflow: "hidden",
     borderWidth: 1,
     borderColor: "rgba(240,215,160,0.14)",

@@ -155,23 +155,21 @@ export const TODAY_AT_HOTEL: TodayItem[] = [
     module: "campaigns",
     accent: "#181818",
   },
-  {
-    id: "msg",
-    title: "Message from PLAY",
-    detail: "Rooftop seats held for Premium Guests tonight",
-    module: "askHotel",
-    accent: "#C9A962",
-  },
 ];
 
-/** Compact home grid — primary guest actions only. */
+/**
+ * Primary service directory on Hotelier home ("What can we do for you?").
+ * Events/offers/campaigns live in the Happening feed — not duplicated here.
+ * Underlying `/hotelier/{id}` modules remain available via deep links.
+ */
 export const HOTELIER_QUICK_ACTIONS: QuickAction[] = [
   { id: "breakfast", title: "Breakfast", subtitle: "Menu & reserve", emoji: "🥐" },
   { id: "restaurant", title: "Restaurant", subtitle: "Specials & wine", emoji: "🍽️" },
+  { id: "spa", title: "Spa", subtitle: "Treatments & calm", emoji: "💆" },
+  { id: "stayInfo", title: "Room", subtitle: "Stay details", emoji: "🛏" },
+  { id: "concierge", title: "Concierge", subtitle: "Tickets · tips", emoji: "🎩" },
   { id: "taxi", title: "Taxi / Airport", subtitle: "Transfer & rides", emoji: "🚕" },
   { id: "guestServices", title: "Guest Services", subtitle: "Housekeeping · DND", emoji: "🔑" },
-  { id: "events", title: "Hotel Events", subtitle: "What’s on today", emoji: "📅" },
-  { id: "campaigns", title: "Hotel Offers", subtitle: "Live for your stay", emoji: "✨" },
   { id: "askHotel", title: "Ask the Hotel", subtitle: "Message reception", emoji: "💬" },
 ];
 
@@ -329,6 +327,100 @@ export const HOTEL_CAMPAIGNS: CampaignCard[] = [
     cta: "Upgrade checkout",
   },
 ];
+
+/** Stable theme keys for feed dedupe (analytics attribution kept on each item). */
+export type HappeningKind = "today" | "offer" | "event" | "campaign";
+
+export type HappeningFeedItem = CampaignCard & {
+  contentKey: string;
+  kind: HappeningKind;
+  /** Original catalog id before dedupe — for hotel analytics. */
+  sourceId: string;
+};
+
+function themeKeyFor(card: { id: string; title: string; module: HotelierModuleId }): string {
+  const t = `${card.id} ${card.title}`.toLowerCase();
+  if (/roof|sunset|sparkling|golden/.test(t)) return "theme:rooftop-sunset";
+  if (
+    (/chef|courtyard|lamb|meze|tasting|dining|kitchen/.test(t) || card.module === "restaurant") &&
+    /chef|lamb|meze|tasting|special|table/.test(t)
+  ) {
+    return "theme:chef-dining";
+  }
+  if (/rain/.test(t)) return "theme:rain-spa-package";
+  if (/spa|calm-hour|facial|massage/.test(t) && card.module === "spa") return "theme:spa-calm";
+  if (/late checkout|checkout/.test(t) || card.module === "lateCheckout") return "theme:late-checkout";
+  if (/bandit|lobby|elena/.test(t)) return "theme:bandit-meet";
+  if (/breakfast/.test(t) || card.module === "breakfast") return "theme:breakfast-signal";
+  if (/weather|athens evening|28°/.test(t)) return "theme:weather-context";
+  if (/message from|ask/.test(t) || card.module === "askHotel") return "theme:hotel-message";
+  return `theme:${card.module}:${card.id}`;
+}
+
+/**
+ * Curated Happening feed: offers + events + campaigns (+ select today signals),
+ * deduped by stable contentKey. Source arrays stay intact for attribution.
+ */
+export function buildHappeningFeed(limit = 6): HappeningFeedItem[] {
+  const pool: HappeningFeedItem[] = [];
+
+  for (const c of HOTEL_OFFERS) {
+    pool.push({ ...c, contentKey: themeKeyFor(c), kind: "offer", sourceId: c.id });
+  }
+  for (const c of HOTEL_EVENTS) {
+    pool.push({ ...c, contentKey: themeKeyFor(c), kind: "event", sourceId: c.id });
+  }
+  for (const c of HOTEL_CAMPAIGNS) {
+    pool.push({ ...c, contentKey: themeKeyFor(c), kind: "campaign", sourceId: c.id });
+  }
+  for (const t of TODAY_AT_HOTEL) {
+    if (t.id === "brk" || t.id === "spa" || t.id === "chef") continue;
+    const asCard: CampaignCard = {
+      id: `today-${t.id}`,
+      title: t.title,
+      detail: t.detail,
+      imageUrl:
+        t.module === "events"
+          ? IMG.rooftop
+          : t.module === "campaigns"
+            ? IMG.rain
+            : t.module === "lateCheckout"
+              ? IMG.room
+              : IMG.lobby,
+      module: t.module,
+      cta: "Open",
+    };
+    pool.push({
+      ...asCard,
+      contentKey: themeKeyFor(asCard),
+      kind: "today",
+      sourceId: t.id,
+    });
+  }
+
+  const kindRank: Record<HappeningKind, number> = {
+    event: 4,
+    campaign: 3,
+    offer: 2,
+    today: 1,
+  };
+  const byKey = new Map<string, HappeningFeedItem>();
+  for (const item of pool) {
+    const prev = byKey.get(item.contentKey);
+    if (!prev || kindRank[item.kind] > kindRank[prev.kind]) {
+      byKey.set(item.contentKey, item);
+    }
+  }
+
+  const ordered = Array.from(byKey.values()).sort((a, b) => {
+    const prefer = (x: HappeningFeedItem) =>
+      (x.kind === "event" ? 0 : x.kind === "campaign" ? 1 : 2) +
+      (x.contentKey === "theme:weather-context" ? 10 : 0);
+    return prefer(a) - prefer(b);
+  });
+
+  return ordered.slice(0, limit);
+}
 
 export const HOTELIER_MODULES: Record<HotelierModuleId, ModuleContent> = {
   breakfast: {
