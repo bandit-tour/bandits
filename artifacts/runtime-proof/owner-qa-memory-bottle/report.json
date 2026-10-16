@@ -1,0 +1,119 @@
+{
+  "base": "http://localhost:8082",
+  "checks": {
+    "hotelName": "PLAY Theatrou Athens",
+    "hotelPanelHasAnise": false,
+    "hotelIsPlayStay": true,
+    "lifecycleStays": [
+      "play-theatrou"
+    ],
+    "alumaChipHidesSignPhoto": true,
+    "alumaChipHonestEmpty": true,
+    "sampleBannerHonest": true,
+    "samplePriceLabeled": true,
+    "journeySample": true,
+    "journeySamplePrice": true,
+    "journeyHotelNotAnise": true,
+    "workspaceStayQueried": true,
+    "zeroInventoryNote": true,
+    "backToBottle": true,
+    "catalogWorkspaceHits": 4,
+    "followedSeedStillVisible": true,
+    "peopleSectionSettled": true,
+    "peopleNotStuckLoading": true,
+    "likesRequestSeen": true,
+    "memorySavedVisible": true,
+    "galleryOpened": true,
+    "memoryEdited": true,
+    "otherAccountHidden": true,
+    "ownMemoryKept": true,
+    "memoryRowsKept": true,
+    "memoryDeleted": true,
+    "dreamSaveEnabled": true,
+    "consentOff": true,
+    "dreamReload": true,
+    "dreamReloginSameAccount": true,
+    "dreamOtherAccountHidden": true,
+    "dreamUserKey": "a44937ad-116b-4d4d-bad0-8de8e28cd7a7",
+    "homeDream": true,
+    "noticeVisible": true,
+    "noticeDeepLink": true,
+    "noticeStoredSeparately": true,
+    "seededFollowNotErased": true
+  },
+  "requests": [
+    {
+      "url": "http://localhost:8082/__workspace/api/public/hotels/aluma-athens/config",
+      "status": 404
+    },
+    {
+      "url": "http://localhost:8082/__workspace/api/public/hotels/play-theatrou/config",
+      "status": 200
+    },
+    {
+      "url": "http://localhost:8082/__workspace/api/public/bottle/stays",
+      "status": 200
+    },
+    {
+      "url": "http://localhost:8082/__workspace/api/public/hotels/aluma-athens/config",
+      "status": 404
+    },
+    {
+      "url": "http://localhost:8082/__workspace/api/public/hotels/play-theatrou/config",
+      "status": 200
+    },
+    {
+      "url": "http://localhost:8082/__workspace/api/public/hotels/play-theatrou/config",
+      "status": 200
+    },
+    {
+      "url": "http://localhost:8082/__workspace/api/public/bottle/stays",
+      "status": 200
+    },
+    {
+      "url": "http://localhost:8082/__workspace/api/public/hotels/play-theatrou/config",
+      "status": 200
+    },
+    {
+      "url": "http://localhost:8082/__workspace/api/public/bottle/stays",
+      "status": 200
+    },
+    {
+      "url": "http://localhost:8082/__workspace/api/public/hotels/aluma-athens/config",
+      "status": 404
+    },
+    {
+      "url": "http://localhost:8082/__workspace/api/public/bottle/stays",
+      "status": 200
+    },
+    {
+      "url": "http://localhost:8082/__workspace/api/public/hotels/aluma-athens/config",
+      "status": 404
+    },
+    {
+      "url": "http://localhost:8082/__workspace/api/public/hotels/aluma-athens/config",
+      "status": 404
+    },
+    {
+      "url": "http://localhost:8082/__workspace/api/public/hotels/aluma-athens/config",
+      "status": 404
+    },
+    {
+      "url": "http://localhost:8082/__workspace/api/public/bottle/stays?id=match_forest",
+      "status": 200
+    },
+    {
+      "url": "http://localhost:8082/__workspace/api/public/bottle/stays?id=match_forest",
+      "status": 200
+    },
+    {
+      "url": "http://localhost:8082/__workspace/api/public/hotels/play-theatrou/config",
+      "status": 200
+    },
+    {
+      "url": "http://localhost:8082/__workspace/api/public/bottle/stays",
+      "status": 200
+    }
+  ],
+  "pass": true
+}

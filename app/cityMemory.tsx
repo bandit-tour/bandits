@@ -15,7 +15,9 @@ import { useGuestLifecycle } from "@/lib/guest-lifecycle/useGuestLifecycle";
 import { transitionStartTripPlanning } from "@/lib/guest-lifecycle/transitions";
 import { usePremiumRefreshControl } from "@/lib/mobilePullToRefresh";
 import { color } from "@/lib/guestDesign";
+import { getFollowedBanditsWithTags } from "@/app/services/bandits";
 import { listTravelMemories, type TravelMemory } from "@/lib/travel-memory";
+import type { CityMemoryPerson } from "@/components/guest-lifecycle/AfterTripHome";
 
 export default function CityMemoryScreen() {
   const router = useRouter();
@@ -24,6 +26,8 @@ export default function CityMemoryScreen() {
   const { getCurrentUser, activeIdentity } = useAppState();
   const [refreshing, setRefreshing] = useState(false);
   const [personalMoments, setPersonalMoments] = useState<TravelMemory[]>([]);
+  const [livePeople, setLivePeople] = useState<CityMemoryPerson[]>([]);
+  const [peopleLoading, setPeopleLoading] = useState(true);
 
   const model = useMemo(() => (snap ? buildAfterTripHome(snap) : null), [snap]);
 
@@ -34,10 +38,37 @@ export default function CityMemoryScreen() {
     setPersonalMoments(list);
   }, [activeIdentity?.userId, getCurrentUser]);
 
+  const loadFollows = useCallback(async () => {
+    setPeopleLoading(true);
+    try {
+      const u = await getCurrentUser().catch(() => null);
+      const uid = u?.id || activeIdentity?.userId || "";
+      const rows = uid
+        ? await getFollowedBanditsWithTags({ userId: uid })
+        : await getFollowedBanditsWithTags();
+      const people: CityMemoryPerson[] = (rows || []).map((row) => {
+        const name = String(row.name || "").trim();
+        const face = String(row.face_image_url || row.image_url || "").trim();
+        return {
+          id: String(row.id),
+          name: name || "Local banDit",
+          avatarUrl: /^https?:\/\//i.test(face) ? face : null,
+          entityId: String(row.id),
+        };
+      });
+      setLivePeople(people);
+    } catch {
+      setLivePeople([]);
+    } finally {
+      setPeopleLoading(false);
+    }
+  }, [activeIdentity?.userId, getCurrentUser]);
+
   useFocusEffect(
     useCallback(() => {
       void loadMoments();
-    }, [loadMoments]),
+      void loadFollows();
+    }, [loadFollows, loadMoments]),
   );
 
   const screenOptions = useAppBackScreenOptions({
@@ -51,10 +82,10 @@ export default function CityMemoryScreen() {
 
   const onRefresh = useCallback(() => {
     setRefreshing(true);
-    void Promise.all([refresh(), loadMoments()])
+    void Promise.all([refresh(), loadMoments(), loadFollows()])
       .catch(() => {})
       .finally(() => setRefreshing(false));
-  }, [loadMoments, refresh]);
+  }, [loadFollows, loadMoments, refresh]);
   const refreshControl = usePremiumRefreshControl(refreshing, onRefresh);
 
   if (loading && !model) {
@@ -86,6 +117,8 @@ export default function CityMemoryScreen() {
           model={model}
           state={state || "AFTER_TRIP"}
           personalMoments={personalMoments}
+          livePeople={livePeople}
+          peopleLoading={peopleLoading}
           onPlanNextTrip={() => {
             void transitionStartTripPlanning({ intent: "Plan next trip" }).then(() => {
               void refresh();

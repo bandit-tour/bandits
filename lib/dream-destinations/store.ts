@@ -28,12 +28,16 @@ export type DreamDestination = {
   updatedAt: string;
 };
 
-type FileShape = {
+type LegacyFile = {
   userId: string;
   destinations: DreamDestination[];
 };
 
-const EMPTY = (userId: string): FileShape => ({ userId, destinations: [] });
+type StoreFile = {
+  byUser: Record<string, DreamDestination[]>;
+};
+
+const EMPTY_STORE = (): StoreFile => ({ byUser: {} });
 
 async function readRaw(): Promise<string | null> {
   if (Platform.OS === "web" && typeof window !== "undefined") {
@@ -50,28 +54,44 @@ async function writeRaw(raw: string): Promise<void> {
   await AsyncStorage.setItem(DREAM_DESTINATIONS_KEY, raw);
 }
 
-async function readFile(userId: string): Promise<FileShape> {
+function asStore(parsed: unknown): StoreFile {
+  if (!parsed || typeof parsed !== "object") return EMPTY_STORE();
+  const rec = parsed as Partial<StoreFile> & Partial<LegacyFile>;
+  if (rec.byUser && typeof rec.byUser === "object") {
+    const byUser: Record<string, DreamDestination[]> = {};
+    for (const [key, rows] of Object.entries(rec.byUser)) {
+      if (Array.isArray(rows)) byUser[key] = rows;
+    }
+    return { byUser };
+  }
+  if (Array.isArray(rec.destinations)) {
+    const key = String(rec.userId || "").trim();
+    if (!key) return EMPTY_STORE();
+    return { byUser: { [key]: rec.destinations } };
+  }
+  return EMPTY_STORE();
+}
+
+async function readStore(): Promise<StoreFile> {
   try {
     const raw = await readRaw();
-    if (!raw) return EMPTY(userId);
-    const parsed = JSON.parse(raw) as FileShape;
-    if (!parsed || !Array.isArray(parsed.destinations)) return EMPTY(userId);
-    if (parsed.userId && parsed.userId !== userId) {
-      return { userId, destinations: parsed.destinations.map((d) => ({ ...d })) };
-    }
-    return { userId, destinations: parsed.destinations };
+    if (!raw) return EMPTY_STORE();
+    return asStore(JSON.parse(raw));
   } catch {
-    return EMPTY(userId);
+    return EMPTY_STORE();
   }
 }
 
-async function writeFile(file: FileShape): Promise<void> {
+async function writeStore(file: StoreFile): Promise<void> {
   await writeRaw(JSON.stringify(file));
 }
 
 export async function listDreamDestinations(userId: string): Promise<DreamDestination[]> {
-  const file = await readFile(userId);
-  return [...file.destinations].sort((a, b) => a.priority - b.priority || a.name.localeCompare(b.name));
+  const uid = String(userId || "").trim();
+  if (!uid) return [];
+  const file = await readStore();
+  const rows = file.byUser[uid] || [];
+  return [...rows].sort((a, b) => a.priority - b.priority || a.name.localeCompare(b.name));
 }
 
 export async function primaryDreamDestination(userId: string): Promise<DreamDestination | null> {
@@ -88,9 +108,12 @@ export async function saveDreamDestination(input: {
 }): Promise<DreamDestination> {
   const name = String(input.name || "").trim();
   if (name.length < 2) throw new Error("Destination name is required.");
-  const file = await readFile(input.userId);
+  const uid = String(input.userId || "").trim();
+  if (!uid) throw new Error("Sign in before saving a dream destination.");
+  const file = await readStore();
+  const current = file.byUser[uid] || [];
   const now = new Date().toISOString();
-  const existing = input.id ? file.destinations.find((d) => d.id === input.id) : undefined;
+  const existing = input.id ? current.find((d) => d.id === input.id) : undefined;
   const row: DreamDestination = existing
     ? {
         ...existing,
@@ -104,35 +127,47 @@ export async function saveDreamDestination(input: {
         name,
         timing: input.timing?.trim() || undefined,
         styles: input.styles || [],
-        priority: file.destinations.length,
+        priority: current.length,
         createdAt: now,
         updatedAt: now,
       };
-  const others = file.destinations.filter((d) => d.id !== row.id);
+  const others = current.filter((d) => d.id !== row.id);
   /** Newest primary when adding a fresh destination. */
   const destinations = existing
     ? [...others, row]
     : [{ ...row, priority: 0 }, ...others.map((d, i) => ({ ...d, priority: i + 1 }))];
-  await writeFile({ userId: input.userId, destinations });
+  await writeStore({ ...file, byUser: { ...file.byUser, [uid]: destinations } });
   return row;
 }
 
 export async function removeDreamDestination(userId: string, id: string): Promise<void> {
-  const file = await readFile(userId);
-  await writeFile({
-    userId,
-    destinations: file.destinations.filter((d) => d.id !== id).map((d, i) => ({ ...d, priority: i })),
+  const uid = String(userId || "").trim();
+  if (!uid) return;
+  const file = await readStore();
+  const current = file.byUser[uid] || [];
+  await writeStore({
+    ...file,
+    byUser: {
+      ...file.byUser,
+      [uid]: current.filter((d) => d.id !== id).map((d, i) => ({ ...d, priority: i })),
+    },
   });
 }
 
 export async function setPrimaryDreamDestination(userId: string, id: string): Promise<void> {
-  const file = await readFile(userId);
-  const hit = file.destinations.find((d) => d.id === id);
+  const uid = String(userId || "").trim();
+  if (!uid) return;
+  const file = await readStore();
+  const current = file.byUser[uid] || [];
+  const hit = current.find((d) => d.id === id);
   if (!hit) return;
-  const rest = file.destinations.filter((d) => d.id !== id);
-  await writeFile({
-    userId,
-    destinations: [{ ...hit, priority: 0, updatedAt: new Date().toISOString() }, ...rest.map((d, i) => ({ ...d, priority: i + 1 }))],
+  const rest = current.filter((d) => d.id !== id);
+  await writeStore({
+    ...file,
+    byUser: {
+      ...file.byUser,
+      [uid]: [{ ...hit, priority: 0, updatedAt: new Date().toISOString() }, ...rest.map((d, i) => ({ ...d, priority: i + 1 }))],
+    },
   });
 }
 

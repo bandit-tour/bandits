@@ -8,11 +8,24 @@ import { listLifecycleNotices, type LifecycleNotice } from "@/lib/lifecycle/noti
 
 export function LifecycleInboxHeader() {
   const router = useRouter();
-  const { activeIdentity } = useAppState();
-  const userId = activeIdentity?.userId || "guest";
+  const { activeIdentity, getCurrentUser } = useAppState();
+  const [userId, setUserId] = useState<string | null>(activeIdentity?.userId || null);
   const [rows, setRows] = useState<LifecycleNotice[]>([]);
 
   useEffect(() => {
+    let cancelled = false;
+    void getCurrentUser()
+      .catch(() => null)
+      .then((user) => {
+        if (!cancelled) setUserId(user?.id || activeIdentity?.userId || null);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [activeIdentity?.userId, getCurrentUser]);
+
+  useEffect(() => {
+    if (!userId) return;
     void listLifecycleNotices(userId).then(setRows);
   }, [userId]);
 

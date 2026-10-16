@@ -28,7 +28,6 @@ import {
   loadHotelBottleListing,
   type HotelBottleListing,
 } from "@/lib/guest-workspace/hotelBottleListing";
-import { isBottlePrimaryMoment } from "@/lib/guest-lifecycle/access";
 import { getHotelWhiteLabelOrDefault, type HotelWhiteLabelConfig } from "@/lib/hotelWhiteLabel";
 import { getHotelEntry } from "@/lib/pilotSession";
 import { useGuestLifecycle } from "@/lib/guest-lifecycle/useGuestLifecycle";
@@ -128,7 +127,8 @@ function JourneyMatchCard({
             {second.rating != null ? ` · ★ ${second.rating.toFixed(2)}` : ""}
           </Text>
           <Text style={styles.stayMeta} numberOfLines={2}>
-            {match.travelTime} {fromHotel} · {nightLabel(second.nights)} · {match.priceLabel}
+            {match.travelTime} {fromHotel} · {nightLabel(second.nights)} ·{" "}
+            {match.inventorySource === "sample" ? "Sample price · not a live rate" : match.priceLabel}
           </Text>
 
           {attrs.length > 0 ? (
@@ -167,6 +167,7 @@ function JourneyMatchCard({
           onPress={onViewJourney}
           accessibilityRole="button"
           accessibilityLabel={match.cta}
+          testID="bottle-view-journey"
         >
           <Text style={styles.ctaPrimaryText}>{match.cta}</Text>
         </Pressable>
@@ -175,9 +176,130 @@ function JourneyMatchCard({
           onPress={onCheckAvailability}
           accessibilityRole="button"
           accessibilityLabel={match.availabilityCta}
+          testID="bottle-check-availability"
         >
           <Text style={styles.ctaSecondaryText}>{match.availabilityCta}</Text>
         </Pressable>
+      </View>
+    </View>
+  );
+}
+
+const HOTEL_SERVICE_TAGS = ["Breakfast", "Restaurant", "Spa", "Rooftop", "Concierge"];
+
+function isInventedWelcome(text: string): boolean {
+  return /message in a bottle|calm, personal|soft welcome before you/i.test(text);
+}
+
+function HotelStayPresentation({
+  listing,
+  fallbackName,
+  city,
+  nightsLabel,
+  datesLabel,
+  onViewHotel,
+  onHotelServices,
+  onContactHotel,
+}: {
+  listing: HotelBottleListing | null;
+  fallbackName: string;
+  city: string;
+  nightsLabel: string;
+  datesLabel: string;
+  onViewHotel: () => void;
+  onHotelServices: () => void;
+  onContactHotel: () => void;
+}) {
+  const name = listing?.whiteLabel?.title || listing?.displayName || fallbackName;
+  const area = listing?.location || city;
+  const rawSummary = String(listing?.description || "").trim();
+  const usableSummary =
+    rawSummary.length > 80 && !isInventedWelcome(rawSummary) && !/^welcome to\b/i.test(rawSummary)
+      ? rawSummary
+      : "";
+  const guestSummary =
+    usableSummary ||
+    `${name} is your hotel stay in ${area}. Bottle adds a second place to sleep around this stay — it does not replace the hotel.`;
+  const tags = (listing?.services?.length ? listing.services : HOTEL_SERVICE_TAGS).slice(0, 6);
+  const remote = listing?.remoteGalleryUrls || [];
+  const local = listing?.localGallery || [];
+  const photoCount = remote.length + local.length;
+
+  return (
+    <View style={styles.hotelCard} testID="bottle-hotel-panel">
+      <Text style={styles.hotelKicker}>Current hotel stay</Text>
+      {remote[0] ? (
+        <ExpoImage
+          source={{ uri: remote[0] }}
+          style={styles.hotelHero}
+          contentFit="cover"
+          testID="bottle-hotel-hero"
+        />
+      ) : local[0] ? (
+        <Image source={local[0]} style={styles.hotelHero} resizeMode="cover" testID="bottle-hotel-hero" />
+      ) : (
+        <View style={[styles.hotelHero, styles.hotelHeroEmpty]} testID="bottle-hotel-hero">
+          <Text style={styles.hotelHeroEmptyText}>{name}</Text>
+          <Text style={styles.hotelHeroEmptySub}>Property photos publish from the hotel</Text>
+        </View>
+      )}
+      {photoCount > 1 ? (
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={styles.hotelGalleryRow}
+        >
+          {remote.slice(remote[0] ? 1 : 0).map((uri) => (
+            <ExpoImage key={uri} source={{ uri }} style={styles.hotelGalleryImage} contentFit="cover" />
+          ))}
+          {local.slice(remote[0] ? 0 : 1).map((src, idx) => (
+            <Image key={`loc-${idx}`} source={src} style={styles.hotelGalleryImage} resizeMode="cover" />
+          ))}
+        </ScrollView>
+      ) : null}
+      <View style={styles.hotelBody}>
+        <Text style={styles.hotelName} testID="bottle-hotel-name">
+          {name}
+        </Text>
+        <Text style={styles.hotelMeta}>
+          {area} · {/night/i.test(datesLabel) ? datesLabel : `${nightsLabel} · ${datesLabel}`}
+        </Text>
+        <Text style={styles.hotelSummary}>{guestSummary}</Text>
+        <View style={styles.attrChips}>
+          {tags.map((s) => (
+            <View key={s} style={styles.attrChip}>
+              <Text style={styles.attrChipText}>{s}</Text>
+            </View>
+          ))}
+        </View>
+        {photoCount < 4 ? (
+          <Text style={styles.hotelGapNote}>
+            {photoCount === 0
+              ? "No property photos published yet. This block will not borrow another hotel’s images."
+              : `${photoCount} property photo${photoCount === 1 ? "" : "s"} from this hotel. A fuller gallery appears when more are uploaded.`}
+          </Text>
+        ) : null}
+        <View style={styles.hotelCtas}>
+          <Pressable style={styles.hotelCta} onPress={onViewHotel} accessibilityRole="button" testID="bottle-view-hotel">
+            <Text style={styles.hotelCtaText}>View hotel</Text>
+          </Pressable>
+          <Pressable
+            style={styles.hotelCta}
+            onPress={onHotelServices}
+            accessibilityRole="button"
+            testID="bottle-hotel-services"
+          >
+            <Text style={styles.hotelCtaText}>Hotel services</Text>
+          </Pressable>
+          <Pressable
+            style={styles.hotelCtaGhost}
+            onPress={onContactHotel}
+            accessibilityRole="button"
+            testID="bottle-contact-hotel"
+          >
+            <Text style={styles.hotelCtaGhostText}>Contact hotel</Text>
+          </Pressable>
+        </View>
       </View>
     </View>
   );
@@ -198,8 +320,8 @@ export function BottleProductScreen() {
 
   const {
     state: lifeState,
-    isFullStay,
     activeStay,
+    snap,
     loading: lifeLoading,
   } = useGuestLifecycle();
 
@@ -221,18 +343,17 @@ export function BottleProductScreen() {
   const mixGenRef = React.useRef(0);
 
   const bottleOk = canUseTravelBottle(lifeState);
-  const bottlePrimary = isBottlePrimaryMoment(lifeState);
-  const preTrip = lifeState === "PRE_TRIP" || lifeState === "NEXT_TRIP_PLANNING";
-  const checkedIn = isFullStay;
 
   React.useEffect(() => {
     void (async () => {
       const entry = await getHotelEntry();
-      const slug = activeStay?.hotelSlug ?? entry?.slug ?? "";
+      const rememberedStay =
+        activeStay || snap?.stays?.find((s) => s.hotelSlug || s.hotelName) || null;
+      const slug = rememberedStay?.hotelSlug || entry?.slug || "";
       if (slug) {
         const local = getHotelWhiteLabelOrDefault(slug);
-        if (activeStay?.hotelName) {
-          setHotel({ ...local, displayName: activeStay.hotelName, menuLocationLine: activeStay.hotelName });
+        if (rememberedStay?.hotelName) {
+          setHotel({ ...local, displayName: rememberedStay.hotelName, menuLocationLine: rememberedStay.hotelName });
         } else {
           setHotel(local);
         }
@@ -241,16 +362,13 @@ export function BottleProductScreen() {
         setPlanHotelId(slug as typeof planHotelId);
       }
     })();
-  }, [activeStay?.hotelSlug]);
+  }, [activeStay?.hotelSlug, activeStay?.hotelName, snap?.stays]);
 
   const planHotel =
     BOTTLE_PLAN_HOTELS.find((h) => h.id === planHotelId) ?? BOTTLE_PLAN_HOTELS[0];
   const planDate =
     BOTTLE_PLAN_DATES.find((d) => d.id === planDateId) ?? BOTTLE_PLAN_DATES[1];
-  const hotelName = checkedIn
-    ? (activeStay?.hotelName || hotel?.displayName || planHotel.name)
-    : (activeStay?.hotelName || hotel?.displayName || planHotel.name);
-  const hotelHero = hotel?.introHeroSource;
+  const hotelName = activeStay?.hotelName || hotel?.displayName || planHotel.name;
   const hotelNights = planDate.hotelNights;
 
   /**
@@ -362,26 +480,31 @@ export function BottleProductScreen() {
       <ScrollView style={styles.screen} contentContainerStyle={styles.content}>
       <View style={styles.intro}>
         <Text style={styles.kicker}>Travel in a Bottle</Text>
-        <Text style={styles.title}>
-          {bottlePrimary
-            ? "Plan your next journey"
-            : "A later trip — not tonight"}
-        </Text>
+        <Text style={styles.title}>Two sleeps, one journey</Text>
         <Text style={styles.lead}>
-          {bottlePrimary
-            ? "Mix your sleeping experience — hotel nights + a second place to sleep (treehouse, vineyard, glamping, lodge, boat)."
-            : checkedIn
-              ? "During this hotel stay, Bottle stays in the background. After checkout it becomes the place to plan a second sleep."
-              : "Build one paired journey: hotel + a second sleeping stay."}
+          First sleep is your hotel stay. Second sleep is a different place to stay — sea, mountain,
+          vineyard, nature — paired with that hotel. This is not hotel messaging, a social bottle, or
+          an experiences marketplace.
         </Text>
       </View>
 
-      {/* Pre-trip planning — works before check-in */}
-      <View style={styles.planPanel}>
-        <Text style={styles.planKicker}>Plan your trip</Text>
+      {/* A — current hotel stay */}
+      <HotelStayPresentation
+        listing={hotelListing}
+        fallbackName={hotelName}
+        city={planCity}
+        nightsLabel={nightLabel(hotelNights)}
+        datesLabel={planDate.label}
+        onViewHotel={() => router.push("/hotelier" as Href)}
+        onHotelServices={() => router.push("/hotelier" as Href)}
+        onContactHotel={() => router.push("/hotelier/askHotel" as Href)}
+      />
+
+      {/* B — plan the second stay */}
+      <View style={styles.planPanel} testID="bottle-second-stay">
+        <Text style={styles.planKicker}>Plan your second stay</Text>
         <Text style={styles.planLead}>
-          Choose a city and hotel, set dates, then add a second stay — before you leave home or
-          during your trip.
+          {`You're staying at ${hotelListing?.whiteLabel?.title || hotelListing?.displayName || hotelName} in ${hotelListing?.location || planCity}. Now add a second sleep experience — sea, mountain, vineyard, nature, remote work, romance.`}
         </Text>
 
         <Text style={styles.planLabel}>City</Text>
@@ -461,66 +584,6 @@ export function BottleProductScreen() {
         </Pressable>
       </View>
 
-      {/* Hotel discovery — white-label + Workspace public config (not a parallel DB) */}
-      <View style={styles.yourHotel} testID="bottle-hotel-panel">
-        <Text style={styles.yahKicker}>
-          {checkedIn ? "Your hotel stay" : preTrip ? "Hotel stay · plan first" : "Hotel stay"}
-        </Text>
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          contentContainerStyle={styles.hotelGalleryRow}
-        >
-          {(hotelListing?.remoteGalleryUrls || []).map((uri) => (
-            <ExpoImage key={uri} source={{ uri }} style={styles.hotelGalleryImage} contentFit="cover" />
-          ))}
-          {(hotelListing?.localGallery || (hotelHero ? [hotelHero] : [])).map((src, idx) => (
-            <Image
-              key={`local-${idx}`}
-              source={src}
-              style={styles.hotelGalleryImage}
-              resizeMode="cover"
-            />
-          ))}
-        </ScrollView>
-        <View style={styles.yahBodyPad}>
-          <Text style={styles.yahName}>{hotelListing?.displayName || hotelName}</Text>
-          <Text style={styles.yahMeta}>
-            {hotelListing?.location || planCity} · {nightLabel(hotelNights)} · {planDate.label}
-          </Text>
-          {hotelListing?.description ? (
-            <Text style={styles.yahHint} numberOfLines={4}>
-              {hotelListing.description}
-            </Text>
-          ) : null}
-          {hotelListing?.services?.length ? (
-            <View style={styles.attrChips}>
-              {hotelListing.services.slice(0, 6).map((s) => (
-                <View key={s} style={styles.attrChip}>
-                  <Text style={styles.attrChipText}>{s}</Text>
-                </View>
-              ))}
-            </View>
-          ) : null}
-          {hotelListing?.benefits?.length ? (
-            <View style={styles.benefitBlock}>
-              {hotelListing.benefits.slice(0, 2).map((b) => (
-                <Text key={b.id || b.title} style={styles.benefitLine}>
-                  {b.title}
-                  {b.body ? ` — ${b.body}` : ""}
-                </Text>
-              ))}
-            </View>
-          ) : null}
-          {hotelListing?.roomInventoryMissing ? (
-            <Text style={styles.hotelGapNote}>
-              Room types, nightly rates and booking policies stay with Workspace hotel inventory —
-              not yet on this public config.
-            </Text>
-          ) : null}
-        </View>
-      </View>
-
       {catalogError ? (
         <View style={styles.errorBanner} testID="bottle-catalog-error">
           <Text style={styles.errorBannerTitle}>Couldn’t reach Workspace</Text>
@@ -539,11 +602,10 @@ export function BottleProductScreen() {
 
       {showingSample && !catalogError ? (
         <View style={styles.sampleBanner} testID="bottle-sample-banner">
-          <Text style={styles.sampleBannerTitle}>SAMPLE catalog</Text>
+          <Text style={styles.sampleBannerTitle}>Sample paired journeys</Text>
           <Text style={styles.sampleBannerBody}>
-            Workspace has no verified outdoor sleeping stays published right now. Showing the
-            full labeled sample journeys so you can browse galleries, filter, pick dates and
-            review a paired itinerary. Sample bookings stay sandbox-only.
+            Sample preview only. Prices and “open” wording on these cards are not live rates or
+            bookable dates. Check availability confirms there is nothing to reserve.
           </Text>
         </View>
       ) : null}
@@ -574,10 +636,13 @@ export function BottleProductScreen() {
         })}
       </ScrollView>
 
-      <Text style={styles.section}>Paired journeys</Text>
+      <Text style={styles.section} testID="bottle-paired-journeys">
+        {showingSample ? "Sample paired journeys" : "Paired journeys"}
+      </Text>
       <Text style={styles.sectionSub}>
-        Hotel nights + a second place to sleep — treehouse, vineyard, glamping, lodge, boat.
-        Not an activities marketplace.
+        {showingSample
+          ? "Each card is a sample second sleep. Prices shown as sample are not inventory."
+          : "Each card is a second sleep paired with your hotel."}
       </Text>
 
       {filtered.length === 0 && !mixing ? (
@@ -732,58 +797,99 @@ const styles = StyleSheet.create({
     fontWeight: "600",
   },
 
-  yourHotel: {
+  hotelCard: {
     marginHorizontal: 16,
-    marginTop: 14,
-    backgroundColor: "#181818",
-    borderRadius: 18,
+    marginTop: 8,
+    backgroundColor: "#FFFFFF",
+    borderRadius: 20,
     overflow: "hidden",
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: "#E5DFD6",
   },
-  yahKicker: {
-    paddingHorizontal: 14,
-    paddingTop: 12,
-    fontSize: 10,
+  hotelKicker: {
+    paddingHorizontal: 16,
+    paddingTop: 14,
+    fontSize: 11,
     fontWeight: "800",
-    letterSpacing: 1,
+    letterSpacing: 0.8,
     textTransform: "uppercase",
-    color: "#C9A227",
+    color: "#8B6914",
   },
-  hotelGalleryRow: {
-    paddingHorizontal: 12,
-    paddingTop: 10,
-    gap: 8,
-  },
-  hotelGalleryImage: {
-    width: 168,
-    height: 120,
-    borderRadius: 12,
+  hotelHero: {
+    width: "100%",
+    height: 240,
+    marginTop: 12,
     backgroundColor: "#2A241C",
   },
-  yahBodyPad: { paddingHorizontal: 14, paddingTop: 12, paddingBottom: 14 },
-  yahName: { fontSize: 18, fontWeight: "800", color: "#FFF" },
-  yahMeta: {
+  hotelHeroEmpty: {
+    alignItems: "center",
+    justifyContent: "center",
+    paddingHorizontal: 20,
+  },
+  hotelHeroEmptyText: {
+    color: "#F7F2E8",
+    fontSize: 22,
+    fontWeight: "800",
+    textAlign: "center",
+  },
+  hotelHeroEmptySub: {
+    marginTop: 6,
+    color: "#C4B8A0",
     fontSize: 13,
-    color: "rgba(255,255,255,0.75)",
-    marginTop: 4,
+    textAlign: "center",
   },
-  yahHint: {
-    fontSize: 12,
-    color: "rgba(255,255,255,0.7)",
-    marginTop: 8,
-    lineHeight: 17,
+  hotelGalleryRow: {
+    paddingHorizontal: 16,
+    paddingTop: 10,
+    gap: 10,
   },
-  benefitBlock: { marginTop: 10, gap: 6 },
-  benefitLine: {
-    fontSize: 12,
-    color: "rgba(232,197,71,0.9)",
-    lineHeight: 16,
+  hotelGalleryImage: {
+    width: 220,
+    height: 148,
+    borderRadius: 14,
+    backgroundColor: "#2A241C",
+  },
+  hotelBody: { paddingHorizontal: 16, paddingTop: 14, paddingBottom: 16 },
+  hotelName: { fontSize: 26, fontWeight: "800", color: "#1A1510", lineHeight: 32 },
+  hotelMeta: {
+    fontSize: 14,
+    color: "#5A534A",
+    marginTop: 6,
+    fontWeight: "600",
+  },
+  hotelSummary: {
+    fontSize: 15,
+    color: "#3A342C",
+    marginTop: 10,
+    lineHeight: 22,
   },
   hotelGapNote: {
     marginTop: 10,
-    fontSize: 11,
-    color: "rgba(255,255,255,0.45)",
-    lineHeight: 15,
+    fontSize: 12,
+    color: "#6B645A",
+    lineHeight: 17,
   },
+  hotelCtas: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 8,
+    marginTop: 14,
+  },
+  hotelCta: {
+    backgroundColor: "#1A1510",
+    borderRadius: 12,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+  },
+  hotelCtaText: { color: "#FFFFFF", fontWeight: "800", fontSize: 13 },
+  hotelCtaGhost: {
+    borderRadius: 12,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    borderWidth: 1,
+    borderColor: "#E0D8CC",
+  },
+  hotelCtaGhostText: { color: "#1A1510", fontWeight: "700", fontSize: 13 },
   sampleBanner: {
     marginHorizontal: 16,
     marginTop: 12,

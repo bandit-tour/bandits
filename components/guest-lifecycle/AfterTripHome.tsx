@@ -29,10 +29,20 @@ import {
   type TravelMemory,
 } from "@/lib/travel-memory";
 
+export type CityMemoryPerson = {
+  id: string;
+  name: string;
+  avatarUrl: string | null;
+  entityId: string;
+};
+
 type Props = {
   model: AfterTripHomeModel;
   state: GuestLifecycleState;
   personalMoments?: TravelMemory[];
+  /** Authenticated follows from `bandit_user_likes`. Read-only — never written back over City Memory. */
+  livePeople?: CityMemoryPerson[];
+  peopleLoading?: boolean;
   onPlanNextTrip: () => void;
   onReactivate: () => void;
   compact?: boolean;
@@ -70,6 +80,8 @@ export function AfterTripHome({
   model,
   state,
   personalMoments = [],
+  livePeople = [],
+  peopleLoading = false,
   onPlanNextTrip,
   onReactivate,
   compact,
@@ -79,7 +91,19 @@ export function AfterTripHome({
   const go = (href: string) => router.push(href as Href);
   const showStayNotice = state === "AFTER_TRIP" || state === "NEXT_TRIP_PLANNING";
   const places = useMemo(() => uniquePlaces(model), [model]);
-  const people = useMemo(() => readablePeople(model), [model]);
+  const people = useMemo(() => {
+    const fromAccount = livePeople.filter((p) => p.name && !isInternalIdLabel(p.name));
+    const seen = new Set(fromAccount.map((p) => p.entityId));
+    const fromMemory = readablePeople(model)
+      .filter((b) => !b.entityId || !seen.has(b.entityId))
+      .map((b) => ({
+        id: b.id,
+        name: humanBanditLabel(b.title),
+        avatarUrl: memoryImageUri(b),
+        entityId: b.entityId || "",
+      }));
+    return [...fromAccount, ...fromMemory];
+  }, [livePeople, model]);
   const journeys = model.destinationsVisited.filter((d) => !isInternalIdLabel(d.title));
   const thumbW = Math.min(148, Math.max(120, width * 0.36));
 
@@ -220,7 +244,13 @@ export function AfterTripHome({
         actionLabel={people.length ? "Following" : undefined}
         onAction={people.length ? () => go("/following") : undefined}
       />
-      {people.length === 0 ? (
+      {peopleLoading && people.length === 0 ? (
+        <EmptyRail
+          title="Loading people you follow"
+          body="Checking your account follows. Saved activity is left as-is."
+          testID="city-memory-people-loading"
+        />
+      ) : people.length === 0 ? (
         <EmptyRail
           title="No followed banDits yet"
           body="Follow a Local banDit you trust — their name and face appear here."
@@ -231,8 +261,8 @@ export function AfterTripHome({
       ) : (
         <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.rail}>
           {people.slice(0, 16).map((b) => {
-            const img = memoryImageUri(b);
-            const name = humanBanditLabel(b.title);
+            const img = b.avatarUrl;
+            const name = b.name;
             return (
               <Pressable
                 key={b.id}
@@ -395,17 +425,19 @@ function EmptyRail({
 }: {
   title: string;
   body: string;
-  cta: string;
-  onPress: () => void;
+  cta?: string;
+  onPress?: () => void;
   testID?: string;
 }) {
   return (
     <View style={styles.emptyRail} testID={testID}>
       <Text style={styles.emptyTitle}>{title}</Text>
       <Text style={styles.emptyBody}>{body}</Text>
-      <Pressable style={styles.emptyCta} onPress={onPress} accessibilityRole="button">
-        <Text style={styles.emptyCtaText}>{cta}</Text>
-      </Pressable>
+      {cta && onPress ? (
+        <Pressable style={styles.emptyCta} onPress={onPress} accessibilityRole="button">
+          <Text style={styles.emptyCtaText}>{cta}</Text>
+        </Pressable>
+      ) : null}
     </View>
   );
 }

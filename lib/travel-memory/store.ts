@@ -55,7 +55,9 @@ export async function listTravelMemories(userId?: string | null): Promise<Travel
     if (!Array.isArray(arr)) return [];
     const uid = String(userId || "").trim();
     const list = arr.map(normalize).filter((m) => m.id && m.title);
-    const owned = uid ? list.filter((m) => !m.userId || m.userId === uid || m.userId === "self") : list;
+    const owned = uid
+      ? list.filter((m) => m.userId === uid || (!m.userId && uid === "self"))
+      : list.filter((m) => !m.userId || m.userId === "self");
     return owned.sort(
       (a, b) => new Date(b.occurredAt || b.updatedAt).getTime() - new Date(a.occurredAt || a.updatedAt).getTime(),
     );

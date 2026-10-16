@@ -25,15 +25,17 @@ import {
 } from "@/lib/dream-destinations/store";
 import { transitionStartTripPlanning } from "@/lib/guest-lifecycle/transitions";
 import { recordLifecycleNotice } from "@/lib/lifecycle/notices";
+import { ensureAnonymousSession } from "@/lib/pilotSession";
 import { usePremiumRefreshControl } from "@/lib/mobilePullToRefresh";
 
 export default function DreamDestinationsScreen() {
   const router = useRouter();
-  const { activeIdentity } = useAppState();
-  const userId = activeIdentity?.userId || "guest";
+  const { activeIdentity, getCurrentUser } = useAppState();
+  const [userId, setUserId] = useState<string | null>(activeIdentity?.userId || null);
   const [rows, setRows] = useState<DreamDestination[]>([]);
   const [draft, setDraft] = useState("");
   const [timing, setTiming] = useState("");
+  const [notifyOk, setNotifyOk] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
@@ -43,7 +45,24 @@ export default function DreamDestinationsScreen() {
     showBack: true,
   });
 
+  useEffect(() => {
+    let cancelled = false;
+    void (async () => {
+      await ensureAnonymousSession().catch(() => undefined);
+      const user = await getCurrentUser().catch(() => null);
+      const id = user?.id || activeIdentity?.userId || null;
+      if (!cancelled) setUserId(id);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [activeIdentity?.userId, getCurrentUser]);
+
   const reload = useCallback(async () => {
+    if (!userId) {
+      setRows([]);
+      return;
+    }
     setRows(await listDreamDestinations(userId));
   }, [userId]);
 
@@ -55,7 +74,7 @@ export default function DreamDestinationsScreen() {
 
   const onSave = async (name: string) => {
     const dest = name.trim();
-    if (dest.length < 2 || busy) return;
+    if (dest.length < 2 || busy || !userId) return;
     setBusy(true);
     setMsg(null);
     try {
@@ -68,16 +87,22 @@ export default function DreamDestinationsScreen() {
         intent: "Dream destination",
         destination: row.name,
       });
-      await recordLifecycleNotice({
-        id: `dream_saved_${row.id}`,
-        userId,
-        title: "Dream destination saved",
-        message: `${row.name} is your next-trip focus. Open Travel in a Bottle when you want to plan sleeps.`,
-        href: "/dreamDestinations",
-      });
+      if (notifyOk) {
+        await recordLifecycleNotice({
+          id: `dream_saved_${row.id}`,
+          userId,
+          title: "Dream destination saved",
+          message: `${row.name} is your next-trip focus. Open this note to return to the list.`,
+          href: "/dreamDestinations",
+        });
+      }
       setDraft("");
       setTiming("");
-      setMsg(`${row.name} saved. Inspiration will follow this destination — not invented bookings.`);
+      setMsg(
+        notifyOk
+          ? `${row.name} saved. A notification deep-links back to this list.`
+          : `${row.name} saved. No notification was sent — consent was off.`,
+      );
       await reload();
     } catch (e) {
       setMsg(e instanceof Error ? e.message : "Could not save destination.");
@@ -120,8 +145,20 @@ export default function DreamDestinationsScreen() {
         testID="dream-timing-input"
       />
       <Pressable
-        style={[styles.primary, busy && styles.disabled]}
-        disabled={busy}
+        style={styles.consentRow}
+        onPress={() => setNotifyOk((v) => !v)}
+        accessibilityRole="checkbox"
+        accessibilityState={{ checked: notifyOk }}
+        testID="dream-notify-consent"
+      >
+        <Text style={styles.consentMark}>{notifyOk ? "☑" : "☐"}</Text>
+        <Text style={styles.consentText}>
+          Notify me in the app when this destination is saved. Off by default.
+        </Text>
+      </Pressable>
+      <Pressable
+        style={[styles.primary, (busy || !userId) && styles.disabled]}
+        disabled={busy || !userId}
         onPress={() => void onSave(draft)}
         testID="dream-save-cta"
       >
@@ -205,6 +242,9 @@ const styles = StyleSheet.create({
     color: color.muted,
     textTransform: "uppercase",
   },
+  consentRow: { marginTop: 14, flexDirection: "row", alignItems: "flex-start", gap: 8 },
+  consentMark: { fontSize: 18, color: color.ink, lineHeight: 22 },
+  consentText: { flex: 1, fontSize: 14, lineHeight: 20, color: color.inkSoft },
   input: {
     backgroundColor: color.surface,
     borderRadius: 12,

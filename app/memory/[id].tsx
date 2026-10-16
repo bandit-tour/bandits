@@ -164,7 +164,7 @@ export default function TravelMemoryDetailScreen() {
       {row.media.map((m) => (
         <View key={m.id} style={styles.mediaBlock}>
           {m.kind === "image" ? (
-            <Pressable onPress={() => setFullscreenUri(m.uri)}>
+            <Pressable onPress={() => setFullscreenUri(m.uri)} testID="memory-photo-open">
               <ExpoImage
                 source={{ uri: m.uri }}
                 style={{ width, height: Math.round(width * 1.15) }}

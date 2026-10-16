@@ -34,7 +34,6 @@ import {
   type BottleMatch,
 } from "@/lib/guest-workspace/productWorlds";
 import { liveHotelDisplayName } from "@/lib/stay/liveHotelIdentity";
-import { getHotelWhiteLabel } from "@/lib/hotelWhiteLabel";
 import { getHotelEntry } from "@/lib/pilotSession";
 
 function nightLabel(n: number) {
@@ -177,7 +176,6 @@ export default function JourneyDetailScreen() {
   }>();
   const { width } = useWindowDimensions();
   const [hotelName, setHotelName] = useState("");
-  const [hotelHero, setHotelHero] = useState<ImageSourcePropType | null>(null);
   const [hotelListing, setHotelListing] = useState<HotelBottleListing | null>(null);
   const [liveRow, setLiveRow] = useState<WorkspaceBottleStay | null>(null);
   const [liveMatch, setLiveMatch] = useState<BottleMatch | undefined>(undefined);
@@ -193,9 +191,7 @@ export default function JourneyDetailScreen() {
   React.useEffect(() => {
     void getHotelEntry().then((entry) => {
       const slug = hotelSlug || entry?.slug || "";
-      const h = getHotelWhiteLabel(slug);
-      setHotelName(liveHotelDisplayName({ entry, slug }));
-      if (h?.introHeroSource) setHotelHero(h.introHeroSource);
+      setHotelName(liveHotelDisplayName({ entry, slug, stayName: entry?.slug === slug ? entry.displayName : null }));
       void loadHotelBottleListing(slug).then(setHotelListing);
     });
   }, [hotelSlug]);
@@ -251,14 +247,10 @@ export default function JourneyDetailScreen() {
     for (const uri of hotelListing?.remoteGalleryUrls || []) {
       frames.push({ key: uri, remote: uri });
     }
-    const local = hotelListing?.localGallery?.length
-      ? hotelListing.localGallery
-      : hotelHero
-        ? [hotelHero]
-        : [];
+    const local = hotelListing?.localGallery || [];
     local.forEach((src, i) => frames.push({ key: `local-${i}`, local: src }));
     return frames.slice(0, 8);
-  }, [hotelListing, hotelHero]);
+  }, [hotelListing]);
 
   if (!match) {
     return (
@@ -359,7 +351,8 @@ export default function JourneyDetailScreen() {
               <Text style={styles.stepIndex}>3 · Second sleep</Text>
               <Text style={styles.stepName}>{second.name}</Text>
               <Text style={styles.stepMeta}>
-                {second.location} · {nightLabel(second.nights)} · {match.priceLabel}
+                {second.location} · {nightLabel(second.nights)} ·{" "}
+                {sample ? "Sample price · not bookable" : match.priceLabel}
               </Text>
             </View>
           </View>
