@@ -36,9 +36,9 @@ import { getHotelEntry } from "@/lib/pilotSession";
 import { radius } from "@/lib/guestDesign";
 
 /**
- * Guest Hotel tab — personal stay companion (not Hotelier OS staff).
- * AFTER_TRIP → pause services + link to City Memory / Connect stay.
- * Compact hero + card grids; never hotel-ops KPIs or brochure banners.
+ * Guest Hotel tab = Hotelier boutique experience (not Hotelier OS staff).
+ * Lifecycle gates restricted requests only — never erases the product surface.
+ * Between Trips is a contextual state (banner), not a replacement screen.
  */
 export default function HotelierGuestHomeScreen() {
   const router = useRouter();
@@ -47,11 +47,15 @@ export default function HotelierGuestHomeScreen() {
   const todayRef = useRef<ScrollView>(null);
   const [hotelName, setHotelName] = React.useState("");
   const [heroUri, setHeroUri] = React.useState<string | null>(null);
+  const [hotelSlug, setHotelSlug] = React.useState("");
   const [todayX, setTodayX] = React.useState(0);
   const {
     loading: lifeLoading,
     isFullStay,
+    isAfterTrip,
+    state,
     activeStay,
+    snap,
   } = useGuestLifecycle();
 
   const isMobile = width < 720;
@@ -81,14 +85,16 @@ export default function HotelierGuestHomeScreen() {
     let cancelled = false;
     void (async () => {
       const entry = await getHotelEntry();
-      const slug = activeStay?.hotelSlug || entry?.slug || "";
+      const past = snap?.stays?.find((s) => s.hotelSlug || s.hotelName) || snap?.stays?.[0];
+      const slug = activeStay?.hotelSlug || past?.hotelSlug || entry?.slug || "";
       const name = liveHotelDisplayName({
-        stayName: activeStay?.hotelName,
+        stayName: activeStay?.hotelName || past?.hotelName,
         entry,
         slug,
       });
       if (cancelled) return;
       setHotelName(name);
+      setHotelSlug(slug);
       if (!slug) {
         setHeroUri(null);
         return;
@@ -115,7 +121,7 @@ export default function HotelierGuestHomeScreen() {
     return () => {
       cancelled = true;
     };
-  }, [activeStay?.hotelName, activeStay?.hotelSlug]);
+  }, [activeStay?.hotelName, activeStay?.hotelSlug, snap?.stays]);
 
   const openModule = (id: HotelierModuleId) => {
     router.push(`/hotelier/${id}` as Href);
@@ -143,13 +149,35 @@ export default function HotelierGuestHomeScreen() {
       : Math.min(320, Math.max(280, (contentW - 14 * (offerCols - 1)) / offerCols));
   const offerImgH = Math.min(240, Math.max(180, Math.round(offerCardW * (3 / 4))));
 
-  const playSandbox = isIsolatedPlaySandboxSlug(activeStay?.hotelSlug);
-  const roomNumber = activeStay?.roomNumber || (playSandbox ? GUEST_STAY.roomNumber : null);
+  const playSandbox = isIsolatedPlaySandboxSlug(hotelSlug || activeStay?.hotelSlug);
+  const roomNumber = isFullStay
+    ? activeStay?.roomNumber || (playSandbox ? GUEST_STAY.roomNumber : null)
+    : null;
   const copyCtx = {
     hotelName,
     roomNumber,
-    hotelSlug: activeStay?.hotelSlug,
+    hotelSlug: hotelSlug || activeStay?.hotelSlug,
   };
+  const hasHotelContext = Boolean(hotelName || hotelSlug || playSandbox);
+  const lifecyclePhase =
+    isFullStay || state === "ACTIVE_STAY" || state === "REACTIVATED"
+      ? "during"
+      : isAfterTrip || state === "AFTER_TRIP" || state === "NEXT_TRIP_PLANNING"
+        ? "after"
+        : "before";
+  const todaySectionLabel =
+    lifecyclePhase === "during"
+      ? "Today at your hotel"
+      : lifecyclePhase === "after"
+        ? "At your hotel"
+        : "Discover your hotel";
+  const heroKicker =
+    lifecyclePhase === "during"
+      ? "What can your hotel do for you right now?"
+      : lifecyclePhase === "after"
+        ? "Browse your hotel — reconnect when you book again"
+        : "Explore the hotel before you arrive";
+
   const stayFacts = (playSandbox ? PERSONAL_STAY_FACTS : PERSONAL_STAY_FACTS.filter((f) => !["wifi", "addr", "desk"].includes(f.id))).map(
     (fact) => ({
       ...fact,
@@ -184,84 +212,32 @@ export default function HotelierGuestHomeScreen() {
 
   const identityMeta = [
     roomNumber ? `Room ${roomNumber}` : null,
-    playSandbox ? `${GUEST_STAY.nightsRemaining} nights` : null,
-    playSandbox ? GUEST_STAY.premiumStatus : hotelName ? "Your stay" : null,
+    isFullStay && playSandbox ? `${GUEST_STAY.nightsRemaining} nights` : null,
+    lifecyclePhase === "during"
+      ? playSandbox
+        ? GUEST_STAY.premiumStatus
+        : hotelName
+          ? "Your stay"
+          : null
+      : lifecyclePhase === "after"
+        ? "Browse anytime"
+        : "Before arrival",
   ]
     .filter(Boolean)
     .join(" · ");
 
   const heroSource = heroUri
     ? { uri: heroUri }
-    : playSandbox
+    : playSandbox || hasHotelContext
       ? require("@/assets/images/play-theatrou.png")
       : { uri: "https://images.unsplash.com/photo-1566073771259-6a8506099945?auto=format&fit=crop&w=1200&q=80" };
 
-  // No FULL_STAY — pause hotel services (PRE_TRIP / AFTER_TRIP / NEXT_TRIP_PLANNING).
-  // Never show demo “today at hotel” CTAs without a verified stay.
-  // City Memory remains its own traveler route.
-  if (!lifeLoading && !isFullStay) {
+  if (lifeLoading) {
     return (
-      <ScrollView
-        style={[styles.screenBetweenTrips, Platform.OS === "web" && styles.screenWeb]}
-        contentContainerStyle={[
-          styles.scrollContent,
-          { paddingBottom: 56 + insets.bottom, paddingHorizontal: contentPad },
-        ]}
-        showsVerticalScrollIndicator
-      >
-        <Stack.Screen
-          options={{
-            title: "Hotel",
-            headerStyle: { backgroundColor: "#F7F4EE" },
-            headerTintColor: "#121212",
-            headerLeft: () => null,
-            headerBackVisible: false,
-          }}
-        />
-        <Pressable
-          onPress={() => router.replace("/home" as Href)}
-          style={styles.betweenTripsHomeLink}
-          accessibilityRole="button"
-          accessibilityLabel="Back to Home"
-        >
-          <Text style={styles.betweenTripsHomeLinkText}>← Home</Text>
-        </Pressable>
-        <Text style={{ fontSize: 12, fontWeight: "800", color: "#6B5A3A", marginTop: 8 }}>
-          BETWEEN TRIPS
-        </Text>
-        <Text style={{ fontSize: 26, fontWeight: "800", color: "#121212", marginTop: 6 }}>
-          Hotel services pause
-        </Text>
-        <Text style={{ fontSize: 15, lineHeight: 22, color: "#444", marginTop: 10 }}>
-          Connect a verified stay to unlock room, breakfast and hotel requests. Your trip memory
-          lives separately.
-        </Text>
-        <Pressable
-          style={{
-            marginTop: 20,
-            backgroundColor: "#121212",
-            borderRadius: 14,
-            paddingVertical: 14,
-            alignItems: "center",
-          }}
-          onPress={() => router.push("/reactivateStay" as Href)}
-        >
-          <Text style={{ color: "#FFF", fontWeight: "800" }}>Connect My New Stay</Text>
-        </Pressable>
-        <Pressable
-          style={{ marginTop: 12, paddingVertical: 12, alignItems: "center" }}
-          onPress={() => router.push("/cityMemory" as Href)}
-          testID="hotel-open-city-memory"
-        >
-          <Text style={{ color: "#121212", fontWeight: "700" }}>Open City Memory</Text>
-        </Pressable>
-        <Pressable
-          style={{ marginTop: 4, paddingVertical: 12, alignItems: "center" }}
-          onPress={() => router.push("/travelBottle" as Href)}
-        >
-          <Text style={{ color: "#6B5A3A", fontWeight: "700" }}>Plan next journey</Text>
-        </Pressable>
-      </ScrollView>
+      <View style={[styles.screen, styles.loadingWrap, Platform.OS === "web" && styles.screenWeb]}>
+        <Stack.Screen options={{ title: "Hotelier", headerLeft: () => null, headerBackVisible: false }} />
+        <Text style={styles.loadingText}>Opening Hotelier…</Text>
+      </View>
     );
   }
 
@@ -276,10 +252,11 @@ export default function HotelierGuestHomeScreen() {
       bounces
       nestedScrollEnabled
       keyboardShouldPersistTaps="handled"
+      testID="hotelier-guest-scroll"
     >
       <Stack.Screen
         options={{
-          title: "Hotel",
+          title: "Hotelier",
           headerLeft: () => null,
           headerBackVisible: false,
         }}
@@ -287,15 +264,54 @@ export default function HotelierGuestHomeScreen() {
 
       {/* Compact stay identity — above hero */}
       <View style={styles.identity}>
+        <Text style={styles.identityKicker}>Hotelier</Text>
         <Text style={styles.identityHotel} numberOfLines={1}>
-          {hotelName}
+          {hotelName || "Your hotel"}
         </Text>
         <Text style={styles.identityMeta} numberOfLines={1}>
-          {identityMeta || hotelName || "Your stay"}
+          {identityMeta || "Boutique hotel experience"}
         </Text>
       </View>
 
-      {/* Compact hero — section, not landing page */}
+      {!isFullStay ? (
+        <View style={styles.lifecycleBanner} testID="hotelier-lifecycle-banner">
+          <Text style={styles.lifecycleBannerTitle}>
+            {lifecyclePhase === "after"
+              ? "Between trips? Your next stay is waiting."
+              : "Connect your stay to unlock room requests."}
+          </Text>
+          <Text style={styles.lifecycleBannerBody}>
+            {lifecyclePhase === "after"
+              ? "Browse hotel stories and services anytime. Requests need a verified booking."
+              : "Explore the hotel before you arrive. Breakfast, spa and room requests unlock with a verified stay."}
+          </Text>
+          <View style={styles.lifecycleBannerActions}>
+            <Pressable
+              style={styles.lifecyclePrimary}
+              onPress={() => router.push("/reactivateStay" as Href)}
+              accessibilityRole="button"
+              testID="hotelier-connect-stay"
+            >
+              <Text style={styles.lifecyclePrimaryText}>
+                {lifecyclePhase === "after" ? "Connect My New Stay" : "Connect My Stay"}
+              </Text>
+            </Pressable>
+            <Pressable
+              style={styles.lifecycleGhost}
+              onPress={() =>
+                router.push((lifecyclePhase === "after" ? "/travelBottle" : "/explore") as Href)
+              }
+              accessibilityRole="button"
+            >
+              <Text style={styles.lifecycleGhostText}>
+                {lifecyclePhase === "after" ? "Explore your next stay" : "Explore the city"}
+              </Text>
+            </Pressable>
+          </View>
+        </View>
+      ) : null}
+
+      {/* Compact hero — boutique photography */}
       <View style={[styles.hero, { height: heroH, maxHeight: isMobile ? 220 : 300 }]}>
         <ExpoImage
           source={heroSource}
@@ -303,12 +319,12 @@ export default function HotelierGuestHomeScreen() {
           contentFit="cover"
         />
         <View style={styles.heroScrim} />
-        <Text style={styles.heroKicker}>What can your hotel do for you right now?</Text>
+        <Text style={styles.heroKicker}>{heroKicker}</Text>
       </View>
 
-      {/* TODAY AT YOUR HOTEL */}
+      {/* TODAY / DISCOVER */}
       <View style={styles.sectionRow}>
-        <Text style={styles.sectionInline}>Today at your hotel</Text>
+        <Text style={styles.sectionInline}>{todaySectionLabel}</Text>
         <View style={styles.carouselControls}>
           <Pressable
             style={styles.carouselBtn}
@@ -358,18 +374,10 @@ export default function HotelierGuestHomeScreen() {
           >
             <View style={[styles.todayAccent, { backgroundColor: item.accent ?? "#E03131" }]} />
             <Text style={styles.todayTitle} numberOfLines={2}>
-              {rewritePlaySandboxCopy(item.title, {
-                hotelName,
-                roomNumber,
-                hotelSlug: activeStay?.hotelSlug,
-              })}
+              {rewritePlaySandboxCopy(item.title, copyCtx)}
             </Text>
             <Text style={styles.todayDetail} numberOfLines={2}>
-              {rewritePlaySandboxCopy(item.detail, {
-                hotelName,
-                roomNumber,
-                hotelSlug: activeStay?.hotelSlug,
-              })}
+              {rewritePlaySandboxCopy(item.detail, copyCtx)}
             </Text>
           </Pressable>
         ))}
@@ -616,26 +624,6 @@ const styles = StyleSheet.create({
       default: {},
     }),
   },
-  /** Between Trips must stay high-contrast — never inherit the dark hotel companion shell. */
-  screenBetweenTrips: {
-    flex: 1,
-    backgroundColor: "#F7F4EE",
-    ...Platform.select({
-      web: { overflow: "auto" as const },
-      default: {},
-    }),
-  },
-  betweenTripsHomeLink: {
-    alignSelf: "flex-start",
-    paddingVertical: 10,
-    paddingHorizontal: 4,
-    marginBottom: 4,
-  },
-  betweenTripsHomeLinkText: {
-    fontSize: 15,
-    fontWeight: "700",
-    color: "#0A7EA4",
-  },
   screenWeb: {
     height: "100%" as unknown as number,
     overflow: "auto" as const,
@@ -646,9 +634,27 @@ const styles = StyleSheet.create({
     maxWidth: 1120,
     alignSelf: "center",
   },
+  loadingWrap: {
+    alignItems: "center",
+    justifyContent: "center",
+    padding: 40,
+  },
+  loadingText: {
+    color: "rgba(247,242,232,0.8)",
+    fontWeight: "600",
+    fontSize: 15,
+  },
   identity: {
     paddingTop: 10,
     paddingBottom: 10,
+  },
+  identityKicker: {
+    color: "rgba(240,215,160,0.9)",
+    fontSize: 11,
+    fontWeight: "800",
+    letterSpacing: 1.4,
+    textTransform: "uppercase",
+    marginBottom: 4,
   },
   identityHotel: {
     color: "#F7F2E8",
@@ -661,6 +667,53 @@ const styles = StyleSheet.create({
     color: "rgba(247,242,232,0.72)",
     fontSize: 13,
     fontWeight: "600",
+  },
+  lifecycleBanner: {
+    backgroundColor: "rgba(240,215,160,0.12)",
+    borderWidth: 1,
+    borderColor: "rgba(240,215,160,0.28)",
+    borderRadius: 16,
+    padding: 14,
+    marginBottom: 14,
+  },
+  lifecycleBannerTitle: {
+    color: "#F7F2E8",
+    fontSize: 16,
+    fontWeight: "800",
+    letterSpacing: -0.2,
+  },
+  lifecycleBannerBody: {
+    marginTop: 6,
+    color: "rgba(247,242,232,0.78)",
+    fontSize: 13,
+    lineHeight: 19,
+  },
+  lifecycleBannerActions: {
+    marginTop: 12,
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 10,
+    alignItems: "center",
+  },
+  lifecyclePrimary: {
+    backgroundColor: "#F0D7A0",
+    borderRadius: 12,
+    paddingVertical: 10,
+    paddingHorizontal: 14,
+  },
+  lifecyclePrimaryText: {
+    color: "#141210",
+    fontWeight: "800",
+    fontSize: 13,
+  },
+  lifecycleGhost: {
+    paddingVertical: 10,
+    paddingHorizontal: 4,
+  },
+  lifecycleGhostText: {
+    color: "rgba(240,215,160,0.95)",
+    fontWeight: "700",
+    fontSize: 13,
   },
   hero: {
     width: "100%",

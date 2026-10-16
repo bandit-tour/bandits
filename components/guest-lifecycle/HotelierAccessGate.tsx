@@ -1,6 +1,7 @@
 /**
- * Guest Hotel module gate — FULL_STAY only for hotel services.
- * Without an active stay: Connect My New Stay (not Hotelier OS, not silent fail).
+ * Strict gate for surfaces that must not render without FULL_STAY.
+ * Prefer browse-first Hotelier modules (landing + [module]) with request CTAs gated
+ * instead of replacing the whole boutique experience.
  */
 
 import { useRouter, type Href } from "expo-router";
