@@ -12,24 +12,30 @@ import {
 import { color, radius } from "@/lib/guestDesign";
 import {
   attachChatThreadToSession,
+  getMomentConnectionStatus,
   getOrCreateMomentChatThread,
   GUEST_MOMENT_CHAT_TYPE,
   GUEST_MOMENT_THREAD_REF,
   loadActiveBottleSession,
+  requestMomentConnection,
   revealBottleScanSender,
   type BottleScanSession,
+  type MomentConnectionStatus,
 } from "@/lib/guest-moment";
+import { alertMessage } from "@/lib/uiConfirm";
+import { ensureAnonymousSession, resolveTravelerSession } from "@/lib/pilotSession";
 import { useAppBackScreenOptions } from "@/hooks/useAppBackScreenOptions";
 
 /**
- * Bottle discovery bridge — Mode A (Moment) + Mode B (Local Friend).
- * Reveal → Reply → Chat. No dead ends.
+ * Ocean Bottle discovery bridge — Mode A (Moment) + Mode B (Local Friend).
+ * Reveal → Chat (already delivered) → Request connection. Not Travel in a Bottle.
  */
 export default function BottleDiscoverScreen() {
   const router = useRouter();
   const [loading, setLoading] = useState(true);
   const [session, setSession] = useState<BottleScanSession | null>(null);
   const [busy, setBusy] = useState(false);
+  const [connectionStatus, setConnectionStatus] = useState<MomentConnectionStatus>("none");
 
   const header = useAppBackScreenOptions({
     title: session?.mode === "local_friend" ? "Local Friend" : "Moment",
@@ -42,7 +48,14 @@ export default function BottleDiscoverScreen() {
   const reload = useCallback(async () => {
     setLoading(true);
     try {
-      setSession(await loadActiveBottleSession());
+      const s = await loadActiveBottleSession();
+      setSession(s);
+      const tid = s?.chatThreadId || s?.momentId || s?.id;
+      if (tid) {
+        setConnectionStatus(await getMomentConnectionStatus(tid));
+      } else {
+        setConnectionStatus("none");
+      }
     } finally {
       setLoading(false);
     }
@@ -63,7 +76,7 @@ export default function BottleDiscoverScreen() {
   };
 
   const openChat = async () => {
-    if (!session) return;
+    if (!session || !session.quote.trim()) return;
     setBusy(true);
     try {
       if (session.mode === "local_friend" && session.floatId) {
@@ -83,9 +96,8 @@ export default function BottleDiscoverScreen() {
       }
 
       /**
-       * QA-06: Moments stay mystery-first. Reveal is not chat consent —
-       * require an explicit reveal tap before opening a 2-way Chat thread.
-       * Does not touch Notifications vs Chat routing.
+       * Moments stay mystery-first. Reveal before opening the thread UI —
+       * the Chat inbox row was already created at scan time.
        */
       if (session.mode === "moment" && !session.revealed) {
         const next = await revealBottleScanSender();
@@ -94,12 +106,11 @@ export default function BottleDiscoverScreen() {
       }
 
       const thread = await getOrCreateMomentChatThread({
-        threadId: session.chatThreadId,
+        threadId: session.chatThreadId || session.momentId,
         peer: session.sender,
         openingQuote: session.quote,
       });
       await attachChatThreadToSession(thread.id);
-      /** When conversation starts, point inbox at the chat thread. */
       if (session.notificationId && /^[0-9a-f-]{36}$/i.test(session.notificationId)) {
         try {
           const { supabase } = await import("@/lib/supabase");
@@ -120,7 +131,7 @@ export default function BottleDiscoverScreen() {
         pathname: "/chat",
         params: {
           banditName: session.sender.displayName,
-          notificationId: thread.id,
+          notificationId: session.notificationId || thread.id,
           notificationType: GUEST_MOMENT_CHAT_TYPE,
           referenceId: thread.id,
           referenceType: GUEST_MOMENT_THREAD_REF,
@@ -128,6 +139,46 @@ export default function BottleDiscoverScreen() {
           notificationMessage: session.quote,
         },
       } as Href);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const onRequestConnection = async () => {
+    if (!session?.revealed) return;
+    setBusy(true);
+    try {
+      await ensureAnonymousSession().catch(() => undefined);
+      const traveler = await resolveTravelerSession();
+      const selfName =
+        String(
+          (traveler?.user?.user_metadata as { full_name?: string; name?: string } | undefined)
+            ?.full_name ||
+            (traveler?.user?.user_metadata as { name?: string } | undefined)?.name ||
+            "",
+        ).trim() || "A traveler";
+      const threadId = session.chatThreadId || session.momentId || session.id;
+      const result = await requestMomentConnection({
+        threadId,
+        momentId: session.momentId,
+        senderUserId: session.sender.id,
+        senderDisplayName: session.sender.displayName,
+        requesterDisplayName: selfName,
+        quote: session.quote,
+      });
+      if (!result.ok) {
+        alertMessage(
+          "Could not send request",
+          result.error === "invalid_sender"
+            ? "This sender cannot receive connection requests yet."
+            : result.error === "blocked"
+              ? "This connection is blocked."
+              : result.error || "Try again.",
+        );
+        return;
+      }
+      setConnectionStatus("pending");
+      alertMessage("Request sent", "They’ll see your connection request in Chat.");
     } finally {
       setBusy(false);
     }
@@ -144,20 +195,24 @@ export default function BottleDiscoverScreen() {
     );
   }
 
-  if (!session) {
+  if (!session || !String(session.quote || "").trim()) {
     return (
       <View style={styles.screen}>
         <Stack.Screen options={header} />
         <View style={styles.emptyWrap}>
-          <Text style={styles.emptyTitle}>No bottle discovery yet</Text>
+          <Text style={styles.emptyTitle}>No bottle message right now</Text>
           <Text style={styles.emptyLead}>
-            Scan a bandiTour bottle to receive a Moment or a Local Friend message.
+            There are no eligible Moments or Local Friend ocean messages to discover. When someone
+            publishes a Moment for bottle discovery, your next scan will deliver it to Chat.
           </Text>
           <Pressable style={styles.primary} onPress={() => router.push("/bottle" as Href)}>
-            <Text style={styles.primaryText}>Open bottle scan</Text>
+            <Text style={styles.primaryText}>Scan again</Text>
           </Pressable>
           <Pressable style={styles.link} onPress={() => router.push("/myMoment" as Href)}>
             <Text style={styles.linkText}>Set My Moment</Text>
+          </Pressable>
+          <Pressable style={styles.link} onPress={() => router.push("/community" as Href)}>
+            <Text style={styles.linkText}>Open Chat</Text>
           </Pressable>
         </View>
       </View>
@@ -217,11 +272,13 @@ export default function BottleDiscoverScreen() {
                   {[session.sender.city, session.sender.stayHint].filter(Boolean).join(" · ")}
                 </Text>
                 <Text style={styles.senderKind}>
-                  {session.banditId || /^[0-9a-f-]{36}$/i.test(session.sender.id)
+                  {session.banditId
                     ? "Local banDit"
                     : session.sender.kind === "local_friend"
                       ? "Local Friend"
-                      : "Guest · Moment"}
+                      : session.sender.kind === "demo"
+                        ? "Local banDit"
+                        : "Guest · Moment"}
                 </Text>
               </View>
             </View>
@@ -231,11 +288,33 @@ export default function BottleDiscoverScreen() {
               disabled={busy}
               onPress={() => void openChat()}
             >
-              <Text style={styles.primaryText}>{busy ? "Opening…" : "Reply"}</Text>
+              <Text style={styles.primaryText}>{busy ? "Opening…" : "Open in Chat"}</Text>
             </Pressable>
+            {isMoment &&
+            /^[0-9a-f-]{36}$/i.test(session.sender.id) &&
+            connectionStatus !== "accepted" &&
+            connectionStatus !== "blocked" ? (
+              <Pressable
+                style={[styles.secondary, busy && styles.disabled]}
+                disabled={busy || connectionStatus === "pending"}
+                onPress={() => void onRequestConnection()}
+                accessibilityRole="button"
+                accessibilityLabel="Request connection"
+              >
+                <Text style={styles.secondaryText}>
+                  {connectionStatus === "pending"
+                    ? "Connection requested"
+                    : "Request connection"}
+                </Text>
+              </Pressable>
+            ) : null}
+            {connectionStatus === "accepted" ? (
+              <Text style={styles.hint}>Connected — you can message each other in Chat.</Text>
+            ) : null}
             {session.banditId ||
             (session.sender.id &&
-              /^[0-9a-f-]{36}$/i.test(session.sender.id)) ? (
+              /^[0-9a-f-]{36}$/i.test(session.sender.id) &&
+              session.sender.kind !== "guest") ? (
               <Pressable
                 style={[styles.secondary, busy && styles.disabled]}
                 disabled={busy}
@@ -250,10 +329,16 @@ export default function BottleDiscoverScreen() {
                   {`Meet ${session.sender.displayName} · Local banDit`}
                 </Text>
               </Pressable>
+            ) : session.sender.kind === "guest" ? (
+              <Text style={styles.hint}>
+                Permitted public name: {session.sender.displayName}
+                {session.sender.city ? ` · ${session.sender.city}` : ""}
+                {session.sender.stayHint ? ` · ${session.sender.stayHint}` : ""}
+              </Text>
             ) : null}
             <Text style={styles.hint}>
-              Reply opens Chat. Meet opens their Local banDit profile — status, identity, City Guide,
-              Routes, Premium.
+              This message is already in your Chat inbox. Request a connection before unrestricted
+              messaging.
             </Text>
           </>
         )}

@@ -51,13 +51,16 @@ import {
   chatMessageNotificationId,
   clearChatThreadReplies,
   deleteChatMessagesByIds,
+  deleteChatThreadForUser,
   deleteEntireChatConversation,
 } from '@/lib/chatThreadManage';
+import { loadChatThreadSummaries } from '@/lib/chatThreads';
 import { deleteNotificationThread } from '@/lib/threadDelete';
 import { useAppState } from '@/contexts/AppStateContext';
 import { usePremiumRefreshControl } from '@/lib/mobilePullToRefresh';
 import { getOperatorUserId } from '@/services/localFriend';
 import { ensureAnonymousSession, resolveTravelerSession } from '@/lib/pilotSession';
+import { alertMessage, confirmDestructive } from '@/lib/uiConfirm';
 
 type ChatRole = 'user' | 'bandit' | 'traveler';
 
@@ -137,6 +140,8 @@ export default function ChatScreen() {
   const [oceanRevealing, setOceanRevealing] = useState(false);
   const [oceanComposeAllowed, setOceanComposeAllowed] = useState(true);
   const [oceanWaitingForGuest, setOceanWaitingForGuest] = useState(false);
+  const [momentConnectionPending, setMomentConnectionPending] = useState(false);
+  const [momentConnectionBusy, setMomentConnectionBusy] = useState(false);
   const listRef = useRef<FlatList<ChatMessage>>(null);
   const firstScrollDoneRef = useRef(false);
   const [selectMode, setSelectMode] = useState(false);
@@ -163,12 +168,12 @@ export default function ChatScreen() {
     if (nType === 'local_friend') {
       return 'Local Friend';
     }
-    if (nType === 'guest_moment') {
+    if (nType === 'guest_moment' || nType === 'guest_moment_connection') {
       const t = typeof notificationTitle === 'string' ? notificationTitle.trim() : '';
       if (t && !/^a moment from the city$/i.test(t)) return t;
       const route = banditName.trim();
       if (route && route !== 'Local banDit') return route;
-      return 'A Moment';
+      return nType === 'guest_moment_connection' ? 'Connection request' : 'A Moment';
     }
     if (isLocalFriendOceanBottleType(nType)) {
       const t = typeof notificationTitle === 'string' ? notificationTitle.trim() : '';
@@ -317,13 +322,19 @@ export default function ChatScreen() {
         const refId = String(referenceId || '').trim();
         const routeRefType = String(referenceTypeParam || '').trim();
 
-        /** Guest Moment threads — bottle discovery → reveal → reply continues here. */
+        /** Guest Moment threads — bottle discovery → Chat + connection. */
         if (
           nType === 'guest_moment' ||
+          nType === 'guest_moment_connection' ||
           routeRefType === 'guest_moment_thread' ||
+          routeRefType === 'guest_moment_connection' ||
           nid.startsWith('gm_')
         ) {
-          const { loadMomentChatThread, getOrCreateMomentChatThread } = await import('@/lib/guest-moment');
+          const {
+            loadMomentChatThread,
+            getOrCreateMomentChatThread,
+            getMomentConnectionStatus,
+          } = await import('@/lib/guest-moment');
           const threadId = refId || nid;
           let thread = await loadMomentChatThread(threadId);
           if (!thread) {
@@ -340,9 +351,13 @@ export default function ChatScreen() {
                 'A Moment from the city.',
             });
           }
+          const conn = await getMomentConnectionStatus(threadId);
+          setMomentConnectionPending(
+            nType === 'guest_moment_connection' || conn === 'pending',
+          );
           setOceanFloatId(null);
           setOceanRevealHidden(false);
-          setOceanComposeAllowed(true);
+          setOceanComposeAllowed(conn === 'accepted' || conn === 'none');
           setOceanWaitingForGuest(false);
           setOperatorMode(false);
           setDeskPersonaLock(thread.peer.displayName);
@@ -909,32 +924,54 @@ export default function ChatScreen() {
 
   const deleteConversation = useCallback(() => {
     if (bulkWorking || !incomingNotifId) return;
-    Alert.alert('Delete conversation?', 'This removes the whole thread from your inbox.', [
-      { text: 'Cancel', style: 'cancel' },
-      {
-        text: 'Delete',
-        style: 'destructive',
-        onPress: () => {
-          void (async () => {
-            setBulkWorking(true);
+    void (async () => {
+      const ok = await confirmDestructive(
+        'Delete conversation?',
+        'This removes the whole thread from your Chat. Other people keep their copy.',
+      );
+      if (!ok) return;
+      setBulkWorking(true);
+      try {
+        const traveler = await resolveTravelerSession();
+        const userId = traveler?.user?.id || '';
+        const refId = String(referenceId || '').trim();
+        const summaries = userId ? await loadChatThreadSummaries(userId) : [];
+        const match =
+          summaries.find((t) => t.openNotificationId === incomingNotifId) ||
+          summaries.find((t) => t.floatId && t.floatId === refId) ||
+          summaries.find((t) => t.threadKey === `moment:${refId}`) ||
+          summaries.find((t) => t.threadKey === `ocean:${refId}`) ||
+          summaries.find((t) => t.openReferenceId === refId && !!refId);
+        if (match) {
+          await deleteChatThreadForUser(match, userId);
+        } else {
+          await deleteEntireChatConversation(incomingNotifId);
+          if (incomingNotifId.startsWith('gm_') || String(notificationType || '').includes('guest_moment')) {
             try {
-              await deleteEntireChatConversation(incomingNotifId);
-              await refreshNotifications();
-              DeviceEventEmitter.emit(BANDITS_NOTIFICATIONS_REFRESH);
-              router.back();
-            } catch (e) {
-              Alert.alert(
-                'Delete failed',
-                e instanceof Error ? e.message : 'Could not delete conversation.',
-              );
-            } finally {
-              setBulkWorking(false);
+              const { removeMomentChatThread } = await import('@/lib/guest-moment/store');
+              await removeMomentChatThread(refId || incomingNotifId);
+            } catch {
+              /* ignore */
             }
-          })();
-        },
-      },
-    ]);
-  }, [bulkWorking, incomingNotifId, refreshNotifications, router]);
+          }
+        }
+        await refreshNotifications();
+        DeviceEventEmitter.emit(BANDITS_NOTIFICATIONS_REFRESH);
+        router.back();
+      } catch (e) {
+        alertMessage('Delete failed', e instanceof Error ? e.message : 'Could not delete conversation.');
+      } finally {
+        setBulkWorking(false);
+      }
+    })();
+  }, [
+    bulkWorking,
+    incomingNotifId,
+    notificationType,
+    referenceId,
+    refreshNotifications,
+    router,
+  ]);
 
   const deleteOneMessage = useCallback(
     (item: ChatMessage) => {
@@ -1284,6 +1321,57 @@ export default function ChatScreen() {
             <Text style={styles.waitingBarText}>
               Someone found your bottle. You can reply after they send the first message.
             </Text>
+          </View>
+        ) : null}
+        {momentConnectionPending && !operatorMode ? (
+          <View style={styles.waitingBar}>
+            <Text style={styles.waitingBarText}>Connection request — accept to open two-way Chat.</Text>
+            <View style={{ flexDirection: 'row', gap: 8, marginTop: 10, flexWrap: 'wrap' }}>
+              {(
+                [
+                  ['accept', 'Accept'],
+                  ['decline', 'Decline'],
+                  ['block', 'Block'],
+                ] as const
+              ).map(([action, label]) => (
+                <Pressable
+                  key={action}
+                  disabled={momentConnectionBusy}
+                  onPress={() => {
+                    void (async () => {
+                      setMomentConnectionBusy(true);
+                      try {
+                        const { respondMomentConnection } = await import('@/lib/guest-moment');
+                        const traveler = await resolveTravelerSession();
+                        const peerMeta = traveler?.user?.user_metadata as
+                          | { full_name?: string; name?: string }
+                          | undefined;
+                        await respondMomentConnection({
+                          threadId: String(referenceId || notificationId || '').trim(),
+                          action,
+                          peerDisplayName:
+                            String(peerMeta?.full_name || peerMeta?.name || '').trim() ||
+                            banditName,
+                        });
+                        setMomentConnectionPending(false);
+                        if (action === 'accept') setOceanComposeAllowed(true);
+                        await loadThread(true);
+                      } catch (e) {
+                        alertMessage(
+                          'Could not update',
+                          e instanceof Error ? e.message : 'Try again.',
+                        );
+                      } finally {
+                        setMomentConnectionBusy(false);
+                      }
+                    })();
+                  }}
+                  style={styles.revealBtn}
+                >
+                  <Text style={styles.revealBtnText}>{label}</Text>
+                </Pressable>
+              ))}
+            </View>
           </View>
         ) : null}
         {operatorMode && (

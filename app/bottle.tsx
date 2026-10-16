@@ -10,9 +10,9 @@ import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { ActivityIndicator, StyleSheet, View } from 'react-native';
 
 /**
- * Travel in a Bottle — QR scan hook.
+ * Ocean Bottle Message — social QR scan hook (NOT Travel in a Bottle).
  * Mode A — Moment (curiosity first, sender hidden).
- * Mode B — Local Friend message (reply → Chat).
+ * Mode B — Local Friend ocean message (reply → Chat).
  * Continues in /bottleDiscover — never a dead public page.
  */
 export default function BottleScanScreen() {
@@ -36,8 +36,13 @@ export default function BottleScanScreen() {
   }, []);
 
   const steps = useMemo(
-    () => buildBottleQrSteps(hook?.hookSubline ?? 'Find out who sent it inside bandiTour.'),
-    [hook?.hookSubline],
+    () =>
+      buildBottleQrSteps(
+        hook?.empty
+          ? 'No new bottle messages right now.'
+          : hook?.hookSubline ?? 'Find out who sent it inside bandiTour.',
+      ),
+    [hook?.empty, hook?.hookSubline],
   );
 
   const enterDiscover = useCallback(async () => {
@@ -57,8 +62,11 @@ export default function BottleScanScreen() {
     );
   }
 
-  const discoverLabel =
-    hook.mode === 'moment' ? 'See who sent this' : 'Reply in Chat';
+  const discoverLabel = hook.empty
+    ? 'Continue'
+    : hook.mode === 'moment'
+      ? 'See who sent this'
+      : 'Reply in Chat';
 
   return (
     <HotelOnboardingFlow
@@ -68,7 +76,11 @@ export default function BottleScanScreen() {
       markOnboardingComplete={async () => {}}
       backGuardPath="/bottle"
       testID="bottle-qr-play-intro"
-      prefilledSignalLine={hook.quote}
+      prefilledSignalLine={
+        hook.empty
+          ? 'The ocean is quiet — no eligible messages to discover right now.'
+          : hook.quote
+      }
       bottleDiscoverLabel={discoverLabel}
       onBottleDiscover={() => void enterDiscover()}
     />

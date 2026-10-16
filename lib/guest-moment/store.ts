@@ -224,25 +224,45 @@ async function upsertPoolMoment(moment: GuestMoment): Promise<void> {
   await setRaw(POOL_KEY, JSON.stringify(without.slice(0, 40)));
 }
 
-export async function pickEligibleGuestMoment(excludeSenderId?: string): Promise<GuestMoment | null> {
+export async function pickEligibleGuestMoment(
+  excludeSenderId?: string,
+  excludeMomentIds?: string[],
+): Promise<GuestMoment | null> {
+  const excluded = new Set(
+    (excludeMomentIds || []).map((x) => String(x || "").trim()).filter(Boolean),
+  );
+
   /** Prefer durable remote Moments (Supabase / Orchestra). */
   try {
     const { pickEligibleMomentRemote } = await import("@/lib/guest-moment/remote");
     const remote = await pickEligibleMomentRemote(excludeSenderId);
-    if (remote) return remote;
+    if (remote && !excluded.has(remote.id)) return remote;
   } catch {
     /* fall through to local pool */
   }
 
   const pool = await ensureMomentPool();
   const today = dayKeyUtc();
-  const eligible = pool.filter(
+  /** Prefer real guest Moments over demo seed when any guest-published exist. */
+  const guestPublished = pool.filter(
     (m) =>
       m.bottleEligible &&
+      m.sender.kind === "guest" &&
       String(m.text || "").trim().length >= 8 &&
-      (m.dayKey === today || m.sender.kind === "demo") &&
-      (!excludeSenderId || m.sender.id !== excludeSenderId),
+      m.dayKey === today &&
+      (!excludeSenderId || m.sender.id !== excludeSenderId) &&
+      !excluded.has(m.id),
   );
+  const eligible = guestPublished.length
+    ? guestPublished
+    : pool.filter(
+        (m) =>
+          m.bottleEligible &&
+          String(m.text || "").trim().length >= 8 &&
+          (m.dayKey === today || m.sender.kind === "demo") &&
+          (!excludeSenderId || m.sender.id !== excludeSenderId) &&
+          !excluded.has(m.id),
+      );
   if (!eligible.length) return null;
   const idx = Math.floor(Math.random() * eligible.length);
   return eligible[idx]!;
@@ -416,6 +436,15 @@ export async function listMomentChatThreads(): Promise<MomentChatThread[]> {
   );
 }
 
+export async function removeMomentChatThread(threadId: string): Promise<void> {
+  const id = String(threadId || "").trim();
+  if (!id) return;
+  const map = await readThreads();
+  if (!map[id]) return;
+  delete map[id];
+  await writeThreads(map);
+}
+
 export async function appendMomentChatReply(threadId: string, body: string): Promise<MomentChatThread> {
   const map = await readThreads();
   const thread = map[threadId];
@@ -460,6 +489,20 @@ export async function appendMomentChatReply(threadId: string, body: string): Pro
     });
   } catch {
     /* best-effort */
+  }
+
+  try {
+    const { persistMomentChatMessage } = await import("@/lib/guest-moment/connection");
+    const peerId = thread.peer?.id;
+    await persistMomentChatMessage({
+      threadId,
+      body: text,
+      peerUserId: peerId && /^[0-9a-f-]{36}$/i.test(peerId) ? peerId : undefined,
+      peerDisplayName: thread.peer?.displayName,
+      selfDisplayName: "Traveler",
+    });
+  } catch {
+    /* local thread remains durable on-device */
   }
 
   return next;

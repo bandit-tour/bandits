@@ -4,13 +4,18 @@ import {
   type BottleQrHookResult,
 } from "@/lib/bottleQrIntro";
 import {
-  getBottleScanSession,
+  getMomentHistory,
+  getOrCreateMomentChatThread,
   newId,
   pickEligibleGuestMoment,
   recordMomentReceived,
   saveBottleScanSession,
 } from "@/lib/guest-moment/store";
 import type { BottleScanSession, MomentSender } from "@/lib/guest-moment/types";
+import {
+  GUEST_MOMENT_CHAT_TYPE,
+  GUEST_MOMENT_THREAD_REF,
+} from "@/lib/guest-moment/types";
 import { claimLocalFriendOceanFloat, type OceanFloatClaimResult } from "@/lib/localFriendOcean";
 import { requestNotificationsRefresh } from "@/lib/notificationEvents";
 import { ensureAnonymousSession } from "@/lib/pilotSession";
@@ -18,11 +23,14 @@ import {
   notifyMomentDiscovery,
   recordDiscoveryRemote,
 } from "@/lib/guest-moment/remote";
+import { supabase } from "@/lib/supabase";
 
 export type GuestBottleHook = BottleQrHookResult & {
   sessionId: string;
-  mode: "moment" | "local_friend";
+  mode: "moment" | "local_friend" | "empty";
   sender: MomentSender;
+  /** True when no eligible ocean float or Moment was available. */
+  empty?: boolean;
 };
 
 function lfSender(persona?: string, floatId?: string): MomentSender {
@@ -37,10 +45,77 @@ function lfSender(persona?: string, floatId?: string): MomentSender {
   };
 }
 
+const EMPTY_SENDER: MomentSender = {
+  id: "empty",
+  displayName: "bandiTour",
+  avatarInitials: "B",
+  kind: "guest",
+};
+
+async function durableMomentChatDelivery(args: {
+  sessionId: string;
+  quote: string;
+  sender: MomentSender;
+  momentId?: string;
+  notificationId?: string | null;
+}): Promise<{ threadId: string; notificationId?: string }> {
+  const threadId =
+    (args.momentId && /^[0-9a-f-]{36}$/i.test(args.momentId) && args.momentId) ||
+    args.sessionId;
+
+  await getOrCreateMomentChatThread({
+    threadId,
+    peer: args.sender,
+    openingQuote: args.quote,
+  });
+
+  let notificationId = args.notificationId || undefined;
+  if (notificationId && /^[0-9a-f-]{36}$/i.test(notificationId)) {
+    try {
+      await supabase
+        .from("notifications")
+        .update({
+          title: "Message in a bottle",
+          reference_id: threadId,
+          reference_type: GUEST_MOMENT_THREAD_REF,
+          type: GUEST_MOMENT_CHAT_TYPE,
+        })
+        .eq("id", notificationId);
+    } catch {
+      /* best-effort */
+    }
+  } else {
+    notificationId =
+      (await notifyMomentDiscovery({
+        quote: args.quote,
+        momentId: args.momentId,
+        sessionId: threadId,
+        hiddenTitle: "Message in a bottle",
+      })) || undefined;
+    if (notificationId) {
+      try {
+        await supabase
+          .from("notifications")
+          .update({
+            reference_id: threadId,
+            reference_type: GUEST_MOMENT_THREAD_REF,
+            type: GUEST_MOMENT_CHAT_TYPE,
+          })
+          .eq("id", notificationId);
+      } catch {
+        /* ignore */
+      }
+    }
+  }
+
+  return { threadId, notificationId };
+}
+
 /**
- * Resolve bottle opening:
+ * Resolve bottle opening (Ocean Message / social QR — not Travel in a Bottle):
  * Mode B — Local Friend ocean message (intentional)
- * Mode A — Guest Moment (ambient discovery; sender hidden)
+ * Mode A — Guest Moment (ambient discovery; sender hidden until reveal)
+ * Empty — truthful zero-eligible state (no fabricated senders)
  */
 export async function resolveGuestBottleOpening(): Promise<GuestBottleHook> {
   await ensureAnonymousSession().catch(() => undefined);
@@ -74,6 +149,14 @@ export async function resolveGuestBottleOpening(): Promise<GuestBottleHook> {
       floatId: claim.floatId,
       notificationId: claim.notificationId,
     };
+    const delivered = await durableMomentChatDelivery({
+      sessionId: session.id,
+      quote: lfQuote,
+      sender,
+      notificationId: claim.notificationId,
+    });
+    session.chatThreadId = delivered.threadId;
+    session.notificationId = delivered.notificationId || claim.notificationId;
     await saveBottleScanSession(session);
     await recordMomentReceived({
       id: newId("hist"),
@@ -84,7 +167,9 @@ export async function resolveGuestBottleOpening(): Promise<GuestBottleHook> {
       revealed: false,
       replied: false,
       floatId: claim.floatId,
+      chatThreadId: delivered.threadId,
     });
+    requestNotificationsRefresh();
     return {
       sessionId: session.id,
       mode: "moment",
@@ -94,7 +179,7 @@ export async function resolveGuestBottleOpening(): Promise<GuestBottleHook> {
       banditId: claim.banditId,
       banditName: name,
       floatId: claim.floatId,
-      notificationId: claim.notificationId,
+      notificationId: session.notificationId,
       sender,
     };
   }
@@ -110,6 +195,7 @@ export async function resolveGuestBottleOpening(): Promise<GuestBottleHook> {
       revealed: false,
       floatId: claim.floatId,
       notificationId: claim.notificationId,
+      chatThreadId: claim.floatId,
     };
     await saveBottleScanSession(session);
     await recordMomentReceived({
@@ -121,6 +207,7 @@ export async function resolveGuestBottleOpening(): Promise<GuestBottleHook> {
       revealed: false,
       replied: false,
       floatId: claim.floatId,
+      chatThreadId: claim.floatId,
     });
     await recordDiscoveryRemote({
       quote: lfQuote,
@@ -130,6 +217,7 @@ export async function resolveGuestBottleOpening(): Promise<GuestBottleHook> {
       floatId: claim.floatId,
       notificationId: claim.notificationId,
     });
+    requestNotificationsRefresh();
     return {
       sessionId: session.id,
       mode: "local_friend",
@@ -143,13 +231,16 @@ export async function resolveGuestBottleOpening(): Promise<GuestBottleHook> {
   }
 
   /** Mode A — guest Moment (curiosity first; no sender on the hook). */
-  const moment = await pickEligibleGuestMoment();
+  const hist = await getMomentHistory();
+  const excludeMomentIds = hist.map((h) => h.momentId).filter(Boolean) as string[];
+  const moment = await pickEligibleGuestMoment(undefined, excludeMomentIds);
   if (moment) {
     const sessionId = newId("scan");
-    const notificationId = await notifyMomentDiscovery({
-      quote: moment.text,
-      momentId: moment.id,
+    const delivered = await durableMomentChatDelivery({
       sessionId,
+      quote: moment.text,
+      sender: moment.sender,
+      momentId: moment.id,
     });
     const session: BottleScanSession = {
       id: sessionId,
@@ -159,7 +250,8 @@ export async function resolveGuestBottleOpening(): Promise<GuestBottleHook> {
       sender: moment.sender,
       revealed: false,
       momentId: moment.id,
-      notificationId: notificationId || undefined,
+      notificationId: delivered.notificationId,
+      chatThreadId: delivered.threadId,
     };
     await saveBottleScanSession(session);
     await recordMomentReceived({
@@ -171,6 +263,7 @@ export async function resolveGuestBottleOpening(): Promise<GuestBottleHook> {
       revealed: false,
       replied: false,
       momentId: moment.id,
+      chatThreadId: delivered.threadId,
     });
     await recordDiscoveryRemote({
       momentId: moment.id,
@@ -178,9 +271,9 @@ export async function resolveGuestBottleOpening(): Promise<GuestBottleHook> {
       mode: "moment",
       sender: moment.sender,
       revealed: false,
-      notificationId: notificationId || undefined,
+      notificationId: delivered.notificationId,
     });
-    if (notificationId) requestNotificationsRefresh();
+    if (delivered.notificationId) requestNotificationsRefresh();
     return {
       sessionId: session.id,
       mode: "moment",
@@ -188,64 +281,32 @@ export async function resolveGuestBottleOpening(): Promise<GuestBottleHook> {
       quote: moment.text,
       hookSubline: BOTTLE_QR_MOMENT_SUBLINE,
       sender: moment.sender,
-      notificationId: notificationId || undefined,
+      notificationId: delivered.notificationId,
     };
   }
 
-  /** Last resort — Local banDit Moment (Neo) so QR always retains attribution. */
-  const neoId = "d76cb120-018d-4a2e-8b5f-0578a71fd8f9";
-  const fallbackSender: MomentSender = {
-    id: neoId,
-    displayName: "Neo",
-    city: "Athens",
-    stayHint: "Local banDit · vintage · jazz",
-    avatarInitials: "N",
-    kind: "demo",
-  };
-  const quote =
-    "Monastiraki still hides vinyl if you know which alley to turn into after coffee.";
-  const sessionId = newId("scan");
-  const notificationId = await notifyMomentDiscovery({
-    quote,
-    momentId: "demo_moment_neo",
-    sessionId,
-  });
-  const session: BottleScanSession = {
-    id: sessionId,
+  /** Truthful empty — never fabricate a sender or static quote. */
+  const emptySession: BottleScanSession = {
+    id: newId("scan"),
     mode: "moment",
-    quote,
+    quote: "",
     createdAt: new Date().toISOString(),
-    sender: fallbackSender,
+    sender: EMPTY_SENDER,
     revealed: false,
-    momentId: "demo_moment_neo",
-    banditId: neoId,
-    notificationId: notificationId || undefined,
   };
-  await saveBottleScanSession(session);
-  await recordMomentReceived({
-    id: newId("hist"),
-    quote,
-    mode: "moment",
-    receivedAt: session.createdAt,
-    sender: fallbackSender,
-    revealed: false,
-    replied: false,
-    momentId: "demo_moment_neo",
-  });
-  if (notificationId) requestNotificationsRefresh();
+  await saveBottleScanSession(emptySession);
   return {
-    sessionId: session.id,
-    mode: "moment",
+    sessionId: emptySession.id,
+    mode: "empty",
     source: "bandit_moment",
-    quote,
-    hookSubline: BOTTLE_QR_MOMENT_SUBLINE,
-    banditId: neoId,
-    banditName: "Neo",
-    sender: fallbackSender,
-    notificationId: notificationId || undefined,
+    quote: "",
+    hookSubline: "No new bottle messages right now. Try again later, or set My Moment for others.",
+    sender: EMPTY_SENDER,
+    empty: true,
   };
 }
 
 export async function loadActiveBottleSession(): Promise<BottleScanSession | null> {
+  const { getBottleScanSession } = await import("@/lib/guest-moment/store");
   return getBottleScanSession();
 }

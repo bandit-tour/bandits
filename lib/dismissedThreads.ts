@@ -15,9 +15,13 @@ export async function getDismissedNotificationIds(): Promise<Set<string>> {
 }
 
 export async function addDismissedNotificationId(id: string): Promise<void> {
-  const t = String(id || '').trim();
-  if (!t) return;
+  await addDismissedNotificationIds([id]);
+}
+
+export async function addDismissedNotificationIds(ids: string[]): Promise<void> {
+  const cleaned = [...new Set(ids.map((x) => String(x || '').trim()).filter(Boolean))];
+  if (!cleaned.length) return;
   const set = await getDismissedNotificationIds();
-  set.add(t);
+  for (const id of cleaned) set.add(id);
   await AsyncStorage.setItem(KEY, JSON.stringify([...set]));
 }

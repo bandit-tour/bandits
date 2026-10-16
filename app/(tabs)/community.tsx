@@ -3,7 +3,6 @@ import { useFocusEffect } from '@react-navigation/native';
 import React, { useCallback, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
-  Alert,
   DeviceEventEmitter,
   FlatList,
   Pressable,
@@ -16,7 +15,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { IconSymbol } from '@/components/ui/IconSymbol';
 import { useAppState } from '@/contexts/AppStateContext';
 import { usePremiumRefreshControl } from '@/lib/mobilePullToRefresh';
-import { deleteEntireChatConversation } from '@/lib/chatThreadManage';
+import { deleteChatThreadForUser } from '@/lib/chatThreadManage';
 import { loadChatThreadSummaries, type ChatThreadSummary } from '@/lib/chatThreads';
 import { formatInboxSentAt } from '@/lib/inboxSentAtLabel';
 import { ensureAnonymousSession, resolveTravelerSession } from '@/lib/pilotSession';
@@ -25,21 +24,7 @@ import { markChatSurfaceOpened } from '@/lib/osAppBadge';
 import { syncOsAppIconBadge } from '@/lib/pushNotifications';
 import { useAppBackScreenOptions } from '@/hooks/useAppBackScreenOptions';
 import { APP_HOME_HREF } from '@/lib/appNavigation';
-
-function threadDeleteRootId(t: ChatThreadSummary): string {
-  const rt = String(t.openReferenceType || '').trim();
-  if (
-    rt === 'bandit_question_guest_echo' ||
-    rt === 'local_friend_guest_echo' ||
-    rt === 'bandit_question_request' ||
-    rt === 'local_friend_request'
-  ) {
-    return String(t.openReferenceId || t.openNotificationId || '').trim();
-  }
-  if (t.threadKey.startsWith('ask:')) return t.threadKey.slice(4);
-  if (t.threadKey.startsWith('local_friend:')) return t.threadKey.slice('local_friend:'.length);
-  return String(t.openNotificationId || t.openReferenceId || '').trim();
-}
+import { alertMessage, confirmDestructive } from '@/lib/uiConfirm';
 
 /**
  * Bottom Chat tab — unified conversation threads (same /chat route as Notifications deep links).
@@ -111,37 +96,30 @@ export default function CommunityScreen() {
   const deleteSelectedThreads = useCallback(() => {
     if (bulkWorking || selectedKeys.size === 0) return;
     const targets = threads.filter((t) => selectedKeys.has(t.threadKey));
-    Alert.alert(
-      'Delete conversations',
-      `Remove ${targets.length} conversation${targets.length === 1 ? '' : 's'}?`,
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Delete',
-          style: 'destructive',
-          onPress: () => {
-            void (async () => {
-              setBulkWorking(true);
-              try {
-                for (const t of targets) {
-                  const root = threadDeleteRootId(t);
-                  if (root) await deleteEntireChatConversation(root);
-                }
-                setSelectMode(false);
-                setSelectedKeys(new Set());
-                await loadThreads(true);
-                await refreshNotifications();
-                DeviceEventEmitter.emit(BANDITS_NOTIFICATIONS_REFRESH);
-              } catch (e) {
-                Alert.alert('Could not delete', e instanceof Error ? e.message : 'Try again.');
-              } finally {
-                setBulkWorking(false);
-              }
-            })();
-          },
-        },
-      ],
-    );
+    void (async () => {
+      const ok = await confirmDestructive(
+        'Delete conversations',
+        `Remove ${targets.length} conversation${targets.length === 1 ? '' : 's'} from your Chat? Other people keep their copy.`,
+      );
+      if (!ok) return;
+      setBulkWorking(true);
+      try {
+        const traveler = await resolveTravelerSession();
+        const userId = traveler?.user?.id || '';
+        for (const t of targets) {
+          await deleteChatThreadForUser(t, userId);
+        }
+        setSelectMode(false);
+        setSelectedKeys(new Set());
+        await loadThreads(true);
+        await refreshNotifications();
+        DeviceEventEmitter.emit(BANDITS_NOTIFICATIONS_REFRESH);
+      } catch (e) {
+        alertMessage('Could not delete', e instanceof Error ? e.message : 'Try again.');
+      } finally {
+        setBulkWorking(false);
+      }
+    })();
   }, [bulkWorking, loadThreads, refreshNotifications, selectedKeys, threads]);
 
   const chatHeaderRight = useCallback(

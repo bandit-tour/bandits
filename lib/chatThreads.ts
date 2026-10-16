@@ -44,7 +44,7 @@ const BANDIT_REPLY_REFS = new Set([
 const NOTIF_SELECT =
   'id, type, title, message, reference_id, reference_type, is_read, created_at';
 
-function threadKeyForRow(n: NotifRow): string | null {
+export function threadKeyForRow(n: NotifRow): string | null {
   const t = String(n.type || '').trim();
   const rt = String(n.reference_type || '').trim();
   const ref = String(n.reference_id || '').trim();
@@ -83,14 +83,33 @@ function threadKeyForRow(n: NotifRow): string | null {
   /** Mode A Moments / bottle discover — must appear in Chat, not Notifications-only. */
   if (
     t === 'guest_moment' ||
+    t === 'guest_moment_connection' ||
     rt === 'guest_moment_thread' ||
-    rt === 'guest_moment_discovery'
+    rt === 'guest_moment_discovery' ||
+    rt === 'guest_moment_connection'
   ) {
     if (ref) return `moment:${ref}`;
     return `moment-notif:${n.id}`;
   }
 
   return null;
+}
+
+/** True when a notification row belongs to the given Chat threadKey. */
+export function notificationMatchesChatThreadKey(
+  n: {
+    id: string;
+    type: string;
+    title: string;
+    message: string;
+    reference_id: string | null;
+    reference_type: string | null;
+    is_read: boolean;
+    created_at: string;
+  },
+  threadKey: string,
+): boolean {
+  return threadKeyForRow(n as NotifRow) === threadKey;
 }
 
 function titleForThread(n: NotifRow): string {
