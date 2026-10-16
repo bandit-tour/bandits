@@ -176,9 +176,18 @@ export default function LocalFindDetailScreen() {
         >
           <Ionicons name="map-outline" size={18} color={color.ink} />
           <Text style={styles.mapCtaText}>Directions</Text>
+          <Text style={styles.privilegeDetail}>Map search for this place. Not a GPS reading.</Text>
         </Pressable>
 
-        {place.guestPrivilege ? (
+        {isDemo ? (
+          <View style={styles.privilegeCard} testID="local-find-editorial">
+            <Text style={styles.privilegeEyebrow}>Editorial Local Find</Text>
+            <Text style={styles.privilegeDetail}>
+              Featured for discovery. This is not an approved Hotel Guest Special, and there is no
+              redemption code.
+            </Text>
+          </View>
+        ) : place.guestPrivilege ? (
           <View style={styles.privilegeCard}>
             <Text style={styles.privilegeEyebrow}>Guest privilege</Text>
             <Text style={styles.privilegeTitle}>

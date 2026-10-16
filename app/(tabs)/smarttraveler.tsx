@@ -66,7 +66,6 @@ export function SmartTravelerScreen() {
   const [live, setLive] = useState<SmartTravelerPartner[]>([]);
   const [liveOk, setLiveOk] = useState(false);
   const [loading, setLoading] = useState(true);
-  const [showingDemo, setShowingDemo] = useState(false);
 
   const city = resolveSmartTravelerCity({
     stayCity: activeStay?.city,
@@ -83,11 +82,9 @@ export function SmartTravelerScreen() {
       if (result.ok) {
         setLive(result.partners);
         setLiveOk(true);
-        setShowingDemo(false);
       } else {
         setLive([]);
         setLiveOk(false);
-        setShowingDemo(true);
       }
       setLoading(false);
     });
@@ -99,11 +96,12 @@ export function SmartTravelerScreen() {
   const cols = offerMarketplaceColumns(width);
   const cardW = cardWidthForColumns(width, cols, GRID_PAD, GRID_GAP);
 
+  /** Live partners when Workspace published any. Otherwise the editorial catalog — never a blank page. */
+  const editorialMode = !liveOk || live.length === 0;
   const inventory = useMemo(() => {
-    if (liveOk) return live;
-    if (showingDemo) return SMART_TRAVELER_PARTNERS;
-    return [];
-  }, [liveOk, live, showingDemo]);
+    if (!editorialMode) return live;
+    return SMART_TRAVELER_PARTNERS;
+  }, [editorialMode, live]);
 
   const finds = useMemo(() => {
     if (filter === "All") return inventory;
@@ -126,16 +124,15 @@ export function SmartTravelerScreen() {
       <View style={styles.header}>
         <Text style={styles.title}>SmartTraveler</Text>
         <Text style={styles.subtitle}>
-          Secret local discounts for partner-hotel guests — show your code at the door.
+          {editorialMode
+            ? "Editorial Local Finds for Athens. Not approved Hotel Guest Specials."
+            : "Approved local partners for this stay."}
         </Text>
         <Text style={styles.subtitleSecondary}>
-          Cafés, shops and makers locals actually recommend.
+          {editorialMode
+            ? "Browsing by destination, not GPS. These places are for discovery — discounts cannot be redeemed."
+            : "Cafés, shops and makers with a published partner profile."}
         </Text>
-        {showingDemo ? (
-          <Text style={[styles.lead, { marginTop: 8 }]}>
-            Sample places for browsing — offers unlock with a partner stay.
-          </Text>
-        ) : null}
       </View>
 
       <ScrollView
@@ -152,6 +149,7 @@ export function SmartTravelerScreen() {
               onPress={() => setFilter(chip)}
               accessibilityRole="button"
               accessibilityState={{ selected: on }}
+              testID={`st-filter-${chip}`}
             >
               <Text style={[styles.chipText, on && styles.chipTextOn]}>
                 {chip === "All" ? "All" : chip.toUpperCase()}
@@ -162,8 +160,10 @@ export function SmartTravelerScreen() {
       </ScrollView>
 
       <View style={styles.sectionRow}>
-        <Text style={styles.section}>Local Finds</Text>
-        <Text style={styles.sectionCount}>{loading ? "…" : finds.length}</Text>
+        <Text style={styles.section}>{editorialMode ? "Editorial Local Finds" : "Local Finds"}</Text>
+        <Text style={styles.sectionCount} testID="st-find-count">
+          {loading ? "…" : finds.length}
+        </Text>
       </View>
 
       {loading ? (
@@ -173,7 +173,7 @@ export function SmartTravelerScreen() {
         </View>
       ) : finds.length === 0 ? (
         <Text style={styles.empty}>
-          {liveOk
+          {filter === "All"
             ? "No local finds published near you yet."
             : "No local finds in this category yet."}
         </Text>
@@ -187,6 +187,7 @@ export function SmartTravelerScreen() {
               saved={savedIds.has(place.id)}
               onOpen={() => open(place.id)}
               onToggleSave={() => toggleSave(place.id)}
+              editorial={editorialMode}
             />
           ))}
         </View>
@@ -201,12 +202,14 @@ function LocalFindCard({
   saved,
   onOpen,
   onToggleSave,
+  editorial,
 }: {
   place: SmartTravelerPartner;
   width: number;
   saved: boolean;
   onOpen: () => void;
   onToggleSave: () => void;
+  editorial?: boolean;
 }) {
   const imageH = Math.max(200, Math.min(320, width));
   return (
@@ -219,6 +222,7 @@ function LocalFindCard({
       onPress={onOpen}
       accessibilityRole="button"
       accessibilityLabel={`${place.businessName} · ${place.neighborhood}`}
+      testID={`st-card-${place.id}`}
     >
       <View
         style={[
@@ -248,13 +252,11 @@ function LocalFindCard({
             color={saved ? color.brand : "#FFFFFF"}
           />
         </Pressable>
-        {place.guestPrivilege ? (
-          <View style={styles.perkBadge}>
-            <Text style={styles.perkBadgeText} numberOfLines={1}>
-              Guest privilege
-            </Text>
-          </View>
-        ) : null}
+        <View style={styles.perkBadge}>
+          <Text style={styles.perkBadgeText} numberOfLines={1}>
+            {editorial ? "Editorial" : "Partner"}
+          </Text>
+        </View>
       </View>
 
       <View style={styles.cardBody}>
@@ -270,9 +272,13 @@ function LocalFindCard({
         <Text style={styles.curator} numberOfLines={1}>
           {place.curator}
         </Text>
-        {place.guestPrivilege ? (
+        {editorial ? (
           <Text style={styles.privilege} numberOfLines={2}>
-            Guest privilege: {place.guestPrivilege.label}
+            Editorial find · not redeemable
+          </Text>
+        ) : place.guestPrivilege ? (
+          <Text style={styles.privilege} numberOfLines={2}>
+            Hotel Guest Special: {place.guestPrivilege.label}
           </Text>
         ) : null}
       </View>
