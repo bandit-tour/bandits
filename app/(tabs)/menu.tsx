@@ -55,6 +55,7 @@ const QUICK_ACTIONS_STAY: { key: string; title: string; subtitle: string; emoji:
 
 const QUICK_ACTIONS_AFTER: { key: string; title: string; subtitle: string; emoji: string; href: Href }[] = [
   { key: "memory", title: "City Memory", subtitle: "Photos, places & travel story", emoji: "🧭", href: "/cityMemory" as Href },
+  { key: "dream", title: "Dream Destinations", subtitle: "Where you want to go next", emoji: "✈", href: "/dreamDestinations" as Href },
   { key: "bottle", title: "Next journey", subtitle: "Travel in a Bottle", emoji: "🌲", href: "/travelBottle" },
   { key: "moments", title: "My Moments", subtitle: "Personal messages · Bottle discovery", emoji: "✨", href: "/myMoment" as Href },
   { key: "lf", title: "Local Friend", subtitle: "Meet someone local", emoji: "💬", href: "/localFriend" },

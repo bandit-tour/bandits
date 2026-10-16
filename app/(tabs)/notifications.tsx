@@ -50,7 +50,7 @@ import { inboxPreviewForType, isSignalBottleInboxType } from '@/lib/bottleThread
 import { isDeletedThreadRef } from '@/lib/threadDelete';
 import { markInboxSurfaceOpened } from '@/lib/osAppBadge';
 import { syncOsAppIconBadge } from '@/lib/pushNotifications';
-import { ImpactInboxHeader } from '@/components/ImpactInboxHeader';
+import { LifecycleInboxHeader } from '@/components/LifecycleInboxHeader';
 import { useAppBackScreenOptions } from '@/hooks/useAppBackScreenOptions';
 
 type NotificationRow = {
@@ -893,7 +893,7 @@ export default function NotificationsScreen() {
           ItemSeparatorComponent={() => <View style={{ height: 10 }} />}
           stickySectionHeadersEnabled={false}
           refreshControl={inboxRefreshControl}
-          ListHeaderComponent={<ImpactInboxHeader />}
+          ListHeaderComponent={<LifecycleInboxHeader />}
           ListEmptyComponent={
             loading ? (
               <View style={styles.center}>

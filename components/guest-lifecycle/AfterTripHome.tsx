@@ -320,12 +320,23 @@ export function AfterTripHome({
       <SectionHeader title="Where to next?" />
       <Pressable
         style={styles.primaryNext}
+        onPress={() => go("/dreamDestinations")}
+        accessibilityRole="button"
+        testID="city-memory-dream"
+      >
+        <Text style={styles.primaryNextTitle}>Dream Destinations</Text>
+        <Text style={styles.primaryNextDetail}>
+          Choose Vietnam or another place you want next. Saved on your account — not a booking.
+        </Text>
+      </Pressable>
+      <Pressable
+        style={styles.secondaryNext}
         onPress={onPlanNextTrip}
         accessibilityRole="button"
         testID="city-memory-plan-next"
       >
-        <Text style={styles.primaryNextTitle}>Plan Your Next Trip</Text>
-        <Text style={styles.primaryNextDetail}>
+        <Text style={styles.secondaryNextTitle}>Plan Your Next Trip</Text>
+        <Text style={styles.secondaryNextDetail}>
           Opens Travel in a Bottle — Mix Sleeping Experiences. Editorial inspiration stays separate
           from live bookable stays.
         </Text>

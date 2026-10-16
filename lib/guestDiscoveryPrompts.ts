@@ -10,6 +10,7 @@ export type DiscoveryPromptId =
   | 'home_my_moments'
   | 'home_local_insider'
   | 'home_impact'
+  | 'home_dream_destinations'
   | 'between_trips_city_memory'
   | 'bandit_local_insider';
 

@@ -38,6 +38,8 @@ import {
   fetchBanditPremiumVisibility,
   type BanditPremiumVisibility,
 } from '@/lib/guest-app/premium-visibility';
+import { useAppState } from '@/contexts/AppStateContext';
+import { primaryDreamDestination, type DreamDestination } from '@/lib/dream-destinations/store';
 import { useGuestLifecycle } from '@/lib/guest-lifecycle/useGuestLifecycle';
 import { liveHotelDisplayName } from '@/lib/stay/liveHotelIdentity';
 import { ensureAnonymousSession, getHotelEntry, type HotelEntry } from '@/lib/pilotSession';
@@ -95,23 +97,28 @@ export default function TripHomeScreen() {
   const { height } = useWindowDimensions();
   const { selectedCity } = useCity();
   const { isAfterTrip, state: lifeState, activeStay, isFullStay, refresh } = useGuestLifecycle();
+  const { activeIdentity } = useAppState();
   const [hotel, setHotel] = useState<HotelEntry | null>(null);
   const [bandits, setBandits] = useState<Bandit[]>([]);
   const [loadingBandits, setLoadingBandits] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [premiumVis, setPremiumVis] = useState<BanditPremiumVisibility | null>(null);
+  const [dream, setDream] = useState<DreamDestination | null>(null);
 
   const load = useCallback(async () => {
     try {
       await ensureAnonymousSession().catch(() => undefined);
-      const [entry, list] = await Promise.all([
+      const uid = activeIdentity?.userId || 'guest';
+      const [entry, list, dreamRow] = await Promise.all([
         getHotelEntry().catch(() => null),
         getBanditsWithTags().catch((e) => {
           console.warn('[TripHome] bandits load failed', e);
           return [];
         }),
+        primaryDreamDestination(uid).catch(() => null),
       ]);
       setHotel(entry);
+      setDream(dreamRow);
       const rows = (list || []) as Bandit[];
       setBandits(rows);
       const featured = rows[0];
@@ -124,7 +131,7 @@ export default function TripHomeScreen() {
     } finally {
       setLoadingBandits(false);
     }
-  }, []);
+  }, [activeIdentity?.userId]);
 
   useEffect(() => {
     void load();
@@ -143,13 +150,15 @@ export default function TripHomeScreen() {
     void onRefresh();
   });
 
-  const city = selectedCity || 'Athens';
+  const stayCity = selectedCity || activeStay?.city || 'Athens';
+  /** Between trips: prefer the guest's dream destination over endlessly repeating the last stay city. */
+  const city = isAfterTrip && dream?.name ? dream.name : stayCity;
   const hotelName =
     liveHotelDisplayName({
       stayName: activeStay?.hotelName,
       entry: hotel,
       slug: activeStay?.hotelSlug || hotel?.slug,
-    }) || city;
+    }) || stayCity;
   const roomLabel = activeStay?.roomNumber ? `Room ${activeStay.roomNumber}` : null;
   const featured = bandits[0] ?? null;
   const first = featured ? firstNameOf(featured.name) : 'a Local banDit';
@@ -195,31 +204,64 @@ export default function TripHomeScreen() {
         <View style={styles.betweenTripsBanner} testID="home-between-trips-banner">
           <Text style={styles.betweenTripsKicker}>Between trips</Text>
           <Text style={styles.betweenTripsTitle}>Keep discovering</Text>
+          <Text style={styles.betweenTripsLead}>
+            Your stay ended. Your City Memory, Moments and chats stay with you — plan the next sleep
+            when you are ready.
+          </Text>
           <View style={styles.betweenTripsRow}>
             <Pressable
               style={({ pressed }) => [styles.betweenTripsBtn, pressed && styles.pressed]}
               onPress={() => router.push('/cityMemory' as Href)}
               accessibilityRole="button"
-              accessibilityLabel="Open City Memory"
+              testID="home-between-city-memory"
             >
               <Text style={styles.betweenTripsBtnText}>City Memory</Text>
             </Pressable>
             <Pressable
               style={({ pressed }) => [styles.betweenTripsBtnGhost, pressed && styles.pressed]}
+              onPress={() => router.push('/dreamDestinations' as Href)}
+              accessibilityRole="button"
+              testID="home-between-dream"
+            >
+              <Text style={styles.betweenTripsBtnGhostText}>
+                {dream ? `Next · ${dream.name}` : 'Where next?'}
+              </Text>
+            </Pressable>
+          </View>
+          <View style={styles.betweenTripsRow}>
+            <Pressable
+              style={({ pressed }) => [styles.betweenTripsBtnGhost, pressed && styles.pressed]}
+              onPress={() => router.push('/travelBottle' as Href)}
+              accessibilityRole="button"
+              testID="home-between-bottle"
+            >
+              <Text style={styles.betweenTripsBtnGhostText}>Travel in a Bottle</Text>
+            </Pressable>
+            <Pressable
+              style={({ pressed }) => [styles.betweenTripsBtnGhost, pressed && styles.pressed]}
               onPress={() => router.push('/reactivateStay' as Href)}
               accessibilityRole="button"
-              accessibilityLabel="Connect My New Stay"
+              testID="home-between-connect"
             >
               <Text style={styles.betweenTripsBtnGhostText}>Connect stay</Text>
             </Pressable>
           </View>
+          {dream ? (
+            <Text style={styles.betweenTripsDream} testID="home-dream-focus">
+              Dream focus: {dream.name}
+              {dream.timing ? ` · ${dream.timing}` : ''}. Inspiration follows this destination — no
+              invented bookings.
+            </Text>
+          ) : null}
         </View>
       ) : null}
 
       {/* 1 — Destination / stay context (brand lives in GuestChromeBar) */}
       <View style={styles.contextBar} testID="home-destination-context">
         <View style={styles.contextLeft}>
-          <Text style={styles.contextKicker}>Destination</Text>
+          <Text style={styles.contextKicker}>
+            {isAfterTrip && dream ? 'Dream destination' : 'Destination'}
+          </Text>
           <Text style={styles.contextCity} numberOfLines={1}>
             {city}
           </Text>
@@ -482,6 +524,19 @@ export default function TripHomeScreen() {
 
 const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: '#0B0B0B' },
+  betweenTripsLead: {
+    marginTop: 6,
+    marginBottom: 10,
+    fontSize: 13,
+    lineHeight: 18,
+    color: 'rgba(247,242,232,0.78)',
+  },
+  betweenTripsDream: {
+    marginTop: 10,
+    fontSize: 12,
+    lineHeight: 17,
+    color: 'rgba(232,197,71,0.95)',
+  },
   betweenTripsBanner: {
     marginHorizontal: space.lg,
     marginTop: 12,

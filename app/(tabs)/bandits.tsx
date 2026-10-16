@@ -332,6 +332,17 @@ export function BanditsScreen({ tabActive }: BanditsScreenProps = {}) {
         href="/myMoment"
         testID="home-discovery-my-moments"
       />
+      {isAfterTrip ? (
+        <GuestDiscoveryCard
+          promptId="home_dream_destinations"
+          eyebrow="Where next?"
+          title="Dream Destinations"
+          body="Save Vietnam, Japan or anywhere you want next. We remember it after checkout — without inventing bookings."
+          cta="Choose a destination"
+          href="/dreamDestinations"
+          testID="home-discovery-dream"
+        />
+      ) : null}
       <GuestDiscoveryCard
         promptId="home_impact"
         eyebrow="What you leave behind"

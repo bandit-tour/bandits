@@ -35,7 +35,7 @@ export async function getGuestLifecycle(): Promise<GuestLifecycleSnapshot> {
 export async function transitionCheckout(opts?: {
   confirmedByHotel?: boolean;
 }): Promise<GuestLifecycleSnapshot> {
-  return persistBundle((bundle) => {
+  const snap = await persistBundle((bundle) => {
     const from = bundle.lifecycle.state;
     const t = nowIso();
     const stays = bundle.stays.map((s) =>
@@ -55,7 +55,7 @@ export async function transitionCheckout(opts?: {
       {
         activeStayId: null,
         lastCheckedOutAt: t,
-        conciergeEntitled: false,
+        /** Paid Concierge / Stay Pass validity is contractual — not cleared by checkout alone. */
       },
     );
     next = appendLifecycleEvent(next, {
@@ -77,6 +77,20 @@ export async function transitionCheckout(opts?: {
     });
     return next;
   });
+  try {
+    const { recordLifecycleNotice } = await import("@/lib/lifecycle/notices");
+    await recordLifecycleNotice({
+      id: `checkout_${snap.lifecycle.lastCheckedOutAt || snap.lifecycle.updatedAt}`,
+      userId: snap.lifecycle.userId,
+      title: "Stay complete",
+      message:
+        "Your hotel stay ended. City Memory stays with you — choose a dream destination when you are ready.",
+      href: "/dreamDestinations",
+    });
+  } catch {
+    /* inbox notice is best-effort */
+  }
+  return snap;
 }
 
 /** Explicit check-in → ACTIVE_STAY + FULL_STAY. */
