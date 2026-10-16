@@ -168,11 +168,12 @@ function PhotoGrid({
  * Sample fixtures never create reservations or payments.
  */
 export default function JourneyDetailScreen() {
-  const { id, hotelNights: hotelNightsParam, hotelSlug } = useLocalSearchParams<{
+  const { id, hotelNights: hotelNightsParam, hotelSlug, connectedStay } = useLocalSearchParams<{
     id: string;
     hotelNights?: string;
     hotelSlug?: string;
     planDate?: string;
+    connectedStay?: string;
   }>();
   const { width } = useWindowDimensions();
   const [hotelName, setHotelName] = useState("");
@@ -190,11 +191,16 @@ export default function JourneyDetailScreen() {
 
   React.useEffect(() => {
     void getHotelEntry().then((entry) => {
-      const slug = hotelSlug || entry?.slug || "";
+      const slug = connectedStay === "0" ? "" : hotelSlug || entry?.slug || "";
+      if (!slug) {
+        setHotelName("");
+        setHotelListing(null);
+        return;
+      }
       setHotelName(liveHotelDisplayName({ entry, slug, stayName: entry?.slug === slug ? entry.displayName : null }));
       void loadHotelBottleListing(slug).then(setHotelListing);
     });
-  }, [hotelSlug]);
+  }, [connectedStay, hotelSlug]);
 
   React.useEffect(() => {
     if (typeof id !== "string") return;

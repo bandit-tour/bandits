@@ -57,7 +57,13 @@ export function mapWorkspaceBottleStay(row: WorkspaceBottleStay, hotelName?: str
   return {
     id: row.id,
     inventorySource: "provider_record",
-    hotel: { ...DEFAULT_BOTTLE_HOTEL, name: hotelName || DEFAULT_BOTTLE_HOTEL.name, nights: 2 },
+    hotel: {
+      name: hotelName || "Partner hotel",
+      nights: 2,
+      city: "",
+      emoji: "🏨",
+      imageUrl: "",
+    },
     second: {
       name: row.title,
       nights,
@@ -99,6 +105,78 @@ export async function fetchLiveBottleStays(): Promise<WorkspaceBottleStay[]> {
   const result = await workspaceGet<{ ok?: boolean; stays?: WorkspaceBottleStay[] }>("/api/public/bottle/stays");
   if (!result.ok) return [];
   return (result.data.stays || []).filter((s) => s.source === "provider_record");
+}
+
+function nightsBetween(checkIn: string, checkOut: string): number | null {
+  const start = new Date(`${checkIn}T00:00:00`);
+  const end = new Date(`${checkOut}T00:00:00`);
+  if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) return null;
+  const nights = Math.round((end.getTime() - start.getTime()) / 86400000);
+  return nights >= 1 ? nights : null;
+}
+
+function stayMatchesRequest(
+  row: WorkspaceBottleStay,
+  destination: string,
+  travelers: number,
+): boolean {
+  const q = destination.trim().toLowerCase();
+  const blob = `${row.location || ""} ${row.title || ""} ${row.natureType || ""}`.toLowerCase();
+  if (!q || !blob.includes(q)) return false;
+  if (row.maxGuests && travelers > row.maxGuests) return false;
+  return true;
+}
+
+/**
+ * Live mix only. Sample journeys are not returned as search results.
+ */
+export async function searchMixedSleeps(input: {
+  destination: string;
+  checkIn: string;
+  checkOut: string;
+  travelers: number;
+  hotelName?: string | null;
+}): Promise<BottleCatalogResult> {
+  const totalNights = nightsBetween(input.checkIn, input.checkOut);
+  const result = await workspaceGet<{
+    ok?: boolean;
+    stays?: WorkspaceBottleStay[];
+    demoStays?: { id?: string }[];
+  }>("/api/public/bottle/stays");
+
+  if (!result.ok) {
+    return {
+      matches: [],
+      mode: "live",
+      liveCount: 0,
+      workspaceDemoStubCount: 0,
+      error: result.detail || "Could not reach Workspace sleeping stays.",
+    };
+  }
+
+  const workspaceDemoStubCount = Array.isArray(result.data?.demoStays) ? result.data.demoStays.length : 0;
+  const hotelNights = totalNights && totalNights >= 2 ? totalNights - 1 : 1;
+  const secondNights = totalNights && totalNights >= 2 ? totalNights - hotelNights : 1;
+  const mapped = (result.data.stays || [])
+    .filter((s) => s.source === "provider_record")
+    .filter((s) => stayMatchesRequest(s, input.destination, input.travelers))
+    .map((r) => mapWorkspaceBottleStay(r, input.hotelName || undefined))
+    .filter((m): m is BottleMatch => Boolean(m))
+    .map((m) => ({
+      ...m,
+      hotel: { ...m.hotel, nights: hotelNights },
+      second: { ...m.second, nights: secondNights },
+      journeyNights: hotelNights + secondNights,
+      priceLabel: m.priceLabel === "From €0" ? "Price on request" : m.priceLabel,
+    }));
+
+  return {
+    matches: mapped,
+    mode: "live",
+    liveCount: mapped.length,
+    workspaceDemoStubCount,
+    error: null,
+  };
 }
 
 /**

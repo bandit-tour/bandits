@@ -1,6 +1,6 @@
-import { BOTTLE_POSTER, BOTTLE_VIDEO_WEB_URI } from '@/lib/openingIntroAssets';
+import { BOTTLE_VIDEO_WEB_URI } from '@/lib/openingIntroAssets';
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { Image, Modal, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Modal, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 /**
@@ -79,13 +79,17 @@ export function TravelBottleMixLoading({ visible, statusHint }: Props) {
       >
         <View style={styles.stage}>
           {reduceMotion ? (
-            <Image source={BOTTLE_POSTER} style={styles.poster} resizeMode="cover" />
+            <View style={styles.neutral} testID="travel-bottle-mix-reduced">
+              <ActivityIndicator color="#EED8B4" />
+              <Text style={styles.reducedHint}>Searching sleeping stays…</Text>
+            </View>
           ) : (
             React.createElement('video', {
               ref: (node: HTMLVideoElement | null) => {
                 videoRef.current = node;
               },
               src: BOTTLE_VIDEO_WEB_URI,
+              'data-testid': 'travel-bottle-mix-video',
               style: {
                 width: '100%',
                 height: '100%',
@@ -103,9 +107,7 @@ export function TravelBottleMixLoading({ visible, statusHint }: Props) {
           <View style={styles.copyBlock} pointerEvents="none">
             <Text style={styles.kicker}>Travel in a Bottle</Text>
             <Text style={styles.line}>{line}</Text>
-            {reduceMotion ? (
-              <Text style={styles.reducedHint}>Searching sleeping stays…</Text>
-            ) : null}
+            {null}
           </View>
         </View>
       </View>
@@ -132,10 +134,12 @@ const styles = StyleSheet.create({
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: 'rgba(238, 216, 180, 0.35)',
   },
-  poster: {
-    ...StyleSheet.absoluteFillObject,
-    width: '100%',
-    height: '100%',
+  neutral: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 12,
+    backgroundColor: '#141210',
   },
   scrim: {
     ...StyleSheet.absoluteFillObject,

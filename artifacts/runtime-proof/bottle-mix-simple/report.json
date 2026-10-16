@@ -1,0 +1,39 @@
+{
+  "checks": {
+    "threeQuestions": true,
+    "oneMixCta": true,
+    "ctaLabel": true,
+    "noVideoBefore": true,
+    "noSampleGrid": true,
+    "noHotelPicker": true,
+    "destination": true,
+    "datesValidated": true,
+    "travelers": true,
+    "videoIsVideo": true,
+    "videoAsset": true,
+    "videoPlaying": true,
+    "searchFinishedMs": 4571,
+    "videoDismissed": true,
+    "honestEmpty": true,
+    "apiCalled": true,
+    "noArtificialDelay": true,
+    "samplesSeparated": true,
+    "noVideoHotelier": true,
+    "noVideoCityMemory": true,
+    "mobileEntry": true,
+    "connectedHotel": true
+  },
+  "notes": [
+    {
+      "tag": "VIDEO",
+      "src": "http://localhost:8082/videos/play-intro.mp4",
+      "paused": false,
+      "readyState": 0
+    }
+  ],
+  "api": [
+    "http://localhost:8082/__workspace/api/public/bottle/stays",
+    "http://localhost:8082/__workspace/api/public/bottle/stays"
+  ],
+  "pass": true
+}
