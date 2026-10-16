@@ -1,8 +1,10 @@
 import { Image as ExpoImage } from "expo-image";
 import { Stack, useLocalSearchParams, type Href } from "expo-router";
-import React, { useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import {
   Image,
+  Modal,
+  Platform,
   type ImageSourcePropType,
   Pressable,
   ScrollView,
@@ -13,8 +15,24 @@ import {
 } from "react-native";
 
 import { useAppBackScreenOptions } from "@/hooks/useAppBackScreenOptions";
-import { fetchLiveBottleStay, mapWorkspaceBottleStay, bookBottleStayViaWorkspace } from "@/lib/guest-workspace/liveBottle";
-import { getBottleMatchById, journeyNightsLabel, withLiveHotelName, type BottleMatch } from "@/lib/guest-workspace/productWorlds";
+import {
+  bookBottleStayViaWorkspace,
+  fetchLiveBottleStay,
+  mapWorkspaceBottleStay,
+  type WorkspaceBottleStay,
+} from "@/lib/guest-workspace/liveBottle";
+import {
+  loadHotelBottleListing,
+  type HotelBottleListing,
+} from "@/lib/guest-workspace/hotelBottleListing";
+import {
+  getBottleMatchById,
+  isSampleBottleMatch,
+  journeyNightsLabel,
+  withLiveHotelName,
+  withPlannedHotelNights,
+  type BottleMatch,
+} from "@/lib/guest-workspace/productWorlds";
 import { liveHotelDisplayName } from "@/lib/stay/liveHotelIdentity";
 import { getHotelWhiteLabel } from "@/lib/hotelWhiteLabel";
 import { getHotelEntry } from "@/lib/pilotSession";
@@ -23,48 +41,224 @@ function nightLabel(n: number) {
   return `${n} night${n === 1 ? "" : "s"}`;
 }
 
+function isInventedWelcome(text: string): boolean {
+  return /message in a bottle|calm, personal|soft welcome before you/i.test(text);
+}
+
+type Frame = { key: string; remote?: string; local?: ImageSourcePropType };
+
+function FrameImage({ frame, style }: { frame: Frame; style: object }) {
+  if (frame.remote) {
+    return <ExpoImage source={{ uri: frame.remote }} style={style} contentFit="cover" />;
+  }
+  if (frame.local) {
+    return <Image source={frame.local} style={style} resizeMode="cover" />;
+  }
+  return <View style={[style, styles.missingPhoto]} />;
+}
+
+function GalleryViewer({
+  frames,
+  index,
+  title,
+  onClose,
+  onIndex,
+}: {
+  frames: Frame[];
+  index: number;
+  title: string;
+  onClose: () => void;
+  onIndex: (n: number) => void;
+}) {
+  const frame = frames[index];
+  const prev = () => onIndex((index - 1 + frames.length) % frames.length);
+  const next = () => onIndex((index + 1) % frames.length);
+
+  useEffect(() => {
+    if (Platform.OS !== "web" || typeof window === "undefined") return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") onClose();
+      if (e.key === "ArrowRight") next();
+      if (e.key === "ArrowLeft") prev();
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  });
+
+  if (!frame) return null;
+
+  return (
+    <Modal visible animationType="fade" onRequestClose={onClose} testID="journey-lightbox">
+      <View style={styles.lightbox}>
+        <View style={styles.lightboxBar}>
+          <Pressable onPress={onClose} accessibilityRole="button" testID="journey-lightbox-close">
+            <Text style={styles.lightboxBack}>← Back</Text>
+          </Pressable>
+          <Text style={styles.lightboxTitle} numberOfLines={1}>
+            {title} · {index + 1} / {frames.length}
+          </Text>
+        </View>
+        <Pressable style={styles.lightboxStage} onPress={next} accessibilityRole="button">
+          <FrameImage frame={frame} style={styles.lightboxImage} />
+        </Pressable>
+        {frames.length > 1 ? (
+          <View style={styles.lightboxNav}>
+            <Pressable onPress={prev} style={styles.lightboxNavBtn} accessibilityRole="button">
+              <Text style={styles.lightboxNavText}>Previous</Text>
+            </Pressable>
+            <Pressable onPress={next} style={styles.lightboxNavBtn} accessibilityRole="button">
+              <Text style={styles.lightboxNavText}>Next</Text>
+            </Pressable>
+          </View>
+        ) : null}
+      </View>
+    </Modal>
+  );
+}
+
+function PhotoGrid({
+  frames,
+  label,
+  note,
+  testID,
+  onOpen,
+}: {
+  frames: Frame[];
+  label: string;
+  note?: string;
+  testID: string;
+  onOpen: (index: number) => void;
+}) {
+  const { width } = useWindowDimensions();
+  const wide = width >= 900;
+  const hero = frames[0];
+  const rest = frames.slice(1, 8);
+  const cell = wide ? (Math.min(width, 1080) - 48) / 3 : (width - 40) / 2;
+
+  return (
+    <View testID={testID}>
+      <Text style={styles.sectionKicker}>{label}</Text>
+      {note ? <Text style={styles.sectionNote}>{note}</Text> : null}
+      {!hero ? (
+        <View style={styles.missingBlock}>
+          <Text style={styles.missingTitle}>Photos not published yet</Text>
+          <Text style={styles.missingBody}>This stay will not borrow another property’s images.</Text>
+        </View>
+      ) : (
+        <>
+          <Pressable onPress={() => onOpen(0)} accessibilityRole="button" testID={`${testID}-hero`}>
+            <FrameImage frame={hero} style={styles.propertyHero} />
+          </Pressable>
+          {rest.length > 0 ? (
+            <View style={styles.grid}>
+              {rest.map((frame, i) => (
+                <Pressable key={frame.key} onPress={() => onOpen(i + 1)} accessibilityRole="button">
+                  <FrameImage frame={frame} style={[styles.gridCell, { width: cell, height: cell * 0.72 }]} />
+                </Pressable>
+              ))}
+            </View>
+          ) : null}
+        </>
+      )}
+    </View>
+  );
+}
+
 /**
- * Paired journey detail â€” trip planning framing.
- * Second stay is the visual destination hero; hotel is pairing context.
+ * Paired journey detail — first hotel sleep, then a second sleeping stay.
+ * Sample fixtures never create reservations or payments.
  */
 export default function JourneyDetailScreen() {
-  const { id } = useLocalSearchParams<{ id: string }>();
+  const { id, hotelNights: hotelNightsParam, hotelSlug } = useLocalSearchParams<{
+    id: string;
+    hotelNights?: string;
+    hotelSlug?: string;
+    planDate?: string;
+  }>();
   const { width } = useWindowDimensions();
   const [hotelName, setHotelName] = useState("");
   const [hotelHero, setHotelHero] = useState<ImageSourcePropType | null>(null);
-  const [availabilityChecked, setAvailabilityChecked] = useState(false);
+  const [hotelListing, setHotelListing] = useState<HotelBottleListing | null>(null);
+  const [liveRow, setLiveRow] = useState<WorkspaceBottleStay | null>(null);
   const [liveMatch, setLiveMatch] = useState<BottleMatch | undefined>(undefined);
   const [bookedLine, setBookedLine] = useState<string | null>(null);
   const [bookBusy, setBookBusy] = useState(false);
+  const [secondNights, setSecondNights] = useState<number | null>(null);
+  const [availNote, setAvailNote] = useState<string | null>(null);
+  const [availBusy, setAvailBusy] = useState(false);
+  const [viewer, setViewer] = useState<{ frames: Frame[]; index: number; title: string } | null>(null);
+
+  const plannedHotelNights = Math.max(1, Number(hotelNightsParam) || 0) || null;
 
   React.useEffect(() => {
     void getHotelEntry().then((entry) => {
-      const h = getHotelWhiteLabel(entry?.slug ?? "");
-      setHotelName(liveHotelDisplayName({ entry, slug: entry?.slug }));
+      const slug = hotelSlug || entry?.slug || "";
+      const h = getHotelWhiteLabel(slug);
+      setHotelName(liveHotelDisplayName({ entry, slug }));
       if (h?.introHeroSource) setHotelHero(h.introHeroSource);
+      void loadHotelBottleListing(slug).then(setHotelListing);
     });
-  }, []);
+  }, [hotelSlug]);
 
   React.useEffect(() => {
     if (typeof id !== "string") return;
     void fetchLiveBottleStay(id).then((row) => {
-      if (!row) return;
+      if (!row || row.source !== "provider_record") {
+        setLiveRow(null);
+        return;
+      }
+      setLiveRow(row);
       const mapped = mapWorkspaceBottleStay(row, hotelName);
       if (mapped) setLiveMatch(mapped);
     });
   }, [id, hotelName]);
 
   const match: BottleMatch | undefined = useMemo(() => {
-    if (liveMatch) return withLiveHotelName(liveMatch, hotelName);
-    const raw = typeof id === "string" ? getBottleMatchById(id) : undefined;
-    return raw ? withLiveHotelName(raw, hotelName) : undefined;
-  }, [id, hotelName, liveMatch]);
+    const base = liveMatch
+      ? withLiveHotelName(liveMatch, hotelName || liveMatch.hotel.name)
+      : (() => {
+          const raw = typeof id === "string" ? getBottleMatchById(id) : undefined;
+          return raw ? withLiveHotelName(raw, hotelName || raw.hotel.name) : undefined;
+        })();
+    if (!base) return undefined;
+    const withHotel = plannedHotelNights ? withPlannedHotelNights(base, plannedHotelNights) : base;
+    if (secondNights != null && secondNights > 0) {
+      return {
+        ...withHotel,
+        second: { ...withHotel.second, nights: secondNights },
+        journeyNights: withHotel.hotel.nights + secondNights,
+      };
+    }
+    return withHotel;
+  }, [id, hotelName, liveMatch, plannedHotelNights, secondNights]);
+
+  const sample = isSampleBottleMatch(match);
+  const bookable =
+    !sample &&
+    Boolean(liveRow) &&
+    liveRow?.source === "provider_record" &&
+    liveRow?.available !== false &&
+    (liveRow?.availableDates?.length ?? 0) > 0;
 
   const screenOptions = useAppBackScreenOptions({
     title: match ? match.second.name : "Journey",
     fallback: "/travelBottle" as Href,
     showBack: true,
   });
+
+  const hotelFrames: Frame[] = useMemo(() => {
+    const frames: Frame[] = [];
+    for (const uri of hotelListing?.remoteGalleryUrls || []) {
+      frames.push({ key: uri, remote: uri });
+    }
+    const local = hotelListing?.localGallery?.length
+      ? hotelListing.localGallery
+      : hotelHero
+        ? [hotelHero]
+        : [];
+    local.forEach((src, i) => frames.push({ key: `local-${i}`, local: src }));
+    return frames.slice(0, 8);
+  }, [hotelListing, hotelHero]);
 
   if (!match) {
     return (
@@ -76,523 +270,397 @@ export default function JourneyDetailScreen() {
   }
 
   const second = match.second;
-  const gallery = second.gallery ?? [];
-  const attrs = second.attributes ?? [];
-  const heroMaxW = Math.min(width - 24, 720);
+  const secondUrls = [second.imageUrl, ...(second.gallery || [])].filter(
+    (u, i, arr) => u && /^https?:\/\//i.test(u) && arr.indexOf(u) === i,
+  );
+  const secondFrames: Frame[] = secondUrls.map((uri) => ({ key: uri, remote: uri }));
+  const hotelTitle = hotelListing?.whiteLabel?.title || match.hotel.name;
+  const hotelArea = hotelListing?.location || match.hotel.city || "Athens";
+  const rawHotelCopy = String(hotelListing?.description || "").trim();
+  const hotelSummary =
+    rawHotelCopy.length > 80 && !isInventedWelcome(rawHotelCopy) && !/^welcome to\b/i.test(rawHotelCopy)
+      ? rawHotelCopy
+      : `${hotelTitle} is the first sleep — ${nightLabel(match.hotel.nights)} in ${hotelArea}. The second sleep is a different place to stay.`;
+  const tags = (hotelListing?.services?.length
+    ? hotelListing.services
+    : ["Breakfast", "Restaurant", "Spa", "Rooftop", "Concierge"]
+  ).slice(0, 6);
+  const wide = width >= 900;
+  const transferLine = sample
+    ? `Illustrated estimate · ${match.travelTime} · ${match.distance}. Not a live route.`
+    : liveRow?.distanceMinutes
+      ? `About ${liveRow.distanceMinutes} min from the hotel, as published by the stay.`
+      : "Transfer time is shown when the stay publishes it.";
+
+  const checkAvailability = () => {
+    if (availBusy) return;
+    if (sample) {
+      setAvailNote("Sample preview. This journey is not in live inventory, so dates cannot be reserved.");
+      return;
+    }
+    setAvailBusy(true);
+    void fetchLiveBottleStay(String(id)).then((row) => {
+      setAvailBusy(false);
+      if (!row || row.source !== "provider_record") {
+        setAvailNote("No bookable stay was returned for this journey.");
+        setLiveRow(null);
+        return;
+      }
+      setLiveRow(row);
+      if (row.available === false || !(row.availableDates?.length)) {
+        setAvailNote("Unavailable right now. Workspace has this stay, but no open dates to book.");
+        return;
+      }
+      setAvailNote(`Open dates from the hotel partner: ${row.availableDates.slice(0, 4).join(", ")}.`);
+    });
+  };
 
   return (
-    <ScrollView style={styles.screen} contentContainerStyle={styles.content}>
+    <ScrollView style={styles.screen} contentContainerStyle={styles.content} testID="journey-detail">
       <Stack.Screen options={screenOptions} />
-
-      {/* One journey pairing strip */}
-      <View style={styles.journeyStrip}>
-        <View style={styles.stripStay}>
-          {hotelHero ? (
-            <Image source={hotelHero} style={styles.stripThumb} resizeMode="cover" />
-          ) : (
-            <View style={[styles.stripThumb, styles.stripThumbFallback]} />
-          )}
-          <View style={styles.stripCopy}>
-            <Text style={styles.stripLabel}>Hotel stay</Text>
-            <Text style={styles.stripName} numberOfLines={1}>
-              {match.hotel.name}
-            </Text>
-            <Text style={styles.stripMeta}>
-              {nightLabel(match.hotel.nights)} Â· {match.hotel.city ?? "Athens"}
-            </Text>
-          </View>
-        </View>
-
-        <View style={styles.stripCenter}>
-          <Text style={styles.livePill}>PAIRED</Text>
-          <Text style={styles.stripArrow}>â†“</Text>
-          <Text style={styles.stripStat}>{journeyNightsLabel(match)}</Text>
-          <Text style={styles.stripSub}>{match.travelTime}</Text>
-        </View>
-
-        <View style={styles.stripStay}>
-          <ExpoImage
-            source={{ uri: second.imageUrl }}
-            style={styles.stripThumb}
-            contentFit="cover"
-          />
-          <View style={styles.stripCopy}>
-            <Text style={styles.stripLabelNext}>Second stay</Text>
-            <Text style={styles.stripName} numberOfLines={1}>
-              {second.name}
-            </Text>
-            <Text style={styles.stripMeta}>
-              {nightLabel(second.nights)} Â· {second.location}
-            </Text>
-          </View>
-        </View>
-      </View>
-
-      {/* Second stay = visual hero â€” premium 4:3 */}
-      <View
-        style={[
-          styles.hero,
-          { maxWidth: heroMaxW, alignSelf: "center", width: width - 24 },
-          width - 24 >= 360 && styles.heroMin,
-        ]}
-      >
-        <ExpoImage
-          source={{ uri: second.imageUrl }}
-          style={styles.heroImage}
-          contentFit="cover"
+      {viewer ? (
+        <GalleryViewer
+          frames={viewer.frames}
+          index={viewer.index}
+          title={viewer.title}
+          onClose={() => setViewer(null)}
+          onIndex={(n) => setViewer({ ...viewer, index: n })}
         />
-        <View style={styles.heroScrim} />
-        <View style={styles.heroCopy}>
-          <Text style={styles.heroKicker}>Add a second stay</Text>
-          <Text style={styles.heroEmoji}>{second.emoji}</Text>
-          <Text style={styles.heroName}>{second.name}</Text>
-          <Text style={styles.heroMeta}>
-            {second.type ? `${second.type} Â· ` : ""}
-            {second.location}
-            {" Â· "}
-            {nightLabel(second.nights)}
-            {second.rating != null ? ` Â· â˜… ${second.rating.toFixed(2)}` : ""}
-          </Text>
-          <Text style={styles.heroPrice}>{match.priceLabel}</Text>
-        </View>
-      </View>
-
-      {/* Explicit pairing readout */}
-      <View style={styles.pairingBlock}>
-        <Text style={styles.pairHotel}>{match.hotel.name}</Text>
-        <Text style={styles.pairMeta}>
-          {nightLabel(match.hotel.nights)} Â· {match.hotel.city ?? "Athens"}
-        </Text>
-        <Text style={styles.pairArrow}>â†“</Text>
-        <Text style={styles.pairSecond}>{second.name}</Text>
-        <Text style={styles.pairMeta}>
-          {nightLabel(second.nights)} Â· {second.location}
-        </Text>
-        <Text style={styles.journeyTotal}>{journeyNightsLabel(match)}</Text>
-      </View>
-
-      {attrs.length > 0 ? (
-        <Text style={styles.attrs}>{attrs.join(" Â· ")}</Text>
       ) : null}
 
-      <View style={styles.panel}>
-        {second.host ? (
-          <>
-            <Text style={styles.panelLabel}>Host</Text>
-            <Text style={styles.panelValue}>{second.host}</Text>
-          </>
+      <View style={[styles.page, wide && styles.pageWide]}>
+        {sample ? (
+          <View style={styles.sampleBanner} testID="journey-sample-banner">
+            <Text style={styles.sampleBannerTitle}>Sample paired journey</Text>
+            <Text style={styles.sampleBannerBody}>
+              Illustrative only. These photos and prices are not a live reservation. You cannot pay
+              or complete a booking from this page.
+            </Text>
+          </View>
         ) : null}
-        {second.type ? (
-          <>
-            <Text style={[styles.panelLabel, styles.panelGap]}>Stay type</Text>
-            <Text style={styles.panelValue}>{second.type}</Text>
-          </>
-        ) : null}
-        {second.location ? (
-          <>
-            <Text style={[styles.panelLabel, styles.panelGap]}>Location</Text>
-            <Text style={styles.panelValue}>{second.location}</Text>
-          </>
-        ) : null}
-        {second.availability ? (
-          <>
-            <Text style={[styles.panelLabel, styles.panelGap]}>Availability</Text>
-            <Text style={styles.panelValue}>{second.availability}</Text>
-          </>
-        ) : null}
-      </View>
 
-      <View style={styles.travelRow}>
-        <View style={styles.travelCell}>
-          <Text style={styles.travelLabel}>Travel time</Text>
-          <Text style={styles.travelValue}>{match.travelTime}</Text>
-        </View>
-        <View style={styles.travelCell}>
-          <Text style={styles.travelLabel}>Distance</Text>
-          <Text style={styles.travelValue}>{match.distance}</Text>
-        </View>
-        <View style={styles.travelCell}>
-          <Text style={styles.travelLabel}>From hotel</Text>
-          <Text style={styles.travelValue} numberOfLines={1}>
-            {match.hotel.name}
-          </Text>
-        </View>
-      </View>
-
-      <View style={styles.storyBlock}>
-        <Text style={styles.whyLabel}>This journey</Text>
-        <Text style={styles.story}>{match.story}</Text>
-      </View>
-
-      {gallery.length > 0 ? (
-        <View style={styles.galleryBlock}>
-          <Text style={styles.galleryLabel}>Gallery</Text>
-          <ScrollView
-            horizontal
-            showsHorizontalScrollIndicator={false}
-            contentContainerStyle={styles.galleryRow}
-          >
-            {gallery.map((uri) => (
-              <ExpoImage
-                key={uri}
-                source={{ uri }}
-                style={styles.galleryImage}
-                contentFit="cover"
-              />
-            ))}
-          </ScrollView>
-        </View>
-      ) : null}
-
-      {match.filterTags.length > 0 ? (
-        <View style={styles.tags}>
-          {match.filterTags.map((tag) => (
-            <View key={tag} style={styles.tag}>
-              <Text style={styles.tagText}>{tag}</Text>
+        <View style={styles.journeyHero} testID="journey-hero">
+          <Text style={styles.heroKicker}>One journey. Two ways to stay.</Text>
+          <Text style={styles.heroTitle}>{journeyNightsLabel(match)}</Text>
+          <View style={[styles.steps, wide && styles.stepsWide]}>
+            <View style={styles.step}>
+              <Text style={styles.stepIndex}>1 · First hotel</Text>
+              <Text style={styles.stepName}>{hotelTitle}</Text>
+              <Text style={styles.stepMeta}>
+                {hotelArea} · {nightLabel(match.hotel.nights)}
+              </Text>
             </View>
-          ))}
+            <View style={styles.step}>
+              <Text style={styles.stepIndex}>2 · Transfer</Text>
+              <Text style={styles.stepName}>{match.departure || "Between stays"}</Text>
+              <Text style={styles.stepMeta}>{transferLine}</Text>
+            </View>
+            <View style={styles.step}>
+              <Text style={styles.stepIndex}>3 · Second sleep</Text>
+              <Text style={styles.stepName}>{second.name}</Text>
+              <Text style={styles.stepMeta}>
+                {second.location} · {nightLabel(second.nights)} · {match.priceLabel}
+              </Text>
+            </View>
+          </View>
         </View>
-      ) : null}
 
-      <View style={styles.ctaStack}>
-        <Pressable
-          style={[styles.cta, bookBusy && styles.ctaAlt]}
-          onPress={() => {
-            if (!match || bookBusy) return;
-            setBookBusy(true);
-            void bookBottleStayViaWorkspace({ stayId: match.id, title: match.second.name }).then((r) => {
-              setBookBusy(false);
-              if (!r.ok) {
-                setBookedLine(r.detail);
-                return;
-              }
-              setBookedLine("Your second stay is booked — host notified.");
-              setAvailabilityChecked(true);
-            });
-          }}
-          accessibilityRole="button"
-          accessibilityLabel="Book this sleeping stay"
-        >
-          <Text style={styles.ctaText}>{bookBusy ? "Booking…" : bookedLine || "Book this stay"}</Text>
-        </Pressable>
-        <Pressable
-          style={[styles.ctaAlt, availabilityChecked && styles.ctaDone]}
-          onPress={() => setAvailabilityChecked(true)}
-          accessibilityRole="button"
-          accessibilityLabel={match.availabilityCta}
-        >
-          <Text style={[styles.ctaAltText, availabilityChecked && styles.ctaDoneText]}>
-            {availabilityChecked ? "Dates open — ready to combine stays" : match.availabilityCta}
-          </Text>
-        </Pressable>
+        <View style={styles.block}>
+          <Text style={styles.blockTitle}>First hotel</Text>
+          <Text style={styles.blockLead}>{hotelSummary}</Text>
+          <PhotoGrid
+            frames={hotelFrames}
+            label="Property photos"
+            note={
+              hotelFrames.length < 4
+                ? `${hotelFrames.length || "No"} photo${hotelFrames.length === 1 ? "" : "s"} published for this hotel.`
+                : undefined
+            }
+            testID="journey-hotel-gallery"
+            onOpen={(index) => setViewer({ frames: hotelFrames, index, title: hotelTitle })}
+          />
+          <View style={styles.chips}>
+            {tags.map((t) => (
+              <View key={t} style={styles.chip}>
+                <Text style={styles.chipText}>{t}</Text>
+              </View>
+            ))}
+          </View>
+        </View>
+
+        <View style={styles.block}>
+          <Text style={styles.blockTitle}>Second stay</Text>
+          <Text style={styles.placeName}>{second.name}</Text>
+          <Text style={styles.blockLead}>{match.story}</Text>
+          <PhotoGrid
+            frames={secondFrames}
+            label={sample ? "Sample illustrations" : "Stay photos"}
+            note={
+              sample
+                ? "Editorial sample images for this pairing. They are not another hotel’s branding, and they are not a confirmed property gallery."
+                : undefined
+            }
+            testID="journey-second-gallery"
+            onOpen={(index) => setViewer({ frames: secondFrames, index, title: second.name })}
+          />
+          <View style={styles.facts}>
+            <Fact label="Nights" value={nightLabel(second.nights)} />
+            <Fact label="Place" value={second.location || "—"} />
+            <Fact label="Price from" value={match.priceLabel} />
+            {typeof liveRow?.maxGuests === "number" ? (
+              <Fact label="Guests" value={String(liveRow.maxGuests)} />
+            ) : null}
+            {liveRow?.cancellation ? <Fact label="Policy" value={liveRow.cancellation} /> : null}
+          </View>
+          {second.attributes?.length ? (
+            <View style={styles.chips}>
+              {second.attributes.map((a) => (
+                <View key={a} style={styles.chip}>
+                  <Text style={styles.chipText}>{a}</Text>
+                </View>
+              ))}
+            </View>
+          ) : null}
+          <Text style={styles.nightsLabel}>Second-stay length</Text>
+          <View style={styles.nightChips}>
+            {[1, 2, 3].map((n) => {
+              const on = (secondNights ?? second.nights) === n;
+              return (
+                <Pressable
+                  key={n}
+                  style={[styles.nightChip, on && styles.nightChipOn]}
+                  onPress={() => setSecondNights(n)}
+                >
+                  <Text style={[styles.nightChipText, on && styles.nightChipTextOn]}>{nightLabel(n)}</Text>
+                </Pressable>
+              );
+            })}
+          </View>
+        </View>
+
+        <View style={styles.ctaStack}>
+          <Pressable
+            style={styles.ctaAlt}
+            onPress={checkAvailability}
+            accessibilityRole="button"
+            testID="journey-dates-cta"
+          >
+            <Text style={styles.ctaAltText}>
+              {availBusy ? "Checking Workspace…" : match.availabilityCta}
+            </Text>
+          </Pressable>
+          {availNote ? (
+            <Text style={styles.availNote} testID="journey-availability-note">
+              {availNote}
+            </Text>
+          ) : null}
+          {bookable ? (
+            <Pressable
+              style={[styles.cta, bookBusy && styles.ctaMuted]}
+              disabled={bookBusy}
+              onPress={() => {
+                if (!match || bookBusy || sample) return;
+                setBookBusy(true);
+                void bookBottleStayViaWorkspace({
+                  stayId: match.id,
+                  title: match.second.name,
+                  nights: match.second.nights,
+                }).then((r) => {
+                  setBookBusy(false);
+                  setBookedLine(r.ok ? "Your second stay is booked." : r.detail);
+                });
+              }}
+              accessibilityRole="button"
+              testID="journey-book-cta"
+            >
+              <Text style={styles.ctaText}>{bookBusy ? "Booking…" : bookedLine || "Book this stay"}</Text>
+            </Pressable>
+          ) : (
+            <Text style={styles.previewLock} testID="journey-not-bookable">
+              {sample
+                ? "Booking stays off for sample journeys."
+                : "Booking opens only when Workspace confirms open dates."}
+            </Text>
+          )}
+        </View>
       </View>
     </ScrollView>
   );
 }
 
+function Fact({ label, value }: { label: string; value: string }) {
+  return (
+    <View style={styles.fact}>
+      <Text style={styles.factLabel}>{label}</Text>
+      <Text style={styles.factValue}>{value}</Text>
+    </View>
+  );
+}
+
 const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: "#F7F5F1" },
-  content: { paddingBottom: 48 },
-  missing: {
-    flexGrow: 1,
-    alignItems: "center",
-    justifyContent: "center",
-    padding: 24,
-  },
+  content: { paddingBottom: 56 },
+  page: { width: "100%", maxWidth: 1080, alignSelf: "center" },
+  pageWide: { paddingHorizontal: 8 },
+  missing: { flexGrow: 1, alignItems: "center", justifyContent: "center", padding: 24 },
   missingText: { color: "#1A1510", fontSize: 16 },
-
-  journeyStrip: {
-    marginHorizontal: 12,
-    marginTop: 12,
-    flexDirection: "row",
-    backgroundColor: "#1A1510",
+  sampleBanner: {
+    marginHorizontal: 16,
+    marginTop: 16,
+    padding: 14,
     borderRadius: 16,
-    overflow: "hidden",
-    paddingVertical: 10,
-    paddingHorizontal: 8,
-    gap: 4,
-  },
-  stripStay: {
-    flex: 1,
-    minWidth: 0,
-    alignItems: "center",
-  },
-  stripThumb: {
-    width: 44,
-    height: 44,
-    borderRadius: 10,
-    backgroundColor: "#2A241C",
-  },
-  stripThumbFallback: { backgroundColor: "#3A3228" },
-  stripCopy: { marginTop: 6, alignItems: "center", paddingHorizontal: 2 },
-  stripLabel: {
-    fontSize: 8,
-    fontWeight: "800",
-    letterSpacing: 0.5,
-    textTransform: "uppercase",
-    color: "rgba(232,197,71,0.75)",
-  },
-  stripLabelNext: {
-    fontSize: 8,
-    fontWeight: "800",
-    letterSpacing: 0.5,
-    textTransform: "uppercase",
-    color: "#E8C547",
-  },
-  stripName: {
-    fontSize: 11,
-    fontWeight: "800",
-    color: "#FFF",
-    marginTop: 2,
-    textAlign: "center",
-  },
-  stripMeta: {
-    fontSize: 9,
-    color: "rgba(255,255,255,0.65)",
-    marginTop: 2,
-    textAlign: "center",
-  },
-  stripCenter: {
-    width: 88,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  livePill: {
-    fontSize: 7,
-    fontWeight: "800",
-    letterSpacing: 0.3,
-    color: "#1A1510",
-    backgroundColor: "#E8C547",
-    paddingHorizontal: 5,
-    paddingVertical: 2,
-    borderRadius: 4,
-    overflow: "hidden",
-  },
-  stripArrow: {
-    fontSize: 16,
-    fontWeight: "800",
-    color: "#E8C547",
-    marginVertical: 2,
-  },
-  stripStat: { fontSize: 10, fontWeight: "800", color: "#FFF", textAlign: "center" },
-  stripSub: { fontSize: 9, color: "rgba(255,255,255,0.65)", marginTop: 1 },
-
-  hero: {
-    marginTop: 12,
-    marginHorizontal: 12,
-    aspectRatio: 4 / 3,
-    borderRadius: 18,
-    overflow: "hidden",
-    backgroundColor: "#1A1510",
-  },
-  heroMin: { minHeight: 280 },
-  heroImage: { ...StyleSheet.absoluteFillObject },
-  heroScrim: {
-    ...StyleSheet.absoluteFillObject,
-    backgroundColor: "rgba(20,14,8,0.42)",
-  },
-  heroCopy: {
-    flex: 1,
-    justifyContent: "flex-end",
-    padding: 18,
-  },
-  heroKicker: {
-    fontSize: 10,
-    fontWeight: "800",
-    letterSpacing: 0.8,
-    textTransform: "uppercase",
-    color: "#E8C547",
-    marginBottom: 4,
-  },
-  heroEmoji: { fontSize: 22, marginBottom: 4 },
-  heroName: {
-    fontSize: 28,
-    fontWeight: "800",
-    color: "#FFF",
-    lineHeight: 32,
-  },
-  heroMeta: {
-    fontSize: 14,
-    color: "rgba(255,255,255,0.85)",
-    marginTop: 6,
-  },
-  heroPrice: {
-    marginTop: 10,
-    fontSize: 22,
-    fontWeight: "800",
-    color: "#E8C547",
-  },
-
-  pairingBlock: {
-    marginHorizontal: 16,
-    marginTop: 16,
-    padding: 16,
-    backgroundColor: "#FFF",
-    borderRadius: 16,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: "#E5DFD6",
-  },
-  pairHotel: { fontSize: 17, fontWeight: "800", color: "#1A1510" },
-  pairSecond: { fontSize: 17, fontWeight: "800", color: "#1A1510" },
-  pairMeta: { fontSize: 13, color: "#6B645A", marginTop: 3 },
-  pairArrow: {
-    fontSize: 18,
-    fontWeight: "800",
-    color: "#8B6914",
-    marginVertical: 6,
-  },
-  journeyTotal: {
-    marginTop: 12,
-    fontSize: 14,
-    fontWeight: "800",
-    color: "#8B6914",
-  },
-  attrs: {
-    marginHorizontal: 16,
-    marginTop: 12,
-    fontSize: 13,
-    color: "#5A534A",
-    lineHeight: 19,
-  },
-
-  panel: {
-    marginHorizontal: 16,
-    marginTop: 16,
-    padding: 16,
-    backgroundColor: "#FFF",
-    borderRadius: 16,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: "#E5DFD6",
-  },
-  panelLabel: {
-    fontSize: 10,
-    fontWeight: "800",
-    letterSpacing: 0.5,
-    textTransform: "uppercase",
-    color: "#8B6914",
-  },
-  panelGap: { marginTop: 12 },
-  panelValue: {
-    fontSize: 16,
-    fontWeight: "700",
-    color: "#1A1510",
-    marginTop: 4,
-  },
-
-  travelRow: {
-    marginHorizontal: 16,
-    marginTop: 12,
-    flexDirection: "row",
-    gap: 8,
-  },
-  travelCell: {
-    flex: 1,
-    backgroundColor: "#1A1510",
-    borderRadius: 14,
-    paddingVertical: 12,
-    paddingHorizontal: 10,
-  },
-  travelLabel: {
-    fontSize: 9,
-    fontWeight: "800",
-    letterSpacing: 0.4,
-    textTransform: "uppercase",
-    color: "rgba(232,197,71,0.8)",
-  },
-  travelValue: {
-    fontSize: 13,
-    fontWeight: "800",
-    color: "#FFF",
-    marginTop: 4,
-  },
-
-  storyBlock: {
-    marginHorizontal: 16,
-    marginTop: 16,
-  },
-  whyLabel: {
-    fontSize: 10,
-    fontWeight: "800",
-    letterSpacing: 0.5,
-    textTransform: "uppercase",
-    color: "#8B6914",
-  },
-  story: {
-    fontSize: 15,
-    lineHeight: 22,
-    color: "#3A342C",
-    marginTop: 6,
-  },
-
-  galleryBlock: { marginTop: 18 },
-  galleryLabel: {
-    marginHorizontal: 16,
-    fontSize: 10,
-    fontWeight: "800",
-    letterSpacing: 0.5,
-    textTransform: "uppercase",
-    color: "#8B6914",
-    marginBottom: 10,
-  },
-  galleryRow: {
-    paddingHorizontal: 16,
-    gap: 10,
-  },
-  galleryImage: {
-    width: 160,
-    aspectRatio: 4 / 3,
-    borderRadius: 12,
-    backgroundColor: "#2A241C",
-  },
-
-  tags: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    gap: 8,
-    marginTop: 16,
-    marginHorizontal: 16,
-  },
-  tag: {
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    borderRadius: 999,
-    backgroundColor: "#FFF",
+    backgroundColor: "#F3EFE8",
     borderWidth: 1,
     borderColor: "#E0D8CC",
   },
-  tagText: { fontSize: 11, fontWeight: "600", color: "#5A534A" },
-
-  ctaStack: {
-    marginTop: 22,
+  sampleBannerTitle: {
+    fontSize: 12,
+    fontWeight: "800",
+    letterSpacing: 0.6,
+    textTransform: "uppercase",
+    color: "#8B6914",
+  },
+  sampleBannerBody: { marginTop: 6, fontSize: 14, lineHeight: 20, color: "#3A342C" },
+  journeyHero: {
     marginHorizontal: 16,
-    gap: 10,
+    marginTop: 16,
+    padding: 18,
+    borderRadius: 20,
+    backgroundColor: "#1A1510",
   },
+  heroKicker: {
+    color: "#E8C547",
+    fontSize: 13,
+    fontWeight: "800",
+    letterSpacing: 0.3,
+  },
+  heroTitle: { color: "#FFF", fontSize: 28, fontWeight: "800", marginTop: 8 },
+  steps: { marginTop: 16, gap: 12 },
+  stepsWide: { flexDirection: "row" },
+  step: {
+    flex: 1,
+    backgroundColor: "rgba(255,255,255,0.06)",
+    borderRadius: 14,
+    padding: 12,
+  },
+  stepIndex: {
+    color: "#E8C547",
+    fontSize: 11,
+    fontWeight: "800",
+    letterSpacing: 0.4,
+    textTransform: "uppercase",
+  },
+  stepName: { color: "#FFF", fontSize: 16, fontWeight: "800", marginTop: 6 },
+  stepMeta: { color: "rgba(255,255,255,0.75)", fontSize: 13, marginTop: 4, lineHeight: 18 },
+  block: {
+    marginHorizontal: 16,
+    marginTop: 22,
+    padding: 16,
+    backgroundColor: "#FFF",
+    borderRadius: 20,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: "#E5DFD6",
+  },
+  blockTitle: { fontSize: 13, fontWeight: "800", letterSpacing: 0.5, textTransform: "uppercase", color: "#8B6914" },
+  placeName: { marginTop: 6, fontSize: 26, fontWeight: "800", color: "#1A1510" },
+  blockLead: { marginTop: 8, fontSize: 15, lineHeight: 22, color: "#3A342C" },
+  sectionKicker: {
+    marginTop: 16,
+    fontSize: 12,
+    fontWeight: "800",
+    letterSpacing: 0.4,
+    textTransform: "uppercase",
+    color: "#5A534A",
+  },
+  sectionNote: { marginTop: 6, fontSize: 13, lineHeight: 18, color: "#6B645A" },
+  propertyHero: {
+    marginTop: 12,
+    width: "100%",
+    height: 280,
+    borderRadius: 16,
+    backgroundColor: "#2A241C",
+  },
+  grid: { flexDirection: "row", flexWrap: "wrap", gap: 8, marginTop: 8 },
+  gridCell: { borderRadius: 12, backgroundColor: "#2A241C" },
+  missingBlock: {
+    marginTop: 12,
+    padding: 20,
+    borderRadius: 16,
+    backgroundColor: "#F3EFE8",
+  },
+  missingTitle: { fontWeight: "800", color: "#1A1510" },
+  missingBody: { marginTop: 4, color: "#5A534A", lineHeight: 18 },
+  missingPhoto: { backgroundColor: "#2A241C" },
+  chips: { flexDirection: "row", flexWrap: "wrap", gap: 8, marginTop: 14 },
+  chip: {
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 999,
+    backgroundColor: "#F3EFE8",
+  },
+  chipText: { fontSize: 12, fontWeight: "700", color: "#3A342C" },
+  facts: { flexDirection: "row", flexWrap: "wrap", gap: 10, marginTop: 14 },
+  fact: {
+    minWidth: 120,
+    flexGrow: 1,
+    padding: 12,
+    borderRadius: 14,
+    backgroundColor: "#F7F5F1",
+  },
+  factLabel: { fontSize: 11, fontWeight: "800", color: "#8B6914", textTransform: "uppercase" },
+  factValue: { marginTop: 4, fontSize: 15, fontWeight: "700", color: "#1A1510" },
+  nightsLabel: { marginTop: 16, fontSize: 12, fontWeight: "800", color: "#5A534A" },
+  nightChips: { flexDirection: "row", gap: 8, marginTop: 8 },
+  nightChip: {
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: "#E0D8CC",
+  },
+  nightChipOn: { backgroundColor: "#1A1510", borderColor: "#1A1510" },
+  nightChipText: { fontSize: 13, fontWeight: "600", color: "#5A534A" },
+  nightChipTextOn: { color: "#FFF", fontWeight: "800" },
+  ctaStack: { marginTop: 20, marginHorizontal: 16, gap: 10 },
   cta: {
-    backgroundColor: "#E03131",
+    backgroundColor: "#1A1510",
     borderRadius: 14,
     paddingVertical: 16,
-    paddingHorizontal: 16,
     alignItems: "center",
   },
-  ctaText: {
-    color: "#FFFFFF",
-    fontWeight: "800",
-    fontSize: 15,
-    textAlign: "center",
-  },
+  ctaMuted: { opacity: 0.7 },
+  ctaText: { color: "#FFF", fontWeight: "800", fontSize: 15 },
   ctaAlt: {
-    backgroundColor: "#181818",
+    backgroundColor: "#FFF",
     borderRadius: 14,
     paddingVertical: 16,
-    paddingHorizontal: 16,
     alignItems: "center",
+    borderWidth: 1,
+    borderColor: "#1A1510",
   },
-  ctaAltText: {
-    color: "#FFFFFF",
-    fontWeight: "800",
-    fontSize: 15,
-    textAlign: "center",
+  ctaAltText: { color: "#1A1510", fontWeight: "800", fontSize: 15 },
+  availNote: { fontSize: 14, lineHeight: 20, color: "#3A342C" },
+  previewLock: { fontSize: 14, lineHeight: 20, color: "#5A534A", textAlign: "center" },
+  lightbox: { flex: 1, backgroundColor: "#0E0C0A" },
+  lightboxBar: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+    paddingHorizontal: 16,
+    paddingTop: 18,
+    paddingBottom: 10,
   },
-  ctaDone: { backgroundColor: "#2F5D3A" },
-  ctaDoneText: { color: "#FFF" },
+  lightboxBack: { color: "#F7F2E8", fontWeight: "800", fontSize: 16 },
+  lightboxTitle: { color: "#C4B8A0", flex: 1, fontSize: 14 },
+  lightboxStage: { flex: 1, marginHorizontal: 12 },
+  lightboxImage: { width: "100%", height: "100%", borderRadius: 12 },
+  lightboxNav: { flexDirection: "row", justifyContent: "space-between", padding: 16 },
+  lightboxNavBtn: {
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: "#C4B8A0",
+  },
+  lightboxNavText: { color: "#F7F2E8", fontWeight: "700" },
 });
