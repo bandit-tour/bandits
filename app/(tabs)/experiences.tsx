@@ -77,7 +77,9 @@ export function ExperiencesScreen() {
           `Live hosts unavailable (${res.detail}). Workspace has provider inventory — check CORS / publication.`,
         );
       } else if (!mapped.length) {
-        setLiveError("No published provider experiences yet.");
+        setLiveError(
+          "No bookable local experiences yet — hosts are still preparing. Check back soon.",
+        );
       } else {
         setLiveError(null);
       }

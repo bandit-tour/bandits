@@ -89,6 +89,7 @@ const MENU_GROUPS_STAY: MenuGroup[] = [
     title: "My Privileges",
     cards: [
       { key: "premium", emoji: "⭐", title: "Your Local Insider", href: "/account/membership" },
+      { key: "moments", emoji: "✨", title: "My Moments", href: "/myMoment" as Href },
       { key: "impact", emoji: "🌍", title: "Impact / Passport", href: "/impact" },
     ],
   },
@@ -151,6 +152,7 @@ const MENU_GROUPS_AFTER: MenuGroup[] = [
     title: "My Privileges",
     cards: [
       { key: "premium", emoji: "⭐", title: "Your Local Insider", href: "/account/membership" },
+      /** Connect My New Stay stays in Quick Actions only — avoid duplicate tiles. */
     ],
   },
   {

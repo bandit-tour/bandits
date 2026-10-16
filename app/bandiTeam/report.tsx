@@ -301,6 +301,20 @@ export default function BandiTeamReportScreen() {
         imageUri: imageUri ?? undefined,
       });
 
+      /** Dual-write Workspace reflection — never blocks Guest Supabase success. */
+      try {
+        const { submitBanditReport } = await import('@/lib/workspace/actions');
+        await submitBanditReport({
+          type: title.trim(),
+          detail: `${city} · ${loc}\n${description.trim()}`,
+          anonymous: true,
+          hasPhoto: Boolean(imageUri),
+          hasEvidence: Boolean(imageUri),
+        });
+      } catch {
+        /* Workspace bridge optional */
+      }
+
       setTitle('');
       setDescription('');
       setImageUri(null);

@@ -61,7 +61,28 @@ function inferCategory(row: WorkspaceLocalExperience): GuestExperience["category
   return "Workshops";
 }
 
+const ORCH_HASH_SUFFIX = /\s(mu[a-z0-9]{6,10}|mt[a-z0-9]{5,10}|muy[a-z0-9]{5,10})$/i;
+
+/** Defense-in-depth — Workspace honesty gate is SoT; never render orch/hash shells. */
+export function isHonestGuestExperienceRow(row: WorkspaceLocalExperience): boolean {
+  const title = String(row.title || "").trim();
+  const host = String(row.hostName || "").trim();
+  if (!title || ORCH_HASH_SUFFIX.test(title) || /\bdebug\b/i.test(title)) return false;
+  if (host && (ORCH_HASH_SUFFIX.test(host) || /\bdebug\b/i.test(host))) return false;
+  const email = String(row.hostEmail || "").toLowerCase();
+  if (
+    email.endsWith("@banditour.test") ||
+    email.endsWith("@banditour.demo") ||
+    email.endsWith("@banditour.proof") ||
+    email.startsWith("lexp.")
+  ) {
+    return false;
+  }
+  return true;
+}
+
 export function mapWorkspaceExperience(row: WorkspaceLocalExperience): GuestExperience | null {
+  if (!isHonestGuestExperienceRow(row)) return null;
   const status = String(row.status || "").toLowerCase();
   /** Do not list draft / unpublished provider inventory as bookable. */
   if (status && /draft|unpublished|hidden|private|archived/.test(status)) return null;
@@ -69,8 +90,10 @@ export function mapWorkspaceExperience(row: WorkspaceLocalExperience): GuestExpe
   const photos = (row.photos || [])
     .map((u) => resolveExperiencePhoto(u))
     .filter((u): u is string => !!u && isValidExperienceImageUrl(u));
-  const imageUrl = photos[0] || FALLBACK_COVER;
-  if (!isValidExperienceImageUrl(imageUrl)) return null;
+  /** Prefer real supplier media; stock Unsplash-only rows are not commercial inventory. */
+  const nonStock = photos.filter((u) => !/images\.unsplash\.com/i.test(u));
+  const imageUrl = nonStock[0] || null;
+  if (!imageUrl || !isValidExperienceImageUrl(imageUrl)) return null;
 
   const category = inferCategory(row);
   return {
@@ -178,8 +201,12 @@ export async function fetchLiveLocalExperiences(): Promise<LiveExperiencesFetch>
   if (!result.ok) {
     return { experiences: [], detail: result.detail || "Workspace experiences unavailable" };
   }
+  /**
+   * Workspace honesty gate strips partnerId/hostEmail/source from guest cards.
+   * Accept id+title rows; client honesty filter drops orch shells.
+   */
   const published = (result.data.experiences || []).filter(
-    (e) => e.source === "provider_record" || e.partnerId || e.hostEmail,
+    (e) => Boolean(e?.id && e?.title) && isHonestGuestExperienceRow(e),
   );
   return { experiences: published, origin: result.origin };
 }
