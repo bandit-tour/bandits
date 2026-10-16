@@ -115,7 +115,7 @@ function ReportSubmitSuccessOverlay({
 export default function BandiTeamReportScreen() {
   const router = useRouter();
   const screenOptions = useAppBackScreenOptions({
-    title: 'Report Alert',
+    title: 'Share a Warning',
     fallback: '/bandiTeam',
     escapeShortcuts: true,
   });
@@ -342,9 +342,9 @@ export default function BandiTeamReportScreen() {
         >
           <View style={styles.inner}>
             <AppEscapeNav compact />
-            <Text style={styles.screenTitle}>Report a scam alert</Text>
+            <Text style={styles.screenTitle}>Share a Warning</Text>
             <Text style={styles.screenSubtitle}>
-              We treat every report seriously. It is reviewed in confidence, and you help protect other travelers.
+              Tell others what to watch for. Your note is reviewed before it goes live.
             </Text>
 
             <View style={[styles.twoCol, isDesktopWeb && styles.twoColDesktop]}>

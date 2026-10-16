@@ -63,12 +63,24 @@ export function ExperiencesScreen() {
 
   const [live, setLive] = useState<GuestExperience[]>([]);
   const [liveError, setLiveError] = useState<string | null>(null);
+  const [liveTransportFailed, setLiveTransportFailed] = useState(false);
 
   useEffect(() => {
-    void fetchLiveLocalExperiences().then((rows) => {
-      const mapped = rows.map(mapWorkspaceExperience).filter(Boolean) as GuestExperience[];
+    void fetchLiveLocalExperiences().then((res) => {
+      const mapped = res.experiences
+        .map(mapWorkspaceExperience)
+        .filter(Boolean) as GuestExperience[];
       setLive(mapped);
-      if (!rows.length) setLiveError("No published provider experiences yet.");
+      setLiveTransportFailed(Boolean(res.detail));
+      if (res.detail) {
+        setLiveError(
+          `Live hosts unavailable (${res.detail}). Workspace has provider inventory — check CORS / publication.`,
+        );
+      } else if (!mapped.length) {
+        setLiveError("No published provider experiences yet.");
+      } else {
+        setLiveError(null);
+      }
     });
   }, []);
 
@@ -89,10 +101,20 @@ export function ExperiencesScreen() {
     return base;
   }, [filter, live, failedImages]);
 
-  const demoRows = useMemo(
-    () => (live.length ? [] : seeded.filter((e) => !failedImages.has(e.id))),
-    [live.length, seeded, failedImages],
+  /**
+   * DNA editorial seed is NOT mixed into live SoT when Workspace answers.
+   * Only used as last-resort visual catalog when transport fails (CORS), never as bookable claim.
+   */
+  const editorialFallback = useMemo(
+    () =>
+      !live.length && liveTransportFailed
+        ? seeded.filter((e) => !failedImages.has(e.id) && matchesFilter(e, filter))
+        : [],
+    [live.length, liveTransportFailed, seeded, failedImages, filter],
   );
+
+  const displayRows = live.length ? rows : editorialFallback;
+  const showingEditorial = !live.length && editorialFallback.length > 0;
 
   const open = (id: string) => router.push(`/experience/${id}` as Href);
 
@@ -122,7 +144,12 @@ export function ExperiencesScreen() {
         <Text style={styles.lead}>
           Unexpected · local · creative · slightly underground — not a tourism brochure.
         </Text>
-        {liveError && !live.length ? (
+        {showingEditorial ? (
+          <Text style={[styles.lead, { marginTop: 8 }]}>
+            Editorial DNA catalog (not live host inventory). Live Workspace providers are blocked
+            from this browser until the Workspace bridge is reachable.
+          </Text>
+        ) : liveError && !live.length ? (
           <Text style={[styles.lead, { marginTop: 8 }]}>{liveError}</Text>
         ) : live.length ? (
           <Text style={[styles.lead, { marginTop: 8 }]}>
@@ -151,9 +178,11 @@ export function ExperiencesScreen() {
         ))}
       </ScrollView>
 
-      {isMobile && filter === "All" && featured.length > 0 ? (
+      {isMobile && filter === "All" && (featured.length > 0 || (showingEditorial && editorialFallback.length > 0)) ? (
         <View style={styles.carouselSection}>
-          <Text style={styles.carouselLabel}>Tonight & this week</Text>
+          <Text style={styles.carouselLabel}>
+            {showingEditorial ? "Editorial picks" : "Tonight & this week"}
+          </Text>
           <ScrollView
             horizontal
             showsHorizontalScrollIndicator={false}
@@ -161,7 +190,7 @@ export function ExperiencesScreen() {
             decelerationRate="fast"
             snapToInterval={Math.min(width * 0.72, 280) + 12}
           >
-            {featured.map((exp) => (
+            {(featured.length ? featured : editorialFallback.slice(0, 3)).map((exp) => (
               <ExperienceMarketplaceCard
                 key={`feat_${exp.id}`}
                 exp={exp}
@@ -178,13 +207,14 @@ export function ExperiencesScreen() {
 
       <View style={styles.resultMeta}>
         <Text style={styles.resultCount}>
-          {rows.length} {rows.length === 1 ? "experience" : "experiences"}
+          {displayRows.length} {displayRows.length === 1 ? "experience" : "experiences"}
           {filter !== "All" ? ` · ${filter}` : ""}
+          {showingEditorial ? " · editorial" : live.length ? " · live hosts" : ""}
         </Text>
       </View>
 
       <View style={[styles.grid, { gap: GRID_GAP }]}>
-        {rows.map((exp) => (
+        {displayRows.map((exp) => (
           <ExperienceMarketplaceCard
             key={exp.id}
             exp={exp}
@@ -197,7 +227,7 @@ export function ExperiencesScreen() {
         ))}
       </View>
 
-      {rows.length === 0 ? (
+      {displayRows.length === 0 ? (
         <Text style={styles.empty}>Nothing in this category yet — try another filter.</Text>
       ) : null}
     </ScrollView>
