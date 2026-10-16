@@ -1,3 +1,4 @@
+import { BOTTLE_VIDEO_WEB_URI } from '@/lib/openingIntroAssets';
 import React, { useCallback, useEffect, useRef } from 'react';
 import { Modal, Pressable, StyleSheet, Text, View } from 'react-native';
 
@@ -8,7 +9,7 @@ import { Modal, Pressable, StyleSheet, Text, View } from 'react-native';
  */
 
 const WEB_ADVANCE_MS = 9_000;
-const BOTTLE_MP4 = '/videos/play-intro.mp4';
+const BOTTLE_MP4 = BOTTLE_VIDEO_WEB_URI;
 
 type BottleSubmitVideoProps = {
   visible: boolean;

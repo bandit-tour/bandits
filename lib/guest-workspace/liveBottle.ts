@@ -1,9 +1,11 @@
 /**
  * Production Travel in a Bottle — Workspace sleeping-stay inventory.
- * Seeded BOTTLE_MATCHES are labelled DEMO only and must not mix as source of truth.
+ * When Workspace publishes zero verified stays, Guest falls back to labeled SAMPLE
+ * fixtures (`BOTTLE_MATCHES`) so the paired journey UX stays exercisable.
  */
 import { workspaceGet, workspacePost } from "@/lib/workspace/client";
 import {
+  BOTTLE_MATCHES,
   DEFAULT_BOTTLE_HOTEL,
   type BottleMatch,
 } from "@/lib/guest-workspace/productWorlds";
@@ -28,6 +30,18 @@ export type WorkspaceBottleStay = {
   cancellation?: string;
 };
 
+export type BottleCatalogMode = "live" | "sample";
+
+export type BottleCatalogResult = {
+  matches: BottleMatch[];
+  mode: BottleCatalogMode;
+  liveCount: number;
+  /** Workspace may advertise stub demoStays without full listing payloads. */
+  workspaceDemoStubCount: number;
+  /** Set when the Workspace request failed — UI should offer retry, not invent stays. */
+  error?: string | null;
+};
+
 function euros(cents: number) {
   return `From €${Math.round(cents / 100)}`;
 }
@@ -36,12 +50,13 @@ export function mapWorkspaceBottleStay(row: WorkspaceBottleStay, hotelName?: str
   const photos = (row.photos || []).filter((u) => /^https?:\/\//i.test(u));
   const cover =
     row.coverPhoto && /^https?:\/\//i.test(row.coverPhoto) ? row.coverPhoto : photos[0] || "";
-  // No invented hotel/cabin stock — incomplete supplier photography stays out of bookable UI.
+  // Incomplete supplier photography stays out of bookable live UI.
   if (!cover) return null;
   const nights = 1;
   const typeLabel = (row.natureType || "cabin").replace(/_/g, " ");
   return {
     id: row.id,
+    inventorySource: "provider_record",
     hotel: { ...DEFAULT_BOTTLE_HOTEL, name: hotelName || DEFAULT_BOTTLE_HOTEL.name, nights: 2 },
     second: {
       name: row.title,
@@ -58,21 +73,79 @@ export function mapWorkspaceBottleStay(row: WorkspaceBottleStay, hotelName?: str
       gallery: photos.slice(0, 6),
     },
     filterTags: [typeLabel, "Nature"],
-    priceLabel: euros(row.priceCentsPerNight),
+    priceLabel: euros(row.priceCentsPerNight || 0),
     travelTime: `${row.distanceMinutes || 45} min`,
     distance: row.location,
     departure: "After hotel nights",
-    story: row.description || `Hotel nights, then one night at ${row.title} — a second place to sleep, not a spa day.`,
+    story:
+      row.description ||
+      `Hotel nights, then one night at ${row.title} — a second place to sleep, not a spa day.`,
     cta: "View journey",
     availabilityCta: "Check dates",
     journeyNights: 3,
   };
 }
 
+function sampleMatches(hotelName?: string): BottleMatch[] {
+  const name = hotelName || DEFAULT_BOTTLE_HOTEL.name;
+  return BOTTLE_MATCHES.map((m) => ({
+    ...m,
+    inventorySource: "sample" as const,
+    hotel: { ...m.hotel, name },
+  }));
+}
+
 export async function fetchLiveBottleStays(): Promise<WorkspaceBottleStay[]> {
   const result = await workspaceGet<{ ok?: boolean; stays?: WorkspaceBottleStay[] }>("/api/public/bottle/stays");
   if (!result.ok) return [];
   return (result.data.stays || []).filter((s) => s.source === "provider_record");
+}
+
+/**
+ * Prefer verified Workspace stays. If none are published (or mapping yields zero
+ * usable covers), restore the full SAMPLE paired-journey catalog.
+ */
+export async function loadBottleCatalog(hotelName?: string): Promise<BottleCatalogResult> {
+  const result = await workspaceGet<{
+    ok?: boolean;
+    stays?: WorkspaceBottleStay[];
+    demoStays?: { id?: string }[];
+    count?: number;
+  }>("/api/public/bottle/stays");
+
+  if (!result.ok) {
+    return {
+      matches: [],
+      mode: "sample",
+      liveCount: 0,
+      workspaceDemoStubCount: 0,
+      error: result.detail || "Could not reach Workspace sleeping stays.",
+    };
+  }
+
+  const workspaceDemoStubCount = Array.isArray(result.data?.demoStays) ? result.data.demoStays.length : 0;
+  const liveRows = (result.data.stays || []).filter((s) => s.source === "provider_record");
+  const mapped = liveRows
+    .map((r) => mapWorkspaceBottleStay(r, hotelName))
+    .filter((m): m is BottleMatch => Boolean(m));
+  if (mapped.length > 0) {
+    return {
+      matches: mapped,
+      mode: "live",
+      liveCount: mapped.length,
+      workspaceDemoStubCount,
+      error: null,
+    };
+  }
+
+  /** Workspace answered; no verified outdoor stays — labeled SAMPLE fixtures only. */
+  return {
+    matches: sampleMatches(hotelName),
+    mode: "sample",
+    liveCount: 0,
+    workspaceDemoStubCount,
+    error: null,
+  };
 }
 
 export async function fetchLiveBottleStay(id: string): Promise<WorkspaceBottleStay | null> {
