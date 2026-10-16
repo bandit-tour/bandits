@@ -2,7 +2,11 @@ import { BANDIT_QUESTION_GUEST_ECHO_REF } from '@/lib/askMeMessageFormat';
 import { inboxPreviewForType, isSignalBottleInboxType } from '@/lib/bottleThreadText';
 import { isLocalFriendBottleInboxType, isLocalFriendOceanFoundRef } from '@/lib/localFriendOcean';
 import { OCEAN_THREAD_REPLY_REF } from '@/lib/oceanBottleChat';
-import { getDismissedNotificationIds } from '@/lib/dismissedThreads';
+import {
+  getDismissedChatThreadKeys,
+  getDismissedNotificationIds,
+  isChatThreadStillDismissed,
+} from '@/lib/dismissedThreads';
 import { readGuestFlipSignalCache } from '@/lib/signals';
 import { isDeletedThreadRef } from '@/lib/threadDelete';
 import { supabase } from '@/lib/supabase';
@@ -224,6 +228,16 @@ async function mergeGuestBottleThreads(
   );
 }
 
+function filterDismissedThreadSummaries(
+  summaries: ChatThreadSummary[],
+  dismissedThreads: Map<string, string>,
+): ChatThreadSummary[] {
+  if (!dismissedThreads.size) return summaries;
+  return summaries.filter(
+    (s) => !isChatThreadStillDismissed(s.threadKey, s.lastAt, dismissedThreads),
+  );
+}
+
 /**
  * Active conversations for the bottom Chat tab (unified notification threads).
  */
@@ -231,7 +245,10 @@ export async function loadChatThreadSummaries(userId: string): Promise<ChatThrea
   const uid = String(userId || '').trim();
   if (!uid) return [];
 
-  const dismissed = await getDismissedNotificationIds();
+  const [dismissed, dismissedThreads] = await Promise.all([
+    getDismissedNotificationIds(),
+    getDismissedChatThreadKeys(),
+  ]);
   const { data, error } = await supabase
     .from('notifications')
     .select(NOTIF_SELECT)
@@ -246,13 +263,14 @@ export async function loadChatThreadSummaries(userId: string): Promise<ChatThrea
   const rows = ((data || []) as NotifRow[]).filter((n) => isEligibleChatRow(n, dismissed));
   let summaries = buildSummariesFromRows(rows);
   summaries = await mergeGuestBottleThreads(uid, summaries, dismissed);
-  summaries = await mergeLocalMomentThreads(summaries);
-  return summaries;
+  summaries = await mergeLocalMomentThreads(summaries, dismissedThreads);
+  return filterDismissedThreadSummaries(summaries, dismissedThreads);
 }
 
 /** Mode A bottle/moment threads stored locally must surface in Chat. */
 async function mergeLocalMomentThreads(
   summaries: ChatThreadSummary[],
+  dismissedThreads: Map<string, string>,
 ): Promise<ChatThreadSummary[]> {
   try {
     const { listMomentChatThreads } = await import('@/lib/guest-moment/store');
@@ -266,6 +284,7 @@ async function mergeLocalMomentThreads(
     for (const t of local) {
       const key = `moment:${t.id}`;
       if (existing.has(key)) continue;
+      if (isChatThreadStillDismissed(key, t.updatedAt, dismissedThreads)) continue;
       const last = t.messages[t.messages.length - 1];
       extras.push({
         threadKey: key,

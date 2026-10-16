@@ -103,18 +103,22 @@ export default function CommunityScreen() {
       );
       if (!ok) return;
       setBulkWorking(true);
+      const removeKeys = new Set(targets.map((t) => t.threadKey));
+      /** Optimistic hide so refetch cannot flash the row back before storage writes finish. */
+      setThreads((prev) => prev.filter((t) => !removeKeys.has(t.threadKey)));
+      setSelectMode(false);
+      setSelectedKeys(new Set());
       try {
         const traveler = await resolveTravelerSession();
         const userId = traveler?.user?.id || '';
         for (const t of targets) {
           await deleteChatThreadForUser(t, userId);
         }
-        setSelectMode(false);
-        setSelectedKeys(new Set());
         await loadThreads(true);
         await refreshNotifications();
         DeviceEventEmitter.emit(BANDITS_NOTIFICATIONS_REFRESH);
       } catch (e) {
+        await loadThreads(true);
         alertMessage('Could not delete', e instanceof Error ? e.message : 'Try again.');
       } finally {
         setBulkWorking(false);

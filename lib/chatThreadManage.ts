@@ -1,5 +1,8 @@
-import { addDismissedNotificationIds } from '@/lib/dismissedThreads';
-import { deleteNotificationThread } from '@/lib/threadDelete';
+import {
+  addDismissedChatThreadKey,
+  addDismissedNotificationIds,
+} from '@/lib/dismissedThreads';
+import { deleteNotificationThread, hideOwnedNotificationRowsForUser } from '@/lib/threadDelete';
 import { supabase } from '@/lib/supabase';
 import type { ChatThreadSummary } from '@/lib/chatThreads';
 import { notificationMatchesChatThreadKey } from '@/lib/chatThreads';
@@ -37,10 +40,27 @@ export async function clearChatThreadReplies(rootNotificationId: string): Promis
 export async function deleteEntireChatConversation(rootNotificationId: string): Promise<void> {
   const root = String(rootNotificationId || '').trim();
   if (!root) return;
+  await addDismissedChatThreadKey(`reply:${root}`);
+  await addDismissedChatThreadKey(`ask:${root}`);
+  await addDismissedChatThreadKey(`ocean:${root}`);
+  await addDismissedChatThreadKey(`local_friend:${root}`);
+  await addDismissedChatThreadKey(`signal:${root}`);
+  await addDismissedChatThreadKey(`moment:${root}`);
+  try {
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+    const uid = String(user?.id || '').trim();
+    if (uid) {
+      await hideOwnedNotificationRowsForUser([root], uid);
+    }
+  } catch {
+    /* local dismiss still holds */
+  }
   try {
     await deleteNotificationThread(root);
   } catch {
-    /* still hide locally */
+    /* soft-hide + dismiss still hide */
   }
   await addDismissedNotificationIds([root]);
 }
@@ -48,8 +68,16 @@ export async function deleteEntireChatConversation(rootNotificationId: string): 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
 /**
- * Remove a Chat inbox thread for this user: every matching notification row + local
- * Mode A moment threads. Peer data (ocean floats, their inbox) stays intact.
+ * Remove a Chat inbox thread for this user only (delete-for-me / hide-from-my-inbox).
+ * Peer data (ocean floats, their inbox) stays intact.
+ *
+ * Durability layers (in order):
+ * 1. Local dismiss by threadKey + timestamp (blocks refetch / moment merge resurrection)
+ * 2. Soft-hide owned notification rows (reference_type = deleted_thread) — survives login
+ * 3. Best-effort hard delete of owned rows
+ *
+ * Product rule: thread stays gone until a genuinely newer message arrives
+ * (created_at > dismissedAt), which resurrects it for this user only.
  */
 export async function deleteChatThreadForUser(
   thread: ChatThreadSummary,
@@ -58,6 +86,10 @@ export async function deleteChatThreadForUser(
   const uid = String(userId || '').trim();
   const key = String(thread.threadKey || '').trim();
   if (!key) return;
+
+  const dismissedAt = new Date().toISOString();
+  /** Persist hide first so any concurrent refetch cannot resurrect. */
+  await addDismissedChatThreadKey(key, dismissedAt);
 
   if (key.startsWith('moment:')) {
     const momentThreadId = key.slice('moment:'.length);
@@ -98,13 +130,23 @@ export async function deleteChatThreadForUser(
   }
 
   const idList = [...ids];
+
+  if (uid && idList.length) {
+    try {
+      await hideOwnedNotificationRowsForUser(idList, uid);
+    } catch {
+      /* local threadKey dismiss still holds */
+    }
+  }
+
   for (const id of idList) {
     try {
       await deleteNotificationThread(id);
     } catch {
-      /* dismiss still hides */
+      /* soft-hide + dismiss still hide */
     }
   }
+
   if (idList.length) {
     await addDismissedNotificationIds(idList);
   } else if (openId) {
