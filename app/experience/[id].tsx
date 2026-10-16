@@ -27,7 +27,7 @@ import {
   type ExperienceReview,
 } from "@/lib/guest-workspace/experienceDetail";
 import { fetchLiveExperienceDetail } from "@/lib/guest-workspace/liveExperiences";
-import { formatEuro } from "@/lib/guest-workspace/productWorlds";
+import { formatEuro, isEditorialExperienceId } from "@/lib/guest-workspace/productWorlds";
 import { getCachedAuthUser, invalidateAuthUserCache } from "@/lib/authUserCache";
 import { ImageRatio, imageFocusStyle } from "@/lib/imageRatios";
 import { bookExperienceViaCommerce } from "@/lib/orchestra/commerceBook";
@@ -51,6 +51,8 @@ export default function ExperienceDetailScreen() {
   const catalog = useMemo(() => (id ? getExperienceDetail(id) : undefined), [id]);
   const [liveExp, setLiveExp] = useState<ExperienceDetail | null>(null);
   const exp = catalog ?? liveExp ?? undefined;
+  /** Editorial DNA (`exp_*`) — inspiration only; never Commerce checkout. */
+  const isPreview = Boolean(id && isEditorialExperienceId(id) && catalog);
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const { width: SCREEN_W } = useWindowDimensions();
@@ -120,12 +122,14 @@ export default function ExperienceDetailScreen() {
   }, [exp]);
 
   const openBooking = useCallback((step: BookingStep = "dates") => {
+    if (isPreview) return;
     setBookError(null);
     setBookStep(step);
     setBookOpen(true);
-  }, []);
+  }, [isPreview]);
 
   const scrollToDates = useCallback(() => {
+    if (isPreview) return;
     if (selectedSlot) {
       openBooking("review");
       return;
@@ -134,7 +138,7 @@ export default function ExperienceDetailScreen() {
       scrollRef.current?.scrollTo({ y: Math.max(0, availY - 80), animated: true });
     }
     openBooking("dates");
-  }, [availY, openBooking, selectedSlot]);
+  }, [availY, isPreview, openBooking, selectedSlot]);
 
   const openHost = useCallback(() => {
     const hostId = exp?.hostProfile?.id;
@@ -151,13 +155,23 @@ export default function ExperienceDetailScreen() {
 
   const confirmPay = useCallback(async () => {
     if (!exp || !selectedSlot) return;
+    if (isPreview || isEditorialExperienceId(exp.id)) {
+      setBookStep("review");
+      setBookError("This is a preview experience — reservations are not open yet.");
+      return;
+    }
     setBookError(null);
     setBookStep("paying");
 
     await ensureAnonymousSession();
     invalidateAuthUserCache();
     const user = await getCachedAuthUser();
-    const guestEmail = (user as { email?: string } | null)?.email || "guest@banditour.demo";
+    const guestEmail = (user as { email?: string } | null)?.email;
+    if (!guestEmail) {
+      setBookStep("review");
+      setBookError("Sign in required for Commerce checkout — payment was not charged.");
+      return;
+    }
     const customerId = user?.id ?? (exp.commerceWorkspaceId === "local-experiences" ? "guest_bridge" : null);
     if (!customerId) {
       setBookStep("review");
@@ -198,7 +212,7 @@ export default function ExperienceDetailScreen() {
 
     setOrderId(String(result.data.order.id ?? ""));
     setBookStep("done");
-  }, [exp, selectedSlot, guestCount]);
+  }, [exp, selectedSlot, guestCount, isPreview]);
 
   if (!exp) {
     return (
@@ -308,12 +322,16 @@ export default function ExperienceDetailScreen() {
           </Text>
           <Text style={styles.title}>{exp.title}</Text>
           <Text style={styles.shortDesc}>{exp.shortDescription}</Text>
-          <View style={styles.ratingRow}>
-            <Ionicons name="star" size={14} color={INK} />
-            <Text style={styles.ratingText}>
-              {exp.rating.toFixed(2)} · {exp.reviewCount} reviews
-            </Text>
-          </View>
+          {isPreview ? (
+            <Text style={styles.ratingText}>Preview · editorial inspiration · not a live listing</Text>
+          ) : (
+            <View style={styles.ratingRow}>
+              <Ionicons name="star" size={14} color={INK} />
+              <Text style={styles.ratingText}>
+                {exp.rating.toFixed(2)} · {exp.reviewCount} reviews
+              </Text>
+            </View>
+          )}
         </View>
 
         <View style={styles.rule} />
@@ -384,66 +402,79 @@ export default function ExperienceDetailScreen() {
 
         <View style={styles.rule} />
 
-        {/* 7 · Reviews */}
-        <View style={styles.pad}>
-          <View style={styles.reviewsHeader}>
-            <Ionicons name="star" size={18} color={INK} />
-            <Text style={styles.sectionTitleInline}>
-              {exp.rating.toFixed(2)} · {exp.reviewCount} reviews
-            </Text>
-          </View>
-          {visibleReviews.map((r) => (
-            <ReviewCard key={r.id} review={r} />
-          ))}
-          {exp.reviews.length > 2 ? (
-            <Pressable
-              style={styles.showAllBtn}
-              onPress={() => setShowAllReviews((v) => !v)}
-            >
-              <Text style={styles.showAllText}>
-                {showAllReviews ? "Show fewer reviews" : `Show all ${exp.reviews.length} reviews`}
-              </Text>
-            </Pressable>
-          ) : null}
-        </View>
+        {/* 7 · Reviews — live listings only (no synthetic social proof on previews) */}
+        {!isPreview ? (
+          <>
+            <View style={styles.pad}>
+              <View style={styles.reviewsHeader}>
+                <Ionicons name="star" size={18} color={INK} />
+                <Text style={styles.sectionTitleInline}>
+                  {exp.rating.toFixed(2)} · {exp.reviewCount} reviews
+                </Text>
+              </View>
+              {visibleReviews.map((r) => (
+                <ReviewCard key={r.id} review={r} />
+              ))}
+              {exp.reviews.length > 2 ? (
+                <Pressable
+                  style={styles.showAllBtn}
+                  onPress={() => setShowAllReviews((v) => !v)}
+                >
+                  <Text style={styles.showAllText}>
+                    {showAllReviews ? "Show fewer reviews" : `Show all ${exp.reviews.length} reviews`}
+                  </Text>
+                </Pressable>
+              ) : null}
+            </View>
+            <View style={styles.rule} />
+          </>
+        ) : (
+          <View style={styles.rule} />
+        )}
 
-        <View style={styles.rule} />
-
-        {/* 8 · Upcoming availability */}
+        {/* 8 · Upcoming availability — live only */}
         <View
           style={styles.pad}
           onLayout={(e) => setAvailY(e.nativeEvent.layout.y)}
         >
           <Text style={styles.sectionTitle}>Upcoming availability</Text>
-          <Text style={styles.sectionLead}>Choose a date and time to continue booking</Text>
-          <ScrollView
-            horizontal
-            showsHorizontalScrollIndicator={false}
-            contentContainerStyle={styles.slotRail}
-          >
-            {exp.availability.map((slot) => {
-              const on = selectedSlotId === slot.id;
-              return (
-                <Pressable
-                  key={slot.id}
-                  style={[styles.slotCard, on && styles.slotCardOn]}
-                  onPress={() => {
-                    setSelectedSlotId(slot.id);
-                    openBooking("guests");
-                  }}
-                >
-                  <Text style={[styles.slotLabel, on && styles.slotLabelOn]}>{slot.label}</Text>
-                  <Text style={[styles.slotTime, on && styles.slotTimeOn]}>{slot.timeRange}</Text>
-                  <Text style={[styles.slotMeta, on && styles.slotMetaOn]}>
-                    {slot.spotsLeft} spots · {slot.language}
-                  </Text>
-                  <Text style={[styles.slotPrice, on && styles.slotPriceOn]}>
-                    {formatEuro(slot.priceCents)}
-                  </Text>
-                </Pressable>
-              );
-            })}
-          </ScrollView>
+          {isPreview ? (
+            <Text style={styles.sectionLead}>
+              Dates open when a local host publishes this as a live Workspace listing.
+            </Text>
+          ) : (
+            <>
+              <Text style={styles.sectionLead}>Choose a date and time to continue booking</Text>
+              <ScrollView
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                contentContainerStyle={styles.slotRail}
+              >
+                {exp.availability.map((slot) => {
+                  const on = selectedSlotId === slot.id;
+                  return (
+                    <Pressable
+                      key={slot.id}
+                      style={[styles.slotCard, on && styles.slotCardOn]}
+                      onPress={() => {
+                        setSelectedSlotId(slot.id);
+                        openBooking("guests");
+                      }}
+                    >
+                      <Text style={[styles.slotLabel, on && styles.slotLabelOn]}>{slot.label}</Text>
+                      <Text style={[styles.slotTime, on && styles.slotTimeOn]}>{slot.timeRange}</Text>
+                      <Text style={[styles.slotMeta, on && styles.slotMetaOn]}>
+                        {slot.spotsLeft} spots · {slot.language}
+                      </Text>
+                      <Text style={[styles.slotPrice, on && styles.slotPriceOn]}>
+                        {formatEuro(slot.priceCents)}
+                      </Text>
+                    </Pressable>
+                  );
+                })}
+              </ScrollView>
+            </>
+          )}
         </View>
 
         <View style={styles.rule} />
@@ -550,19 +581,40 @@ export default function ExperienceDetailScreen() {
         </Pressable>
       </View>
 
-      {/* 12 · Sticky booking bar */}
+      {/* 12 · Sticky booking bar — live only; editorial previews cannot reserve/pay */}
       <View style={[styles.bookBar, { paddingBottom: Math.max(12, insets.bottom) }]}>
         <View style={styles.bookBarLeft}>
-          <Text style={styles.bookPrice}>
-            {priceLabel} <Text style={styles.bookPer}>/ guest</Text>
-          </Text>
-          <Text style={styles.bookCancel}>{exp.cancellationPolicyShort}</Text>
+          {isPreview ? (
+            <>
+              <Text style={styles.bookPrice}>Preview</Text>
+              <Text style={styles.bookCancel}>Inspiration only · not open to book</Text>
+            </>
+          ) : (
+            <>
+              <Text style={styles.bookPrice}>
+                {priceLabel} <Text style={styles.bookPer}>/ guest</Text>
+              </Text>
+              <Text style={styles.bookCancel}>{exp.cancellationPolicyShort}</Text>
+            </>
+          )}
         </View>
-        <Pressable style={styles.bookCta} onPress={scrollToDates}>
-          <Text style={styles.bookCtaText}>
-            {selectedSlot ? "Book" : "Show dates"}
-          </Text>
-        </Pressable>
+        {isPreview ? (
+          <Pressable
+            style={[styles.bookCta, styles.bookCtaPreview]}
+            onPress={goBack}
+            testID="exp-preview-cta"
+            accessibilityRole="button"
+            accessibilityLabel="Back to Experiences"
+          >
+            <Text style={styles.bookCtaText}>Coming soon</Text>
+          </Pressable>
+        ) : (
+          <Pressable style={styles.bookCta} onPress={scrollToDates} testID="exp-book-cta">
+            <Text style={styles.bookCtaText}>
+              {selectedSlot ? "Book" : "Show dates"}
+            </Text>
+          </Pressable>
+        )}
       </View>
 
       {/* Full-screen gallery */}
@@ -593,28 +645,30 @@ export default function ExperienceDetailScreen() {
         </View>
       </Modal>
 
-      {/* Booking sheet */}
-      <BookingSheet
-        visible={bookOpen}
-        onClose={() => {
-          if (bookStep !== "paying") setBookOpen(false);
-        }}
-        exp={exp}
-        step={bookStep}
-        setStep={setBookStep}
-        selectedSlot={selectedSlot}
-        setSelectedSlotId={setSelectedSlotId}
-        guestCount={guestCount}
-        setGuestCount={setGuestCount}
-        bookError={bookError}
-        onConfirmPay={() => void confirmPay()}
-        orderId={orderId}
-        insetsBottom={insets.bottom}
-        onViewJourney={() => {
-          setBookOpen(false);
-          router.push("/my-profile" as Href);
-        }}
-      />
+      {/* Booking sheet — never for editorial previews */}
+      {!isPreview ? (
+        <BookingSheet
+          visible={bookOpen}
+          onClose={() => {
+            if (bookStep !== "paying") setBookOpen(false);
+          }}
+          exp={exp}
+          step={bookStep}
+          setStep={setBookStep}
+          selectedSlot={selectedSlot}
+          setSelectedSlotId={setSelectedSlotId}
+          guestCount={guestCount}
+          setGuestCount={setGuestCount}
+          bookError={bookError}
+          onConfirmPay={() => void confirmPay()}
+          orderId={orderId}
+          insetsBottom={insets.bottom}
+          onViewJourney={() => {
+            setBookOpen(false);
+            router.push("/my-profile" as Href);
+          }}
+        />
+      ) : null}
     </View>
   );
 }
@@ -1104,6 +1158,9 @@ const styles = StyleSheet.create({
     borderRadius: 14,
     minWidth: 120,
     alignItems: "center",
+  },
+  bookCtaPreview: {
+    backgroundColor: "#3A3530",
   },
   bookCtaText: { color: "#FFF", fontWeight: "800", fontSize: 15 },
 

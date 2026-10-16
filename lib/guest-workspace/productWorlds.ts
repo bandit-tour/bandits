@@ -32,7 +32,29 @@ export type GuestExperience = {
   bookingMode: "instant" | "request";
   featured?: boolean;
   popularThisWeek?: boolean;
+  /**
+   * Editorial / inspiration DNA — browseable, never Workspace-bookable.
+   * Live host inventory must leave this unset/false.
+   */
+  previewOnly?: boolean;
 };
+
+/** Guest App editorial DNA ids (`exp_*`) — inspiration only, not live inventory. */
+export function isEditorialExperienceId(id: string | null | undefined): boolean {
+  const raw = String(id || "").trim();
+  return /^exp_[a-z0-9_]+$/i.test(raw);
+}
+
+/** Mark a seed listing as preview (no Reserve/Pay, not counted as live). */
+export function asEditorialPreview(exp: GuestExperience): GuestExperience {
+  return {
+    ...exp,
+    previewOnly: true,
+    availableToday: false,
+    seatsLeft: 0,
+    bookingMode: "request",
+  };
+}
 
 /** Portrait-friendly Unsplash URL — 4:5 crop for marketplace cards. */
 export function experienceCover(photoId: string, w = 900): string {
@@ -263,6 +285,11 @@ export type BottleMatch = {
   departure: string;
   /** Explicit total when hotel + second nights should be labeled (e.g. 5-night journey). */
   journeyNights?: number;
+  /**
+   * Inventory provenance. `sample` = labeled demo fixtures (never real reservations).
+   * `provider_record` = Workspace verified sleeping stays.
+   */
+  inventorySource?: "provider_record" | "sample";
 };
 
 /** @deprecated Use BottleMatch */
@@ -2328,7 +2355,16 @@ export const BOTTLE_MATCHES: BottleMatch[] = [
 export const BOTTLE_JOURNEYS = BOTTLE_MATCHES;
 
 export function getBottleMatchById(id: string): BottleMatch | undefined {
-  return BOTTLE_MATCHES.find((m) => m.id === id);
+  const found = BOTTLE_MATCHES.find((m) => m.id === id);
+  return found ? { ...found, inventorySource: found.inventorySource || "sample" } : undefined;
+}
+
+/** True for editorial / fixture journeys — never produce real Workspace bookings. */
+export function isSampleBottleMatch(match: Pick<BottleMatch, "id" | "inventorySource"> | null | undefined): boolean {
+  if (!match) return false;
+  if (match.inventorySource === "provider_record") return false;
+  if (match.inventorySource === "sample") return true;
+  return String(match.id || "").startsWith("match_");
 }
 
 export function withLiveHotelName(match: BottleMatch, hotelName: string): BottleMatch {

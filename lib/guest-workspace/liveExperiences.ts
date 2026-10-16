@@ -61,14 +61,25 @@ function inferCategory(row: WorkspaceLocalExperience): GuestExperience["category
   return "Workshops";
 }
 
+/** Session / orch tokens sometimes appended to otherwise real provider titles. */
 const ORCH_HASH_SUFFIX = /\s(mu[a-z0-9]{6,10}|mt[a-z0-9]{5,10}|muy[a-z0-9]{5,10})$/i;
 
-/** Defense-in-depth — Workspace honesty gate is SoT; never render orch/hash shells. */
+function cleanProviderTitle(title: string): string {
+  return String(title || "")
+    .replace(ORCH_HASH_SUFFIX, "")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+/**
+ * Defense-in-depth — reject test/orchestration shells; keep real provider rows.
+ * Hash suffixes on titles are stripped for display, not used as a hard reject.
+ */
 export function isHonestGuestExperienceRow(row: WorkspaceLocalExperience): boolean {
-  const title = String(row.title || "").trim();
-  const host = String(row.hostName || "").trim();
-  if (!title || ORCH_HASH_SUFFIX.test(title) || /\bdebug\b/i.test(title)) return false;
-  if (host && (ORCH_HASH_SUFFIX.test(host) || /\bdebug\b/i.test(host))) return false;
+  const title = cleanProviderTitle(String(row.title || ""));
+  const host = cleanProviderTitle(String(row.hostName || ""));
+  if (!title || /\bdebug\b/i.test(title)) return false;
+  if (host && /\bdebug\b/i.test(host)) return false;
   const email = String(row.hostEmail || "").toLowerCase();
   if (
     email.endsWith("@banditour.test") ||
@@ -78,6 +89,8 @@ export function isHonestGuestExperienceRow(row: WorkspaceLocalExperience): boole
   ) {
     return false;
   }
+  /** Pure hash / empty after strip = orch shell. */
+  if (/^(mu|mt|muy)[a-z0-9]{5,10}$/i.test(String(row.title || "").trim())) return false;
   return true;
 }
 
@@ -90,31 +103,34 @@ export function mapWorkspaceExperience(row: WorkspaceLocalExperience): GuestExpe
   const photos = (row.photos || [])
     .map((u) => resolveExperiencePhoto(u))
     .filter((u): u is string => !!u && isValidExperienceImageUrl(u));
-  /** Prefer real supplier media; stock Unsplash-only rows are not commercial inventory. */
+  /** Prefer supplier media; allow approved asset-key / cover mapping when stock-only. */
   const nonStock = photos.filter((u) => !/images\.unsplash\.com/i.test(u));
-  const imageUrl = nonStock[0] || null;
+  const imageUrl = nonStock[0] || photos[0] || null;
   if (!imageUrl || !isValidExperienceImageUrl(imageUrl)) return null;
 
+  const title = cleanProviderTitle(row.title) || String(row.title || "").trim();
+  const host = cleanProviderTitle(row.hostName || "") || "Local host";
   const category = inferCategory(row);
   return {
     id: row.id,
-    title: row.title,
+    title,
     category,
     categoryLabel: category === "Workshops" ? "Local experience" : category,
     duration: row.duration || row.when || "Session",
     area: row.neighborhood || row.city || "Athens",
     distance: row.location || row.neighborhood || row.city || "Athens",
     rating: 0,
-    story: row.description || row.title,
+    story: row.description || title,
     when: row.when || row.duration || "Upcoming",
     priceCents: row.priceCents || 0,
     seatsLeft: row.seatsLeft ?? 0,
-    host: row.hostName || "Local host",
+    host,
     meetingPoint: row.location || row.neighborhood || "Athens",
     included: ["Local host"],
     imageUrl,
     availableToday: (row.seatsLeft ?? 0) > 0,
     bookingMode: "request",
+    previewOnly: false,
   };
 }
 

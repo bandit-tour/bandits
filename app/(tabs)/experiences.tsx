@@ -12,6 +12,7 @@ import {
 
 import { RatioImage } from "@/components/RatioImage";
 import {
+  asEditorialPreview,
   experiencesWithValidCover,
   formatEuro,
   GUEST_EXPERIENCES,
@@ -20,7 +21,7 @@ import {
 } from "@/lib/guest-workspace/productWorlds";
 import { cardWidthForColumns } from "@/lib/imageRatios";
 import { fetchLiveLocalExperiences, mapWorkspaceExperience } from "@/lib/guest-workspace/liveExperiences";
-import { color, radius, space } from "@/lib/guestDesign";
+import { color, space } from "@/lib/guestDesign";
 
 const CATEGORIES = [
   "All",
@@ -52,7 +53,8 @@ function matchesFilter(exp: GuestExperience, filter: (typeof CATEGORIES)[number]
 
 /**
  * Experiences — bandiTour DNA marketplace.
- * NO VALID IMAGE = DO NOT RENDER THE LISTING (including on load failure).
+ * Live Workspace inventory first; editorial DNA always available as Preview inspiration.
+ * NO VALID IMAGE = DO NOT RENDER THE LISTING.
  */
 export function ExperiencesScreen() {
   const router = useRouter();
@@ -62,61 +64,45 @@ export function ExperiencesScreen() {
   const [failedImages, setFailedImages] = useState<Set<string>>(() => new Set());
 
   const [live, setLive] = useState<GuestExperience[]>([]);
-  const [liveError, setLiveError] = useState<string | null>(null);
+  const [liveReady, setLiveReady] = useState(false);
   const [liveTransportFailed, setLiveTransportFailed] = useState(false);
 
   useEffect(() => {
-    void fetchLiveLocalExperiences().then((res) => {
-      const mapped = res.experiences
-        .map(mapWorkspaceExperience)
-        .filter(Boolean) as GuestExperience[];
-      setLive(mapped);
-      setLiveTransportFailed(Boolean(res.detail));
-      if (res.detail) {
-        setLiveError(
-          `Live hosts unavailable (${res.detail}). Workspace has provider inventory — check CORS / publication.`,
-        );
-      } else if (!mapped.length) {
-        setLiveError(
-          "No bookable local experiences yet — hosts are still preparing. Check back soon.",
-        );
-      } else {
-        setLiveError(null);
-      }
-    });
+    void fetchLiveLocalExperiences()
+      .then((res) => {
+        const mapped = res.experiences
+          .map(mapWorkspaceExperience)
+          .filter(Boolean) as GuestExperience[];
+        setLive(mapped);
+        setLiveTransportFailed(Boolean(res.detail));
+      })
+      .finally(() => setLiveReady(true));
   }, []);
 
   const columns = experienceColumns(width);
   const cardW = cardWidthForColumns(width, columns, GRID_PAD, GRID_GAP);
   const isMobile = width < 720;
 
-  const seeded = useMemo(() => experiencesWithValidCover(GUEST_EXPERIENCES), []);
-
-  const featured = useMemo(
-    () =>
-      live.filter((e) => !failedImages.has(e.id)).slice(0, 3),
-    [live, failedImages],
+  const editorial = useMemo(
+    () => experiencesWithValidCover(GUEST_EXPERIENCES).map(asEditorialPreview),
+    [],
   );
 
-  const rows = useMemo(() => {
-    const base = live.filter((e) => matchesFilter(e, filter) && !failedImages.has(e.id));
-    return base;
-  }, [filter, live, failedImages]);
-
-  /**
-   * DNA editorial seed is NOT mixed into live SoT when Workspace answers.
-   * Only used as last-resort visual catalog when transport fails (CORS), never as bookable claim.
-   */
-  const editorialFallback = useMemo(
-    () =>
-      !live.length && liveTransportFailed
-        ? seeded.filter((e) => !failedImages.has(e.id) && matchesFilter(e, filter))
-        : [],
-    [live.length, liveTransportFailed, seeded, failedImages, filter],
+  const liveRows = useMemo(
+    () => live.filter((e) => matchesFilter(e, filter) && !failedImages.has(e.id)),
+    [filter, live, failedImages],
   );
 
-  const displayRows = live.length ? rows : editorialFallback;
-  const showingEditorial = !live.length && editorialFallback.length > 0;
+  const editorialRows = useMemo(
+    () => editorial.filter((e) => matchesFilter(e, filter) && !failedImages.has(e.id)),
+    [editorial, filter, failedImages],
+  );
+
+  /** Featured carousel: live first, else editorial picks. */
+  const featured = useMemo(() => {
+    const src = liveRows.length ? liveRows : editorialRows;
+    return src.slice(0, 3);
+  }, [liveRows, editorialRows]);
 
   const open = (id: string) => router.push(`/experience/${id}` as Href);
 
@@ -138,6 +124,9 @@ export function ExperiencesScreen() {
     });
   };
 
+  const showInspiration = liveReady;
+  const hasAny = liveRows.length > 0 || (showInspiration && editorialRows.length > 0);
+
   return (
     <ScrollView style={styles.screen} contentContainerStyle={styles.content}>
       <View style={styles.titleStrip}>
@@ -146,16 +135,15 @@ export function ExperiencesScreen() {
         <Text style={styles.lead}>
           Unexpected · local · creative · slightly underground — not a tourism brochure.
         </Text>
-        {showingEditorial ? (
-          <Text style={[styles.lead, { marginTop: 8 }]}>
-            Editorial DNA catalog (not live host inventory). Live Workspace providers are blocked
-            from this browser until the Workspace bridge is reachable.
-          </Text>
-        ) : liveError && !live.length ? (
-          <Text style={[styles.lead, { marginTop: 8 }]}>{liveError}</Text>
-        ) : live.length ? (
-          <Text style={[styles.lead, { marginTop: 8 }]}>
+        {liveReady && live.length > 0 ? (
+          <Text style={[styles.lead, { marginTop: 8 }]} testID="exp-live-banner">
             Hosted by locals near you — book the ones that feel right.
+          </Text>
+        ) : liveReady ? (
+          <Text style={[styles.lead, { marginTop: 8 }]} testID="exp-inspiration-banner">
+            {liveTransportFailed
+              ? "Inspiration from the bandiTour DNA catalog. Live host bookings open when Workspace providers are reachable."
+              : "Inspiration & previews while local hosts finish publishing. Reservations open only on authorized live listings."}
           </Text>
         ) : null}
       </View>
@@ -180,10 +168,10 @@ export function ExperiencesScreen() {
         ))}
       </ScrollView>
 
-      {isMobile && filter === "All" && (featured.length > 0 || (showingEditorial && editorialFallback.length > 0)) ? (
+      {isMobile && filter === "All" && featured.length > 0 ? (
         <View style={styles.carouselSection}>
           <Text style={styles.carouselLabel}>
-            {showingEditorial ? "Editorial picks" : "Tonight & this week"}
+            {liveRows.length ? "Tonight & this week" : "Editorial picks"}
           </Text>
           <ScrollView
             horizontal
@@ -192,7 +180,7 @@ export function ExperiencesScreen() {
             decelerationRate="fast"
             snapToInterval={Math.min(width * 0.72, 280) + 12}
           >
-            {(featured.length ? featured : editorialFallback.slice(0, 3)).map((exp) => (
+            {featured.map((exp) => (
               <ExperienceMarketplaceCard
                 key={`feat_${exp.id}`}
                 exp={exp}
@@ -207,29 +195,57 @@ export function ExperiencesScreen() {
         </View>
       ) : null}
 
-      <View style={styles.resultMeta}>
-        <Text style={styles.resultCount}>
-          {displayRows.length} {displayRows.length === 1 ? "experience" : "experiences"}
-          {filter !== "All" ? ` · ${filter}` : ""}
-          {showingEditorial ? " · editorial" : live.length ? " · live hosts" : ""}
-        </Text>
-      </View>
+      {liveRows.length > 0 ? (
+        <>
+          <View style={styles.resultMeta}>
+            <Text style={styles.resultCount} testID="exp-live-count">
+              {liveRows.length} live {liveRows.length === 1 ? "experience" : "experiences"}
+              {filter !== "All" ? ` · ${filter}` : ""}
+            </Text>
+          </View>
+          <View style={[styles.grid, { gap: GRID_GAP }]}>
+            {liveRows.map((exp) => (
+              <ExperienceMarketplaceCard
+                key={exp.id}
+                exp={exp}
+                width={cardW}
+                saved={saved.has(exp.id)}
+                onPress={() => open(exp.id)}
+                onToggleSave={() => toggleSave(exp.id)}
+                onImageFailed={() => markImageFailed(exp.id)}
+              />
+            ))}
+          </View>
+        </>
+      ) : null}
 
-      <View style={[styles.grid, { gap: GRID_GAP }]}>
-        {displayRows.map((exp) => (
-          <ExperienceMarketplaceCard
-            key={exp.id}
-            exp={exp}
-            width={cardW}
-            saved={saved.has(exp.id)}
-            onPress={() => open(exp.id)}
-            onToggleSave={() => toggleSave(exp.id)}
-            onImageFailed={() => markImageFailed(exp.id)}
-          />
-        ))}
-      </View>
+      {showInspiration && editorialRows.length > 0 ? (
+        <>
+          <View style={[styles.resultMeta, { marginTop: liveRows.length ? 18 : 0 }]}>
+            <Text style={styles.sectionEyebrow}>Inspiration</Text>
+            <Text style={styles.resultCount} testID="exp-editorial-count">
+              {editorialRows.length} {editorialRows.length === 1 ? "preview" : "previews"}
+              {filter !== "All" ? ` · ${filter}` : ""}
+              {" · not bookable yet"}
+            </Text>
+          </View>
+          <View style={[styles.grid, { gap: GRID_GAP }]}>
+            {editorialRows.map((exp) => (
+              <ExperienceMarketplaceCard
+                key={exp.id}
+                exp={exp}
+                width={cardW}
+                saved={saved.has(exp.id)}
+                onPress={() => open(exp.id)}
+                onToggleSave={() => toggleSave(exp.id)}
+                onImageFailed={() => markImageFailed(exp.id)}
+              />
+            ))}
+          </View>
+        </>
+      ) : null}
 
-      {displayRows.length === 0 ? (
+      {liveReady && !hasAny ? (
         <Text style={styles.empty}>Nothing in this category yet — try another filter.</Text>
       ) : null}
     </ScrollView>
@@ -256,6 +272,7 @@ function ExperienceMarketplaceCard({
   onImageFailed: () => void;
 }) {
   const [coverFailed, setCoverFailed] = useState(false);
+  const preview = exp.previewOnly === true;
 
   if (!isValidExperienceImageUrl(exp.imageUrl) || coverFailed) return null;
 
@@ -266,7 +283,12 @@ function ExperienceMarketplaceCard({
       style={[styles.card, { width }]}
       onPress={onPress}
       accessibilityRole="button"
-      accessibilityLabel={`${exp.title}, ${formatEuro(exp.priceCents)}`}
+      accessibilityLabel={
+        preview
+          ? `${exp.title}, preview`
+          : `${exp.title}, ${formatEuro(exp.priceCents)}`
+      }
+      testID={preview ? `exp-preview-card-${exp.id}` : `exp-live-card-${exp.id}`}
     >
       <RatioImage
         uri={exp.imageUrl}
@@ -283,7 +305,11 @@ function ExperienceMarketplaceCard({
             {categoryLine}
           </Text>
         </View>
-        {exp.availableToday ? (
+        {preview ? (
+          <View style={styles.previewBadge} testID="exp-preview-badge">
+            <Text style={styles.previewBadgeText}>Preview</Text>
+          </View>
+        ) : exp.availableToday ? (
           <View style={styles.todayBadge}>
             <Text style={styles.todayBadgeText}>Today</Text>
           </View>
@@ -315,13 +341,24 @@ function ExperienceMarketplaceCard({
         <Text style={styles.meta} numberOfLines={1}>
           {exp.duration} · {exp.area}
         </Text>
-        <View style={styles.ratingRow}>
-          <Ionicons name="star" size={12} color={color.ink} />
-          <Text style={styles.rating}>{exp.rating.toFixed(2)}</Text>
-        </View>
+        {!preview && exp.rating > 0 ? (
+          <View style={styles.ratingRow}>
+            <Ionicons name="star" size={12} color={color.ink} />
+            <Text style={styles.rating}>{exp.rating.toFixed(2)}</Text>
+          </View>
+        ) : null}
         <View style={styles.footer}>
-          <Text style={styles.price}>{formatEuro(exp.priceCents)}</Text>
-          <Text style={styles.cta}>Book</Text>
+          {preview ? (
+            <>
+              <Text style={styles.priceMuted}>Coming soon</Text>
+              <Text style={styles.ctaPreview}>Explore</Text>
+            </>
+          ) : (
+            <>
+              <Text style={styles.price}>{formatEuro(exp.priceCents)}</Text>
+              <Text style={styles.cta}>Book</Text>
+            </>
+          )}
         </View>
       </View>
     </Pressable>
@@ -375,6 +412,14 @@ const styles = StyleSheet.create({
   },
   carouselRow: { paddingHorizontal: GRID_PAD, gap: 12, paddingBottom: 4 },
   resultMeta: { paddingHorizontal: GRID_PAD, marginBottom: 10 },
+  sectionEyebrow: {
+    fontSize: 11,
+    fontWeight: "800",
+    letterSpacing: 0.8,
+    textTransform: "uppercase",
+    color: color.brand,
+    marginBottom: 4,
+  },
   resultCount: { fontSize: 12, fontWeight: "600", color: "#888" },
   grid: {
     flexDirection: "row",
@@ -409,6 +454,16 @@ const styles = StyleSheet.create({
     borderRadius: 8,
   },
   todayBadgeText: { fontSize: 10, fontWeight: "800", color: "#FFF" },
+  previewBadge: {
+    position: "absolute",
+    top: 10,
+    left: 10,
+    backgroundColor: "rgba(255,255,255,0.92)",
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 8,
+  },
+  previewBadgeText: { fontSize: 10, fontWeight: "800", color: "#111" },
   heartBtn: {
     position: "absolute",
     top: 10,
@@ -438,7 +493,9 @@ const styles = StyleSheet.create({
     marginTop: 8,
   },
   price: { fontSize: 15, fontWeight: "800", color: "#FFFFFF" },
+  priceMuted: { fontSize: 14, fontWeight: "700", color: "#9A9A9A" },
   cta: { fontSize: 13, fontWeight: "800", color: color.brand },
+  ctaPreview: { fontSize: 13, fontWeight: "800", color: "#C0C0C0" },
   empty: {
     paddingHorizontal: 16,
     fontSize: 13,
