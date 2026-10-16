@@ -12,29 +12,50 @@ import {
   useWindowDimensions,
   View,
 } from "react-native";
-import { useSafeAreaInsets } from "react-native-safe-area-context";
-
+import { useAppState } from "@/contexts/AppStateContext";
 import { useAppBackScreenOptions } from "@/hooks/useAppBackScreenOptions";
 import { color } from "@/lib/guestDesign";
-import { IMPACT_STORY } from "@/lib/guest-workspace/impactStory";
+import {
+  IMPACT_DROP_MILESTONE,
+  IMPACT_DROP_RULES,
+  dropsForCity,
+  listImpactEvents,
+  sharePassportText,
+  type ImpactEvent,
+} from "@/lib/impact/ledger";
+import { IMPACT_VIEW } from "@/lib/guest-workspace/productWorlds";
 
 /** Impact — bandiTour brand chrome; water blue only inside the drop meter. */
 export function ImpactScreen() {
-  const insets = useSafeAreaInsets();
   const { width } = useWindowDimensions();
+  const { activeIdentity } = useAppState();
+  const userId = activeIdentity?.userId || "guest";
   const screenOptions = useAppBackScreenOptions({
     title: "Impact / Passport",
     fallback: "/menu",
     showBack: true,
     escapeShortcuts: true,
   });
-  const [joined, setJoined] = useState<string | null>(null);
-  const fillRatio = IMPACT_STORY.dropsEarned / IMPACT_STORY.dropsRequired;
+  const [events, setEvents] = useState<ImpactEvent[]>([]);
+  const [causeNote, setCauseNote] = useState<string | null>(null);
+  const [shareNote, setShareNote] = useState<string | null>(null);
   const oceanMax = Math.min(width - 32, 960);
+  const drops = dropsForCity(events);
+  const fillRatio = Math.min(1, drops / IMPACT_DROP_MILESTONE);
+
+  useEffect(() => {
+    void listImpactEvents(userId).then(setEvents);
+  }, [userId]);
 
   const onShare = async () => {
+    if (!events.length) {
+      setShareNote("Nothing verified to share yet.");
+      return;
+    }
+    const message = sharePassportText(events);
+    setShareNote(message);
     try {
-      await Share.share({ message: IMPACT_STORY.shareLine });
+      await Share.share({ message });
     } catch {
       /* user dismissed */
     }
@@ -48,114 +69,151 @@ export function ImpactScreen() {
       contentContainerStyle={[styles.content, { paddingTop: 12 }]}
       showsVerticalScrollIndicator
     >
-      <Text style={styles.title}>{IMPACT_STORY.title}</Text>
-      <Text style={styles.subtitle}>{IMPACT_STORY.subtitle}</Text>
-      <Text style={styles.supporting}>{IMPACT_STORY.supporting}</Text>
+      <Text testID="impact-user" style={styles.srOnly}>
+        {userId}
+      </Text>
+      <Text style={styles.title}>Your Impact</Text>
+      <Text style={styles.subtitle}>The verified good you leave behind.</Text>
+      <Text style={styles.supporting}>
+        Drops count only confirmed actions. They are not a measure of trees, plastic or money.
+      </Text>
 
-      <Text style={styles.intro}>{IMPACT_STORY.intro}</Text>
+      <Text style={styles.sectionTitle}>Your Impact Ocean</Text>
+      <WaterDropOcean
+        fillRatio={fillRatio}
+        maxWidth={oceanMax}
+        destination={events[0]?.city || "Your travels"}
+        earned={drops}
+        required={IMPACT_DROP_MILESTONE}
+        hint={
+          drops === 0
+            ? "No verified Drops yet. The ocean stays quiet until a confirmed action is recorded."
+            : `${Math.max(0, IMPACT_DROP_MILESTONE - drops)} Drops to the next mark. Drops are not redeemable.`
+        }
+      />
+      <Text style={styles.sectionLead} testID="impact-drop-rules">
+        {`Confirmed local purchase +${IMPACT_DROP_RULES.verified_local_purchase} · Cause contribution +${IMPACT_DROP_RULES.verified_cause_contribution} · Completed volunteering +${IMPACT_DROP_RULES.verified_volunteer_completion}. The same action cannot be counted twice.`}
+      </Text>
 
-      <WaterDropOcean fillRatio={fillRatio} maxWidth={oceanMax} />
-
-      {/* What you left behind — prominent under Your Impact / meter */}
       <Text style={styles.sectionTitle}>What you left behind</Text>
-      <Text style={styles.sectionLead}>{IMPACT_STORY.leftBehindLead}</Text>
-      <View style={styles.leftBehindList}>
-        {IMPACT_STORY.leftBehind.map((item, index) => (
-          <View
-            key={item.id}
-            style={[
-              styles.leftBehindRow,
-              index === IMPACT_STORY.leftBehind.length - 1 && styles.leftBehindRowLast,
-            ]}
-          >
-            <Text style={styles.leftBehindEmoji}>{item.emoji}</Text>
-            <Text style={styles.leftBehindText}>
-              <Text style={styles.leftBehindValue}>{item.value}</Text>
-              {"  "}
-              {item.label}
-            </Text>
-          </View>
-        ))}
-      </View>
-
-      <Text style={styles.sectionTitle}>Where your drops come from</Text>
-      <Text style={styles.sectionLead}>Each local action earned Water Drops for Athens.</Text>
-      <View style={styles.sourceGrid}>
-        {IMPACT_STORY.dropSources.map((s) => (
-          <Pressable key={s.id} style={({ pressed }) => [styles.sourceCard, pressed && styles.pressed]}>
-            <Text style={styles.sourceEmoji}>{s.emoji}</Text>
-            <Text style={styles.sourceLabel}>{s.label}</Text>
-            <Text style={styles.sourceDrops}>💧 +{s.drops}</Text>
-          </Pressable>
-        ))}
-      </View>
-
-      <View style={styles.compareBlock}>
-        {IMPACT_STORY.comparisons.map((c) => (
-          <View key={c.id} style={styles.compareCard}>
-            <Text style={styles.compareLine}>{c.line}</Text>
-          </View>
-        ))}
-      </View>
-
-      {/* Compact share — not a blue banner */}
-      <Pressable style={({ pressed }) => [styles.shareCard, pressed && styles.pressed]} onPress={onShare}>
-        <Text style={styles.shareTitle}>Share your Athens footprint</Text>
-        <Text style={styles.shareSub}>Proud of what you left behind? Share your journey.</Text>
-        <View style={styles.shareAction}>
-          <Text style={styles.shareActionText}>Share</Text>
+      {events.length === 0 ? (
+        <Text style={styles.sectionLead} testID="impact-empty">
+          No verified impact yet. A confirmed local purchase, an approved cause contribution, or a
+          completed volunteer activity will appear here with the reason it earned Drops.
+        </Text>
+      ) : (
+        <View style={styles.leftBehindList} testID="impact-history">
+          {events.map((item, index) => (
+            <View
+              key={item.id}
+              style={[styles.leftBehindRow, index === events.length - 1 && styles.leftBehindRowLast]}
+              testID={`impact-event-${item.id}`}
+            >
+              <Text style={styles.leftBehindText}>
+                <Text style={styles.leftBehindValue}>{item.drops} Drops</Text>
+                {"  "}
+                {item.title} · {item.city}
+              </Text>
+              <Text style={styles.sectionLead}>{item.evidence}</Text>
+            </View>
+          ))}
         </View>
-      </Pressable>
+      )}
 
-      <Text style={styles.sectionTitle}>Keep giving · local causes</Text>
-      {IMPACT_STORY.causes.map((c) => (
+      <Text style={styles.sectionTitle}>Make a difference</Text>
+      <Text style={styles.sectionLead}>
+        Editorial inspiration. These organizations are not approved partners here, so the app will
+        not take a donation, registration or completion.
+      </Text>
+      {IMPACT_VIEW.causes.map((c) => (
         <Pressable
           key={c.id}
           style={({ pressed }) => [styles.causeCard, pressed && styles.pressed]}
-          onPress={() => setJoined(c.id)}
+          onPress={() =>
+            setCauseNote(
+              `${c.name} is listed as inspiration. ${c.organizationName} is not an approved partner in this app, so support and signup are unavailable.`,
+            )
+          }
+          testID={`impact-cause-${c.id}`}
         >
-          <Text style={styles.causeFamily}>{c.family}</Text>
+          <Text style={styles.causeFamily}>{c.family} · Inspiration</Text>
           <Text style={styles.causeTitle}>{c.name}</Text>
           <Text style={styles.causeBody}>{c.guestDescription}</Text>
           <Text style={styles.causeOrg}>{c.organizationName}</Text>
           <View style={styles.causeCta}>
-            <Text style={styles.causeCtaText}>{joined === c.id ? "Supporting ✓" : "Support this cause"}</Text>
+            <Text style={styles.causeCtaText}>Learn more</Text>
           </View>
         </Pressable>
       ))}
-
-      <Text style={styles.sectionTitle}>Impact Passport</Text>
-      {IMPACT_STORY.passportEntries.map((p) => (
-        <Pressable key={p.id} style={({ pressed }) => [styles.passport, pressed && styles.pressed]} onPress={onShare}>
-          <Text style={styles.passportDest}>{p.destination}</Text>
-          <Text style={styles.passportCause}>{p.causeName}</Text>
-          <Text style={styles.passportShare}>{p.shareLine}</Text>
-          <Text style={styles.passportDate}>{p.date}</Text>
-        </Pressable>
-      ))}
-
-      <Text style={styles.sectionTitle}>Volunteer while here</Text>
-      {IMPACT_STORY.volunteer.map((v) => (
-        <Pressable key={v.id} style={({ pressed }) => [styles.volunteerRow, pressed && styles.pressed]}>
+      {causeNote ? (
+        <Text style={styles.sectionLead} testID="impact-cause-note">
+          {causeNote}
+        </Text>
+      ) : null}
+      {IMPACT_VIEW.volunteer.map((v) => (
+        <View key={v.id} style={styles.volunteerRow}>
           <View style={styles.volunteerCopy}>
             <Text style={styles.volunteerTitle}>{v.title}</Text>
-            <Text style={styles.volunteerWhen}>{v.when}</Text>
+            <Text style={styles.volunteerWhen}>{v.when} · Inspiration, not an open signup</Text>
           </View>
-          <Text style={styles.volunteerDrops}>💧 +{v.drops}</Text>
-        </Pressable>
+        </View>
       ))}
 
-      <View style={styles.reward}>
-        <Text style={styles.rewardTitle}>Ocean almost full</Text>
-        <Text style={styles.rewardBody}>{IMPACT_STORY.badgeUnlockCopy(IMPACT_STORY.remainingDrops)}</Text>
-      </View>
+      <Text style={styles.sectionTitle}>Your Impact Passport</Text>
+      {events.length === 0 ? (
+        <Text style={styles.sectionLead}>
+          Your Passport stays blank until a verified action is yours. Sharing stays off until you
+          choose it.
+        </Text>
+      ) : (
+        events.map((p) => (
+          <View key={p.id} style={styles.passport}>
+            <Text style={styles.passportDest}>{p.city}</Text>
+            <Text style={styles.passportCause}>{p.title}</Text>
+            <Text style={styles.passportShare}>{p.evidence}</Text>
+            <Text style={styles.passportDate}>{p.at.slice(0, 10)}</Text>
+          </View>
+        ))
+      )}
+      <Pressable
+        style={({ pressed }) => [styles.shareCard, pressed && styles.pressed]}
+        onPress={() => void onShare()}
+        testID="impact-share"
+      >
+        <Text style={styles.shareTitle}>Share Passport</Text>
+        <Text style={styles.shareSub}>
+          Shares only your verified Drops and cities. No hotel, spending or precise places.
+        </Text>
+        <View style={styles.shareAction}>
+          <Text style={styles.shareActionText}>{events.length ? "Share" : "Nothing to share"}</Text>
+        </View>
+      </Pressable>
+      {shareNote ? (
+        <Text style={styles.sectionLead} testID="impact-share-note">
+          {shareNote}
+        </Text>
+      ) : null}
     </ScrollView>
     </>
   );
 }
 
 /** Living water-drop meter — blue only here, capped width, not a full-bleed slab. */
-function WaterDropOcean({ fillRatio, maxWidth }: { fillRatio: number; maxWidth: number }) {
+function WaterDropOcean({
+  fillRatio,
+  maxWidth,
+  destination,
+  earned,
+  required,
+  hint,
+}: {
+  fillRatio: number;
+  maxWidth: number;
+  destination: string;
+  earned: number;
+  required: number;
+  hint: string;
+}) {
   const fillAnim = useRef(new Animated.Value(0)).current;
   const pulseAnim = useRef(new Animated.Value(0.7)).current;
   const drop1 = useRef(new Animated.Value(0)).current;
@@ -259,11 +317,11 @@ function WaterDropOcean({ fillRatio, maxWidth }: { fillRatio: number; maxWidth: 
         </View>
 
         <View style={styles.oceanContent}>
-          <Text style={styles.oceanDest}>{IMPACT_STORY.destination}</Text>
-          <Text style={styles.oceanCount}>
-            {IMPACT_STORY.dropsEarned} / {IMPACT_STORY.dropsRequired} Drops
+          <Text style={styles.oceanDest}>{destination}</Text>
+          <Text style={styles.oceanCount} testID="impact-drops-count">
+            {earned} / {required} Drops
           </Text>
-          <Text style={styles.oceanHint}>Your ocean is filling</Text>
+          <Text style={styles.oceanHint}>{hint}</Text>
         </View>
       </LinearGradient>
     </View>
@@ -284,6 +342,7 @@ const PlatformShadow = {
 };
 
 const styles = StyleSheet.create({
+  srOnly: { height: 0, width: 0, opacity: 0 },
   screen: { flex: 1, backgroundColor: color.surfaceWarm },
   content: { paddingHorizontal: 18, paddingBottom: 96 },
   title: {

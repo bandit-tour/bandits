@@ -333,6 +333,15 @@ export function BanditsScreen({ tabActive }: BanditsScreenProps = {}) {
         testID="home-discovery-my-moments"
       />
       <GuestDiscoveryCard
+        promptId="home_impact"
+        eyebrow="What you leave behind"
+        title="Your Impact"
+        body="Verified local choices can earn Drops and a personal Passport. Nothing is counted until an action is confirmed."
+        cta="Open Impact"
+        href="/impact"
+        testID="home-discovery-impact"
+      />
+      <GuestDiscoveryCard
         promptId="home_local_insider"
         eyebrow="Local access"
         title="Your Local Insider"

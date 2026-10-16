@@ -1,6 +1,7 @@
 /**
- * Impact tab — travel footprint story seed.
- * Emotional recap language (not admin stats). Consumes IMPACT_VIEW for causes / passport / volunteer.
+ * Editorial Impact story seed.
+ * Do not render dropsEarned, leftBehind, comparisons or shareLine as a guest's personal record.
+ * The Impact screen reads lib/impact/ledger instead.
  */
 
 import { IMPACT_VIEW, type ImpactCause } from "@/lib/guest-workspace/productWorlds";

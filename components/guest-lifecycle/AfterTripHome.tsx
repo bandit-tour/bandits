@@ -312,6 +312,7 @@ export function AfterTripHome({
         <LinkChip label="Following" onPress={() => go("/following")} />
         <LinkChip label="Chat" onPress={() => go("/community")} />
         <LinkChip label="My Moments" onPress={() => go("/myMoment")} />
+        <LinkChip label="Impact" onPress={() => go("/impact")} />
         <LinkChip label="Experiences" onPress={() => go("/experiences")} />
       </View>
 
