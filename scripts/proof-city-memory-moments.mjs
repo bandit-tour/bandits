@@ -60,21 +60,23 @@ async function run() {
   const bodyA = await pageA.locator('body').innerText();
   const noGiantInitials =
     !/\b[SPTC1NREK]\s*\n\s*(Places|Loved|Moments|Cities|Following|Discover)/i.test(bodyA);
-  const hasJournal = /My Moments|My Places|My People|My Journeys|Add a Memory/i.test(bodyA);
+  const hasJournal = /Memories|My Places|My People|My Journeys|Add a Memory/i.test(bodyA);
+  const separatedFromMyMoments = /visual travel journal|My Moments/i.test(bodyA) &&
+    !/My Moments create personal memories/i.test(bodyA);
   const noRawUuid = !/[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}/i.test(
     bodyA.replace(/cityMemory|bandit\//gi, ''),
   );
 
   await pageA.getByTestId('city-memory-add-memory').click();
   await pageA.waitForTimeout(1500);
-  const marker = `QA Moment ${Date.now()}`;
+  const marker = `QA Memory ${Date.now()}`;
   await pageA.getByTestId('memory-title-input').fill(marker);
   await pageA.getByTestId('memory-story-input').fill('A private story from browser QA — should persist.');
   await pageA.getByTestId('memory-save-cta').click();
   await pageA.waitForTimeout(3500);
   const detailShot = await shot(pageA, '02-moment-detail.png');
   const detailBody = await pageA.locator('body').innerText();
-  const created = detailBody.includes(marker) && /Private Moment/i.test(detailBody);
+  const created = detailBody.includes(marker) && /Private Memory/i.test(detailBody);
 
   await pageA.reload({ waitUntil: 'domcontentloaded', timeout: 120000 });
   await pageA.waitForTimeout(2000);
@@ -102,7 +104,7 @@ async function run() {
   // Back to City Memory
   await pageA.goto(`${base}/cityMemory`, { waitUntil: 'domcontentloaded', timeout: 120000 });
   await pageA.waitForTimeout(2500);
-  const onCity = /My Moments|Add a Memory/i.test(await pageA.locator('body').innerText());
+  const onCity = /Memories|Add a Memory/i.test(await pageA.locator('body').innerText());
   const listed = (await pageA.locator('body').innerText()).includes(edited);
   const cityAfter = await shot(pageA, '04-city-memory-with-moment.png');
 
@@ -150,18 +152,30 @@ async function run() {
   if (!homeHas) {
     await pageA.goto(`${base}/cityMemory`, { waitUntil: 'domcontentloaded', timeout: 120000 });
     await pageA.waitForTimeout(1500);
-    homeHas = /Add a Memory|My Moments/i.test(await pageA.locator('body').innerText());
+    homeHas = /Add a Memory|Memories/i.test(await pageA.locator('body').innerText());
   }
   await pageA.goto(`${base}/menu`, { waitUntil: 'domcontentloaded', timeout: 120000 });
   await pageA.waitForTimeout(1500);
   await pageA.getByText('City Memory', { exact: true }).first().click();
   await pageA.waitForTimeout(2000);
-  const moreNav = /Add a Memory|My Moments/i.test(await pageA.locator('body').innerText());
+  const moreNav = /Add a Memory|Memories/i.test(await pageA.locator('body').innerText());
+
+  // My Moments remains a separate text product
+  await pageA.goto(`${base}/menu`, { waitUntil: 'domcontentloaded', timeout: 120000 });
+  await pageA.waitForTimeout(1200);
+  await pageA.getByText('My Moments', { exact: true }).first().click();
+  await pageA.waitForTimeout(2000);
+  const myMomentBody = await pageA.locator('body').innerText();
+  const myMomentSeparate =
+    /Eligible for bottle|Private today|Write my own|Shuffle inspiration|bottle discovery/i.test(
+      myMomentBody,
+    ) && !/Add a Memory|Photos, video, story/i.test(myMomentBody);
 
   const pass =
     okA &&
     okB &&
     hasJournal &&
+    separatedFromMyMoments &&
     noGiantInitials &&
     created &&
     persistReload &&
@@ -171,7 +185,8 @@ async function run() {
     bBlocked &&
     deleted &&
     homeHas &&
-    moreNav;
+    moreNav &&
+    myMomentSeparate;
 
   const result = {
     pass,
@@ -179,6 +194,7 @@ async function run() {
       okA,
       okB,
       hasJournal,
+      separatedFromMyMoments,
       noGiantInitials,
       noRawUuid,
       created,
@@ -190,9 +206,10 @@ async function run() {
       deleted,
       homeHas,
       moreNav,
+      myMomentSeparate,
     },
     shots: { before, detailShot, afterReload, cityAfter, bShot },
-    note: 'Photo/video picker requires interactive device permissions — text Moment persistence proven in headless.',
+    note: 'City Memory = visual journal. My Moments = separate text product at /myMoment. Photo picker not exercised headless.',
   };
   await fs.writeFile(path.join(out, 'manifest.json'), JSON.stringify(result, null, 2));
   console.log(JSON.stringify(result, null, 2));

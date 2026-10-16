@@ -1,5 +1,6 @@
 /**
- * Add / Edit a personal travel Moment — private by default.
+ * Add / Edit a City Memory entry (visual journal) — private by default.
+ * Not My Moments (text statuses for Bottle QR).
  */
 import { Image as ExpoImage } from "expo-image";
 import { Stack, useLocalSearchParams, useRouter, type Href } from "expo-router";
@@ -51,7 +52,7 @@ export default function AddTravelMemoryScreen() {
   const [refreshing, setRefreshing] = useState(false);
 
   const header = useAppBackScreenOptions({
-    title: editId ? "Edit Moment" : "Add a Memory",
+    title: editId ? "Edit Memory" : "Add a Memory",
     fallback: "/cityMemory" as Href,
     showBack: true,
     escapeShortcuts: true,
@@ -65,7 +66,7 @@ export default function AddTravelMemoryScreen() {
     try {
       const row = await getTravelMemory(editId);
       if (!row) {
-        alertMessage("Not found", "This Moment is missing or not yours.");
+        alertMessage("Not found", "This Memory is missing or not yours.");
         router.replace("/cityMemory" as Href);
         return;
       }
@@ -179,11 +180,11 @@ export default function AddTravelMemoryScreen() {
       testID="memory-add-scroll"
     >
       <Stack.Screen options={header} />
-      <Text style={styles.kicker}>Private by default</Text>
-      <Text style={styles.title}>{editId ? "Edit your Moment" : "New Moment"}</Text>
+      <Text style={styles.kicker}>City Memory · private by default</Text>
+      <Text style={styles.title}>{editId ? "Edit your Memory" : "New Memory"}</Text>
       <Text style={styles.lead}>
-        Photos and notes stay in your City Memory. They are never shared to Bottle discovery unless
-        you opt in later.
+        Photos and notes stay in your visual travel journal. They are not Bottle QR messages — those
+        live in My Moments.
       </Text>
 
       <Text style={styles.label}>Title</Text>
@@ -191,7 +192,7 @@ export default function AddTravelMemoryScreen() {
         style={styles.input}
         value={title}
         onChangeText={setTitle}
-        placeholder="Give this Moment a name"
+        placeholder="Give this Memory a name"
         placeholderTextColor={color.muted}
         testID="memory-title-input"
       />
@@ -271,7 +272,7 @@ export default function AddTravelMemoryScreen() {
         disabled={saving}
         testID="memory-save-cta"
       >
-        <Text style={styles.saveCtaText}>{saving ? "Saving…" : "Save Moment"}</Text>
+        <Text style={styles.saveCtaText}>{saving ? "Saving…" : "Save Memory"}</Text>
       </Pressable>
       <Pressable onPress={() => router.back()} style={styles.cancel}>
         <Text style={styles.cancelText}>Back to City Memory</Text>

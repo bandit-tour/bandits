@@ -1,7 +1,7 @@
 /**
- * City Memory — personal travel journal.
- * Sections: My Moments · My Places · My People · My Journeys · Still connected · Next Journey.
- * No giant initial-only placeholder cards.
+ * City Memory — visual travel journal (photos, places, people, journeys).
+ * Distinct from My Moments (`/myMoment`) — text statuses for Bottle QR discovery.
+ * Sections: Memories · My Places · My People · My Journeys · Still connected · Next Journey.
  */
 
 import { Image as ExpoImage } from "expo-image";
@@ -91,8 +91,8 @@ export function AfterTripHome({
       <Text style={styles.kicker}>City Memory</Text>
       <Text style={styles.title}>{model.memoryTitle}</Text>
       <Text style={styles.lead}>
-        My Moments create personal memories. City Memory keeps your places, people and journeys —
-        private by default.
+        Your visual travel journal — photos, saved places, people and cities. Private by default.
+        Personal Bottle messages live in My Moments.
       </Text>
 
       <HotelCheckoutInvite visible={showStayNotice} onConnectStay={onReactivate} />
@@ -108,17 +108,17 @@ export function AfterTripHome({
         <Text style={styles.addMemoryCtaDetail}>Photos, video, story, place and date</Text>
       </Pressable>
 
-      {/* MY MOMENTS */}
+      {/* MEMORIES — visual journal (not My Moments text statuses) */}
       <SectionHeader
-        title="My Moments"
-        actionLabel={personalMoments.length ? "See all" : undefined}
+        title="Memories"
+        actionLabel={personalMoments.length ? "Add another" : undefined}
         onAction={personalMoments.length ? () => go("/memory/add") : undefined}
       />
       {personalMoments.length === 0 ? (
         <EmptyRail
-          title="No Moments yet"
-          body="Capture a place, a face, a night — your story stays private until you choose to share."
-          cta="Create your first Moment"
+          title="No memories yet"
+          body="Capture a place, a face, a night — photos and stories stay in City Memory."
+          cta="Add your first Memory"
           onPress={() => go("/memory/add")}
           testID="city-memory-moments-empty"
         />
@@ -297,10 +297,10 @@ export function AfterTripHome({
 
       {!hasAnyMemory ? (
         <GuestDiscoveryCard
-          promptId="home_my_moments"
-          eyebrow="Start your scrapbook"
+          promptId="home_city_memory"
+          eyebrow="Start your journal"
           title="Your journey lives here"
-          body="Add a Moment, save a place, or follow a Local banDit — City Memory grows with you."
+          body="Add a Memory, save a place, or follow a Local banDit — City Memory grows with you."
           cta="Add a Memory"
           href="/memory/add"
         />
@@ -311,7 +311,7 @@ export function AfterTripHome({
       <View style={styles.linkRow}>
         <LinkChip label="Following" onPress={() => go("/following")} />
         <LinkChip label="Chat" onPress={() => go("/community")} />
-        <LinkChip label="Daily Moment" onPress={() => go("/myMoment")} />
+        <LinkChip label="My Moments" onPress={() => go("/myMoment")} />
         <LinkChip label="Experiences" onPress={() => go("/experiences")} />
       </View>
 

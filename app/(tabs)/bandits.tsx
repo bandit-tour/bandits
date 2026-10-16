@@ -307,22 +307,31 @@ export function BanditsScreen({ tabActive }: BanditsScreenProps = {}) {
           promptId="between_trips_city_memory"
           eyebrow={lifeState === 'NEXT_TRIP_PLANNING' ? 'Next trip' : 'Between trips'}
           title={afterTripHome.memoryTitle}
-          body="Your places, followed banDits and next journeys live in City Memory — not only in More."
+          body="Your photos, places, followed banDits and journeys live in City Memory — not only in More."
           cta="Open City Memory"
           href="/cityMemory"
           testID="home-discovery-city-memory"
         />
       ) : (
         <GuestDiscoveryCard
-          promptId="home_my_moments"
+          promptId="home_city_memory"
           eyebrow="During your stay"
           title="Start City Memory"
-          body="Add a private Moment with photos — or save places and follows. Your scrapbook grows here."
+          body="Add private photos and stories — or save places and follows. Your visual journal grows here."
           cta="Open City Memory"
           href="/cityMemory"
-          testID="home-discovery-my-moments"
+          testID="home-discovery-city-memory"
         />
       )}
+      <GuestDiscoveryCard
+        promptId="home_my_moments"
+        eyebrow="Personal expression"
+        title="My Moments"
+        body="Write a short personal message. With your consent it can be discovered in Bottle QR — never a photo scrapbook."
+        cta="Open My Moments"
+        href="/myMoment"
+        testID="home-discovery-my-moments"
+      />
       <GuestDiscoveryCard
         promptId="home_local_insider"
         eyebrow="Local access"

@@ -1,5 +1,6 @@
 /**
- * Personal Moment detail — private to owner; full-size media; edit/delete.
+ * City Memory detail — private to owner; full-size media; edit/delete.
+ * Not My Moments (text Bottle statuses).
  */
 import { Image as ExpoImage } from "expo-image";
 import { Stack, useLocalSearchParams, useRouter, type Href } from "expo-router";
@@ -60,7 +61,7 @@ export default function TravelMemoryDetailScreen() {
   const [refreshing, setRefreshing] = useState(false);
 
   const header = useAppBackScreenOptions({
-    title: "Moment",
+    title: "Memory",
     fallback: "/cityMemory" as Href,
     showBack: true,
     escapeShortcuts: true,
@@ -109,8 +110,8 @@ export default function TravelMemoryDetailScreen() {
   const onDelete = async () => {
     if (!row) return;
     const ok = await confirmDestructive(
-      "Delete Moment",
-      "Remove this Moment and its media from your City Memory?",
+      "Delete Memory",
+      "Remove this Memory and its media from your City Memory?",
     );
     if (!ok) return;
     try {
@@ -135,7 +136,7 @@ export default function TravelMemoryDetailScreen() {
     return (
       <View style={styles.boot}>
         <Stack.Screen options={header} />
-        <Text style={styles.missing}>This Moment is private or no longer available.</Text>
+        <Text style={styles.missing}>This Memory is private or no longer available.</Text>
         <Pressable onPress={goBack} style={styles.backBtn}>
           <Text style={styles.backBtnText}>← City Memory</Text>
         </Pressable>
@@ -152,7 +153,7 @@ export default function TravelMemoryDetailScreen() {
     >
       <Stack.Screen options={header} />
       <View style={styles.pad}>
-        <Text style={styles.private}>Private Moment</Text>
+        <Text style={styles.private}>Private Memory</Text>
         <Text style={styles.title}>{row.title}</Text>
         <Text style={styles.meta}>
           {[row.placeLabel || row.city, row.occurredAt.slice(0, 10)].filter(Boolean).join(" · ")}
@@ -182,7 +183,7 @@ export default function TravelMemoryDetailScreen() {
           onPress={() => router.push(`/memory/add?id=${encodeURIComponent(row.id)}` as Href)}
           testID="memory-edit-cta"
         >
-          <Text style={styles.editCtaText}>Edit Moment</Text>
+          <Text style={styles.editCtaText}>Edit Memory</Text>
         </Pressable>
         <Pressable style={styles.deleteCta} onPress={() => void onDelete()} testID="memory-delete-cta">
           <Text style={styles.deleteCtaText}>Delete</Text>
