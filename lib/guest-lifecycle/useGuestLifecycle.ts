@@ -11,10 +11,13 @@ import {
 } from "@/lib/guest-lifecycle";
 import { can, isAfterTripExperience, isFullStayAccess } from "@/lib/guest-lifecycle/access";
 import { buildAfterTripHome } from "@/lib/guest-lifecycle/city-memory";
+import { promotionPhaseForState, type StayPromotionPhase } from "@/lib/guest-lifecycle/promotion";
 import type { GuestAccessLevel, GuestLifecycleState } from "@/lib/guest-lifecycle/types";
 
-/** QA / Playwright: `?guestState=AFTER_TRIP|PRE_TRIP|ACTIVE_STAY` on web. */
-function webGuestStateOverride(): GuestLifecycleState | null {
+type GuestStateQuery = GuestLifecycleState | "NEAR_CHECKOUT" | "UNKNOWN";
+
+/** QA / Playwright: `?guestState=` presentation only. UNKNOWN does not invent a finished trip. */
+function webGuestStateOverride(): GuestStateQuery | null {
   if (Platform.OS !== "web" || typeof window === "undefined") return null;
   try {
     const raw = new URLSearchParams(window.location.search).get("guestState");
@@ -23,7 +26,9 @@ function webGuestStateOverride(): GuestLifecycleState | null {
       raw === "PRE_TRIP" ||
       raw === "ACTIVE_STAY" ||
       raw === "NEXT_TRIP_PLANNING" ||
-      raw === "REACTIVATED"
+      raw === "REACTIVATED" ||
+      raw === "NEAR_CHECKOUT" ||
+      raw === "UNKNOWN"
     ) {
       return raw;
     }
@@ -44,7 +49,7 @@ export function useGuestLifecycle() {
   const [snap, setSnap] = useState<GuestLifecycleSnapshot | null>(null);
   const [loading, setLoading] = useState(true);
   /** Re-read on every render so SSR/null window does not permanently cache null. */
-  const [override, setOverride] = useState<GuestLifecycleState | null>(() => webGuestStateOverride());
+  const [override, setOverride] = useState<GuestStateQuery | null>(() => webGuestStateOverride());
 
   useEffect(() => {
     setOverride(webGuestStateOverride());
@@ -83,8 +88,29 @@ export function useGuestLifecycle() {
 
   const baseAccess = snap?.lifecycle.accessLevel ?? "PRE_TRIP";
   const baseState = snap?.lifecycle.state ?? "PRE_TRIP";
-  const state = override ?? baseState;
-  const access = override ? accessForOverride(override) : baseAccess;
+  const forcedUnknown = override === "UNKNOWN" || (loading && !override);
+  const nearCheckout =
+    !forcedUnknown &&
+    (override === "NEAR_CHECKOUT" || snap?.lifecycle.checkoutWindowOpen === true);
+  const state: GuestLifecycleState = forcedUnknown
+    ? "PRE_TRIP"
+    : override === "NEAR_CHECKOUT"
+      ? "ACTIVE_STAY"
+      : override && override !== "UNKNOWN"
+        ? override
+        : baseState;
+  const access = forcedUnknown
+    ? "PRE_TRIP"
+    : override && override !== "UNKNOWN" && override !== "NEAR_CHECKOUT"
+      ? accessForOverride(override)
+      : nearCheckout
+        ? "FULL_STAY"
+        : override
+          ? accessForOverride(state)
+          : baseAccess;
+  const phase: StayPromotionPhase = forcedUnknown
+    ? "unknown"
+    : promotionPhaseForState(state, nearCheckout);
   const afterTripHome = snap ? buildAfterTripHome(snap) : null;
 
   return {
@@ -92,14 +118,17 @@ export function useGuestLifecycle() {
     loading,
     refresh,
     state,
+    phase,
+    nearCheckout,
     access,
     mode: snap?.lifecycle.mode ?? "PRE_TRIP_MODE",
     activeStay:
-      override && override !== "ACTIVE_STAY" && override !== "REACTIVATED"
+      forcedUnknown ||
+      (override && override !== "ACTIVE_STAY" && override !== "REACTIVATED" && override !== "NEAR_CHECKOUT")
         ? null
         : (snap?.activeStay ?? null),
-    isFullStay: isFullStayAccess(access),
-    isAfterTrip: isAfterTripExperience(state),
+    isFullStay: phase === "during_stay" || phase === "near_checkout" || isFullStayAccess(access),
+    isAfterTrip: phase === "after_checkout" || phase === "between_trips" || isAfterTripExperience(state),
     can: (cap: Parameters<typeof can>[1]) => can(access, cap),
     afterTripHome,
   };

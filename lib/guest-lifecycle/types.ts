@@ -91,6 +91,8 @@ export type GuestLifecycleRecord = {
   lastReactivatedAt: string | null;
   lastActivationAt: string | null;
   conciergeEntitled: boolean;
+  /** Set only by an explicit hotel checkout-window action. Never from the clock. */
+  checkoutWindowOpen?: boolean;
   tasteSummary: Record<string, unknown>;
   createdAt: string;
   updatedAt: string;

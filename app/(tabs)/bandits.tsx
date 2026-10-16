@@ -21,7 +21,6 @@ import { fetchSWR, invalidateAppDataCache, readCacheStale } from '@/lib/appDataC
 import { BANDITS_ROWS_CACHE_KEY, persistBanditsHomeSnapshot } from '@/lib/banditsHomeCache';
 import { Database } from '@/lib/database.types';
 import { ensureAnonymousSession, getHotelEntry } from '@/lib/pilotSession';
-import { useGuestLifecycle } from '@/lib/guest-lifecycle/useGuestLifecycle';
 import { trackEvent } from '@/lib/analytics';
 import { usePremiumRefreshControl } from '@/lib/mobilePullToRefresh';
 import { useUpperTabHost } from '@/contexts/UpperTabHostContext';
@@ -30,7 +29,6 @@ import { useScreenFocused } from '@/lib/useScreenFocused';
 import { useGuestLiveSurface } from '@/lib/orchestra/useGuestLiveSurface';
 import { buildEventListImagePlan, getEventDbImageCandidatesOrdered } from '@/lib/eventListImagePlan';
 import { resolveApprovedListHeroUrisByEventId } from '@/lib/recommendationImages';
-import { GuestDiscoveryCard } from '@/components/GuestDiscoveryCard';
 
 
 type BanditRow = Database['public']['Tables']['bandit']['Row'];
@@ -298,72 +296,6 @@ export function BanditsScreen({ tabActive }: BanditsScreenProps = {}) {
     );
   }, [loadedOnce, rows.length, loadError, fetchRows]);
 
-  const { isAfterTrip, afterTripHome, state: lifeState } = useGuestLifecycle();
-
-  const listHeader = (
-    <View>
-      {isAfterTrip && afterTripHome ? (
-        <GuestDiscoveryCard
-          promptId="between_trips_city_memory"
-          eyebrow={lifeState === 'NEXT_TRIP_PLANNING' ? 'Next trip' : 'Between trips'}
-          title={afterTripHome.memoryTitle}
-          body="Your photos, places, followed banDits and journeys live in City Memory — not only in More."
-          cta="Open City Memory"
-          href="/cityMemory"
-          testID="home-discovery-city-memory"
-        />
-      ) : (
-        <GuestDiscoveryCard
-          promptId="home_city_memory"
-          eyebrow="During your stay"
-          title="Start City Memory"
-          body="Add private photos and stories — or save places and follows. Your visual journal grows here."
-          cta="Open City Memory"
-          href="/cityMemory"
-          testID="home-discovery-city-memory"
-        />
-      )}
-      <GuestDiscoveryCard
-        promptId="home_my_moments"
-        eyebrow="Personal expression"
-        title="My Moments"
-        body="Write a short personal message. With your consent it can be discovered in Bottle QR — never a photo scrapbook."
-        cta="Open My Moments"
-        href="/myMoment"
-        testID="home-discovery-my-moments"
-      />
-      {isAfterTrip ? (
-        <GuestDiscoveryCard
-          promptId="home_dream_destinations"
-          eyebrow="Where next?"
-          title="Dream Destinations"
-          body="Save Vietnam, Japan or anywhere you want next. We remember it after checkout — without inventing bookings."
-          cta="Choose a destination"
-          href="/dreamDestinations"
-          testID="home-discovery-dream"
-        />
-      ) : null}
-      <GuestDiscoveryCard
-        promptId="home_impact"
-        eyebrow="What you leave behind"
-        title="Your Impact"
-        body="Verified local choices can earn Drops and a personal Passport. Nothing is counted until an action is confirmed."
-        cta="Open Impact"
-        href="/impact"
-        testID="home-discovery-impact"
-      />
-      <GuestDiscoveryCard
-        promptId="home_local_insider"
-        eyebrow="Local access"
-        title="Your Local Insider"
-        body="Premium concierge with eligible Local banDits — open when you want a deeper Athens invite."
-        cta="See Local Insider"
-        href="/account/membership"
-        testID="home-discovery-local-insider"
-      />
-    </View>
-  );
-
   if (!screenActive) {
     return <View style={styles.screen} />;
   }
@@ -372,7 +304,6 @@ export function BanditsScreen({ tabActive }: BanditsScreenProps = {}) {
   if (!loadedOnce) {
     return (
       <View style={styles.screen}>
-        {listHeader}
         <View style={[styles.listContent, { gap: 14 }]}>
           {[0, 1, 2].map((i) => (
             <EventCardSkeleton key={i} />
@@ -384,7 +315,6 @@ export function BanditsScreen({ tabActive }: BanditsScreenProps = {}) {
 
   return (
     <View style={styles.screen}>
-      {listHeader}
       <FlatList
         ref={listRef}
         style={styles.listFlex}

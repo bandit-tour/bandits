@@ -381,6 +381,11 @@ export default function HotelierGuestHomeScreen() {
         ))}
       </View>
 
+      {isFullStay ? (
+        <Text style={styles.sectionLead} testID="hotelier-stay-now">
+          This stay comes first. City Memory and Travel in a Bottle stay in More until you are ready.
+        </Text>
+      ) : (
       <View style={styles.nextJourneyRow}>
         <Pressable
           style={({ pressed }) => [styles.nextJourneyCard, pressed && styles.pressed]}
@@ -403,6 +408,7 @@ export default function HotelierGuestHomeScreen() {
           <Text style={styles.nextJourneyDetail}>Hotel nights + a second place to sleep.</Text>
         </Pressable>
       </View>
+      )}
     </ScrollView>
   );
 }

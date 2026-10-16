@@ -90,15 +90,13 @@ export function discoveryLaneForLifecycle(_opts: {
   return DISCOVERY_LANE_STAY;
 }
 
-/** Bottle is a next-trip product — promote on Home when not mid-stay (not in upper rail). */
+/** Bottle is a next-trip product — promote on Home only after checkout, not on arrival. */
 export function bottleIsPrimaryInvite(opts: {
   isFullStay?: boolean;
   state?: string | null;
 }): boolean {
   const state = String(opts.state || "");
-  const midStay =
-    opts.isFullStay === true || state === "ACTIVE_STAY" || state === "REACTIVATED";
-  return !midStay;
+  return state === "AFTER_TRIP" || state === "NEXT_TRIP_PLANNING";
 }
 
 export function bottlePrimaryInviteCopy(opts: {

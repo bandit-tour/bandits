@@ -80,12 +80,11 @@ export async function transitionCheckout(opts?: {
   try {
     const { recordLifecycleNotice } = await import("@/lib/lifecycle/notices");
     await recordLifecycleNotice({
-      id: `checkout_${snap.lifecycle.lastCheckedOutAt || snap.lifecycle.updatedAt}`,
+      id: `after_checkout_${snap.lifecycle.userId}`,
       userId: snap.lifecycle.userId,
-      title: "Stay complete",
-      message:
-        "Your hotel stay ended. City Memory stays with you — choose a dream destination when you are ready.",
-      href: "/dreamDestinations",
+      title: "Your journey doesn't end here.",
+      message: "Explore your memories. City Memory stays with you.",
+      href: "/cityMemory",
     });
   } catch {
     /* inbox notice is best-effort */
@@ -157,6 +156,16 @@ export async function transitionStartTripPlanning(opts?: {
     });
     void emitLifecycleAnalytics("guest.started_trip_planning", next);
     void publishLifecycleLiveEvent("guest.started_trip_planning", next);
+    const uid = next.lifecycle.userId;
+    void import("@/lib/lifecycle/notices").then(({ recordLifecycleNotice }) =>
+      recordLifecycleNotice({
+        id: `between_trips_${uid}`,
+        userId: uid,
+        title: "Where would you love to go next?",
+        message: "Choose a Dream Destination when you want inspiration — not a new booking.",
+        href: "/dreamDestinations",
+      }),
+    );
     syncTransitionToWorkspace("start_trip_planning", {
       intent: opts?.intent,
       destination: opts?.destination,

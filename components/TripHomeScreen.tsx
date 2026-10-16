@@ -30,6 +30,7 @@ import {
 
 import { getBanditsWithTags } from '@/app/services/bandits';
 import ExploreBanditLane from '@/components/ExploreBanditLane';
+import { GuestDiscoveryCard } from '@/components/GuestDiscoveryCard';
 import LocalBanditOctopusIcon from '@/components/LocalBanditOctopusIcon';
 import { useCity } from '@/contexts/CityContext';
 import { Database } from '@/lib/database.types';
@@ -40,7 +41,9 @@ import {
 } from '@/lib/guest-app/premium-visibility';
 import { useAppState } from '@/contexts/AppStateContext';
 import { primaryDreamDestination, type DreamDestination } from '@/lib/dream-destinations/store';
+import { showBetweenTripsModule } from '@/lib/guest-lifecycle/promotion';
 import { useGuestLifecycle } from '@/lib/guest-lifecycle/useGuestLifecycle';
+import { recordLifecycleNotice } from '@/lib/lifecycle/notices';
 import { liveHotelDisplayName } from '@/lib/stay/liveHotelIdentity';
 import { ensureAnonymousSession, getHotelEntry, type HotelEntry } from '@/lib/pilotSession';
 import { usePremiumRefreshControl } from '@/lib/mobilePullToRefresh';
@@ -96,8 +99,9 @@ export default function TripHomeScreen() {
   const router = useRouter();
   const { height } = useWindowDimensions();
   const { selectedCity } = useCity();
-  const { isAfterTrip, state: lifeState, activeStay, isFullStay, refresh } = useGuestLifecycle();
-  const { activeIdentity } = useAppState();
+  const { state: lifeState, phase, activeStay, isFullStay, refresh, snap } =
+    useGuestLifecycle();
+  const { activeIdentity, getCurrentUser } = useAppState();
   const [hotel, setHotel] = useState<HotelEntry | null>(null);
   const [bandits, setBandits] = useState<Bandit[]>([]);
   const [loadingBandits, setLoadingBandits] = useState(true);
@@ -150,9 +154,10 @@ export default function TripHomeScreen() {
     void onRefresh();
   });
 
-  const stayCity = selectedCity || activeStay?.city || 'Athens';
-  /** Between trips: prefer the guest's dream destination over endlessly repeating the last stay city. */
-  const city = isAfterTrip && dream?.name ? dream.name : stayCity;
+  const stayCity = selectedCity || activeStay?.city || snap?.lifecycle.lastCity || 'Athens';
+  const showBetween = showBetweenTripsModule(phase);
+  /** Dream focus replaces the last city only once the stay has actually ended. */
+  const city = showBetween && dream?.name ? dream.name : stayCity;
   const hotelName =
     liveHotelDisplayName({
       stayName: activeStay?.hotelName,
@@ -168,26 +173,77 @@ export default function TripHomeScreen() {
   const heroH = Math.max(280, Math.min(height * 0.38, 360));
 
   const stayContextLine = useMemo(() => {
-    if (isAfterTrip) return 'Between trips · city memory open';
+    if (phase === 'unknown') return `${stayCity} · discover the city`;
+    if (phase === 'before_stay') return `Welcome · ${hotelName}`;
+    if (phase === 'near_checkout') return `Still your stay · ${hotelName}`;
+    if (showBetween) return 'Between trips';
     if (isFullStay && roomLabel) return `${hotelName} · ${roomLabel}`;
     if (isFullStay) return `Stay active · ${hotelName}`;
-    if (activeStay) return `Connected · ${hotelName}`;
-    return `${city} · guest access`;
-  }, [isAfterTrip, isFullStay, roomLabel, hotelName, activeStay, city]);
+    return `${stayCity} · guest access`;
+  }, [phase, showBetween, isFullStay, roomLabel, hotelName, stayCity]);
 
   const lifeLabel = useMemo(() => {
-    switch (lifeState) {
-      case 'ACTIVE_STAY':
-      case 'REACTIVATED':
+    switch (phase) {
+      case 'during_stay':
         return 'During stay';
-      case 'AFTER_TRIP':
-        return 'After trip';
-      case 'NEXT_TRIP_PLANNING':
-        return 'Planning next';
+      case 'near_checkout':
+        return 'Your stay';
+      case 'after_checkout':
+        return 'After checkout';
+      case 'between_trips':
+        return 'Between trips';
+      case 'before_stay':
+        return 'Before arrival';
       default:
-        return 'Before trip';
+        return 'Discover';
     }
-  }, [lifeState]);
+  }, [phase]);
+
+  useEffect(() => {
+    if (phase === 'unknown' || phase === 'before_stay' || phase === 'during_stay') return;
+    const memoryCity = activeStay?.city || snap?.lifecycle.lastCity || 'your';
+    const stayId = activeStay?.id || snap?.lifecycle.activeStayId || 'stay';
+    void (async () => {
+      const user = await getCurrentUser().catch(() => null);
+      const uid = user?.id || activeIdentity?.userId;
+      if (!uid) return;
+      if (phase === 'near_checkout') {
+        await recordLifecycleNotice({
+          id: `near_checkout_${stayId}`,
+          userId: uid,
+          title: `Your ${memoryCity} memories are yours to keep.`,
+          message: 'Open City Memory whenever you want them. This stay is still yours tonight.',
+          href: '/cityMemory',
+        });
+      }
+      if (phase === 'after_checkout') {
+        await recordLifecycleNotice({
+          id: `after_checkout_${uid}`,
+          userId: uid,
+          title: "Your journey doesn't end here.",
+          message: 'Explore your memories.',
+          href: '/cityMemory',
+        });
+      }
+      if (phase === 'between_trips') {
+        await recordLifecycleNotice({
+          id: `between_trips_${uid}`,
+          userId: uid,
+          title: 'Where would you love to go next?',
+          message: 'Choose a Dream Destination when you want inspiration — not a new booking.',
+          href: '/dreamDestinations',
+        });
+      }
+    })();
+  }, [
+    activeIdentity?.userId,
+    activeStay?.city,
+    activeStay?.id,
+    getCurrentUser,
+    phase,
+    snap?.lifecycle.activeStayId,
+    snap?.lifecycle.lastCity,
+  ]);
 
   /**
    * P0: Home must NEVER trap in Between Trips (full AfterTripHome).
@@ -200,57 +256,44 @@ export default function TripHomeScreen() {
       refreshControl={refreshControl}
       testID="trip-home-scroll"
     >
-      {isAfterTrip ? (
-        <View style={styles.betweenTripsBanner} testID="home-between-trips-banner">
-          <Text style={styles.betweenTripsKicker}>Between trips</Text>
-          <Text style={styles.betweenTripsTitle}>Keep discovering</Text>
-          <Text style={styles.betweenTripsLead}>
-            Your stay ended. Your City Memory, Moments and chats stay with you — plan the next sleep
-            when you are ready.
+      {phase === 'near_checkout' ? (
+        <View style={styles.nearCheckoutWrap}>
+          <GuestDiscoveryCard
+            promptId="near_checkout_memory"
+            eyebrow="Before you leave"
+            title={`Your ${stayCity} memories are yours to keep.`}
+            body="Optional. Stay with tonight if you are not ready to look back."
+            cta="Open City Memory"
+            href="/cityMemory"
+            testID="home-near-checkout-prompt"
+          />
+        </View>
+      ) : null}
+
+      {showBetween ? (
+        <View style={styles.betweenCompact} testID="home-between-trips-banner">
+          <Text style={styles.betweenCompactKicker}>Between trips</Text>
+          <Text style={styles.betweenCompactLine}>
+            Memories, a next place, or a new stay — when you want them.
           </Text>
-          <View style={styles.betweenTripsRow}>
-            <Pressable
-              style={({ pressed }) => [styles.betweenTripsBtn, pressed && styles.pressed]}
-              onPress={() => router.push('/cityMemory' as Href)}
-              accessibilityRole="button"
-              testID="home-between-city-memory"
-            >
-              <Text style={styles.betweenTripsBtnText}>City Memory</Text>
+          <View style={styles.betweenLinks}>
+            <Pressable onPress={() => router.push('/cityMemory' as Href)} testID="home-between-city-memory">
+              <Text style={styles.betweenLink}>City Memory</Text>
             </Pressable>
-            <Pressable
-              style={({ pressed }) => [styles.betweenTripsBtnGhost, pressed && styles.pressed]}
-              onPress={() => router.push('/dreamDestinations' as Href)}
-              accessibilityRole="button"
-              testID="home-between-dream"
-            >
-              <Text style={styles.betweenTripsBtnGhostText}>
-                {dream ? `Next · ${dream.name}` : 'Where next?'}
-              </Text>
+            <Pressable onPress={() => router.push('/dreamDestinations' as Href)} testID="home-between-dream">
+              <Text style={styles.betweenLink}>{dream ? `Next · ${dream.name}` : 'Where next?'}</Text>
             </Pressable>
-          </View>
-          <View style={styles.betweenTripsRow}>
-            <Pressable
-              style={({ pressed }) => [styles.betweenTripsBtnGhost, pressed && styles.pressed]}
-              onPress={() => router.push('/travelBottle' as Href)}
-              accessibilityRole="button"
-              testID="home-between-bottle"
-            >
-              <Text style={styles.betweenTripsBtnGhostText}>Travel in a Bottle</Text>
+            <Pressable onPress={() => router.push('/travelBottle' as Href)} testID="home-between-bottle">
+              <Text style={styles.betweenLink}>Travel in a Bottle</Text>
             </Pressable>
-            <Pressable
-              style={({ pressed }) => [styles.betweenTripsBtnGhost, pressed && styles.pressed]}
-              onPress={() => router.push('/reactivateStay' as Href)}
-              accessibilityRole="button"
-              testID="home-between-connect"
-            >
-              <Text style={styles.betweenTripsBtnGhostText}>Connect stay</Text>
+            <Pressable onPress={() => router.push('/reactivateStay' as Href)} testID="home-between-connect">
+              <Text style={styles.betweenLink}>Connect stay</Text>
             </Pressable>
           </View>
           {dream ? (
-            <Text style={styles.betweenTripsDream} testID="home-dream-focus">
+            <Text style={styles.betweenDream} testID="home-dream-focus">
               Dream focus: {dream.name}
-              {dream.timing ? ` · ${dream.timing}` : ''}. Inspiration follows this destination — no
-              invented bookings.
+              {dream.timing ? ` · ${dream.timing}` : ''}. No invented bookings.
             </Text>
           ) : null}
         </View>
@@ -260,7 +303,7 @@ export default function TripHomeScreen() {
       <View style={styles.contextBar} testID="home-destination-context">
         <View style={styles.contextLeft}>
           <Text style={styles.contextKicker}>
-            {isAfterTrip && dream ? 'Dream destination' : 'Destination'}
+            {showBetween && dream ? 'Dream destination' : phase === 'before_stay' ? 'Arriving' : 'Destination'}
           </Text>
           <Text style={styles.contextCity} numberOfLines={1}>
             {city}
@@ -497,7 +540,7 @@ export default function TripHomeScreen() {
           accent="#2A3A2A"
           onPress={() => router.push('/smarttraveler' as Href)}
         />
-        {!isFullStay ? (
+        {showBetween ? (
           <SectionRow
             title="Travel in a Bottle"
             sub="Mix sleeping experiences for the next trip"
@@ -537,6 +580,29 @@ const styles = StyleSheet.create({
     lineHeight: 17,
     color: 'rgba(232,197,71,0.95)',
   },
+  nearCheckoutWrap: { marginHorizontal: space.lg, marginTop: 12 },
+  betweenCompact: {
+    marginHorizontal: space.lg,
+    marginTop: 12,
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    borderRadius: 12,
+    backgroundColor: color.surface,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: color.hairline,
+    gap: 6,
+  },
+  betweenCompactKicker: {
+    fontSize: 10,
+    fontWeight: '800',
+    letterSpacing: 0.7,
+    textTransform: 'uppercase',
+    color: color.muted,
+  },
+  betweenCompactLine: { fontSize: 14, lineHeight: 20, color: color.ink },
+  betweenLinks: { flexDirection: 'row', flexWrap: 'wrap', gap: 12 },
+  betweenLink: { fontSize: 13, fontWeight: '700', color: color.ink, textDecorationLine: 'underline' },
+  betweenDream: { fontSize: 12, color: color.muted },
   betweenTripsBanner: {
     marginHorizontal: space.lg,
     marginTop: 12,

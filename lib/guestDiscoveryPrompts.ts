@@ -12,7 +12,8 @@ export type DiscoveryPromptId =
   | 'home_impact'
   | 'home_dream_destinations'
   | 'between_trips_city_memory'
-  | 'bandit_local_insider';
+  | 'bandit_local_insider'
+  | 'near_checkout_memory';
 
 type PromptRecord = {
   dismissedAt?: string;

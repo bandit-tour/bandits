@@ -205,18 +205,20 @@ export default function MenuScreen() {
   const { width } = useWindowDimensions();
   const isDesktopWeb = Platform.OS === "web" && width >= 1000;
   const { activeIdentity } = useAppState();
-  const { isFullStay, state: lifeState, activeStay, refresh: refreshLife } = useGuestLifecycle();
+  const { isFullStay, isAfterTrip, state: lifeState, activeStay, refresh: refreshLife } = useGuestLifecycle();
   const [ownerPrivateMenuAllowed, setOwnerPrivateMenuAllowed] = React.useState(false);
   const [authHydrated, setAuthHydrated] = React.useState(false);
   const [refreshing, setRefreshing] = React.useState(false);
   const [hotelName, setHotelName] = React.useState("");
   const [avatarFailed, setAvatarFailed] = React.useState(false);
 
-  const roomLabel = activeStay?.roomNumber
-    ? `Room ${activeStay.roomNumber}`
-    : isFullStay
-      ? "In stay"
-      : "Between trips";
+  const roomLabel = isFullStay
+    ? activeStay?.roomNumber
+      ? `Room ${activeStay.roomNumber}`
+      : "In stay"
+    : isAfterTrip
+      ? "Between trips"
+      : "Before arrival";
 
   const guestName = activeIdentity?.displayName?.trim() || "Guest";
   const avatarUrl = activeIdentity?.avatarUrl?.trim() || "";

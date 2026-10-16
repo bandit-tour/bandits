@@ -1,0 +1,27 @@
+{
+  "checks": {
+    "activeNoBetween": true,
+    "activeDuring": true,
+    "beforeNoEndOfTrip": true,
+    "beforeArrival": true,
+    "nearPrompt": true,
+    "nearNoBetweenModule": true,
+    "nearDismissed": true,
+    "nearNotice": true,
+    "nearDeepLink": true,
+    "afterCompact": true,
+    "afterLinks": true,
+    "unknownNeutral": true,
+    "unknownDiscover": true,
+    "returnCompact": true,
+    "betweenNotice": true,
+    "betweenDeepLink": true,
+    "afterNotice": true,
+    "afterDeepLink": true,
+    "banditsLead": true,
+    "experiencesLead": true,
+    "smartLead": true,
+    "cityMemoryRoute": true
+  },
+  "pass": true
+}
