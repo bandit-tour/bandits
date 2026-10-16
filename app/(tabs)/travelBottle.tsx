@@ -12,6 +12,7 @@ import {
   View,
 } from "react-native";
 
+import { BottleDateRangeField, humanDate } from "@/components/BottleDateRangeField";
 import { TravelBottleMixLoading } from "@/components/TravelBottleMixLoading";
 import { useAppBackScreenOptions } from "@/hooks/useAppBackScreenOptions";
 import {
@@ -357,6 +358,8 @@ export function BottleProductScreen() {
 
   const hotelNights = totalNights && totalNights >= 2 ? totalNights - 1 : 1;
   const hotelName = connectedHotel?.name || "";
+  const datesReady = Boolean(checkIn && checkOut && totalNights && totalNights >= 2);
+  const canMix = destination.trim().length >= 2 && datesReady && travelers >= 1 && !mixing;
 
   const mixSleepingExperiences = useCallback(async () => {
     const place = destination.trim();
@@ -543,21 +546,14 @@ export function BottleProductScreen() {
           </View>
           <View style={styles.askField}>
             <Text style={styles.planLabel}>When?</Text>
-            <TextInput
-              testID="bottle-check-in"
-              value={checkIn}
-              onChangeText={setCheckIn}
-              placeholder="Check-in YYYY-MM-DD"
-              placeholderTextColor="#8A8178"
-              style={styles.askInput}
-            />
-            <TextInput
-              testID="bottle-check-out"
-              value={checkOut}
-              onChangeText={setCheckOut}
-              placeholder="Check-out YYYY-MM-DD"
-              placeholderTextColor="#8A8178"
-              style={[styles.askInput, { marginTop: 8 }]}
+            <BottleDateRangeField
+              checkIn={checkIn}
+              checkOut={checkOut}
+              onChange={(nextIn, nextOut) => {
+                setCheckIn(nextIn);
+                setCheckOut(nextOut);
+                setFormError(null);
+              }}
             />
           </View>
           <View style={styles.askField}>
@@ -602,8 +598,8 @@ export function BottleProductScreen() {
         ) : null}
 
         <Pressable
-          style={[styles.mixCta, mixing && styles.mixCtaDisabled]}
-          disabled={mixing}
+          style={[styles.mixCta, !canMix && styles.mixCtaDisabled]}
+          disabled={!canMix}
           onPress={() => void mixSleepingExperiences()}
           accessibilityRole="button"
           accessibilityLabel="Mix My Sleeping Experiences"
@@ -653,7 +649,7 @@ export function BottleProductScreen() {
         <View style={styles.emptyBlock} testID="bottle-catalog-empty">
           <Text style={styles.emptyTitle}>No combination for these dates</Text>
           <Text style={styles.empty}>
-            {`Mixed sleeping stays are not available yet for ${destination.trim()} from ${checkIn} to ${checkOut}.`}
+            {`Mixed sleeping stays are not available yet for ${destination.trim()} from ${humanDate(checkIn)} to ${humanDate(checkOut)}.`}
           </Text>
           <Pressable
             testID="bottle-notify-consent"
@@ -806,7 +802,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     alignItems: "center",
   },
-  mixCtaDisabled: { opacity: 0.7 },
+  mixCtaDisabled: { opacity: 0.4 },
   askPanel: { paddingHorizontal: 20, gap: 16, marginTop: 8 },
   askPanelRow: { flexDirection: "row", alignItems: "flex-start" },
   askField: { flex: 1, minWidth: 200 },

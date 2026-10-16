@@ -1,0 +1,31 @@
+{
+  "checks": {
+    "mixDisabledInitially": true,
+    "noRawDatePrompt": true,
+    "noDateTextInputs": true,
+    "calendarOpens": true,
+    "pastDateIgnored": true,
+    "escapeCloses": true,
+    "humanDates": true,
+    "eightNights": true,
+    "rangeHighlighted": true,
+    "calendarClosedAfterRange": true,
+    "noChoosePromptAfterDates": true,
+    "mixStillDisabledWithoutDestination": true,
+    "nightsOnField": true,
+    "mixEnabled": true,
+    "workspaceDates": true,
+    "noChoosePromptAfterMix": true,
+    "refreshClearsDates": true,
+    "keyboardSelectsArrival": true,
+    "editedNights": true,
+    "editedDatesSent": true,
+    "mobileCalendarOpens": true
+  },
+  "api": [
+    "http://localhost:8082/__workspace/api/public/bottle/stays?destination=Athens&checkIn=2026-11-02&checkOut=2026-11-10&travelers=2",
+    "http://localhost:8082/__workspace/api/public/bottle/stays?destination=Athens&checkIn=2026-11-16&checkOut=2026-11-20&travelers=2"
+  ],
+  "notes": [],
+  "pass": true
+}

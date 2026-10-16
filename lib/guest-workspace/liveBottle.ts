@@ -138,11 +138,17 @@ export async function searchMixedSleeps(input: {
   hotelName?: string | null;
 }): Promise<BottleCatalogResult> {
   const totalNights = nightsBetween(input.checkIn, input.checkOut);
+  const query = new URLSearchParams({
+    destination: input.destination,
+    checkIn: input.checkIn,
+    checkOut: input.checkOut,
+    travelers: String(input.travelers),
+  });
   const result = await workspaceGet<{
     ok?: boolean;
     stays?: WorkspaceBottleStay[];
     demoStays?: { id?: string }[];
-  }>("/api/public/bottle/stays");
+  }>(`/api/public/bottle/stays?${query.toString()}`);
 
   if (!result.ok) {
     return {
