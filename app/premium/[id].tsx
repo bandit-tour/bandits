@@ -252,6 +252,10 @@ export default function PremiumConciergeScreen() {
   /** Return from Commerce success URL (?paid=1&order=…) → claim entitlement → open ops. */
   useEffect(() => {
     if (!id || paidFlag !== "1" || !orderFromUrl || claimingPaid) return;
+    if (!guestEmail) {
+      setCheckoutMsg("Sign in with the same account you paid with to unlock Your Local Insider.");
+      return;
+    }
     let cancelled = false;
     (async () => {
       setClaimingPaid(true);
@@ -260,7 +264,7 @@ export default function PremiumConciergeScreen() {
         await syncWorkspacePremiumEntitlement({
           banditId: id,
           orderId: orderFromUrl,
-          guestEmail: guestEmail || "guest@banditour.demo",
+          guestEmail,
           guestId,
         });
         if (!cancelled) await refreshEntitlement();
@@ -275,6 +279,10 @@ export default function PremiumConciergeScreen() {
 
   const onUnlock = async () => {
     if (!id || checkoutBusy) return;
+    if (!guestEmail) {
+      setCheckoutMsg("Sign in to unlock Your Local Insider.");
+      return;
+    }
     setCheckoutBusy(true);
     setCheckoutMsg(null);
     try {
@@ -296,7 +304,7 @@ export default function PremiumConciergeScreen() {
         await syncWorkspacePremiumEntitlement({
           banditId: id,
           orderId: result.orderId,
-          guestEmail: guestEmail || "guest@banditour.demo",
+          guestEmail,
           guestId,
         });
         await refreshEntitlement();
@@ -313,7 +321,7 @@ export default function PremiumConciergeScreen() {
             await syncWorkspacePremiumEntitlement({
               banditId: id,
               orderId,
-              guestEmail: guestEmail || "guest@banditour.demo",
+              guestEmail,
               guestId,
             });
             await refreshEntitlement();
@@ -331,6 +339,17 @@ export default function PremiumConciergeScreen() {
 
   const submitAsk = (serviceLabel = "Special requests") => {
     if (!entitlement || !assertConciergeOpsAllowed(entitlement)) return;
+    if (!guestEmail) {
+      setSentMsg("Sign in required to send a concierge request.");
+      return;
+    }
+    if (
+      typeof entitlement.requestsRemaining === "number" &&
+      entitlement.requestsRemaining <= 0
+    ) {
+      setSentMsg("Stay Pass allowance used up for this stay — renew to send more requests.");
+      return;
+    }
     const t = askText.trim();
     if (!t) return;
     const task = createConciergeTaskStub(entitlement, {
@@ -345,11 +364,29 @@ export default function PremiumConciergeScreen() {
       banditId: id,
       service: serviceLabel,
       note: t,
-      guestEmail: guestEmail || "guest@banditour.demo",
+      guestEmail,
       guestId: entitlement.guestId,
     }).then((r) => {
-      if (!r.ok) setSentMsg(`Request saved · ${r.detail}`);
-      else setSentMsg(`${OCTOPUS_CONCIERGE_PRODUCT_LAW.guestVoice.handling(first)} · #${r.requestId}`);
+      if (!r.ok) {
+        setSentMsg(
+          r.code === "premium_required"
+            ? "Premium required — unlock Your Local Insider to send requests."
+            : `Could not send · ${r.detail}`,
+        );
+        void refreshEntitlement();
+        return;
+      }
+      if (typeof r.requestsRemaining === "number") {
+        setEntitlement((prev) =>
+          prev ? { ...prev, requestsRemaining: r.requestsRemaining ?? prev.requestsRemaining } : prev,
+        );
+        setSentMsg(
+          `${OCTOPUS_CONCIERGE_PRODUCT_LAW.guestVoice.handling(first)} · #${r.requestId} · ${r.requestsRemaining} left`,
+        );
+      } else {
+        setSentMsg(`${OCTOPUS_CONCIERGE_PRODUCT_LAW.guestVoice.handling(first)} · #${r.requestId}`);
+        void refreshEntitlement();
+      }
     });
     setTimeout(() => setSentMsg(null), 4500);
   };
@@ -400,6 +437,10 @@ export default function PremiumConciergeScreen() {
   // ─── SALES — concise: headline, price, ≤3 benefits, one CTA, brief terms ────
   if (!entitled) {
     const commerceReady = entitlement?.state !== "unavailable";
+    const renewState =
+      entitlement?.state === "exhausted" || entitlement?.state === "expired"
+        ? entitlement.state
+        : null;
     const compactBenefits = [
       `Up to 5 requests with ${first} this stay`,
       "Tables, tickets and transfers handled for you",
@@ -420,7 +461,11 @@ export default function PremiumConciergeScreen() {
           <Text style={styles.salesTitle}>Your Local Insider</Text>
           <Text style={styles.salesLead}>Your city. Your insider.</Text>
           <Text style={styles.salesPersuade}>
-            {`Go beyond recommendations. ${first} helps make things happen.`}
+            {renewState === "exhausted"
+              ? `Your Stay Pass with ${first} used all 5 requests. Renew for another stay.`
+              : renewState === "expired"
+                ? `Your Stay Pass with ${first} expired. Renew to unlock Concierge again.`
+                : `Go beyond recommendations. ${first} helps make things happen.`}
           </Text>
 
           <View style={styles.priceBlock}>
@@ -474,7 +519,11 @@ export default function PremiumConciergeScreen() {
     );
   }
 
-  // ─── CONCIERGE OS (entitled only) ──────────────────────────────────────
+  // ─── CONCIERGE OS (entitled only — Octopus Verified alone never reaches here) ──
+  const remainingLabel =
+    typeof entitlement?.requestsRemaining === "number"
+      ? `${entitlement.requestsRemaining} of ${entitlement.requestsIncluded ?? 5} requests left`
+      : "Stay Pass active";
   return (
     <View style={styles.opsScreen}>
       <Stack.Screen options={opsHeader} />
@@ -490,9 +539,12 @@ export default function PremiumConciergeScreen() {
         <Text style={styles.opsTagline}>
           {`${first}'s Athens is unlocked — ask anything, or pick what ${first} can handle.`}
         </Text>
+        <View style={styles.passBadge} testID="stay-pass-remaining">
+          <Text style={styles.passBadgeText}>{`Stay Pass · ${remainingLabel}`}</Text>
+        </View>
 
         <View style={styles.askCard}>
-          <Text style={styles.askTitle}>Ask My banDit</Text>
+          <Text style={styles.askTitle}>{`Ask ${first}`}</Text>
           <Text style={styles.askLead}>Need something arranged?</Text>
           <TextInput
             style={styles.askInput}
@@ -859,10 +911,25 @@ const styles = StyleSheet.create({
   },
   opsTagline: {
     marginTop: 8,
-    marginBottom: 20,
+    marginBottom: 12,
     color: color.inkSoft,
     fontSize: 15,
     lineHeight: 22,
+  },
+  passBadge: {
+    alignSelf: "flex-start",
+    marginBottom: 20,
+    paddingHorizontal: 12,
+    paddingVertical: 7,
+    borderRadius: radius.md,
+    backgroundColor: "rgba(27, 42, 74, 0.08)",
+    borderWidth: 1,
+    borderColor: "rgba(27, 42, 74, 0.12)",
+  },
+  passBadgeText: {
+    color: NAVY_SOFT,
+    fontSize: 13,
+    fontWeight: "700",
   },
   askCard: {
     backgroundColor: color.surface,

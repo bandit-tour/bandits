@@ -17,6 +17,7 @@ export type OctopusEntitlementState =
   | "pending_payment"
   | "active"
   | "expired"
+  | "exhausted"
   | "unavailable";
 
 export type OctopusEntitlement = {
@@ -30,6 +31,8 @@ export type OctopusEntitlement = {
   expiresAt: string | null;
   orderId?: string | null;
   stayId?: string | null;
+  requestsRemaining?: number | null;
+  requestsIncluded?: number | null;
 };
 
 type CommerceEntitlementPayload = {
@@ -44,16 +47,26 @@ type CommerceEntitlementPayload = {
   owner?: string;
   order_id?: string | null;
   stay_id?: string | null;
+  requests_remaining?: number | null;
+  requests_included?: number | null;
   entitlement?: CommerceEntitlementPayload;
 };
 
+/** Paid commerce must bind to the signed-in guest — never inherit demo Stay Pass. */
+function requireGuestEmail(guestEmail?: string | null): string | null {
+  const email = String(guestEmail || "").trim().toLowerCase();
+  if (!email || !email.includes("@")) return null;
+  return email;
+}
+
 function normalizeState(raw: CommerceEntitlementPayload | null): OctopusEntitlementState {
   if (!raw) return "none";
-  if (raw.active === true || raw.entitled === true) return "active";
   const s = String(raw.status ?? raw.state ?? "").trim().toLowerCase();
-  if (s === "active" || s === "entitled" || s === "paid") return "active";
-  if (s === "pending" || s === "pending_payment" || s === "processing") return "pending_payment";
+  if (s === "exhausted") return "exhausted";
   if (s === "expired") return "expired";
+  if (s === "pending" || s === "pending_payment" || s === "processing") return "pending_payment";
+  if (raw.active === true || raw.entitled === true) return "active";
+  if (s === "active" || s === "entitled" || s === "paid") return "active";
   if (s === "none" || s === "") return "none";
   return "none";
 }
@@ -66,9 +79,8 @@ export async function resolveOctopusConciergeEntitlement(input: {
 }): Promise<OctopusEntitlement> {
   const banditId = String(input.banditId || "").trim();
   const guestId = input.guestId ? String(input.guestId).trim() : null;
-  const guestEmail = input.guestEmail || "guest@banditour.demo";
+  const guestEmail = requireGuestEmail(input.guestEmail);
   const stayId = input.stayId ? String(input.stayId).trim() : "current_stay";
-  const customerKey = guestId || guestEmail;
   const base: Omit<OctopusEntitlement, "state" | "entitled" | "source" | "detail" | "expiresAt"> = {
     productSku: OCTOPUS_CONCIERGE_OFFER.sku,
     banditId,
@@ -77,6 +89,17 @@ export async function resolveOctopusConciergeEntitlement(input: {
 
   if (!banditId) {
     return { ...base, state: "none", entitled: false, source: "none", detail: "Missing bandit id", expiresAt: null };
+  }
+
+  if (!guestEmail) {
+    return {
+      ...base,
+      state: "none",
+      entitled: false,
+      source: "none",
+      detail: "Sign in to unlock Your Local Insider.",
+      expiresAt: null,
+    };
   }
 
   const origin = commerceOrigin();
@@ -92,7 +115,7 @@ export async function resolveOctopusConciergeEntitlement(input: {
   }
 
   const qs = new URLSearchParams({
-    user_id: customerKey,
+    user_id: guestEmail,
     product: OCTOPUS_CONCIERGE_OFFER.sku,
     bandit_id: banditId,
     stay_id: stayId,
@@ -115,6 +138,10 @@ export async function resolveOctopusConciergeEntitlement(input: {
 
   const payload = result.data.entitlement ?? result.data;
   const state = normalizeState(payload);
+  const remaining =
+    typeof payload.requests_remaining === "number" ? payload.requests_remaining : null;
+  const included =
+    typeof payload.requests_included === "number" ? payload.requests_included : null;
   return {
     ...base,
     state,
@@ -122,11 +149,17 @@ export async function resolveOctopusConciergeEntitlement(input: {
     source: "commerce",
     detail:
       state === "active"
-        ? `Commerce ACTIVE · ${payload.owner || "Workspace"}`
-        : `Commerce state: ${state}`,
+        ? `Commerce ACTIVE · ${payload.owner || "Workspace"}${remaining != null ? ` · ${remaining} requests left` : ""}`
+        : state === "exhausted"
+          ? "Stay Pass allowance used up for this stay"
+          : state === "expired"
+            ? "Stay Pass expired"
+            : `Commerce state: ${state}`,
     expiresAt: payload.expires_at ?? payload.expiresAt ?? null,
     orderId: payload.order_id ?? null,
     stayId: payload.stay_id ?? stayId,
+    requestsRemaining: remaining,
+    requestsIncluded: included,
   };
 }
 
@@ -166,12 +199,12 @@ export async function startOctopusConciergeCheckout(input: {
 }): Promise<OctopusCheckoutResult> {
   const banditId = String(input.banditId || "").trim();
   const guestId = input.guestId ? String(input.guestId).trim() : null;
-  const guestEmail = input.guestEmail || "guest@banditour.demo";
+  const guestEmail = requireGuestEmail(input.guestEmail);
   const stayId = input.stayId ? String(input.stayId).trim() : "current_stay";
-  const customerKey = guestId || guestEmail;
+  const customerKey = guestEmail;
 
   if (!customerKey) {
-    return { ok: false, reason: "missing_guest", detail: "Sign in to unlock Octopus Concierge." };
+    return { ok: false, reason: "missing_guest", detail: "Sign in to unlock Your Local Insider." };
   }
   if (!commerceOrigin()) {
     return {
@@ -284,9 +317,20 @@ export async function submitConciergeRequestToWorkspace(input: {
   note: string;
   guestEmail?: string | null;
   guestId?: string | null;
-}): Promise<{ ok: true; requestId: string } | { ok: false; detail: string }> {
-  const guestEmail = input.guestEmail || "guest@banditour.demo";
-  const result = await workspacePost<{ ok?: boolean; request?: { id: string }; error?: string }>(
+}): Promise<
+  | { ok: true; requestId: string; requestsRemaining?: number | null }
+  | { ok: false; detail: string; code?: string }
+> {
+  const guestEmail = requireGuestEmail(input.guestEmail);
+  if (!guestEmail) {
+    return { ok: false, detail: "Sign in required to send a concierge request.", code: "auth" };
+  }
+  const result = await workspacePost<{
+    ok?: boolean;
+    request?: { id: string };
+    error?: string;
+    stayPass?: { requestsRemaining?: number | null; requests_remaining?: number | null };
+  }>(
     "/api/bandit/premium",
     {
       action: "concierge_request",
@@ -294,12 +338,24 @@ export async function submitConciergeRequestToWorkspace(input: {
       service: input.service,
       note: input.note,
       guestId: input.guestId || guestEmail,
-      user_id: input.guestId || guestEmail,
+      user_id: guestEmail,
     },
     guestEmail,
   );
-  if (!result.ok) return { ok: false, detail: result.detail };
+  if (!result.ok) {
+    const detail = result.detail || "Request blocked";
+    const code = /premium required|entitlement|not entitled|exhausted/i.test(detail)
+      ? "premium_required"
+      : "error";
+    return { ok: false, detail, code };
+  }
   const id = result.data.request?.id;
-  if (!id) return { ok: false, detail: result.data.error || "No request id" };
-  return { ok: true, requestId: id };
+  if (!id) return { ok: false, detail: result.data.error || "No request id", code: "error" };
+  const remaining =
+    typeof result.data.stayPass?.requestsRemaining === "number"
+      ? result.data.stayPass.requestsRemaining
+      : typeof result.data.stayPass?.requests_remaining === "number"
+        ? result.data.stayPass.requests_remaining
+        : null;
+  return { ok: true, requestId: id, requestsRemaining: remaining };
 }
