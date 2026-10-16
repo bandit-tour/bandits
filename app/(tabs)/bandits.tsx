@@ -30,6 +30,7 @@ import { useScreenFocused } from '@/lib/useScreenFocused';
 import { useGuestLiveSurface } from '@/lib/orchestra/useGuestLiveSurface';
 import { buildEventListImagePlan, getEventDbImageCandidatesOrdered } from '@/lib/eventListImagePlan';
 import { resolveApprovedListHeroUrisByEventId } from '@/lib/recommendationImages';
+import { GuestDiscoveryCard } from '@/components/GuestDiscoveryCard';
 
 
 type BanditRow = Database['public']['Tables']['bandit']['Row'];
@@ -299,35 +300,40 @@ export function BanditsScreen({ tabActive }: BanditsScreenProps = {}) {
 
   const { isAfterTrip, afterTripHome, state: lifeState } = useGuestLifecycle();
 
-  const listHeader = isAfterTrip && afterTripHome ? (
-    <Pressable
-      onPress={() => {
-        void trackEvent({ eventName: 'city_memory_opened' });
-        router.push('/cityMemory' as never);
-      }}
-      style={{
-        marginHorizontal: 16,
-        marginTop: 10,
-        marginBottom: 6,
-        padding: 14,
-        borderRadius: 14,
-        backgroundColor: '#F7F4EE',
-        borderWidth: StyleSheet.hairlineWidth,
-        borderColor: '#E6E0D6',
-      }}
-      accessibilityRole="button"
-    >
-      <Text style={{ fontSize: 11, fontWeight: '800', letterSpacing: 0.8, color: '#6B5A3A' }}>
-        {lifeState === 'NEXT_TRIP_PLANNING' ? 'NEXT TRIP PLANNING' : 'BETWEEN TRIPS'}
-      </Text>
-      <Text style={{ fontSize: 17, fontWeight: '800', color: '#1A1A1A', marginTop: 4 }}>
-        {afterTripHome.memoryTitle}
-      </Text>
-      <Text style={{ fontSize: 13, color: '#666', marginTop: 4 }}>
-        Followed banDits keep publishing · open City Memory
-      </Text>
-    </Pressable>
-  ) : null;
+  const listHeader = (
+    <View>
+      {isAfterTrip && afterTripHome ? (
+        <GuestDiscoveryCard
+          promptId="between_trips_city_memory"
+          eyebrow={lifeState === 'NEXT_TRIP_PLANNING' ? 'Next trip' : 'Between trips'}
+          title={afterTripHome.memoryTitle}
+          body="Your places, followed banDits and next journeys live in City Memory — not only in More."
+          cta="Open City Memory"
+          href="/cityMemory"
+          testID="home-discovery-city-memory"
+        />
+      ) : (
+        <GuestDiscoveryCard
+          promptId="home_my_moments"
+          eyebrow="During your stay"
+          title="Share a Moment"
+          body="Leave a short daily note for bottle discovery — travelers nearby may find it."
+          cta="Set My Moment"
+          href="/myMoment"
+          testID="home-discovery-my-moments"
+        />
+      )}
+      <GuestDiscoveryCard
+        promptId="home_local_insider"
+        eyebrow="Local access"
+        title="Your Local Insider"
+        body="Premium concierge with eligible Local banDits — open when you want a deeper Athens invite."
+        cta="See Local Insider"
+        href="/account/membership"
+        testID="home-discovery-local-insider"
+      />
+    </View>
+  );
 
   if (!screenActive) {
     return <View style={styles.screen} />;

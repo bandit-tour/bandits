@@ -32,6 +32,7 @@ import { getNotificationsBackendStatus } from '@/services/localFriend';
 import AppEscapeNav from '@/components/AppEscapeNav';
 import BanditHeader from '@/components/BanditHeader';
 import EventCard from '@/components/EventCard';
+import { GuestDiscoveryCard } from '@/components/GuestDiscoveryCard';
 import ReviewCard from '@/components/ReviewCard';
 import TagChip from '@/components/TagChip';
 import { goToAppHome } from '@/lib/appNavigation';
@@ -505,6 +506,17 @@ export default function BanditScreen() {
                 </RNScrollView>
               </View>
             )}
+
+            <View style={{ marginBottom: 14 }}>
+              <GuestDiscoveryCard
+                promptId="bandit_local_insider"
+                eyebrow="Local Insider"
+                title={`Go deeper with ${bandit.name}`}
+                body="Your Local Insider unlocks premium concierge with eligible Local banDits — only when it fits this stay."
+                cta="Explore Local Insider"
+                href="/account/membership"
+              />
+            </View>
 
             <Text style={styles.whyFollowLabel}>
               {`Why follow ${bandit.name}?`}

@@ -1,0 +1,204 @@
+{
+  "base": "http://localhost:8082",
+  "at": "2026-10-16T08:31:49.518Z",
+  "results": [
+    {
+      "route": "/my-profile",
+      "ok": false,
+      "hasBack": false,
+      "afterBack": null,
+      "deny": false,
+      "error": "page.goto: Timeout 45000ms exceeded.\nCall log:\n  - navigating to \"http://localhost:8082/my-profile\", waiting until \"domcontentloaded\"\n",
+      "bodyHint": ""
+    },
+    {
+      "route": "/cityMemory",
+      "ok": true,
+      "hasBack": true,
+      "afterBack": "/menu",
+      "deny": false,
+      "error": null,
+      "bodyHint": "← Back City Memory Menu Home CITY MEMORY Your city Memory Your places, people, and next journeys — always yours. KEEP THE STORY GOING Not now Update My Moments A short daily Moment"
+    },
+    {
+      "route": "/myMoment",
+      "ok": true,
+      "hasBack": true,
+      "afterBack": "/menu",
+      "deny": false,
+      "error": null,
+      "bodyHint": "← Back My Moment Menu Home YOUR MOMENT TODAY “Athens feels different after midnight.” Eligible for bottle discovery · refreshed 11:30 AM Your Moment may appear when another travele"
+    },
+    {
+      "route": "/mySpots",
+      "ok": true,
+      "hasBack": true,
+      "afterBack": "/menu",
+      "deny": false,
+      "error": null,
+      "bodyHint": " ← Back My Spots Menu Home My Spots Refresh No liked events yet. Tap the heart on a spot in Explore to save it here.  Home  Explore  Hotel  Local Friend  Chat  More"
+    },
+    {
+      "route": "/following",
+      "ok": true,
+      "hasBack": true,
+      "afterBack": "/menu",
+      "deny": false,
+      "error": null,
+      "bodyHint": " ← Back Following Menu Home No banDits yet Open the Local banDits tab, tap Follow on profiles you like, and they will all show up here — same idea as My Spots for saved events.  "
+    },
+    {
+      "route": "/travelBottle",
+      "ok": true,
+      "hasBack": true,
+      "afterBack": "/menu",
+      "deny": false,
+      "error": null,
+      "bodyHint": " ← Back Travel in a Bottle Menu Home TRAVEL IN A BOTTLE Plan your next journey Mix your sleeping experience — hotel nights + a second place to sleep (treehouse, vineyard, glamping"
+    },
+    {
+      "route": "/localFriend",
+      "ok": true,
+      "hasBack": true,
+      "afterBack": "/menu",
+      "deny": false,
+      "error": null,
+      "bodyHint": "← Back Local Friend Menu Home Send something into the city This isn’t regular chat. It’s a note in a bottle. Random on the surface. Matched by vibe underneath. What do you want to "
+    },
+    {
+      "route": "/account/membership",
+      "ok": true,
+      "hasBack": true,
+      "afterBack": "/menu",
+      "deny": false,
+      "error": null,
+      "bodyHint": "← Back Premium Membership UNLOCK PREMIUM Stay Pass Your Local banDit becomes your personal local operator for the stay. €19 / stay · up to 5 requests INCLUDED SERVICES ✓ Octopus Co"
+    },
+    {
+      "route": "/impact",
+      "ok": true,
+      "hasBack": true,
+      "afterBack": "/menu",
+      "deny": false,
+      "error": null,
+      "bodyHint": " ← Back Impact / Passport Menu Home Your Impact What you left behind during your journey. Every local choice you made created a real impact. Every local business visited, every Lo"
+    },
+    {
+      "route": "/scam-alerts",
+      "ok": true,
+      "hasBack": true,
+      "afterBack": "/menu",
+      "deny": false,
+      "error": null,
+      "bodyHint": "← Back bandiTEAM  Share a Warning Menu Home ALL DESTINATIONS Global protection view bandiTEAM Good locals look out for each other. Scams, tourist traps, and things worth knowing —"
+    },
+    {
+      "route": "/bandiTeam",
+      "ok": true,
+      "hasBack": true,
+      "afterBack": "/menu",
+      "deny": false,
+      "error": null,
+      "bodyHint": "← Back bandiTEAM Menu Home ← Back Menu Home BANDITEAM Good locals look out for each other. Scams, tourist traps, and things worth knowing — shared by people who've been there. See "
+    },
+    {
+      "route": "/bandiTeam/report",
+      "ok": true,
+      "hasBack": true,
+      "afterBack": "/menu",
+      "deny": false,
+      "error": null,
+      "bodyHint": "← Back Share a Warning Menu Home ← Back Menu Home Share a Warning Tell others what to watch for. Your note is reviewed before it goes live. City Select city ▼ Area / neighborhood N"
+    },
+    {
+      "route": "/bookings",
+      "ok": true,
+      "hasBack": true,
+      "afterBack": "/menu",
+      "deny": false,
+      "error": null,
+      "bodyHint": "← Back Bookings Your confirmed local experiences — the same records the host manages. Kypseli clay walk muz5c7c3 Confirmed · €72 Kypseli clay walk muv94okn Confirmed · €72 Kypseli "
+    },
+    {
+      "route": "/reactivateStay",
+      "ok": true,
+      "hasBack": true,
+      "afterBack": "/menu",
+      "deny": false,
+      "error": null,
+      "bodyHint": "← Back Connect My New Stay Menu Home VERIFIED STAY Connect My New Stay Enter your booking details to unlock hotel requests. Your City Memory stays with you. Booking number Name on "
+    },
+    {
+      "route": "/account",
+      "ok": true,
+      "hasBack": true,
+      "afterBack": "/menu",
+      "deny": false,
+      "error": null,
+      "bodyHint": "← Back Account & Settings Membership, payments, language, privacy, and help. Account settings Alerts & preferences → Premium Membership Octopus Concierge · billing → Payments Metho"
+    },
+    {
+      "route": "/account/payments",
+      "ok": true,
+      "hasBack": true,
+      "afterBack": "/menu",
+      "deny": false,
+      "error": null,
+      "bodyHint": "← Back Payments Payment methods, bookings, Concierge, Bottle, and SmartTraveler — invoices in one place. PAYMENT METHODS Visa ···· 4242 Expires 08/28 Default Mastercard ···· 1881 E"
+    },
+    {
+      "route": "/account/language",
+      "ok": true,
+      "hasBack": true,
+      "afterBack": "/menu",
+      "deny": false,
+      "error": null,
+      "bodyHint": "← Back Language Choose how bandiTour speaks to you. Preference is saved on this device. English English ✓ Greek Ελληνικά Hebrew עברית More languages coming soon."
+    },
+    {
+      "route": "/account/privacy",
+      "ok": true,
+      "hasBack": true,
+      "afterBack": "/menu",
+      "deny": false,
+      "error": null,
+      "bodyHint": "← Back Privacy Control what hotels, Local Friends, and banDiTour can see. Share stay status with hotel Room, checkout, and requests Visible to Local Friend Name & current city for "
+    },
+    {
+      "route": "/account/faq",
+      "ok": true,
+      "hasBack": true,
+      "afterBack": "/menu",
+      "deny": false,
+      "error": null,
+      "bodyHint": "← Back FAQ Quick answers for stay, Local Friend, Premium, and the Guest App. How do I message my hotel? Menu → Support → Contact Hotel, or open Hotelier → Ask the Hotel. Open relat"
+    },
+    {
+      "route": "/notifications",
+      "ok": true,
+      "hasBack": true,
+      "afterBack": "/menu",
+      "deny": false,
+      "error": null,
+      "bodyHint": " ← Back Notifications Read all Clear Select Menu Home  Home  Explore  Hotel  Local Friend  Chat  More"
+    },
+    {
+      "route": "/operatorDesk",
+      "ok": true,
+      "hasBack": false,
+      "afterBack": null,
+      "deny": true,
+      "error": null,
+      "bodyHint": "This screen does not exist. Go to home screen!"
+    },
+    {
+      "route": "/admin",
+      "ok": true,
+      "hasBack": false,
+      "afterBack": null,
+      "deny": true,
+      "error": null,
+      "bodyHint": "This screen does not exist. Go to home screen!"
+    }
+  ]
+}

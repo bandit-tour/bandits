@@ -1,4 +1,5 @@
 import { LinearGradient } from "expo-linear-gradient";
+import { Stack } from "expo-router";
 import React, { useEffect, useRef, useState } from "react";
 import {
   Animated,
@@ -13,6 +14,7 @@ import {
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
+import { useAppBackScreenOptions } from "@/hooks/useAppBackScreenOptions";
 import { color } from "@/lib/guestDesign";
 import { IMPACT_STORY } from "@/lib/guest-workspace/impactStory";
 
@@ -20,6 +22,12 @@ import { IMPACT_STORY } from "@/lib/guest-workspace/impactStory";
 export function ImpactScreen() {
   const insets = useSafeAreaInsets();
   const { width } = useWindowDimensions();
+  const screenOptions = useAppBackScreenOptions({
+    title: "Impact / Passport",
+    fallback: "/menu",
+    showBack: true,
+    escapeShortcuts: true,
+  });
   const [joined, setJoined] = useState<string | null>(null);
   const fillRatio = IMPACT_STORY.dropsEarned / IMPACT_STORY.dropsRequired;
   const oceanMax = Math.min(width - 32, 960);
@@ -33,9 +41,11 @@ export function ImpactScreen() {
   };
 
   return (
+    <>
+      <Stack.Screen options={screenOptions} />
     <ScrollView
       style={styles.screen}
-      contentContainerStyle={[styles.content, { paddingTop: Math.max(insets.top, 12) + 8 }]}
+      contentContainerStyle={[styles.content, { paddingTop: 12 }]}
       showsVerticalScrollIndicator
     >
       <Text style={styles.title}>{IMPACT_STORY.title}</Text>
@@ -140,6 +150,7 @@ export function ImpactScreen() {
         <Text style={styles.rewardBody}>{IMPACT_STORY.badgeUnlockCopy(IMPACT_STORY.remainingDrops)}</Text>
       </View>
     </ScrollView>
+    </>
   );
 }
 

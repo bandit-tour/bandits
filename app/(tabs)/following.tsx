@@ -23,7 +23,6 @@ import { Database } from '@/lib/database.types';
 import { buildEventListImagePlan } from '@/lib/eventListImagePlan';
 import { usePremiumRefreshControl } from '@/lib/mobilePullToRefresh';
 import { useAppBackScreenOptions } from '@/hooks/useAppBackScreenOptions';
-import { APP_HOME_HREF } from '@/lib/appNavigation';
 import { resolveApprovedListHeroUrisByEventId } from '@/lib/recommendationImages';
 
 const FOLLOWING_ROWS_CACHE_KEY = 'following:rows:withCategories';
@@ -48,7 +47,9 @@ type CategoryExpand = { genre: string; events: EventItem[]; loading: boolean };
 export default function FollowingScreen() {
   const followingScreenOptions = useAppBackScreenOptions({
     title: 'Following',
-    fallback: APP_HOME_HREF,
+    fallback: '/menu',
+    showBack: true,
+    escapeShortcuts: true,
   });
   const { width } = useWindowDimensions();
   const isDesktopWeb = Platform.OS === 'web' && width >= 1100;

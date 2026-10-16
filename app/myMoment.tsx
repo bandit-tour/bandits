@@ -43,6 +43,7 @@ export default function MyMomentScreen() {
   const header = useAppBackScreenOptions({
     title: "My Moment",
     fallback: "/menu" as Href,
+    showBack: true,
     escapeShortcuts: true,
     headerTintColor: color.ink,
     headerStyle: { backgroundColor: color.surface },

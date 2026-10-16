@@ -218,7 +218,9 @@ export default function ScamAlertsScreen() {
   const scopeLabel = filterCity ? asTrimmedString(filterCity) : 'All destinations';
   const screenOptions = useAppBackScreenOptions({
     title: 'bandiTEAM',
-    fallback: '/alerts',
+    fallback: '/menu',
+    showBack: true,
+    escapeShortcuts: true,
     headerRight: () => <ScamAlertsHeaderActions filterCity={filterCity} />,
   });
 

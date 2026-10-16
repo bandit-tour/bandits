@@ -84,6 +84,7 @@ export default function BandiTeamHubScreen({ tabActive = true }: HubProps) {
   const screenOptions = useAppBackScreenOptions({
     title: tabActive ? 'bandiTEAM' : '',
     fallback: '/menu',
+    showBack: true,
     escapeShortcuts: true,
     headerShown: tabActive,
   });

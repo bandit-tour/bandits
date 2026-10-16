@@ -51,7 +51,6 @@ import { isDeletedThreadRef } from '@/lib/threadDelete';
 import { markInboxSurfaceOpened } from '@/lib/osAppBadge';
 import { syncOsAppIconBadge } from '@/lib/pushNotifications';
 import { useAppBackScreenOptions } from '@/hooks/useAppBackScreenOptions';
-import { APP_HOME_HREF } from '@/lib/appNavigation';
 
 type NotificationRow = {
   id: string;
@@ -621,8 +620,9 @@ export default function NotificationsScreen() {
 
   const notificationsScreenOptions = useAppBackScreenOptions({
     title: selectMode ? `${selectedIds.size} selected` : 'Notifications',
-    fallback: APP_HOME_HREF,
-    showBack: false,
+    fallback: '/menu',
+    showBack: true,
+    escapeShortcuts: true,
     headerRight: inboxHeaderRight,
   });
 

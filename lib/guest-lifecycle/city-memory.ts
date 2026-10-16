@@ -60,7 +60,7 @@ export function buildAfterTripHome(snap: GuestLifecycleSnapshot): AfterTripHomeM
     {
       id: "disc_exp",
       title: "Experiences that match your taste",
-      detail: "Public guides & experiences — no hotel gate needed",
+      detail: "Guides and experiences shaped by what you loved",
       href: "/experiences",
     },
   ];
@@ -87,7 +87,7 @@ export function buildAfterTripHome(snap: GuestLifecycleSnapshot): AfterTripHomeM
     {
       id: "bottle",
       title: "Travel in a Bottle",
-      detail: "Build the journey before the hotel activates",
+      detail: "Shape the trip while City Memory stays with you",
     },
     {
       id: "dest",
@@ -107,7 +107,7 @@ export function buildAfterTripHome(snap: GuestLifecycleSnapshot): AfterTripHomeM
     savedPlaces,
     mySpots,
     followedBandits,
-    placesLoved: placesLoved.length ? placesLoved : mySpots,
+    placesLoved,
     neighborhoods,
     guides,
     experiences,

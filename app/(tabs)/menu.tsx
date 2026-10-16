@@ -48,48 +48,58 @@ type MenuGroup = {
 const QUICK_ACTIONS_STAY: { key: string; title: string; subtitle: string; emoji: string; href: Href }[] = [
   { key: "stay", title: "Continue My Stay", subtitle: "Stay management", emoji: "🏨", href: "/hotelier/stayInfo" },
   { key: "lf", title: "Local Friend", subtitle: "Meet someone local", emoji: "💬", href: "/localFriend" },
+  { key: "moments", title: "My Moments", subtitle: "Daily travel status", emoji: "✨", href: "/myMoment" as Href },
   { key: "alerts", title: "Safety alerts", subtitle: "bandiTEAM", emoji: "⚠", href: "/scam-alerts" },
   { key: "impact", title: "Impact / Passport", subtitle: "Your journey trace", emoji: "🌍", href: "/impact" },
-  { key: "notif", title: "Notifications", subtitle: "Inbox", emoji: "🔔", href: "/notifications" },
 ];
 
 const QUICK_ACTIONS_AFTER: { key: string; title: string; subtitle: string; emoji: string; href: Href }[] = [
   { key: "memory", title: "City Memory", subtitle: "Your trip memory", emoji: "🧭", href: "/cityMemory" as Href },
   { key: "bottle", title: "Next journey", subtitle: "Travel in a Bottle", emoji: "🌲", href: "/travelBottle" },
+  { key: "moments", title: "My Moments", subtitle: "Daily travel status", emoji: "✨", href: "/myMoment" as Href },
   { key: "lf", title: "Local Friend", subtitle: "Meet someone local", emoji: "💬", href: "/localFriend" },
-  { key: "alerts", title: "Safety alerts", subtitle: "bandiTEAM", emoji: "⚠", href: "/scam-alerts" },
-  { key: "impact", title: "Impact / Passport", subtitle: "Your journey trace", emoji: "🌍", href: "/impact" },
-  { key: "spots", title: "My Spots", subtitle: "Saved places", emoji: "♥", href: "/mySpots" },
   { key: "reactivate", title: "Connect My New Stay", subtitle: "Verified booking", emoji: "🔑", href: "/reactivateStay" },
 ];
 
 /**
- * MORE (canonical): Local Friend | Impact / Passport | Bookings | Following |
- * My Spots | Notifications | Account | Alerts / bandiTEAM safety
- */
-/**
- * Stay groups: destinations not already in QUICK_ACTIONS_STAY
- * (Continue My Stay / Local Friend / Safety / Impact / Notifications).
- * Underlying routes remain reachable from Hotel tab + Account.
+ * Curated More IA — no accidental duplicates across Quick + groups.
+ * Profile opens from the hero card (not repeated as a menu tile).
  */
 const MENU_GROUPS_STAY: MenuGroup[] = [
   {
     id: "journey",
-    title: "Your journey",
+    title: "My Journey",
     cards: [
-      { key: "bookings", emoji: "🎫", title: "Bookings", href: "/bookings" },
-      { key: "following", emoji: "👥", title: "Following", href: "/following" },
+      { key: "memory", emoji: "🧭", title: "City Memory", href: "/cityMemory" as Href },
       { key: "spots", emoji: "♥", title: "My Spots", href: "/mySpots" },
-      { key: "premium", emoji: "⭐", title: "Your Local Insider", href: "/account/membership" },
+      { key: "following", emoji: "👥", title: "Following", href: "/following" },
       { key: "bottle", emoji: "🍾", title: "Travel in a Bottle", href: "/travelBottle" },
     ],
   },
   {
-    id: "safety",
-    title: "bandiTEAM · Safety",
+    id: "connections",
+    title: "My Connections",
     cards: [
-      // See Reports = same route as Quick “Safety alerts”; keep upload-only here.
+      { key: "notif", emoji: "🔔", title: "Notifications", href: "/notifications" },
+      { key: "bookings", emoji: "🎫", title: "Bookings", href: "/bookings" },
+    ],
+  },
+  {
+    id: "privileges",
+    title: "My Privileges",
+    cards: [
+      { key: "premium", emoji: "⭐", title: "Your Local Insider", href: "/account/membership" },
+      { key: "impact", emoji: "🌍", title: "Impact / Passport", href: "/impact" },
+    ],
+  },
+  {
+    id: "safety",
+    title: "Safety & Support",
+    cards: [
+      { key: "alerts", emoji: "⚠", title: "Safety Alerts", href: "/scam-alerts" },
+      { key: "see-reports", emoji: "📋", title: "See Reports", href: "/bandiTeam" as Href },
       { key: "upload-report", emoji: "📝", title: "Share a Warning", href: "/bandiTeam/report" },
+      { key: "help", emoji: "❓", title: "Help", href: "/account/faq" },
     ],
   },
   {
@@ -110,55 +120,57 @@ const MENU_GROUPS_STAY: MenuGroup[] = [
     id: "account",
     title: "Account",
     cards: [
-      { key: "profile", emoji: "👤", title: "See My Profile", href: "/my-profile" as Href },
       { key: "acct", emoji: "🔧", title: "Account Settings", href: "/account" },
       { key: "pay", emoji: "💳", title: "Payments", href: "/account/payments" },
       { key: "lang", emoji: "🌍", title: "Language", href: "/account/language" },
       { key: "privacy", emoji: "🔒", title: "Privacy", href: "/account/privacy" },
-      { key: "help", emoji: "❓", title: "Help", href: "/account/faq" },
     ],
   },
 ];
 
-/**
- * After / pre-stay groups: no repeat of QUICK_ACTIONS_AFTER destinations
- * (City Memory, Next journey/TiB, Local Friend, Safety, Impact, My Spots, Connect Stay).
- */
 const MENU_GROUPS_AFTER: MenuGroup[] = [
   {
-    id: "saved",
-    title: "Saved · Following · Premium",
+    id: "journey",
+    title: "My Journey",
     cards: [
+      { key: "spots", emoji: "♥", title: "My Spots", href: "/mySpots" },
       { key: "following", emoji: "👥", title: "Following", href: "/following" },
+      { key: "impact", emoji: "🌍", title: "Impact / Passport", href: "/impact" },
+    ],
+  },
+  {
+    id: "connections",
+    title: "My Connections",
+    cards: [
+      { key: "notif", emoji: "🔔", title: "Notifications", href: "/notifications" },
+      { key: "bookings", emoji: "🎫", title: "Bookings", href: "/bookings" },
+    ],
+  },
+  {
+    id: "privileges",
+    title: "My Privileges",
+    cards: [
       { key: "premium", emoji: "⭐", title: "Your Local Insider", href: "/account/membership" },
-      { key: "moments", emoji: "✨", title: "My Moments", href: "/myMoment" },
     ],
   },
   {
     id: "safety",
-    title: "bandiTEAM · Safety",
+    title: "Safety & Support",
     cards: [
+      { key: "alerts", emoji: "⚠", title: "Safety Alerts", href: "/scam-alerts" },
+      { key: "see-reports", emoji: "📋", title: "See Reports", href: "/bandiTeam" as Href },
       { key: "upload-report", emoji: "📝", title: "Share a Warning", href: "/bandiTeam/report" },
+      { key: "help", emoji: "❓", title: "Help", href: "/account/faq" },
     ],
   },
   {
     id: "account",
     title: "Account",
     cards: [
-      { key: "profile", emoji: "👤", title: "See My Profile", href: "/my-profile" as Href },
       { key: "acct", emoji: "🔧", title: "Account Settings", href: "/account" },
       { key: "pay", emoji: "💳", title: "Payments", href: "/account/payments" },
       { key: "lang", emoji: "🌍", title: "Language", href: "/account/language" },
       { key: "privacy", emoji: "🔒", title: "Privacy", href: "/account/privacy" },
-      { key: "help", emoji: "❓", title: "Help", href: "/account/faq" },
-    ],
-  },
-  {
-    id: "journey-after",
-    title: "Your journey",
-    cards: [
-      { key: "bookings", emoji: "🎫", title: "Bookings", href: "/bookings" },
-      { key: "notif", emoji: "🔔", title: "Notifications", href: "/notifications" },
     ],
   },
 ];
@@ -328,13 +340,20 @@ export default function MenuScreen() {
         refreshControl={menuRefreshControl}
         testID="menu-scroll"
       >
-        {/* Header — trip identity */}
-        <View style={styles.header}>
+        {/* Header — trip identity → My Profile (whole card is the affordance) */}
+        <Pressable
+          style={({ pressed }) => [styles.header, pressed && styles.headerPressed]}
+          onPress={() => go("/my-profile" as Href)}
+          accessibilityRole="button"
+          accessibilityLabel={`View My Profile, ${guestName}`}
+          accessibilityHint="Opens your guest profile"
+          testID="menu-profile-card"
+        >
           <View style={styles.logoChip}>
             <Image source={LOGO} style={styles.logo} resizeMode="contain" accessibilityLabel="bandiTour" />
           </View>
           <View style={styles.identityRow}>
-            <Pressable style={styles.avatarWrap} onPress={() => go("/my-profile" as Href)}>
+            <View style={styles.avatarWrap}>
               {avatarUrl && !avatarFailed ? (
                 <Image
                   source={{ uri: avatarUrl }}
@@ -347,7 +366,7 @@ export default function MenuScreen() {
                   <Text style={styles.avatarInitials}>{initials || "G"}</Text>
                 </View>
               )}
-            </Pressable>
+            </View>
             <View style={styles.identityText}>
               <Text style={styles.guestName}>{guestName}</Text>
               <Text style={styles.hotelLine}>{hotelName}</Text>
@@ -362,9 +381,18 @@ export default function MenuScreen() {
                   {isFullStay ? "Premium Guest" : "Members Club · After Trip"}
                 </Text>
               </View>
+              <View style={styles.profileCtaRow}>
+                <Text style={styles.profileCta}>View My Profile</Text>
+                <Text style={styles.profileChevron} accessibilityElementsHidden>
+                  →
+                </Text>
+              </View>
             </View>
+            <Text style={styles.profileChevronLarge} accessibilityElementsHidden>
+              ›
+            </Text>
           </View>
-        </View>
+        </Pressable>
 
         {/* Quick actions */}
         <Text style={styles.sectionLabel}>Quick actions</Text>
@@ -423,9 +451,10 @@ export default function MenuScreen() {
           </View>
         ))}
 
+        {/** Admin-only: never rendered for guests / anonymous / hotel users. Routes also gate. */}
         {ownerPrivateMenuAllowed ? (
-          <View style={styles.group}>
-            <Text style={styles.sectionLabel}>Owner</Text>
+          <View style={styles.group} testID="menu-owner-tools">
+            <Text style={styles.sectionLabel}>Platform admin</Text>
             <View style={styles.grid}>
               <Pressable
                 style={({ pressed }) => [
@@ -435,6 +464,7 @@ export default function MenuScreen() {
                   pressed && styles.pressed,
                 ]}
                 onPress={() => go("/operatorDesk" as Href)}
+                accessibilityLabel="Pilot Desk admin"
               >
                 <Text style={styles.cardEmoji}>🔧</Text>
                 <Text style={styles.cardTitle}>Pilot Desk</Text>
@@ -442,6 +472,7 @@ export default function MenuScreen() {
               <Pressable
                 style={({ pressed }) => [styles.card, { width: cardWidth }, pressed && styles.pressed]}
                 onPress={() => go("/admin" as Href)}
+                accessibilityLabel="CDesk admin"
               >
                 <Text style={styles.cardEmoji}>📊</Text>
                 <Text style={styles.cardTitle}>CDesk</Text>
@@ -480,6 +511,31 @@ const styles = StyleSheet.create({
       android: { elevation: 8 },
       default: {},
     }),
+  },
+  headerPressed: { opacity: 0.92 },
+  profileCtaRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginTop: 12,
+    gap: 6,
+  },
+  profileCta: {
+    color: "rgba(240,215,160,0.98)",
+    fontSize: 14,
+    fontWeight: "800",
+    letterSpacing: 0.2,
+  },
+  profileChevron: {
+    color: "rgba(240,215,160,0.98)",
+    fontSize: 16,
+    fontWeight: "800",
+  },
+  profileChevronLarge: {
+    color: "rgba(255,255,255,0.55)",
+    fontSize: 32,
+    fontWeight: "300",
+    marginLeft: 4,
+    lineHeight: 36,
   },
   logoChip: {
     alignSelf: "flex-start",

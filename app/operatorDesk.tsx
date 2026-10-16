@@ -18,6 +18,7 @@ import { parseAboutBanditFromAskMessage } from '@/lib/askMeMessageFormat';
 import { formatInboxSentAt } from '@/lib/inboxSentAtLabel';
 import { useAppState } from '@/contexts/AppStateContext';
 import OperatorQuickNav from '@/components/OperatorQuickNav';
+import { RequireAppAdminGate } from '@/components/RequireAppAdminGate';
 import { useAppBackScreenOptions } from '@/hooks/useAppBackScreenOptions';
 import { PLAY_MENU_HREF } from '@/lib/appNavigation';
 import { operatorSurfaceTextInputProps, operatorSurfaceTextInputStyle } from '@/lib/operatorSurfaceTextInput';
@@ -150,7 +151,7 @@ function normalizeReportRow(raw: Record<string, unknown>): ReportRow {
   };
 }
 
-export default function OperatorDeskScreen() {
+function OperatorDeskContent() {
   const router = useRouter();
   const { refreshNotifications } = useAppState();
   const [loading, setLoading] = useState(true);
@@ -965,6 +966,15 @@ export default function OperatorDeskScreen() {
         ) : null}
       </GHScrollView>
     </>
+  );
+}
+
+/** Server-adjacent gate: owner email only; Pilot Desk APIs also require operator UUID. */
+export default function OperatorDeskScreen() {
+  return (
+    <RequireAppAdminGate>
+      <OperatorDeskContent />
+    </RequireAppAdminGate>
   );
 }
 

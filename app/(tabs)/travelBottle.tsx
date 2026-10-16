@@ -1,5 +1,5 @@
 import { Image as ExpoImage } from "expo-image";
-import { useRouter, type Href } from "expo-router";
+import { Stack, useRouter, type Href } from "expo-router";
 import React, { useCallback, useMemo, useState } from "react";
 import {
   Image,
@@ -12,6 +12,7 @@ import {
 } from "react-native";
 
 import { TravelBottleMixLoading } from "@/components/TravelBottleMixLoading";
+import { useAppBackScreenOptions } from "@/hooks/useAppBackScreenOptions";
 import {
   BOTTLE_FILTER_CHIPS,
   BOTTLE_PLAN_CITIES,
@@ -188,6 +189,12 @@ export function BottleProductScreen() {
   const { width } = useWindowDimensions();
   const mode = layoutModeFor(width);
   const cardW = cardWidthFor(width, mode);
+  const screenOptions = useAppBackScreenOptions({
+    title: "Travel in a Bottle",
+    fallback: "/menu",
+    showBack: true,
+    escapeShortcuts: true,
+  });
 
   const {
     state: lifeState,
@@ -347,6 +354,7 @@ export function BottleProductScreen() {
 
   return (
     <View style={styles.screen}>
+      <Stack.Screen options={screenOptions} />
       <TravelBottleMixLoading
         visible={mixing}
         statusHint="Mixing hotel and nature stays from Workspace."

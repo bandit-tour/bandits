@@ -116,7 +116,8 @@ export default function BandiTeamReportScreen() {
   const router = useRouter();
   const screenOptions = useAppBackScreenOptions({
     title: 'Share a Warning',
-    fallback: '/bandiTeam',
+    fallback: '/menu',
+    showBack: true,
     escapeShortcuts: true,
   });
   const { width } = useWindowDimensions();

@@ -1,5 +1,5 @@
 /**
- * City Memory — traveler lifecycle memory (saved places, follows, taste).
+ * City Memory — traveler's permanent personal travel space.
  * NOT Hotel / Hotelier OS. Hotel tab remains stay companion services.
  */
 import { Stack, useRouter, type Href } from "expo-router";
@@ -13,6 +13,7 @@ import { buildAfterTripHome } from "@/lib/guest-lifecycle/city-memory";
 import { useGuestLifecycle } from "@/lib/guest-lifecycle/useGuestLifecycle";
 import { transitionStartTripPlanning } from "@/lib/guest-lifecycle/transitions";
 import { usePremiumRefreshControl } from "@/lib/mobilePullToRefresh";
+import { color } from "@/lib/guestDesign";
 
 export default function CityMemoryScreen() {
   const router = useRouter();
@@ -25,9 +26,10 @@ export default function CityMemoryScreen() {
   const screenOptions = useAppBackScreenOptions({
     title: "City Memory",
     fallback: "/menu" as Href,
+    showBack: true,
     escapeShortcuts: true,
-    headerStyle: { backgroundColor: "#F7F4EE" },
-    headerTintColor: "#121212",
+    headerStyle: { backgroundColor: color.surfaceWarm },
+    headerTintColor: color.ink,
   });
 
   const onRefresh = React.useCallback(() => {
@@ -42,7 +44,7 @@ export default function CityMemoryScreen() {
     return (
       <View style={styles.boot}>
         <Stack.Screen options={screenOptions} />
-        <ActivityIndicator color="#121212" />
+        <ActivityIndicator color={color.ink} />
       </View>
     );
   }
@@ -50,19 +52,18 @@ export default function CityMemoryScreen() {
   return (
     <ScrollView
       style={styles.screen}
-      contentContainerStyle={{ paddingBottom: 48 + insets.bottom, paddingHorizontal: 16 }}
+      contentContainerStyle={{
+        paddingBottom: 56 + insets.bottom,
+        paddingHorizontal: 20,
+        paddingTop: 8,
+        maxWidth: 1100,
+        width: "100%",
+        alignSelf: "center",
+      }}
       refreshControl={refreshControl}
       testID="city-memory-scroll"
     >
       <Stack.Screen options={screenOptions} />
-      <Pressable
-        onPress={() => router.replace("/home" as Href)}
-        style={styles.homeLink}
-        accessibilityRole="button"
-        accessibilityLabel="Back to Home"
-      >
-        <Text style={styles.homeLinkText}>← Home</Text>
-      </Pressable>
       {model ? (
         <AfterTripHome
           model={model}
@@ -76,17 +77,25 @@ export default function CityMemoryScreen() {
           onReactivate={() => router.push("/reactivateStay" as Href)}
         />
       ) : (
-        <View style={styles.empty}>
-          <Text style={styles.emptyTitle}>Your city memory</Text>
+        <View style={styles.empty} testID="city-memory-empty-shell">
+          <Text style={styles.emptyKicker}>City Memory</Text>
+          <Text style={styles.emptyTitle}>Your journey lives here</Text>
           <Text style={styles.emptyLead}>
-            Places you save, banDits you follow, and trip taste live here — independent of hotel
-            services.
+            Places you save and banDits you follow gather here — before, during, and after stays.
           </Text>
-          <Pressable style={styles.cta} onPress={() => router.push("/explore" as Href)}>
+          <Pressable
+            style={styles.cta}
+            onPress={() => router.push("/explore" as Href)}
+            accessibilityRole="button"
+          >
             <Text style={styles.ctaText}>Explore places</Text>
           </Pressable>
-          <Pressable style={styles.ctaGhost} onPress={() => router.push("/reactivateStay" as Href)}>
-            <Text style={styles.ctaGhostText}>Connect My New Stay</Text>
+          <Pressable
+            style={styles.ctaGhost}
+            onPress={() => router.push("/reactivateStay" as Href)}
+            accessibilityRole="button"
+          >
+            <Text style={styles.ctaGhostText}>Connect a New Stay</Text>
           </Pressable>
         </View>
       )}
@@ -95,21 +104,27 @@ export default function CityMemoryScreen() {
 }
 
 const styles = StyleSheet.create({
-  boot: { flex: 1, alignItems: "center", justifyContent: "center", backgroundColor: "#F7F4EE" },
-  screen: { flex: 1, backgroundColor: "#F7F4EE" },
-  homeLink: { paddingVertical: 12 },
-  homeLinkText: { fontSize: 15, fontWeight: "700", color: "#121212" },
-  empty: { paddingTop: 24 },
-  emptyTitle: { fontSize: 26, fontWeight: "800", color: "#121212" },
-  emptyLead: { marginTop: 10, fontSize: 15, lineHeight: 22, color: "#444" },
+  boot: { flex: 1, alignItems: "center", justifyContent: "center", backgroundColor: color.surfaceWarm },
+  screen: { flex: 1, backgroundColor: color.surfaceWarm },
+  empty: { paddingTop: 28 },
+  emptyKicker: {
+    fontSize: 11,
+    letterSpacing: 1.4,
+    textTransform: "uppercase",
+    color: color.brand,
+    fontWeight: "800",
+  },
+  emptyTitle: { marginTop: 8, fontSize: 28, fontWeight: "800", color: color.ink, letterSpacing: -0.4 },
+  emptyLead: { marginTop: 10, fontSize: 15, lineHeight: 22, color: color.muted, maxWidth: 420 },
   cta: {
-    marginTop: 20,
-    backgroundColor: "#121212",
+    marginTop: 22,
+    backgroundColor: color.ink,
     borderRadius: 14,
     paddingVertical: 14,
     alignItems: "center",
+    maxWidth: 280,
   },
   ctaText: { color: "#FFF", fontWeight: "800" },
-  ctaGhost: { marginTop: 12, paddingVertical: 12, alignItems: "center" },
-  ctaGhostText: { color: "#121212", fontWeight: "700" },
+  ctaGhost: { marginTop: 12, paddingVertical: 12, alignItems: "flex-start" },
+  ctaGhostText: { color: color.ink, fontWeight: "700", textDecorationLine: "underline" },
 });

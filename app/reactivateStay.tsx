@@ -23,12 +23,20 @@ import {
   transitionAddBookingAndReactivate,
   transitionStartStayFromReactivated,
 } from "@/lib/guest-lifecycle";
+import { color, radius } from "@/lib/guestDesign";
+import { useAppBackScreenOptions } from "@/hooks/useAppBackScreenOptions";
 import { getHotelEntry } from "@/lib/pilotSession";
 import { liveHotelDisplayName } from "@/lib/stay/liveHotelIdentity";
 
 export default function ReactivateStayScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
+  const screenOptions = useAppBackScreenOptions({
+    title: "Connect My New Stay",
+    fallback: "/menu",
+    showBack: true,
+    escapeShortcuts: true,
+  });
   const [booking, setBooking] = useState("");
   const [name, setName] = useState("");
   const [busy, setBusy] = useState(false);
@@ -49,23 +57,24 @@ export default function ReactivateStayScreen() {
         entry,
         slug: hotelSlug,
       });
-      const snap = await transitionAddBookingAndReactivate({
+      await transitionAddBookingAndReactivate({
         bookingNumber: booking,
         guestName: name.trim() || undefined,
         hotelSlug: hotelSlug || undefined,
         hotelName: hotelName || undefined,
         city: life.activeStay?.city || life.lifecycle.lastCity || undefined,
       });
-      // Begin stay privileges immediately after successful attach
-      const active = await transitionStartStayFromReactivated();
+      await transitionStartStayFromReactivated();
       void trackEvent({ eventName: "reactivation_completed" });
       const memoryKept = (await getGuestLifecycle()).cityMemory.length;
       setDone(
-        `Reactivated · ${active.lifecycle.state} · ${active.lifecycle.accessLevel}. City Memory kept (${memoryKept} items). Prior stays: ${snap.stays.length}.`,
+        memoryKept > 0
+          ? `Stay connected — your City Memory stays with you (${memoryKept} kept).`
+          : "Stay connected — your City Memory stays with you.",
       );
       setTimeout(() => router.replace("/hotelier" as Href), 900);
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Activation failed");
+      setError(e instanceof Error ? e.message : "Couldn’t verify this booking. Check the number and try again.");
     } finally {
       setBusy(false);
     }
@@ -74,48 +83,69 @@ export default function ReactivateStayScreen() {
   return (
     <ScrollView
       style={styles.screen}
-      contentContainerStyle={{ padding: 20, paddingBottom: 48 + insets.bottom, gap: 14 }}
+      contentContainerStyle={{
+        padding: 24,
+        paddingBottom: 48 + insets.bottom,
+        gap: 14,
+        maxWidth: 520,
+        width: "100%",
+        alignSelf: "center",
+      }}
       keyboardShouldPersistTaps="handled"
+      testID="reactivate-stay-scroll"
     >
-      <Stack.Screen options={{ title: "Connect My New Stay" }} />
-      <Text style={styles.kicker}>Same account · verified stay</Text>
+      <Stack.Screen options={screenOptions} />
+      <Text style={styles.kicker}>Verified stay</Text>
       <Text style={styles.title}>Connect My New Stay</Text>
       <Text style={styles.lead}>
-        Enter your booking number to verify this stay. City Memory, saves, and follows stay intact.
-        Hotel unlock requires a verified reservation — being nearby is not enough.
+        Enter your booking details to unlock hotel requests. Your City Memory stays with you.
       </Text>
 
-      <Text style={styles.label}>Booking number</Text>
-      <TextInput
-        style={styles.input}
-        value={booking}
-        onChangeText={setBooking}
-        autoCapitalize="characters"
-        placeholder="Reservation number"
-        placeholderTextColor="#999"
-      />
+      <View style={styles.card}>
+        <Text style={styles.label}>Booking number</Text>
+        <TextInput
+          style={styles.input}
+          value={booking}
+          onChangeText={setBooking}
+          autoCapitalize="characters"
+          placeholder="Reservation number"
+          placeholderTextColor={color.muted}
+          testID="reactivate-booking-input"
+        />
 
-      <Text style={styles.label}>Name on reservation (verify)</Text>
-      <TextInput
-        style={styles.input}
-        value={name}
-        onChangeText={setName}
-        placeholder="As on booking"
-        placeholderTextColor="#999"
-      />
+        <Text style={[styles.label, { marginTop: 14 }]}>Name on reservation</Text>
+        <TextInput
+          style={styles.input}
+          value={name}
+          onChangeText={setName}
+          placeholder="As on booking"
+          placeholderTextColor={color.muted}
+          testID="reactivate-name-input"
+        />
+      </View>
 
       {error ? <Text style={styles.error}>{error}</Text> : null}
       {done ? <Text style={styles.done}>{done}</Text> : null}
 
       <Pressable
-        style={[styles.cta, busy && styles.ctaDisabled]}
+        style={[styles.cta, (busy || booking.trim().length < 4) && styles.ctaDisabled]}
         disabled={busy || booking.trim().length < 4}
         onPress={() => void onActivate()}
+        accessibilityRole="button"
+        testID="reactivate-submit"
       >
-        {busy ? <ActivityIndicator color="#fff" /> : <Text style={styles.ctaText}>Verify & Reactivate</Text>}
+        {busy ? (
+          <ActivityIndicator color="#fff" />
+        ) : (
+          <Text style={styles.ctaText}>Verify stay</Text>
+        )}
       </Pressable>
 
-      <Pressable onPress={() => router.replace("/cityMemory" as Href)}>
+      <Pressable
+        onPress={() => router.replace("/cityMemory" as Href)}
+        accessibilityRole="button"
+        testID="reactivate-keep-browsing"
+      >
         <Text style={styles.back}>Keep browsing City Memory</Text>
       </Pressable>
     </ScrollView>
@@ -123,37 +153,51 @@ export default function ReactivateStayScreen() {
 }
 
 const styles = StyleSheet.create({
-  screen: { flex: 1, backgroundColor: "#F7F4EE" },
+  screen: { flex: 1, backgroundColor: color.surfaceWarm },
   kicker: {
-    fontSize: 12,
-    letterSpacing: 1.1,
+    fontSize: 11,
+    letterSpacing: 1.3,
     textTransform: "uppercase",
-    color: "#6B5A3A",
-    fontWeight: "700",
+    color: color.brand,
+    fontWeight: "800",
   },
-  title: { fontSize: 26, fontWeight: "800", color: "#1A1A1A" },
-  lead: { fontSize: 15, lineHeight: 22, color: "#4A4A4A" },
-  label: { fontSize: 13, fontWeight: "700", color: "#333", marginTop: 6 },
+  title: { fontSize: 28, fontWeight: "800", color: color.ink, letterSpacing: -0.4 },
+  lead: { fontSize: 15, lineHeight: 22, color: color.muted },
+  card: {
+    backgroundColor: color.surface,
+    borderRadius: radius.xl,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: color.hairline,
+    padding: 16,
+    gap: 6,
+  },
+  label: { fontSize: 12, fontWeight: "800", color: color.inkSoft, letterSpacing: 0.3 },
   input: {
     borderWidth: 1,
-    borderColor: "#D6CFC3",
-    borderRadius: 12,
+    borderColor: color.hairline,
+    borderRadius: radius.md,
     paddingHorizontal: 14,
-    paddingVertical: 12,
+    paddingVertical: 13,
     fontSize: 16,
-    backgroundColor: "#FFF",
-    color: "#1A1A1A",
+    backgroundColor: color.surfaceWarm,
+    color: color.ink,
   },
   cta: {
-    marginTop: 10,
-    backgroundColor: "#1A1A1A",
-    borderRadius: 12,
-    paddingVertical: 14,
+    marginTop: 4,
+    backgroundColor: color.ink,
+    borderRadius: radius.lg,
+    paddingVertical: 15,
     alignItems: "center",
   },
-  ctaDisabled: { opacity: 0.5 },
+  ctaDisabled: { opacity: 0.45 },
   ctaText: { color: "#FFF", fontWeight: "800", fontSize: 15 },
-  error: { color: "#B00020", fontSize: 14 },
-  done: { color: "#1B5E20", fontSize: 14, lineHeight: 20 },
-  back: { textAlign: "center", color: "#6B5A3A", fontWeight: "700", marginTop: 8 },
+  error: { color: "#B00020", fontSize: 14, lineHeight: 20 },
+  done: { color: color.statusGreen, fontSize: 14, lineHeight: 20 },
+  back: {
+    textAlign: "center",
+    color: color.ink,
+    fontWeight: "700",
+    marginTop: 6,
+    textDecorationLine: "underline",
+  },
 });

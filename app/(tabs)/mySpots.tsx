@@ -1,3 +1,4 @@
+import { Stack } from 'expo-router';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Alert, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 
@@ -8,6 +9,7 @@ import EventList from '@/components/EventList';
 import { useCity } from '@/contexts/CityContext';
 import { fetchSWR, invalidateAppDataCache, readCacheStale } from '@/lib/appDataCache';
 import { useUpperTabHost } from '@/contexts/UpperTabHostContext';
+import { useAppBackScreenOptions } from '@/hooks/useAppBackScreenOptions';
 import { useTabActiveDataLoad } from '@/lib/useTabActiveDataLoad';
 import { useScreenFocused } from '@/lib/useScreenFocused';
 import { useGuestLiveSurface } from '@/lib/orchestra/useGuestLiveSurface';
@@ -27,6 +29,12 @@ type MySpotsScreenProps = {
 };
 
 export function MySpotsScreen({ tabActive }: MySpotsScreenProps = {}) {
+  const screenOptions = useAppBackScreenOptions({
+    title: 'My Spots',
+    fallback: '/menu',
+    showBack: true,
+    escapeShortcuts: true,
+  });
   const navFocused = useScreenFocused();
   const screenActive = tabActive ?? navFocused;
   const mySpotsInitialFocusDoneRef = useRef(false);
@@ -143,6 +151,7 @@ export function MySpotsScreen({ tabActive }: MySpotsScreenProps = {}) {
 
   return (
     <View style={styles.mainContainer}>
+      <Stack.Screen options={screenOptions} />
       <View style={styles.headerContainer}>
         <Text style={styles.headerText}>
           My Spots {selectedCity ? `in ${selectedCity}` : ''}

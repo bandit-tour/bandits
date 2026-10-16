@@ -21,15 +21,15 @@ import { useKeyboardBottomInset } from '@/lib/useKeyboardBottomInset';
 import { LOCAL_FRIEND_SUCCESS_MESSAGE, userFacingMessagingError } from '@/lib/userFacingMessagingError';
 import { getNotificationsBackendStatus, sendLocalFriendMessage } from '@/services/localFriend';
 import { useAppBackScreenOptions } from '@/hooks/useAppBackScreenOptions';
-import { APP_HOME_HREF } from '@/lib/appNavigation';
+import { PLAY_MENU_HREF } from '@/lib/appNavigation';
 
 export default function LocalFriendScreen() {
   const router = useRouter();
   const localFriendScreenOptions = useAppBackScreenOptions({
     title: 'Local Friend',
-    fallback: APP_HOME_HREF,
-    showBack: false,
-    escapeShortcuts: false,
+    fallback: PLAY_MENU_HREF,
+    showBack: true,
+    escapeShortcuts: true,
   });
   const { width } = useWindowDimensions();
   const isDesktopWeb = Platform.OS === 'web' && width >= 1024;
