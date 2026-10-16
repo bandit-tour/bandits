@@ -15,6 +15,8 @@ export type BanditPremiumVisibility = {
   freeAskMe: true;
   cityGuide: true;
   blockers?: string[];
+  /** PRODUCTION | TEST_DEMO | NONE — from Workspace visibility API. */
+  authorizationClass?: "PRODUCTION" | "TEST_DEMO" | "NONE";
 };
 
 const cache = new Map<string, { at: number; value: BanditPremiumVisibility }>();
@@ -30,6 +32,7 @@ function fallbackUnauthorized(banditId: string): BanditPremiumVisibility {
     freeAskMe: true,
     cityGuide: true,
     blockers: ["Workspace visibility unavailable — paid CTA hidden"],
+    authorizationClass: "NONE",
   };
 }
 
@@ -43,16 +46,19 @@ export async function fetchBanditPremiumVisibility(
   const hit = cache.get(id);
   if (hit && Date.now() - hit.at < TTL_MS) return hit.value;
 
-  const result = await workspaceGet<BanditPremiumVisibility & { product?: string; error?: string }>(
-    `/api/bandit/premium?view=visibility&banditId=${encodeURIComponent(id)}`,
-    guestEmail,
-  );
+  const result = await workspaceGet<
+    BanditPremiumVisibility & { product?: string; error?: string; authorizationClass?: string }
+  >(`/api/bandit/premium?view=visibility&banditId=${encodeURIComponent(id)}`, guestEmail);
 
   if (!result.ok) {
     const denied = fallbackUnauthorized(id);
     cache.set(id, { at: Date.now(), value: denied });
     return denied;
   }
+
+  const cls = result.data.authorizationClass;
+  const authorizationClass =
+    cls === "PRODUCTION" || cls === "TEST_DEMO" || cls === "NONE" ? cls : undefined;
 
   const value: BanditPremiumVisibility = {
     banditId: id,
@@ -63,6 +69,7 @@ export async function fetchBanditPremiumVisibility(
     freeAskMe: true,
     cityGuide: true,
     blockers: result.data.blockers,
+    authorizationClass,
   };
   cache.set(id, { at: Date.now(), value });
   return value;

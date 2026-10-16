@@ -47,7 +47,7 @@ function proxyWorkspace(req, res) {
       outHeaders["access-control-allow-origin"] = "*";
       outHeaders["access-control-allow-methods"] = "GET,POST,PUT,PATCH,DELETE,OPTIONS";
       outHeaders["access-control-allow-headers"] =
-        "Content-Type, Accept, Authorization, X-Guest-Email, X-Guest-Bridge";
+        "Content-Type, Accept, Authorization, X-Guest-Email, X-Guest-Bridge, X-Guest-QA";
       res.writeHead(upRes.statusCode || 502, outHeaders);
       upRes.pipe(res);
     },
@@ -86,7 +86,7 @@ module.exports = (() => {
               "access-control-allow-origin": "*",
               "access-control-allow-methods": "GET,POST,PUT,PATCH,DELETE,OPTIONS",
               "access-control-allow-headers":
-                "Content-Type, Accept, Authorization, X-Guest-Email, X-Guest-Bridge",
+                "Content-Type, Accept, Authorization, X-Guest-Email, X-Guest-Bridge, X-Guest-QA",
               "access-control-max-age": "86400",
             });
             res.end();

@@ -1,0 +1,169 @@
+{
+  "at": "2026-10-16T08:44:18.199Z",
+  "logins": {
+    "admin@banditour.demo": {
+      "http": 200,
+      "ok": true,
+      "hasCookie": true
+    },
+    "ops@banditour.prod": {
+      "http": 401,
+      "ok": false,
+      "hasCookie": false,
+      "error": "Invalid email or password"
+    },
+    "ops@banditour.demo": {
+      "http": 401,
+      "ok": false,
+      "hasCookie": false,
+      "error": "Invalid email or password"
+    }
+  },
+  "probes": [
+    {
+      "action": "admin_seed",
+      "keys": [
+        "action",
+        "guestAppBanditId",
+        "displayName",
+        "demo",
+        "testOnly"
+      ],
+      "status": 400,
+      "body": "{\"error\":\"Unknown action\"}"
+    },
+    {
+      "action": "admin_seed",
+      "keys": [
+        "action",
+        "guestBanditId",
+        "name",
+        "mode"
+      ],
+      "status": 400,
+      "body": "{\"error\":\"Unknown action\"}"
+    },
+    {
+      "action": "admin_seed",
+      "keys": [
+        "action",
+        "banditId",
+        "displayName"
+      ],
+      "status": 400,
+      "body": "{\"error\":\"Unknown action\"}"
+    },
+    {
+      "action": "seed_live_bandit",
+      "keys": [
+        "action",
+        "guestAppBanditId",
+        "displayName"
+      ],
+      "status": 400,
+      "body": "{\"error\":\"Unknown action\"}"
+    },
+    {
+      "action": "seed_demo_bandit",
+      "keys": [
+        "action",
+        "guestAppBanditId",
+        "displayName"
+      ],
+      "status": 400,
+      "body": "{\"error\":\"Unknown action\"}"
+    },
+    {
+      "action": "ops_seed",
+      "keys": [
+        "action",
+        "guestAppBanditId",
+        "displayName",
+        "octopusVerified"
+      ],
+      "status": 400,
+      "body": "{\"error\":\"Unknown action\"}"
+    },
+    {
+      "action": "seed_commercial",
+      "keys": [
+        "action",
+        "guestAppBanditId",
+        "displayName",
+        "octopusVerified",
+        "demo"
+      ],
+      "status": 400,
+      "body": "{\"error\":\"Unknown action\"}"
+    },
+    {
+      "path": "/api/bandit/onboarding?action=admin_seed",
+      "status": 400,
+      "body": "{\"error\":\"Unknown action\"}"
+    },
+    {
+      "path": "/api/ops/seed",
+      "status": 404,
+      "body": "{\"raw\":\"<!DOCTYPE html><!--g6pAuARNnWb29uICCGwHr--><html lang=\\\"en\\\"><head><meta charSet=\\\"utf-8\\\"/><meta name=\\\"viewport\\\" content=\\\"width=device-width, initial-scale=1\\\"/><link rel=\\\"stylesheet\\\" href=\\\"/_next/static/css/ec554f33e167e35f.css?dpl=dpl_FwyqWjYi3MhhScZqKPbYnqbhNPyg\\\" data-precedence=\\\"next\\\"/><link rel=\\\"preload\\\" as=\\\"script\\\" fetchPriority=\\\"low\\\" href=\\\"/_next/static/chunks/webpack-b8e1e74fcc0052ca.js?dpl=dpl_FwyqWjYi3MhhScZqKPbYnqbhNPyg\\\"/><script src=\\\"/_next/static/chunks/4b"
+    },
+    {
+      "path": "/api/ops/admin_seed",
+      "status": 404,
+      "body": "{\"raw\":\"<!DOCTYPE html><!--g6pAuARNnWb29uICCGwHr--><html lang=\\\"en\\\"><head><meta charSet=\\\"utf-8\\\"/><meta name=\\\"viewport\\\" content=\\\"width=device-width, initial-scale=1\\\"/><link rel=\\\"stylesheet\\\" href=\\\"/_next/static/css/ec554f33e167e35f.css?dpl=dpl_FwyqWjYi3MhhScZqKPbYnqbhNPyg\\\" data-precedence=\\\"next\\\"/><link rel=\\\"preload\\\" as=\\\"script\\\" fetchPriority=\\\"low\\\" href=\\\"/_next/static/chunks/webpack-b8e1e74fcc0052ca.js?dpl=dpl_FwyqWjYi3MhhScZqKPbYnqbhNPyg\\\"/><script src=\\\"/_next/static/chunks/4b"
+    },
+    {
+      "path": "/api/admin/seed",
+      "status": 404,
+      "body": "{\"raw\":\"<!DOCTYPE html><!--g6pAuARNnWb29uICCGwHr--><html lang=\\\"en\\\"><head><meta charSet=\\\"utf-8\\\"/><meta name=\\\"viewport\\\" content=\\\"width=device-width, initial-scale=1\\\"/><link rel=\\\"stylesheet\\\" href=\\\"/_next/static/css/ec554f33e167e35f.css?dpl=dpl_FwyqWjYi3MhhScZqKPbYnqbhNPyg\\\" data-precedence=\\\"next\\\"/><link rel=\\\"preload\\\" as=\\\"script\\\" fetchPriority=\\\"low\\\" href=\\\"/_next/static/chunks/webpack-b8e1e74fcc0052ca.js?dpl=dpl_FwyqWjYi3MhhScZqKPbYnqbhNPyg\\\"/><script src=\\\"/_next/static/chunks/4b"
+    },
+    {
+      "path": "/api/admin/seed-bandit",
+      "status": 404,
+      "body": "{\"raw\":\"<!DOCTYPE html><!--g6pAuARNnWb29uICCGwHr--><html lang=\\\"en\\\"><head><meta charSet=\\\"utf-8\\\"/><meta name=\\\"viewport\\\" content=\\\"width=device-width, initial-scale=1\\\"/><link rel=\\\"stylesheet\\\" href=\\\"/_next/static/css/ec554f33e167e35f.css?dpl=dpl_FwyqWjYi3MhhScZqKPbYnqbhNPyg\\\" data-precedence=\\\"next\\\"/><link rel=\\\"preload\\\" as=\\\"script\\\" fetchPriority=\\\"low\\\" href=\\\"/_next/static/chunks/webpack-b8e1e74fcc0052ca.js?dpl=dpl_FwyqWjYi3MhhScZqKPbYnqbhNPyg\\\"/><script src=\\\"/_next/static/chunks/4b"
+    },
+    {
+      "path": "/api/bandit/admin_seed",
+      "status": 404,
+      "body": "{\"raw\":\"<!DOCTYPE html><!--g6pAuARNnWb29uICCGwHr--><html lang=\\\"en\\\"><head><meta charSet=\\\"utf-8\\\"/><meta name=\\\"viewport\\\" content=\\\"width=device-width, initial-scale=1\\\"/><link rel=\\\"stylesheet\\\" href=\\\"/_next/static/css/ec554f33e167e35f.css?dpl=dpl_FwyqWjYi3MhhScZqKPbYnqbhNPyg\\\" data-precedence=\\\"next\\\"/><link rel=\\\"preload\\\" as=\\\"script\\\" fetchPriority=\\\"low\\\" href=\\\"/_next/static/chunks/webpack-b8e1e74fcc0052ca.js?dpl=dpl_FwyqWjYi3MhhScZqKPbYnqbhNPyg\\\"/><script src=\\\"/_next/static/chunks/4b"
+    },
+    {
+      "path": "/api/seed/bandit",
+      "status": 404,
+      "body": "{\"raw\":\"<!DOCTYPE html><!--g6pAuARNnWb29uICCGwHr--><html lang=\\\"en\\\"><head><meta charSet=\\\"utf-8\\\"/><meta name=\\\"viewport\\\" content=\\\"width=device-width, initial-scale=1\\\"/><link rel=\\\"stylesheet\\\" href=\\\"/_next/static/css/ec554f33e167e35f.css?dpl=dpl_FwyqWjYi3MhhScZqKPbYnqbhNPyg\\\" data-precedence=\\\"next\\\"/><link rel=\\\"preload\\\" as=\\\"script\\\" fetchPriority=\\\"low\\\" href=\\\"/_next/static/chunks/webpack-b8e1e74fcc0052ca.js?dpl=dpl_FwyqWjYi3MhhScZqKPbYnqbhNPyg\\\"/><script src=\\\"/_next/static/chunks/4b"
+    },
+    {
+      "path": "/api/internal/seed-bandit",
+      "status": 404,
+      "body": "{\"raw\":\"<!DOCTYPE html><!--g6pAuARNnWb29uICCGwHr--><html lang=\\\"en\\\"><head><meta charSet=\\\"utf-8\\\"/><meta name=\\\"viewport\\\" content=\\\"width=device-width, initial-scale=1\\\"/><link rel=\\\"stylesheet\\\" href=\\\"/_next/static/css/ec554f33e167e35f.css?dpl=dpl_FwyqWjYi3MhhScZqKPbYnqbhNPyg\\\" data-precedence=\\\"next\\\"/><link rel=\\\"preload\\\" as=\\\"script\\\" fetchPriority=\\\"low\\\" href=\\\"/_next/static/chunks/webpack-b8e1e74fcc0052ca.js?dpl=dpl_FwyqWjYi3MhhScZqKPbYnqbhNPyg\\\"/><script src=\\\"/_next/static/chunks/4b"
+    },
+    {
+      "action": "accept_agreement",
+      "status": 400,
+      "body": "{\"error\":\"No approved application — Review Board must approve first.\"}"
+    },
+    {
+      "action": "approve_application",
+      "status": 400,
+      "body": "{\"error\":\"Unknown action\"}"
+    },
+    {
+      "action": "activate",
+      "status": 400,
+      "body": "{\"error\":\"Unknown action\"}"
+    },
+    {
+      "action": "admin_activate",
+      "status": 400,
+      "body": "{\"error\":\"Unknown action\"}"
+    }
+  ],
+  "seeds": [],
+  "banditPageScripts": [
+    "/_next/static/chunks/webpack-b8e1e74fcc0052ca.js",
+    "/_next/static/chunks/4bd1b696-f785427dddbba9fb.js",
+    "/_next/static/chunks/1255-92d362308f634760.js",
+    "/_next/static/chunks/main-app-5eb0d9c55a395822.js",
+    "/_next/static/chunks/polyfills-42372ed130431b0a.js",
+    "/_next/static/chunks/webpack-b8e1e74fcc0052ca.js"
+  ]
+}

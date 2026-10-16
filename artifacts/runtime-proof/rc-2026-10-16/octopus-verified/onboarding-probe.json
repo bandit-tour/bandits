@@ -1,0 +1,127 @@
+{
+  "at": "2026-10-16T08:41:23.387Z",
+  "adminLogin": {
+    "http": 200,
+    "ok": true,
+    "hasCookie": true
+  },
+  "banditLogin": {
+    "http": 200,
+    "ok": true,
+    "hasCookie": true,
+    "person": {
+      "id": "person_bandit",
+      "email": "bandit@banditour.demo",
+      "displayName": "Elena Kostas",
+      "roles": [
+        "bandit"
+      ]
+    }
+  },
+  "gets": [
+    {
+      "path": "/api/bandit/onboarding",
+      "status": 200,
+      "body": "{\"agreementVersion\":\"1.0.0\",\"agreementChecksum\":\"aga_100_3cdb0255\",\"agreementSections\":[{\"id\":\"parties\",\"title\":\"Parties and relationship\",\"body\":\"This Local banDit Partner Agreement is between bandiTour (the platform operator) and you (the Local banDit). You are an independent service provider unless a different legal relationship is explicitly created in a separate written instrument. Nothing in this Agreement appoints bandiTour as your general legal representative, employer, or joint-venture partner. You authorize bandiTour to market, promote, distribute, and commercially facilitate your approved profile and services through the bandiTour hotel and travel ecosystem, and to collect the agr"
+    },
+    {
+      "path": "/api/bandit/onboarding?banditId=d6db5a96-339b-4016-ba80-b785fbdfb8e8",
+      "status": 200,
+      "body": "{\"agreementVersion\":\"1.0.0\",\"agreementChecksum\":\"aga_100_3cdb0255\",\"agreementSections\":[{\"id\":\"parties\",\"title\":\"Parties and relationship\",\"body\":\"This Local banDit Partner Agreement is between bandiTour (the platform operator) and you (the Local banDit). You are an independent service provider unless a different legal relationship is explicitly created in a separate written instrument. Nothing in this Agreement appoints bandiTour as your general legal representative, employer, or joint-venture partner. You authorize bandiTour to market, promote, distribute, and commercially facilitate your approved profile and services through the bandiTour hotel and travel ecosystem, and to collect the agr"
+    },
+    {
+      "path": "/api/bandit/onboarding?guestBanditId=d6db5a96-339b-4016-ba80-b785fbdfb8e8",
+      "status": 200,
+      "body": "{\"agreementVersion\":\"1.0.0\",\"agreementChecksum\":\"aga_100_3cdb0255\",\"agreementSections\":[{\"id\":\"parties\",\"title\":\"Parties and relationship\",\"body\":\"This Local banDit Partner Agreement is between bandiTour (the platform operator) and you (the Local banDit). You are an independent service provider unless a different legal relationship is explicitly created in a separate written instrument. Nothing in this Agreement appoints bandiTour as your general legal representative, employer, or joint-venture partner. You authorize bandiTour to market, promote, distribute, and commercially facilitate your approved profile and services through the bandiTour hotel and travel ecosystem, and to collect the agr"
+    },
+    {
+      "path": "/api/bandit/premium?view=guest&banditId=d6db5a96-339b-4016-ba80-b785fbdfb8e8",
+      "status": 200,
+      "body": "{\"product\":\"Premium Insights\",\"authorized\":false,\"showPremiumInsights\":false,\"octopusVerified\":false,\"freeAskMe\":true,\"cityGuide\":true,\"error\":\"Premium Insights not authorized for this Local Bandit\",\"blockers\":[\"No commercial Bandit mapping for this guest-facing id.\",\"Octopus Verified™ not live in Prisma BanditEarnedStatus.\",\"No commercial onboarding record.\",\"Premium Insights business profile not configured.\"],\"visibility\":{\"banditId\":\"d6db5a96-339b-4016-ba80-b785fbdfb8e8\",\"commercialBanditId\":null,\"octopusVerified\":false,\"octopusLevel\":null,\"premiumConciergeEnabled\":false,\"premiumConciergeAllowed\":false,\"showPremiumInsights\":false,\"commerceOperational\":false,\"profileConfigured\":false,\"free"
+    },
+    {
+      "path": "/api/bandit/premium?view=track&banditId=d6db5a96-339b-4016-ba80-b785fbdfb8e8",
+      "status": 200,
+      "body": "{\"product\":\"Premium Insights\",\"guestEmail\":\"admin@banditour.demo\",\"requests\":[],\"stayPasses\":[],\"entitlements\":[]}"
+    },
+    {
+      "path": "/api/bandit/premium?view=visibility&banditId=d6db5a96-339b-4016-ba80-b785fbdfb8e8",
+      "status": 200,
+      "body": "{\"product\":\"Premium Insights\",\"banditId\":\"d6db5a96-339b-4016-ba80-b785fbdfb8e8\",\"commercialBanditId\":null,\"octopusVerified\":false,\"octopusLevel\":null,\"premiumConciergeEnabled\":false,\"premiumConciergeAllowed\":false,\"showPremiumInsights\":false,\"commerceOperational\":false,\"profileConfigured\":false,\"freeAskMe\":true,\"cityGuide\":true,\"blockers\":[\"No commercial Bandit mapping for this guest-facing id.\",\"Octopus Verified™ not live in Prisma BanditEarnedStatus.\",\"No commercial onboarding record.\",\"Premium Insights business profile not configured.\"]}"
+    }
+  ],
+  "postsAdmin": [
+    {
+      "action": "admin_commercial",
+      "status": 400,
+      "body": "{\"error\":\"banditId required\"}"
+    },
+    {
+      "action": "admin_commercial",
+      "status": 400,
+      "body": "{\"error\":\"Not found\"}"
+    },
+    {
+      "action": "set_commercial",
+      "status": 400,
+      "body": "{\"error\":\"Unknown action\"}"
+    },
+    {
+      "action": "link_guest_identity",
+      "status": 400,
+      "body": "{\"error\":\"Unknown action\"}"
+    },
+    {
+      "action": "create_demo_commercial",
+      "status": 400,
+      "body": "{\"error\":\"Unknown action\"}"
+    },
+    {
+      "action": "ensure_demo_bandit",
+      "status": 400,
+      "body": "{\"error\":\"Unknown action\"}"
+    },
+    {
+      "action": "map_guest_bandit",
+      "status": 400,
+      "body": "{\"error\":\"Unknown action\"}"
+    },
+    {
+      "action": "set_earned_status",
+      "status": 400,
+      "body": "{\"error\":\"Unknown action\"}"
+    },
+    {
+      "action": "publish_verified",
+      "status": 400,
+      "body": "{\"error\":\"Unknown action\"}"
+    }
+  ],
+  "postsBandit": [
+    {
+      "action": "admin_commercial",
+      "status": 403,
+      "body": "{\"error\":\"Admin required\"}"
+    },
+    {
+      "action": "set_commercial",
+      "status": 400,
+      "body": "{\"error\":\"Unknown action\"}"
+    },
+    {
+      "action": "complete_onboarding",
+      "status": 400,
+      "body": "{\"error\":\"Unknown action\"}"
+    }
+  ],
+  "homeChunks": [
+    "_next/static/chunks/webpack-b8e1e74fcc0052ca.js",
+    "_next/static/chunks/4bd1b696-f785427dddbba9fb.js",
+    "_next/static/chunks/1255-92d362308f634760.js",
+    "_next/static/chunks/main-app-5eb0d9c55a395822.js",
+    "_next/static/chunks/2619-3c9e02e22d10480a.js",
+    "_next/static/chunks/app/page-917223d9160a0bd2.js",
+    "_next/static/chunks/polyfills-42372ed130431b0a.js",
+    "_next/static/chunks/webpack-b8e1e74fcc0052ca.js"
+  ]
+}

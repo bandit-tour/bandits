@@ -1,0 +1,168 @@
+{
+  "at": "2026-10-16T09:35:31.287Z",
+  "workspace": "https://banditour-workspace.vercel.app",
+  "productionVerifiedWithoutQa": 1,
+  "qaVerifiedWithHeader": 10,
+  "rows": [
+    {
+      "name": "Neo",
+      "id": "d76cb120-018d-4a2e-8b5f-0578a71fd8f9",
+      "withoutQa": {
+        "octopusVerified": true,
+        "authorizationClass": "PRODUCTION",
+        "commercialBanditId": "bandit_live_musq9j2v_2ad6",
+        "showPremiumInsights": true
+      },
+      "withQa": {
+        "octopusVerified": true,
+        "authorizationClass": "PRODUCTION",
+        "commercialBanditId": "bandit_live_musq9j2v_2ad6",
+        "showPremiumInsights": true
+      }
+    },
+    {
+      "name": "Elia",
+      "id": "d6db5a96-339b-4016-ba80-b785fbdfb8e8",
+      "withoutQa": {
+        "octopusVerified": false,
+        "authorizationClass": "NONE",
+        "commercialBanditId": "bandit_qa_elia",
+        "showPremiumInsights": false
+      },
+      "withQa": {
+        "octopusVerified": true,
+        "authorizationClass": "TEST_DEMO",
+        "commercialBanditId": "bandit_qa_elia",
+        "showPremiumInsights": true
+      }
+    },
+    {
+      "name": "Kostas",
+      "id": "d7f053c0-a4c5-4f70-a82c-037d82005808",
+      "withoutQa": {
+        "octopusVerified": false,
+        "authorizationClass": "NONE",
+        "commercialBanditId": "bandit_qa_kostas",
+        "showPremiumInsights": false
+      },
+      "withQa": {
+        "octopusVerified": true,
+        "authorizationClass": "TEST_DEMO",
+        "commercialBanditId": "bandit_qa_kostas",
+        "showPremiumInsights": true
+      }
+    },
+    {
+      "name": "Sonia",
+      "id": "dc2c9269-5b64-4b75-8bb0-1eb6f965c2ed",
+      "withoutQa": {
+        "octopusVerified": false,
+        "authorizationClass": "NONE",
+        "commercialBanditId": "bandit_qa_sonia",
+        "showPremiumInsights": false
+      },
+      "withQa": {
+        "octopusVerified": true,
+        "authorizationClass": "TEST_DEMO",
+        "commercialBanditId": "bandit_qa_sonia",
+        "showPremiumInsights": true
+      }
+    },
+    {
+      "name": "Lukas",
+      "id": "218e9d35-f9cf-400c-aeae-60b14f86e7c7",
+      "withoutQa": {
+        "octopusVerified": false,
+        "authorizationClass": "NONE",
+        "commercialBanditId": "bandit_qa_lukas",
+        "showPremiumInsights": false
+      },
+      "withQa": {
+        "octopusVerified": true,
+        "authorizationClass": "TEST_DEMO",
+        "commercialBanditId": "bandit_qa_lukas",
+        "showPremiumInsights": true
+      }
+    },
+    {
+      "name": "Nina",
+      "id": "cc705328-dd9e-4c2e-8764-b2e1077f9385",
+      "withoutQa": {
+        "octopusVerified": false,
+        "authorizationClass": "NONE",
+        "commercialBanditId": "bandit_qa_nina",
+        "showPremiumInsights": false
+      },
+      "withQa": {
+        "octopusVerified": true,
+        "authorizationClass": "TEST_DEMO",
+        "commercialBanditId": "bandit_qa_nina",
+        "showPremiumInsights": true
+      }
+    },
+    {
+      "name": "Jerry",
+      "id": "2c5fbe9a-8d4b-4de0-a21c-518211431a91",
+      "withoutQa": {
+        "octopusVerified": false,
+        "authorizationClass": "NONE",
+        "commercialBanditId": "bandit_qa_jerry",
+        "showPremiumInsights": false
+      },
+      "withQa": {
+        "octopusVerified": true,
+        "authorizationClass": "TEST_DEMO",
+        "commercialBanditId": "bandit_qa_jerry",
+        "showPremiumInsights": true
+      }
+    },
+    {
+      "name": "Smaragda",
+      "id": "dc477c6f-a0d5-4f40-a99f-5550780dded3",
+      "withoutQa": {
+        "octopusVerified": false,
+        "authorizationClass": "NONE",
+        "commercialBanditId": "bandit_qa_smaragda",
+        "showPremiumInsights": false
+      },
+      "withQa": {
+        "octopusVerified": true,
+        "authorizationClass": "TEST_DEMO",
+        "commercialBanditId": "bandit_qa_smaragda",
+        "showPremiumInsights": true
+      }
+    },
+    {
+      "name": "Joanna",
+      "id": "0e615630-d0a3-4eed-82b6-220d6c056d1b",
+      "withoutQa": {
+        "octopusVerified": false,
+        "authorizationClass": "NONE",
+        "commercialBanditId": "bandit_qa_joanna",
+        "showPremiumInsights": false
+      },
+      "withQa": {
+        "octopusVerified": true,
+        "authorizationClass": "TEST_DEMO",
+        "commercialBanditId": "bandit_qa_joanna",
+        "showPremiumInsights": true
+      }
+    },
+    {
+      "name": "Thodoris",
+      "id": "29464585-5c27-4699-98f0-77092779f0e2",
+      "withoutQa": {
+        "octopusVerified": false,
+        "authorizationClass": "NONE",
+        "commercialBanditId": "bandit_qa_thodoris",
+        "showPremiumInsights": false
+      },
+      "withQa": {
+        "octopusVerified": true,
+        "authorizationClass": "TEST_DEMO",
+        "commercialBanditId": "bandit_qa_thodoris",
+        "showPremiumInsights": true
+      }
+    }
+  ]
+}

@@ -1,0 +1,127 @@
+{
+  "at": "2026-10-16T08:39:41.083Z",
+  "workspace": "https://banditour-workspace.vercel.app",
+  "probes": [
+    {
+      "method": "GET",
+      "path": "/api/bandit/premium?view=authorized",
+      "status": 400,
+      "body": "{\"error\":\"Unknown view\"}"
+    },
+    {
+      "method": "GET",
+      "path": "/api/bandit/premium?view=list",
+      "status": 400,
+      "body": "{\"error\":\"Unknown view\"}"
+    },
+    {
+      "method": "GET",
+      "path": "/api/bandit/premium?view=admin",
+      "status": 400,
+      "body": "{\"error\":\"Unknown view\"}"
+    },
+    {
+      "method": "GET",
+      "path": "/api/bandit/premium?view=octopus",
+      "status": 400,
+      "body": "{\"error\":\"Unknown view\"}"
+    },
+    {
+      "method": "GET",
+      "path": "/api/admin/bandits",
+      "status": 404,
+      "body": "{\"raw\":\"<!DOCTYPE html><!--g6pAuARNnWb29uICCGwHr--><html lang=\\\"en\\\"><head><meta charSet=\\\"utf-8\\\"/><meta name=\\\"viewport\\\" content=\\\"width=device-width, initial-scale=1\\\"/><link rel=\\\"stylesheet\\\" href=\\\"/_next/static/css/ec554f33e167e35f.css?dpl=dpl_FwyqWjYi3MhhScZqKPbYnqbhNPyg\\\" data-precedence=\\\"next\\\"/><link rel=\\\"preload\\\" as=\\\"script\\\" fetchPriority=\\\"low\\\" href=\\\"/_next/static/chunks/webpack-b8e1e74fcc0052ca.js?dpl=dpl_FwyqWjYi3MhhScZqKPbYnqbhNPyg\\\"/><script src=\\\"/_next/static/chunks/4b"
+    },
+    {
+      "method": "GET",
+      "path": "/api/admin/octopus",
+      "status": 404,
+      "body": "{\"raw\":\"<!DOCTYPE html><!--g6pAuARNnWb29uICCGwHr--><html lang=\\\"en\\\"><head><meta charSet=\\\"utf-8\\\"/><meta name=\\\"viewport\\\" content=\\\"width=device-width, initial-scale=1\\\"/><link rel=\\\"stylesheet\\\" href=\\\"/_next/static/css/ec554f33e167e35f.css?dpl=dpl_FwyqWjYi3MhhScZqKPbYnqbhNPyg\\\" data-precedence=\\\"next\\\"/><link rel=\\\"preload\\\" as=\\\"script\\\" fetchPriority=\\\"low\\\" href=\\\"/_next/static/chunks/webpack-b8e1e74fcc0052ca.js?dpl=dpl_FwyqWjYi3MhhScZqKPbYnqbhNPyg\\\"/><script src=\\\"/_next/static/chunks/4b"
+    },
+    {
+      "method": "GET",
+      "path": "/api/admin/premium",
+      "status": 404,
+      "body": "{\"raw\":\"<!DOCTYPE html><!--g6pAuARNnWb29uICCGwHr--><html lang=\\\"en\\\"><head><meta charSet=\\\"utf-8\\\"/><meta name=\\\"viewport\\\" content=\\\"width=device-width, initial-scale=1\\\"/><link rel=\\\"stylesheet\\\" href=\\\"/_next/static/css/ec554f33e167e35f.css?dpl=dpl_FwyqWjYi3MhhScZqKPbYnqbhNPyg\\\" data-precedence=\\\"next\\\"/><link rel=\\\"preload\\\" as=\\\"script\\\" fetchPriority=\\\"low\\\" href=\\\"/_next/static/chunks/webpack-b8e1e74fcc0052ca.js?dpl=dpl_FwyqWjYi3MhhScZqKPbYnqbhNPyg\\\"/><script src=\\\"/_next/static/chunks/4b"
+    },
+    {
+      "method": "GET",
+      "path": "/api/bandits",
+      "status": 404,
+      "body": "{\"raw\":\"<!DOCTYPE html><!--g6pAuARNnWb29uICCGwHr--><html lang=\\\"en\\\"><head><meta charSet=\\\"utf-8\\\"/><meta name=\\\"viewport\\\" content=\\\"width=device-width, initial-scale=1\\\"/><link rel=\\\"stylesheet\\\" href=\\\"/_next/static/css/ec554f33e167e35f.css?dpl=dpl_FwyqWjYi3MhhScZqKPbYnqbhNPyg\\\" data-precedence=\\\"next\\\"/><link rel=\\\"preload\\\" as=\\\"script\\\" fetchPriority=\\\"low\\\" href=\\\"/_next/static/chunks/webpack-b8e1e74fcc0052ca.js?dpl=dpl_FwyqWjYi3MhhScZqKPbYnqbhNPyg\\\"/><script src=\\\"/_next/static/chunks/4b"
+    },
+    {
+      "method": "GET",
+      "path": "/api/bandit",
+      "status": 404,
+      "body": "{\"raw\":\"<!DOCTYPE html><!--g6pAuARNnWb29uICCGwHr--><html lang=\\\"en\\\"><head><meta charSet=\\\"utf-8\\\"/><meta name=\\\"viewport\\\" content=\\\"width=device-width, initial-scale=1\\\"/><link rel=\\\"stylesheet\\\" href=\\\"/_next/static/css/ec554f33e167e35f.css?dpl=dpl_FwyqWjYi3MhhScZqKPbYnqbhNPyg\\\" data-precedence=\\\"next\\\"/><link rel=\\\"preload\\\" as=\\\"script\\\" fetchPriority=\\\"low\\\" href=\\\"/_next/static/chunks/webpack-b8e1e74fcc0052ca.js?dpl=dpl_FwyqWjYi3MhhScZqKPbYnqbhNPyg\\\"/><script src=\\\"/_next/static/chunks/4b"
+    },
+    {
+      "method": "GET",
+      "path": "/api/commerce/bandits",
+      "status": 404,
+      "body": "{\"raw\":\"<!DOCTYPE html><!--g6pAuARNnWb29uICCGwHr--><html lang=\\\"en\\\"><head><meta charSet=\\\"utf-8\\\"/><meta name=\\\"viewport\\\" content=\\\"width=device-width, initial-scale=1\\\"/><link rel=\\\"stylesheet\\\" href=\\\"/_next/static/css/ec554f33e167e35f.css?dpl=dpl_FwyqWjYi3MhhScZqKPbYnqbhNPyg\\\" data-precedence=\\\"next\\\"/><link rel=\\\"preload\\\" as=\\\"script\\\" fetchPriority=\\\"low\\\" href=\\\"/_next/static/chunks/webpack-b8e1e74fcc0052ca.js?dpl=dpl_FwyqWjYi3MhhScZqKPbYnqbhNPyg\\\"/><script src=\\\"/_next/static/chunks/4b"
+    },
+    {
+      "method": "GET",
+      "path": "/api/identity/bandits",
+      "status": 404,
+      "body": "{\"raw\":\"<!DOCTYPE html><!--g6pAuARNnWb29uICCGwHr--><html lang=\\\"en\\\"><head><meta charSet=\\\"utf-8\\\"/><meta name=\\\"viewport\\\" content=\\\"width=device-width, initial-scale=1\\\"/><link rel=\\\"stylesheet\\\" href=\\\"/_next/static/css/ec554f33e167e35f.css?dpl=dpl_FwyqWjYi3MhhScZqKPbYnqbhNPyg\\\" data-precedence=\\\"next\\\"/><link rel=\\\"preload\\\" as=\\\"script\\\" fetchPriority=\\\"low\\\" href=\\\"/_next/static/chunks/webpack-b8e1e74fcc0052ca.js?dpl=dpl_FwyqWjYi3MhhScZqKPbYnqbhNPyg\\\"/><script src=\\\"/_next/static/chunks/4b"
+    }
+  ],
+  "adminLogin": {
+    "http": 200,
+    "ok": true,
+    "hasCookie": true,
+    "keys": [
+      "ok",
+      "person",
+      "workspaceId",
+      "product"
+    ]
+  },
+  "postProbes": [
+    {
+      "action": "authorize_octopus_verified",
+      "status": 400,
+      "body": "{\"error\":\"Unknown action\"}"
+    },
+    {
+      "action": "set_octopus_verified",
+      "status": 400,
+      "body": "{\"error\":\"Unknown action\"}"
+    },
+    {
+      "action": "publish_premium_visibility",
+      "status": 400,
+      "body": "{\"error\":\"Unknown action\"}"
+    },
+    {
+      "action": "upsert_commercial_identity",
+      "status": 400,
+      "body": "{\"error\":\"Unknown action\"}"
+    },
+    {
+      "action": "link_guest_bandit",
+      "status": 400,
+      "body": "{\"error\":\"Unknown action\"}"
+    }
+  ],
+  "adminPosts": [
+    {
+      "path": "/api/admin/octopus-verified",
+      "status": 404,
+      "body": "{\"raw\":\"<!DOCTYPE html><!--g6pAuARNnWb29uICCGwHr--><html lang=\\\"en\\\"><head><meta charSet=\\\"utf-8\\\"/><meta name=\\\"viewport\\\" content=\\\"width=device-width, initial-scale=1\\\"/><link rel=\\\"stylesheet\\\" href=\\\"/_next/static/css/ec554f33e167e35f.css?dpl=dpl_FwyqWjYi3MhhScZqKPbYnqbhNPyg\\\" data-precedence=\\\"next\\\"/><link rel=\\\"preload\\\" as=\\\"script\\\" fetchPriority=\\\"low\\\" href=\\\"/_next/static/chunks/webpack-b8e1e74fcc0052ca.js?dpl=dpl_FwyqWjYi3MhhScZqKPbYnqbhNPyg\\\"/><script src=\\\"/_next/static/chunks/4b"
+    },
+    {
+      "path": "/api/admin/premium/authorize",
+      "status": 404,
+      "body": "{\"raw\":\"<!DOCTYPE html><!--g6pAuARNnWb29uICCGwHr--><html lang=\\\"en\\\"><head><meta charSet=\\\"utf-8\\\"/><meta name=\\\"viewport\\\" content=\\\"width=device-width, initial-scale=1\\\"/><link rel=\\\"stylesheet\\\" href=\\\"/_next/static/css/ec554f33e167e35f.css?dpl=dpl_FwyqWjYi3MhhScZqKPbYnqbhNPyg\\\" data-precedence=\\\"next\\\"/><link rel=\\\"preload\\\" as=\\\"script\\\" fetchPriority=\\\"low\\\" href=\\\"/_next/static/chunks/webpack-b8e1e74fcc0052ca.js?dpl=dpl_FwyqWjYi3MhhScZqKPbYnqbhNPyg\\\"/><script src=\\\"/_next/static/chunks/4b"
+    },
+    {
+      "path": "/api/identity/link",
+      "status": 404,
+      "body": "{\"raw\":\"<!DOCTYPE html><!--g6pAuARNnWb29uICCGwHr--><html lang=\\\"en\\\"><head><meta charSet=\\\"utf-8\\\"/><meta name=\\\"viewport\\\" content=\\\"width=device-width, initial-scale=1\\\"/><link rel=\\\"stylesheet\\\" href=\\\"/_next/static/css/ec554f33e167e35f.css?dpl=dpl_FwyqWjYi3MhhScZqKPbYnqbhNPyg\\\" data-precedence=\\\"next\\\"/><link rel=\\\"preload\\\" as=\\\"script\\\" fetchPriority=\\\"low\\\" href=\\\"/_next/static/chunks/webpack-b8e1e74fcc0052ca.js?dpl=dpl_FwyqWjYi3MhhScZqKPbYnqbhNPyg\\\"/><script src=\\\"/_next/static/chunks/4b"
+    }
+  ]
+}

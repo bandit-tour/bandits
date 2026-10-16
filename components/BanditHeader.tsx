@@ -171,6 +171,8 @@ function BanditHeaderImpl({
 
   const showPremiumInsights = premiumVis?.showPremiumInsights === true;
   const showOctopusBadge = premiumVis?.octopusVerified === true;
+  const octopusIsTestDemo = premiumVis?.authorizationClass === "TEST_DEMO";
+  const octopusBadgeLabel = octopusIsTestDemo ? "Octopus Verified™ (TEST)" : "Octopus Verified™";
 
   /** Valid photos only — drop load failures so carousel count matches visible slides (QA-01/12). */
   const liveGalleryUris = useMemo(
@@ -251,7 +253,7 @@ function BanditHeaderImpl({
             {showOctopusBadge ? (
               <View style={styles.listVerifiedRow}>
                 <LocalBanditOctopusIcon style={styles.verifiedIconSm} />
-                <Text style={styles.listVerifiedText}>Octopus Verified™</Text>
+                <Text style={styles.listVerifiedText}>{octopusBadgeLabel}</Text>
               </View>
             ) : null}
             <Text style={styles.listNameOnPhoto} numberOfLines={1}>
@@ -322,7 +324,7 @@ function BanditHeaderImpl({
             style={styles.verifiedInline}
             onPress={openPremiumInsights}
             accessibilityRole="button"
-            accessibilityLabel="Octopus Verified™ — open Your Local Insider"
+            accessibilityLabel={`${octopusBadgeLabel} — open Your Local Insider`}
             testID="octopus-verified-badge"
           >
             <LocalBanditOctopusIcon style={styles.verifiedIconSm} />
@@ -335,11 +337,11 @@ function BanditHeaderImpl({
           style={styles.octopusVerifiedRow}
           onPress={openPremiumInsights}
           accessibilityRole="button"
-          accessibilityLabel="Octopus Verified™ — open Your Local Insider"
+          accessibilityLabel={`${octopusBadgeLabel} — open Your Local Insider`}
           testID="octopus-verified-row"
         >
           <LocalBanditOctopusIcon style={styles.verifiedIconSm} />
-          <Text style={styles.octopusVerifiedText}>Octopus Verified™</Text>
+          <Text style={styles.octopusVerifiedText}>{octopusBadgeLabel}</Text>
         </Pressable>
       ) : null}
 

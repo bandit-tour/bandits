@@ -43,6 +43,8 @@ export function workspaceOrigin(): string | null {
 /**
  * Commerce payments / entitlements / experience book — Orchestra OS when set,
  * otherwise Workspace (which mirrors commerce routes for Guest bridge).
+ * Production must never return null: empty EXPO_PUBLIC_* on Vercel used to gate
+ * Stay Pass with "Checkout unavailable" / Failed to fetch.
  */
 export function commerceOrigin(): string | null {
   const raw =
@@ -52,8 +54,8 @@ export function commerceOrigin(): string | null {
     env("EXPO_PUBLIC_WORKSPACE_URL") ||
     "";
   if (!raw) {
-    if (__DEV__) return "http://localhost:3000";
-    return null;
+    /** Same production fallback as workspaceOrigin — commerce is Workspace-hosted. */
+    return workspaceOrigin();
   }
   return raw.replace(/\/$/, "");
 }
@@ -61,12 +63,23 @@ export function commerceOrigin(): string | null {
 export function guestBridgeHeaders(guestEmail?: string | null): Record<string, string> {
   const email = String(guestEmail || env("GUEST_BRIDGE_EMAIL") || "guest@banditour.demo").trim();
   const secret = env("GUEST_BRIDGE_SECRET") || "banditour-guest-bridge-2026";
-  return {
+  const headers: Record<string, string> = {
     Accept: "application/json",
     "Content-Type": "application/json",
     "X-Guest-Email": email,
     "X-Guest-Bridge": secret,
   };
+  /** Localhost Guest QA requests TEST_DEMO Octopus surfaces (never LIVE). */
+  try {
+    if (typeof window !== "undefined") {
+      const host = String(window.location.hostname || "");
+      if (host === "localhost" || host === "127.0.0.1") headers["X-Guest-QA"] = "1";
+    }
+  } catch {
+    /* native */
+  }
+  if (env("EXPO_PUBLIC_GUEST_QA_OCTOPUS") === "1") headers["X-Guest-QA"] = "1";
+  return headers;
 }
 
 export type WorkspaceFetchResult<T> =

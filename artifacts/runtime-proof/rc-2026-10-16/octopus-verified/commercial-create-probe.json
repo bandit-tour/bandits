@@ -1,0 +1,184 @@
+{
+  "at": "2026-10-16T08:42:25.050Z",
+  "adminOk": true,
+  "neoInspect": {
+    "product": "Premium Insights",
+    "banditId": "d76cb120-018d-4a2e-8b5f-0578a71fd8f9",
+    "commercialBanditId": "bandit_live_musq9j2v_2ad6",
+    "octopusVerified": true,
+    "octopusLevel": "Octopus Verified™",
+    "premiumConciergeEnabled": true,
+    "premiumConciergeAllowed": true,
+    "showPremiumInsights": true,
+    "commerceOperational": true,
+    "profileConfigured": true,
+    "freeAskMe": true,
+    "cityGuide": true,
+    "blockers": []
+  },
+  "actions": [
+    {
+      "via": "onboarding",
+      "action": "create_bandit",
+      "status": 400,
+      "body": "{\"error\":\"Unknown action\"}"
+    },
+    {
+      "via": "onboarding",
+      "action": "create_commercial_bandit",
+      "status": 400,
+      "body": "{\"error\":\"Unknown action\"}"
+    },
+    {
+      "via": "onboarding",
+      "action": "register_bandit",
+      "status": 400,
+      "body": "{\"error\":\"Unknown action\"}"
+    },
+    {
+      "via": "onboarding",
+      "action": "provision_demo",
+      "status": 400,
+      "body": "{\"error\":\"Unknown action\"}"
+    },
+    {
+      "via": "onboarding",
+      "action": "seed_demo_bandit",
+      "status": 400,
+      "body": "{\"error\":\"Unknown action\"}"
+    },
+    {
+      "via": "onboarding",
+      "action": "admin_create",
+      "status": 400,
+      "body": "{\"error\":\"Unknown action\"}"
+    },
+    {
+      "via": "onboarding",
+      "action": "link_guest_app",
+      "status": 400,
+      "body": "{\"error\":\"Unknown action\"}"
+    },
+    {
+      "via": "onboarding",
+      "action": "set_guest_mapping",
+      "status": 400,
+      "body": "{\"error\":\"Unknown action\"}"
+    },
+    {
+      "via": "onboarding",
+      "action": "admin_commercial",
+      "status": 400,
+      "body": "{\"error\":\"Not found\"}"
+    },
+    {
+      "via": "onboarding",
+      "action": "admin_earned",
+      "status": 400,
+      "body": "{\"error\":\"Unknown action\"}"
+    },
+    {
+      "via": "onboarding",
+      "action": "set_earned_status",
+      "status": 400,
+      "body": "{\"error\":\"Unknown action\"}"
+    },
+    {
+      "via": "onboarding",
+      "action": "admin_octopus",
+      "status": 400,
+      "body": "{\"error\":\"Unknown action\"}"
+    },
+    {
+      "via": "/api/bandit/identity",
+      "status": 404,
+      "body": "{\"raw\":\"<!DOCTYPE html><!--g6pAuARNnWb29uICCGwHr--><html lang=\\\"en\\\"><head><meta charSet=\\\"utf-8\\\"/><meta name=\\\"viewport\\\" content=\\\"width=device-width, initial-scale=1\\\"/><link rel=\\\"stylesheet\\\" href=\\\"/_next/static/css/ec554f33e167e35f.css?dpl=dpl_FwyqWjYi3MhhScZqKPbYnqbhNPyg\\\" data-precedence=\\\"next\\\"/><link rel=\\\"preload\\\" as=\\\"script\\\" fetchPriority=\\\"low\\\" href=\\\"/_next/static/chunks/webpa"
+    },
+    {
+      "via": "/api/bandit/identity",
+      "status": 404,
+      "body": "{\"raw\":\"<!DOCTYPE html><!--g6pAuARNnWb29uICCGwHr--><html lang=\\\"en\\\"><head><meta charSet=\\\"utf-8\\\"/><meta name=\\\"viewport\\\" content=\\\"width=device-width, initial-scale=1\\\"/><link rel=\\\"stylesheet\\\" href=\\\"/_next/static/css/ec554f33e167e35f.css?dpl=dpl_FwyqWjYi3MhhScZqKPbYnqbhNPyg\\\" data-precedence=\\\"next\\\"/><link rel=\\\"preload\\\" as=\\\"script\\\" fetchPriority=\\\"low\\\" href=\\\"/_next/static/chunks/webpa"
+    },
+    {
+      "via": "/api/bandit/register",
+      "status": 404,
+      "body": "{\"raw\":\"<!DOCTYPE html><!--g6pAuARNnWb29uICCGwHr--><html lang=\\\"en\\\"><head><meta charSet=\\\"utf-8\\\"/><meta name=\\\"viewport\\\" content=\\\"width=device-width, initial-scale=1\\\"/><link rel=\\\"stylesheet\\\" href=\\\"/_next/static/css/ec554f33e167e35f.css?dpl=dpl_FwyqWjYi3MhhScZqKPbYnqbhNPyg\\\" data-precedence=\\\"next\\\"/><link rel=\\\"preload\\\" as=\\\"script\\\" fetchPriority=\\\"low\\\" href=\\\"/_next/static/chunks/webpa"
+    },
+    {
+      "via": "/api/bandit/create",
+      "status": 404,
+      "body": "{\"raw\":\"<!DOCTYPE html><!--g6pAuARNnWb29uICCGwHr--><html lang=\\\"en\\\"><head><meta charSet=\\\"utf-8\\\"/><meta name=\\\"viewport\\\" content=\\\"width=device-width, initial-scale=1\\\"/><link rel=\\\"stylesheet\\\" href=\\\"/_next/static/css/ec554f33e167e35f.css?dpl=dpl_FwyqWjYi3MhhScZqKPbYnqbhNPyg\\\" data-precedence=\\\"next\\\"/><link rel=\\\"preload\\\" as=\\\"script\\\" fetchPriority=\\\"low\\\" href=\\\"/_next/static/chunks/webpa"
+    },
+    {
+      "via": "/api/admin/bandit",
+      "status": 404,
+      "body": "{\"raw\":\"<!DOCTYPE html><!--g6pAuARNnWb29uICCGwHr--><html lang=\\\"en\\\"><head><meta charSet=\\\"utf-8\\\"/><meta name=\\\"viewport\\\" content=\\\"width=device-width, initial-scale=1\\\"/><link rel=\\\"stylesheet\\\" href=\\\"/_next/static/css/ec554f33e167e35f.css?dpl=dpl_FwyqWjYi3MhhScZqKPbYnqbhNPyg\\\" data-precedence=\\\"next\\\"/><link rel=\\\"preload\\\" as=\\\"script\\\" fetchPriority=\\\"low\\\" href=\\\"/_next/static/chunks/webpa"
+    },
+    {
+      "via": "/api/commerce/bandit",
+      "status": 404,
+      "body": "{\"raw\":\"<!DOCTYPE html><!--g6pAuARNnWb29uICCGwHr--><html lang=\\\"en\\\"><head><meta charSet=\\\"utf-8\\\"/><meta name=\\\"viewport\\\" content=\\\"width=device-width, initial-scale=1\\\"/><link rel=\\\"stylesheet\\\" href=\\\"/_next/static/css/ec554f33e167e35f.css?dpl=dpl_FwyqWjYi3MhhScZqKPbYnqbhNPyg\\\" data-precedence=\\\"next\\\"/><link rel=\\\"preload\\\" as=\\\"script\\\" fetchPriority=\\\"low\\\" href=\\\"/_next/static/chunks/webpa"
+    },
+    {
+      "via": "/api/bandit/demo",
+      "status": 404,
+      "body": "{\"raw\":\"<!DOCTYPE html><!--g6pAuARNnWb29uICCGwHr--><html lang=\\\"en\\\"><head><meta charSet=\\\"utf-8\\\"/><meta name=\\\"viewport\\\" content=\\\"width=device-width, initial-scale=1\\\"/><link rel=\\\"stylesheet\\\" href=\\\"/_next/static/css/ec554f33e167e35f.css?dpl=dpl_FwyqWjYi3MhhScZqKPbYnqbhNPyg\\\" data-precedence=\\\"next\\\"/><link rel=\\\"preload\\\" as=\\\"script\\\" fetchPriority=\\\"low\\\" href=\\\"/_next/static/chunks/webpa"
+    },
+    {
+      "via": "/api/bandit/seed",
+      "status": 404,
+      "body": "{\"raw\":\"<!DOCTYPE html><!--g6pAuARNnWb29uICCGwHr--><html lang=\\\"en\\\"><head><meta charSet=\\\"utf-8\\\"/><meta name=\\\"viewport\\\" content=\\\"width=device-width, initial-scale=1\\\"/><link rel=\\\"stylesheet\\\" href=\\\"/_next/static/css/ec554f33e167e35f.css?dpl=dpl_FwyqWjYi3MhhScZqKPbYnqbhNPyg\\\" data-precedence=\\\"next\\\"/><link rel=\\\"preload\\\" as=\\\"script\\\" fetchPriority=\\\"low\\\" href=\\\"/_next/static/chunks/webpa"
+    }
+  ],
+  "sourceHits": [
+    {
+      "url": "1255-92d362308f634760.js",
+      "needle": "Unknown action"
+    }
+  ],
+  "neoAdminCommercial": {
+    "status": 200,
+    "body": {
+      "ok": true,
+      "commercial": {
+        "banditId": "bandit_live_musq9j2v_2ad6",
+        "applicantEmail": "bandit_live_musq9j2v_2ad6@banditour.live",
+        "displayName": "Ioanna Live musq9j2v",
+        "activationStatus": "active",
+        "agreementVersion": "1.0.0",
+        "acceptedAt": "2026-10-16T08:34:27.852Z",
+        "commissionPlan": "standard_20",
+        "premiumConciergeEnabled": true,
+        "premiumConciergeEnabledAt": "2026-10-16T08:42:25.406Z",
+        "payoutStatus": "ready",
+        "taxKycStatus": "verified",
+        "acceptanceAudit": {
+          "actorEmail": "ops@banditour.prod",
+          "checksum": "aga_100_3cdb0255",
+          "source": "admin_seed"
+        },
+        "createdAt": "2026-10-16T08:34:27.852Z",
+        "updatedAt": "2026-10-16T08:42:25.406Z"
+      },
+      "eligibility": {
+        "applicationApproved": true,
+        "agreementAccepted": true,
+        "commercialReady": true,
+        "premiumConciergeAllowed": true,
+        "activationStatus": "active",
+        "blockers": [],
+        "commissionPlan": "standard_20",
+        "agreementVersion": "1.0.0",
+        "payoutStatus": "ready",
+        "taxKycStatus": "verified",
+        "premiumConciergeEnabled": true
+      }
+    }
+  },
+  "health": {
+    "status": 404,
+    "body": {
+      "raw": "<!DOCTYPE html><!--g6pAuARNnWb29uICCGwHr--><html lang=\"en\"><head><meta charSet=\"utf-8\"/><meta name=\"viewport\" content=\"width=device-width, initial-scale=1\"/><link rel=\"stylesheet\" href=\"/_next/static/css/ec554f33e167e35f.css?dpl=dpl_FwyqWjYi3MhhScZqKPbYnqbhNPyg\" data-precedence=\"next\"/><link rel=\"preload\" as=\"script\" fetchPriority=\"low\" href=\"/_next/static/chunks/webpack-b8e1e74fcc0052ca.js?dpl=dpl_FwyqWjYi3MhhScZqKPbYnqbhNPyg\"/><script src=\"/_next/static/chunks/4bd1b696-f785427dddbba9fb.js?dpl=dpl_FwyqWjYi3MhhScZqKPbYnqbhNPyg\" async=\"\"></script><script src=\"/_next/static/chunks/1255-92d362308f634760.js?dpl=dpl_FwyqWjYi3MhhScZqKPbYnqbhNPyg\" async=\"\"></script><script src=\"/_next/static/chunks/main-app-5eb0d9c55a395822.js?dpl=dpl_FwyqWjYi3MhhScZqKPbYnqbhNPyg\" async=\"\"></script><meta name=\"robots\" content=\"noindex\"/><title>404: This page could not be found.</title><title>bandiTour Workspace — Local Bandit</title><meta name=\"description\" content=\"Local Bandit Workspace OS\"/><script src=\"/_"
+    }
+  }
+}
