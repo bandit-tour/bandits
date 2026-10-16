@@ -316,10 +316,10 @@ export function BanditsScreen({ tabActive }: BanditsScreenProps = {}) {
         <GuestDiscoveryCard
           promptId="home_my_moments"
           eyebrow="During your stay"
-          title="Share a Moment"
-          body="Leave a short daily note for bottle discovery — travelers nearby may find it."
-          cta="Set My Moment"
-          href="/myMoment"
+          title="Start City Memory"
+          body="Add a private Moment with photos — or save places and follows. Your scrapbook grows here."
+          cta="Open City Memory"
+          href="/cityMemory"
           testID="home-discovery-my-moments"
         />
       )}

@@ -154,7 +154,8 @@ export async function getMyMomentToday(self?: MomentSender): Promise<GuestMoment
     text: insp.line,
     dayKey: today,
     updatedAt: new Date().toISOString(),
-    bottleEligible: true,
+    /** Private by default — Bottle discovery requires explicit opt-in. */
+    bottleEligible: false,
     sender,
   };
   await setRaw(MY_MOMENT_KEY, JSON.stringify(created));
@@ -174,7 +175,7 @@ export async function saveMyMoment(patch: {
     text: String(patch.text || "").trim().slice(0, 280),
     dayKey: dayKeyUtc(),
     updatedAt: new Date().toISOString(),
-    bottleEligible: patch.bottleEligible ?? true,
+    bottleEligible: patch.bottleEligible === true,
     sender: patch.sender || cur.sender,
   };
   if (!next.text) throw new Error("Moment text is required.");

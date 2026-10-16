@@ -129,6 +129,7 @@ export async function toggleBanditLike(
   currentLikeStatus: boolean,
   /** When provided, skips `getUser()` so Home/Profile flows do not race the auth mutex. */
   userId?: string | null,
+  opts?: { displayName?: string | null; avatarUrl?: string | null; city?: string | null },
 ): Promise<void> {
   let uid = userId != null ? String(userId).trim() : '';
   if (!uid) {
@@ -159,14 +160,31 @@ export async function toggleBanditLike(
       throw error;
     }
   } else {
-    // Add like for this user/bandit pair
-    void echoFollowToWorkspace({ banditId: id, title: id }).catch(() => undefined);
+    // Resolve a human-readable name — never persist raw UUIDs as titles.
+    let displayName = String(opts?.displayName || '').trim();
+    let avatarUrl = String(opts?.avatarUrl || '').trim() || null;
+    let city = String(opts?.city || '').trim() || 'Athens';
+    if (!displayName || /^[0-9a-f-]{36}$/i.test(displayName)) {
+      try {
+        const row = await getBanditById(id);
+        displayName = String(row?.name || '').trim() || 'Local banDit';
+        avatarUrl =
+          avatarUrl ||
+          String(row?.face_image_url || row?.image_url || '').trim() ||
+          null;
+        city = String(row?.city || city).trim() || 'Athens';
+      } catch {
+        displayName = 'Local banDit';
+      }
+    }
+    void echoFollowToWorkspace({ banditId: id, title: displayName }).catch(() => undefined);
     try {
       const { recordFollowedBandit } = await import('@/lib/guest-lifecycle');
       await recordFollowedBandit({
-        city: 'Athens',
+        city,
         banditId: id,
-        title: id,
+        title: displayName,
+        avatarUrl,
       });
     } catch {
       /* lifecycle memory is best-effort */

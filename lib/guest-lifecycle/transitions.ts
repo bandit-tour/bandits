@@ -352,23 +352,36 @@ export async function recordSavedPlace(input: {
   entityId?: string;
   category?: string;
   neighborhood?: string;
+  imageUrl?: string | null;
+  loved?: boolean;
 }): Promise<GuestLifecycleSnapshot> {
   return persistBundle((bundle) => {
     if (!can(bundle.lifecycle.accessLevel, "saves")) {
       throw new Error("ACCESS_DENIED:saves");
     }
     const t = nowIso();
+    const entityId = input.entityId ?? null;
+    const kind = input.loved ? ("liked_place" as const) : ("saved_place" as const);
+    const dedupeKey = `${kind}:${entityId || input.title}:${input.city}`;
+    const already = bundle.cityMemory.some((m) => {
+      const k = `${m.kind}:${m.entityId || m.title}:${m.city}`;
+      return k === dedupeKey;
+    });
+    if (already) return bundle;
     const item = {
       id: newId("mem"),
       userId: bundle.lifecycle.userId,
       city: input.city,
-      kind: "saved_place" as const,
-      entityId: input.entityId ?? null,
+      kind,
+      entityId,
       title: input.title,
-      subtitle: "Saved place",
+      subtitle: input.loved ? "Place you loved" : "Saved place",
       category: input.category ?? null,
       neighborhood: input.neighborhood ?? null,
-      meta: {},
+      meta: {
+        ...(input.imageUrl ? { imageUrl: input.imageUrl } : {}),
+        ...(input.loved ? { loved: true } : {}),
+      },
       createdAt: t,
       updatedAt: t,
     };
@@ -386,6 +399,7 @@ export async function recordFollowedBandit(input: {
   city: string;
   banditId: string;
   title: string;
+  avatarUrl?: string | null;
 }): Promise<GuestLifecycleSnapshot> {
   return persistBundle((bundle) => {
     if (!can(bundle.lifecycle.accessLevel, "follows")) {
@@ -395,8 +409,21 @@ export async function recordFollowedBandit(input: {
       (m) => m.kind === "followed_bandit" && m.entityId === input.banditId,
     );
     const t = nowIso();
+    const displayTitle = String(input.title || "").trim() || "Local banDit";
     const cityMemory = exists
-      ? bundle.cityMemory
+      ? bundle.cityMemory.map((m) =>
+          m.kind === "followed_bandit" && m.entityId === input.banditId
+            ? {
+                ...m,
+                title: displayTitle,
+                updatedAt: t,
+                meta: {
+                  ...(m.meta || {}),
+                  ...(input.avatarUrl ? { avatarUrl: input.avatarUrl, imageUrl: input.avatarUrl } : {}),
+                },
+              }
+            : m,
+        )
       : [
           ...bundle.cityMemory,
           {
@@ -405,11 +432,13 @@ export async function recordFollowedBandit(input: {
             city: input.city,
             kind: "followed_bandit" as const,
             entityId: input.banditId,
-            title: input.title,
+            title: displayTitle,
             subtitle: "Followed banDit",
             category: "bandit",
             neighborhood: null,
-            meta: {},
+            meta: input.avatarUrl
+              ? { avatarUrl: input.avatarUrl, imageUrl: input.avatarUrl }
+              : {},
             createdAt: t,
             updatedAt: t,
           },

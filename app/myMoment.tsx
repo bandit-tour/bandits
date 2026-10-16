@@ -37,6 +37,8 @@ export default function MyMomentScreen() {
   const [writing, setWriting] = useState(false);
   const [history, setHistory] = useState<MomentHistoryEntry[]>([]);
   const [msg, setMsg] = useState<string | null>(null);
+  /** Private by default — Bottle discovery requires explicit opt-in. */
+  const [bottleEligible, setBottleEligible] = useState(false);
 
   const displayName = activeIdentity?.displayName?.trim() || "Guest";
 
@@ -63,6 +65,7 @@ export default function MyMomentScreen() {
       const m = await getMyMomentToday(self);
       setMoment(m);
       setDraft(m.text);
+      setBottleEligible(m.bottleEligible === true);
       setHistory(await getMomentHistory());
     } finally {
       setLoading(false);
@@ -85,11 +88,16 @@ export default function MyMomentScreen() {
         avatarInitials: initials(displayName),
         kind: "guest" as const,
       };
-      const next = await saveMyMoment({ text, bottleEligible: true, sender: self });
+      const next = await saveMyMoment({ text, bottleEligible, sender: self });
       setMoment(next);
       setDraft(next.text);
+      setBottleEligible(next.bottleEligible === true);
       setWriting(false);
-      setMsg("Moment updated — eligible for bottle discovery today.");
+      setMsg(
+        next.bottleEligible
+          ? "Moment updated — eligible for bottle discovery today."
+          : "Moment saved privately — not in Bottle discovery.",
+      );
     } catch (e) {
       setMsg(e instanceof Error ? e.message : "Could not save Moment.");
     } finally {
@@ -150,8 +158,24 @@ export default function MyMomentScreen() {
         </View>
 
         <Text style={styles.context}>
-          Your Moment may appear when another traveler discovers you through a bandiTour bottle.
+          Private by default. Only if you opt in may your daily line appear when another traveler
+          discovers a social Bottle Message — never commercial Travel in a Bottle.
         </Text>
+
+        <Pressable
+          style={styles.optInRow}
+          onPress={() => setBottleEligible((v) => !v)}
+          accessibilityRole="checkbox"
+          accessibilityState={{ checked: bottleEligible }}
+          testID="moment-bottle-opt-in"
+        >
+          <View style={[styles.checkbox, bottleEligible && styles.checkboxOn]}>
+            {bottleEligible ? <Text style={styles.checkboxMark}>✓</Text> : null}
+          </View>
+          <Text style={styles.optInText}>
+            Share this daily Moment into Bottle discovery (explicit opt-in)
+          </Text>
+        </Pressable>
 
         <View style={styles.actions}>
           {writing ? (
@@ -163,12 +187,22 @@ export default function MyMomentScreen() {
               >
                 <Text style={styles.primaryText}>{saving ? "Saving…" : "Save Moment"}</Text>
               </Pressable>
-              <Pressable style={styles.secondary} onPress={() => { setDraft(moment.text); setWriting(false); }}>
+              <Pressable style={styles.secondary} onPress={() => { setDraft(moment.text); setWriting(false); setBottleEligible(moment.bottleEligible === true); }}>
                 <Text style={styles.secondaryText}>Cancel</Text>
               </Pressable>
             </>
           ) : (
             <>
+              {bottleEligible !== moment.bottleEligible ? (
+                <Pressable
+                  style={[styles.primary, saving && styles.disabled]}
+                  disabled={saving}
+                  onPress={() => void persist(moment.text)}
+                  testID="moment-save-privacy"
+                >
+                  <Text style={styles.primaryText}>{saving ? "Saving…" : "Save privacy choice"}</Text>
+                </Pressable>
+              ) : null}
               <Pressable style={styles.primary} onPress={() => setWriting(true)}>
                 <Text style={styles.primaryText}>Change Moment</Text>
               </Pressable>
@@ -286,8 +320,32 @@ const styles = StyleSheet.create({
     fontSize: 14,
     lineHeight: 21,
     color: color.inkSoft,
-    marginBottom: 22,
+    marginBottom: 14,
   },
+  optInRow: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    gap: 10,
+    marginBottom: 18,
+    padding: 12,
+    borderRadius: radius.lg,
+    backgroundColor: color.surfaceWarm,
+    borderWidth: 1,
+    borderColor: color.hairline,
+  },
+  checkbox: {
+    width: 22,
+    height: 22,
+    borderRadius: 6,
+    borderWidth: 1.5,
+    borderColor: color.ink,
+    alignItems: "center",
+    justifyContent: "center",
+    marginTop: 1,
+  },
+  checkboxOn: { backgroundColor: color.brand, borderColor: color.brand },
+  checkboxMark: { color: "#FFF", fontWeight: "800", fontSize: 12 },
+  optInText: { flex: 1, fontSize: 13, lineHeight: 19, color: color.ink, fontWeight: "600" },
   actions: { gap: 10, marginBottom: 18 },
   primary: {
     backgroundColor: color.brand,

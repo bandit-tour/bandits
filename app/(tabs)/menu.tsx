@@ -48,7 +48,7 @@ type MenuGroup = {
 const QUICK_ACTIONS_STAY: { key: string; title: string; subtitle: string; emoji: string; href: Href }[] = [
   { key: "stay", title: "Continue My Stay", subtitle: "Stay management", emoji: "🏨", href: "/hotelier/stayInfo" },
   { key: "lf", title: "Local Friend", subtitle: "Meet someone local", emoji: "💬", href: "/localFriend" },
-  { key: "moments", title: "My Moments", subtitle: "Daily travel status", emoji: "✨", href: "/myMoment" as Href },
+  { key: "moments", title: "My Moments", subtitle: "Photos, stories & daily Moment", emoji: "✨", href: "/cityMemory" as Href },
   { key: "alerts", title: "Safety alerts", subtitle: "bandiTEAM", emoji: "⚠", href: "/scam-alerts" },
   { key: "impact", title: "Impact / Passport", subtitle: "Your journey trace", emoji: "🌍", href: "/impact" },
 ];
@@ -56,7 +56,7 @@ const QUICK_ACTIONS_STAY: { key: string; title: string; subtitle: string; emoji:
 const QUICK_ACTIONS_AFTER: { key: string; title: string; subtitle: string; emoji: string; href: Href }[] = [
   { key: "memory", title: "City Memory", subtitle: "Your trip memory", emoji: "🧭", href: "/cityMemory" as Href },
   { key: "bottle", title: "Next journey", subtitle: "Travel in a Bottle", emoji: "🌲", href: "/travelBottle" },
-  { key: "moments", title: "My Moments", subtitle: "Daily travel status", emoji: "✨", href: "/myMoment" as Href },
+  { key: "moments", title: "My Moments", subtitle: "Photos, stories & daily Moment", emoji: "✨", href: "/cityMemory" as Href },
   { key: "lf", title: "Local Friend", subtitle: "Meet someone local", emoji: "💬", href: "/localFriend" },
   { key: "reactivate", title: "Connect My New Stay", subtitle: "Verified booking", emoji: "🔑", href: "/reactivateStay" },
 ];
@@ -89,7 +89,7 @@ const MENU_GROUPS_STAY: MenuGroup[] = [
     title: "My Privileges",
     cards: [
       { key: "premium", emoji: "⭐", title: "Your Local Insider", href: "/account/membership" },
-      { key: "moments", emoji: "✨", title: "My Moments", href: "/myMoment" as Href },
+      { key: "moments", emoji: "✨", title: "My Moments", href: "/cityMemory" as Href },
       { key: "impact", emoji: "🌍", title: "Impact / Passport", href: "/impact" },
     ],
   },

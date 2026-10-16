@@ -328,6 +328,29 @@ async function toggleEventLikeForUser(
       console.error('Error adding event like:', error);
       throw error;
     }
+    /** Feed City Memory — saved ≠ visited; title/image from the real spot. */
+    void (async () => {
+      try {
+        const { data } = await supabase
+          .from('event')
+          .select('id,title,city,neighborhood,category,image_url')
+          .eq('id', eventId)
+          .maybeSingle();
+        if (!data) return;
+        const { recordSavedPlace } = await import('@/lib/guest-lifecycle');
+        await recordSavedPlace({
+          city: String((data as { city?: string }).city || 'Athens'),
+          title: String((data as { title?: string }).title || 'Saved place'),
+          entityId: String((data as { id?: string }).id || eventId),
+          category: String((data as { category?: string }).category || '') || undefined,
+          neighborhood: String((data as { neighborhood?: string }).neighborhood || '') || undefined,
+          imageUrl: String((data as { image_url?: string }).image_url || '') || null,
+          loved: true,
+        });
+      } catch {
+        /* best-effort */
+      }
+    })();
   }
 }
 

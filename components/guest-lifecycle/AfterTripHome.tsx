@@ -1,7 +1,7 @@
 /**
- * City Memory — permanent personal travel space (Between Trips presentation).
- * Three sections: Memories · Still Connected · Where to Next.
- * Preserves existing routes, data, and lifecycle permissions.
+ * City Memory — personal travel journal.
+ * Sections: My Moments · My Places · My People · My Journeys · Still connected · Next Journey.
+ * No giant initial-only placeholder cards.
  */
 
 import { Image as ExpoImage } from "expo-image";
@@ -9,6 +9,7 @@ import { useRouter, type Href } from "expo-router";
 import React, { useMemo } from "react";
 import {
   Pressable,
+  ScrollView,
   StyleSheet,
   Text,
   useWindowDimensions,
@@ -20,10 +21,18 @@ import { HotelCheckoutInvite } from "@/components/guest-lifecycle/HotelCheckoutI
 import type { AfterTripHomeModel } from "@/lib/guest-lifecycle/city-memory";
 import type { CityMemoryItem, GuestLifecycleState } from "@/lib/guest-lifecycle/types";
 import { color, radius } from "@/lib/guestDesign";
+import {
+  humanBanditLabel,
+  isInternalIdLabel,
+  pluralCount,
+  travelMemoryCoverUri,
+  type TravelMemory,
+} from "@/lib/travel-memory";
 
 type Props = {
   model: AfterTripHomeModel;
   state: GuestLifecycleState;
+  personalMoments?: TravelMemory[];
   onPlanNextTrip: () => void;
   onReactivate: () => void;
   compact?: boolean;
@@ -33,7 +42,9 @@ function memoryImageUri(item: CityMemoryItem): string | null {
   const meta = item.meta || {};
   for (const key of ["imageUrl", "photoUrl", "image_url", "coverUrl", "avatarUrl", "heroUrl"]) {
     const v = meta[key];
-    if (typeof v === "string" && /^https?:\/\//i.test(v.trim())) return v.trim();
+    if (typeof v === "string" && (/^https?:\/\//i.test(v.trim()) || v.trim().startsWith("data:"))) {
+      return v.trim();
+    }
   }
   return null;
 }
@@ -44,171 +55,267 @@ function uniquePlaces(model: AfterTripHomeModel): CityMemoryItem[] {
   for (const item of [...model.savedPlaces, ...model.mySpots, ...model.placesLoved]) {
     const key = item.entityId || item.id;
     if (seen.has(key)) continue;
+    if (isInternalIdLabel(item.title) && !memoryImageUri(item)) continue;
     seen.add(key);
     out.push(item);
   }
   return out;
 }
 
-export function AfterTripHome({ model, state, onPlanNextTrip, onReactivate, compact }: Props) {
+function readablePeople(model: AfterTripHomeModel): CityMemoryItem[] {
+  return model.followedBandits.filter((b) => !isInternalIdLabel(b.title));
+}
+
+export function AfterTripHome({
+  model,
+  state,
+  personalMoments = [],
+  onPlanNextTrip,
+  onReactivate,
+  compact,
+}: Props) {
   const router = useRouter();
   const { width } = useWindowDimensions();
   const go = (href: string) => router.push(href as Href);
   const showStayNotice = state === "AFTER_TRIP" || state === "NEXT_TRIP_PLANNING";
   const places = useMemo(() => uniquePlaces(model), [model]);
-  const cardW = width >= 900 ? (Math.min(width, 1100) - 64) / 3 - 10 : width >= 640 ? (width - 56) / 2 - 8 : width - 48;
+  const people = useMemo(() => readablePeople(model), [model]);
+  const journeys = model.destinationsVisited.filter((d) => !isInternalIdLabel(d.title));
+  const thumbW = Math.min(148, Math.max(120, width * 0.36));
+
+  const hasAnyMemory =
+    personalMoments.length > 0 || places.length > 0 || people.length > 0 || journeys.length > 0;
 
   return (
     <View style={[styles.wrap, compact && styles.wrapCompact]} testID="city-memory-home">
       <Text style={styles.kicker}>City Memory</Text>
       <Text style={styles.title}>{model.memoryTitle}</Text>
-      <Text style={styles.lead}>Your places, people, and next journeys — always yours.</Text>
+      <Text style={styles.lead}>
+        My Moments create personal memories. City Memory keeps your places, people and journeys —
+        private by default.
+      </Text>
 
       <HotelCheckoutInvite visible={showStayNotice} onConnectStay={onReactivate} />
 
-      <GuestDiscoveryCard
-        promptId="home_my_moments"
-        eyebrow="Keep the story going"
-        title="Update My Moments"
-        body="A short daily Moment can reach the next traveler through a bottle — when you choose to share."
-        cta="Open My Moments"
-        href="/myMoment"
+      <Pressable
+        style={styles.addMemoryCta}
+        onPress={() => go("/memory/add")}
+        accessibilityRole="button"
+        accessibilityLabel="Add a Memory"
+        testID="city-memory-add-memory"
+      >
+        <Text style={styles.addMemoryCtaTitle}>Add a Memory</Text>
+        <Text style={styles.addMemoryCtaDetail}>Photos, video, story, place and date</Text>
+      </Pressable>
+
+      {/* MY MOMENTS */}
+      <SectionHeader
+        title="My Moments"
+        actionLabel={personalMoments.length ? "See all" : undefined}
+        onAction={personalMoments.length ? () => go("/memory/add") : undefined}
       />
+      {personalMoments.length === 0 ? (
+        <EmptyRail
+          title="No Moments yet"
+          body="Capture a place, a face, a night — your story stays private until you choose to share."
+          cta="Create your first Moment"
+          onPress={() => go("/memory/add")}
+          testID="city-memory-moments-empty"
+        />
+      ) : (
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={styles.rail}
+          testID="city-memory-moments-rail"
+        >
+          {personalMoments.slice(0, 12).map((m) => {
+            const cover = travelMemoryCoverUri(m);
+            return (
+              <Pressable
+                key={m.id}
+                style={[styles.momentCard, { width: thumbW }]}
+                onPress={() => go(`/memory/${encodeURIComponent(m.id)}`)}
+                accessibilityRole="button"
+                testID={`city-memory-moment-${m.id}`}
+              >
+                <View style={styles.momentMedia}>
+                  {cover ? (
+                    <ExpoImage
+                      source={{ uri: cover }}
+                      style={StyleSheet.absoluteFillObject}
+                      contentFit="cover"
+                    />
+                  ) : (
+                    <View style={styles.momentMediaFallback}>
+                      <Text style={styles.momentMediaFallbackText}>Story</Text>
+                    </View>
+                  )}
+                  <View style={styles.privatePill}>
+                    <Text style={styles.privatePillText}>Private</Text>
+                  </View>
+                </View>
+                <Text style={styles.momentTitle} numberOfLines={2}>
+                  {m.title}
+                </Text>
+                <Text style={styles.momentMeta} numberOfLines={1}>
+                  {[m.placeLabel || m.city, m.occurredAt.slice(0, 10)].filter(Boolean).join(" · ")}
+                </Text>
+              </Pressable>
+            );
+          })}
+        </ScrollView>
+      )}
 
-      {/* A — YOUR TRAVEL MEMORIES */}
-      <SectionHeader title="Your travel memories" />
-      <View style={styles.cardRow}>
-        <MemoryCard
-          width={cardW}
-          label="Places"
-          title={places.length ? `${places.length} saved` : "Saved places"}
-          detail={
-            places.length
-              ? places
-                  .slice(0, 2)
-                  .map((p) => p.title)
-                  .join(" · ")
-              : "Spots you save will gather here."
-          }
-          imageUri={places[0] ? memoryImageUri(places[0]) : null}
-          accent="#2A4A3A"
-          onPress={() => go("/mySpots")}
-          testID="city-memory-places"
-        />
-        <MemoryCard
-          width={cardW}
-          label="Loved"
-          title={model.placesLoved.length ? `${model.placesLoved.length} you loved` : "Places you loved"}
-          detail={
-            model.placesLoved.length
-              ? model.placesLoved[0]!.title
-              : "Mark favorites as you explore."
-          }
-          imageUri={model.placesLoved[0] ? memoryImageUri(model.placesLoved[0]) : null}
-          accent="#6B3A2A"
-          onPress={() => go("/mySpots")}
-          testID="city-memory-loved"
-        />
-        <MemoryCard
-          width={cardW}
-          label="Moments"
-          title="Travel moments"
-          detail="Photos and notes from the road."
-          imageUri={null}
-          accent="#1A2A4A"
-          onPress={() => go("/myMoment")}
-          testID="city-memory-moments"
-        />
-        <MemoryCard
-          width={cardW}
-          label="Cities"
-          title={
-            model.destinationsVisited.length
-              ? `${model.destinationsVisited.length} cities`
-              : "Cities visited"
-          }
-          detail={
-            model.destinationsVisited.length
-              ? model.destinationsVisited.map((d) => d.title || d.city).join(" · ")
-              : "Cities you visit will appear here."
-          }
-          imageUri={model.destinationsVisited[0] ? memoryImageUri(model.destinationsVisited[0]) : null}
-          accent="#3A2A4A"
+      {/* MY PLACES */}
+      <SectionHeader
+        title="My Places"
+        actionLabel={places.length ? "My Spots" : undefined}
+        onAction={places.length ? () => go("/mySpots") : undefined}
+      />
+      {places.length === 0 ? (
+        <EmptyRail
+          title="No saved places yet"
+          body="Heart a spot in Explore — it gathers here. Saving is not the same as visiting."
+          cta="Explore places"
           onPress={() => go("/explore")}
-          testID="city-memory-cities"
+          testID="city-memory-places-empty"
         />
-      </View>
+      ) : (
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.rail}>
+          {places.slice(0, 16).map((p) => {
+            const img = memoryImageUri(p);
+            return (
+              <Pressable
+                key={p.id}
+                style={[styles.placeCard, { width: thumbW }]}
+                onPress={() => go("/mySpots")}
+                accessibilityRole="button"
+                testID={`city-memory-place-${p.id}`}
+              >
+                <View style={[styles.placeMedia, !img && styles.placeMediaMuted]}>
+                  {img ? (
+                    <ExpoImage
+                      source={{ uri: img }}
+                      style={StyleSheet.absoluteFillObject}
+                      contentFit="cover"
+                    />
+                  ) : null}
+                </View>
+                <Text style={styles.placeTitle} numberOfLines={2}>
+                  {p.title}
+                </Text>
+                <Text style={styles.placeMeta} numberOfLines={1}>
+                  {[p.neighborhood, p.city].filter(Boolean).join(" · ") || "Saved"}
+                </Text>
+              </Pressable>
+            );
+          })}
+        </ScrollView>
+      )}
 
-      {places.length > 0 ? (
-        <View style={styles.previewRail}>
-          {places.slice(0, 6).map((p) => (
-            <Pressable
-              key={p.id}
-              style={[styles.previewChip, { width: Math.min(160, cardW) }]}
-              onPress={() => go("/mySpots")}
-              accessibilityRole="button"
-            >
-              <Text style={styles.previewChipTitle} numberOfLines={2}>
-                {p.title}
-              </Text>
-              <Text style={styles.previewChipMeta} numberOfLines={1}>
-                {[p.neighborhood, p.city].filter(Boolean).join(" · ") || "Saved"}
-              </Text>
-            </Pressable>
-          ))}
-        </View>
+      {/* MY PEOPLE */}
+      <SectionHeader
+        title="My People"
+        actionLabel={people.length ? "Following" : undefined}
+        onAction={people.length ? () => go("/following") : undefined}
+      />
+      {people.length === 0 ? (
+        <EmptyRail
+          title="No followed banDits yet"
+          body="Follow a Local banDit you trust — their name and face appear here."
+          cta="Meet Local banDits"
+          onPress={() => go("/bandits")}
+          testID="city-memory-people-empty"
+        />
+      ) : (
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.rail}>
+          {people.slice(0, 16).map((b) => {
+            const img = memoryImageUri(b);
+            const name = humanBanditLabel(b.title);
+            return (
+              <Pressable
+                key={b.id}
+                style={styles.personCard}
+                onPress={() =>
+                  b.entityId
+                    ? go(`/bandit/${encodeURIComponent(b.entityId)}`)
+                    : go("/following")
+                }
+                accessibilityRole="button"
+                testID={`city-memory-person-${b.id}`}
+              >
+                <View style={styles.avatar}>
+                  {img ? (
+                    <ExpoImage
+                      source={{ uri: img }}
+                      style={StyleSheet.absoluteFillObject}
+                      contentFit="cover"
+                    />
+                  ) : (
+                    <Text style={styles.avatarInitial}>{name.slice(0, 1).toUpperCase()}</Text>
+                  )}
+                </View>
+                <Text style={styles.personName} numberOfLines={2}>
+                  {name}
+                </Text>
+              </Pressable>
+            );
+          })}
+        </ScrollView>
+      )}
+      {people.length > 0 ? (
+        <Text style={styles.countLine}>{pluralCount(people.length, "banDit")}</Text>
       ) : null}
 
-      {/* B — STILL CONNECTED */}
+      {/* MY JOURNEYS */}
+      <SectionHeader title="My Journeys" />
+      {journeys.length === 0 && !model.bottleJourneys.length ? (
+        <EmptyRail
+          title="Journeys appear as you travel"
+          body="Cities from real stays and plans gather here — never invented visits."
+          cta="Plan Your Next Trip"
+          onPress={onPlanNextTrip}
+          testID="city-memory-journeys-empty"
+        />
+      ) : (
+        <View style={styles.journeyList} testID="city-memory-journeys">
+          {journeys.map((j) => (
+            <View key={j.id} style={styles.journeyRow}>
+              <Text style={styles.journeyCity}>{j.title}</Text>
+              <Text style={styles.journeyMeta}>{j.subtitle || "In your travel story"}</Text>
+            </View>
+          ))}
+          {model.bottleJourneys.slice(0, 4).map((j) => (
+            <View key={j.id} style={styles.journeyRow}>
+              <Text style={styles.journeyCity}>{j.title}</Text>
+              <Text style={styles.journeyMeta}>{j.subtitle || "Travel in a Bottle"}</Text>
+            </View>
+          ))}
+        </View>
+      )}
+
+      {!hasAnyMemory ? (
+        <GuestDiscoveryCard
+          promptId="home_my_moments"
+          eyebrow="Start your scrapbook"
+          title="Your journey lives here"
+          body="Add a Moment, save a place, or follow a Local banDit — City Memory grows with you."
+          cta="Add a Memory"
+          href="/memory/add"
+        />
+      ) : null}
+
+      {/* STILL CONNECTED */}
       <SectionHeader title="Still connected" />
-      <View style={styles.cardRow}>
-        <MemoryCard
-          width={cardW}
-          label="Following"
-          title={
-            model.followedBandits.length
-              ? `${model.followedBandits.length} banDits`
-              : "Followed Local banDits"
-          }
-          detail={
-            model.followedBandits.length
-              ? model.followedBandits
-                  .slice(0, 2)
-                  .map((b) => b.title)
-                  .join(" · ")
-              : "Follows continue after checkout."
-          }
-          imageUri={model.followedBandits[0] ? memoryImageUri(model.followedBandits[0]) : null}
-          accent="#111111"
-          onPress={() => go("/following")}
-          testID="city-memory-following"
-        />
-        {model.discoveryPicks.map((d) => (
-          <MemoryCard
-            key={d.id}
-            width={cardW}
-            label="Discover"
-            title={d.title}
-            detail={d.detail}
-            imageUri={null}
-            accent="#3A3A3A"
-            onPress={() => go(d.href)}
-            testID={`city-memory-disc-${d.id}`}
-          />
-        ))}
-        <MemoryCard
-          width={cardW}
-          label="Chat"
-          title="Keep the conversation"
-          detail="Threads with locals stay in your inbox."
-          imageUri={null}
-          accent="#2A2A2A"
-          onPress={() => go("/community")}
-          testID="city-memory-chat"
-        />
+      <View style={styles.linkRow}>
+        <LinkChip label="Following" onPress={() => go("/following")} />
+        <LinkChip label="Chat" onPress={() => go("/community")} />
+        <LinkChip label="Daily Moment" onPress={() => go("/myMoment")} />
+        <LinkChip label="Experiences" onPress={() => go("/experiences")} />
       </View>
 
-      {/* C — WHERE TO NEXT? */}
+      {/* NEXT JOURNEY */}
       <SectionHeader title="Where to next?" />
       <Pressable
         style={styles.primaryNext}
@@ -218,35 +325,19 @@ export function AfterTripHome({ model, state, onPlanNextTrip, onReactivate, comp
       >
         <Text style={styles.primaryNextTitle}>Plan Your Next Trip</Text>
         <Text style={styles.primaryNextDetail}>
-          {model.nextTripIdeas[0]?.detail || "Start from memory — not from zero."}
+          Opens Travel in a Bottle — Mix Sleeping Experiences. Editorial inspiration stays separate
+          from live bookable stays.
         </Text>
       </Pressable>
-
-      <View style={styles.cardRow}>
-        <MemoryCard
-          width={cardW}
-          label="Bottle"
-          title="Travel in a Bottle"
-          detail="Shape the trip while City Memory stays with you."
-          imageUri={null}
-          accent="#4A2A1A"
-          onPress={() => go("/travelBottle")}
-          testID="city-memory-bottle"
-        />
-        {model.similarCities.map((c) => (
-          <MemoryCard
-            key={c.id}
-            width={cardW}
-            label="Idea"
-            title={c.title}
-            detail={c.detail}
-            imageUri={null}
-            accent="#1A3A4A"
-            onPress={() => go("/explore")}
-            testID={`city-memory-city-${c.id}`}
-          />
-        ))}
-      </View>
+      <Pressable
+        style={styles.secondaryNext}
+        onPress={() => go("/travelBottle")}
+        accessibilityRole="button"
+        testID="city-memory-bottle"
+      >
+        <Text style={styles.secondaryNextTitle}>Travel in a Bottle</Text>
+        <Text style={styles.secondaryNextDetail}>Shape the trip while City Memory stays with you.</Text>
+      </Pressable>
 
       {showStayNotice ? (
         <Pressable
@@ -262,67 +353,61 @@ export function AfterTripHome({ model, state, onPlanNextTrip, onReactivate, comp
   );
 }
 
-function SectionHeader({ title }: { title: string }) {
+function SectionHeader({
+  title,
+  actionLabel,
+  onAction,
+}: {
+  title: string;
+  actionLabel?: string;
+  onAction?: () => void;
+}) {
   return (
     <View style={styles.sectionHead}>
       <Text style={styles.sectionTitle}>{title}</Text>
+      {actionLabel && onAction ? (
+        <Pressable onPress={onAction} hitSlop={8}>
+          <Text style={styles.sectionAction}>{actionLabel}</Text>
+        </Pressable>
+      ) : null}
     </View>
   );
 }
 
-function MemoryCard({
-  width,
-  label,
+function EmptyRail({
   title,
-  detail,
-  imageUri,
-  accent,
+  body,
+  cta,
   onPress,
   testID,
 }: {
-  width: number;
-  label: string;
   title: string;
-  detail: string;
-  imageUri: string | null;
-  accent: string;
+  body: string;
+  cta: string;
   onPress: () => void;
   testID?: string;
 }) {
   return (
-    <Pressable
-      style={[styles.memCard, { width }]}
-      onPress={onPress}
-      accessibilityRole="button"
-      accessibilityLabel={title}
-      testID={testID}
-    >
-      <View style={[styles.memMedia, { backgroundColor: accent }]}>
-        {imageUri ? (
-          <ExpoImage source={{ uri: imageUri }} style={StyleSheet.absoluteFillObject} contentFit="cover" />
-        ) : (
-          <Text style={styles.memInitial}>{title.slice(0, 1).toUpperCase()}</Text>
-        )}
-        <View style={styles.memLabelPill}>
-          <Text style={styles.memLabelText}>{label}</Text>
-        </View>
-      </View>
-      <Text style={styles.memTitle} numberOfLines={2}>
-        {title}
-      </Text>
-      <Text style={styles.memDetail} numberOfLines={2}>
-        {detail}
-      </Text>
+    <View style={styles.emptyRail} testID={testID}>
+      <Text style={styles.emptyTitle}>{title}</Text>
+      <Text style={styles.emptyBody}>{body}</Text>
+      <Pressable style={styles.emptyCta} onPress={onPress} accessibilityRole="button">
+        <Text style={styles.emptyCtaText}>{cta}</Text>
+      </Pressable>
+    </View>
+  );
+}
+
+function LinkChip({ label, onPress }: { label: string; onPress: () => void }) {
+  return (
+    <Pressable style={styles.linkChip} onPress={onPress} accessibilityRole="button">
+      <Text style={styles.linkChipText}>{label}</Text>
     </Pressable>
   );
 }
 
 const styles = StyleSheet.create({
-  wrap: {
-    gap: 18,
-    paddingBottom: 28,
-    paddingTop: 4,
-  },
+  wrap: { gap: 16, paddingBottom: 28, paddingTop: 4 },
   wrapCompact: { paddingTop: 4 },
   kicker: {
     fontSize: 11,
@@ -337,115 +422,146 @@ const styles = StyleSheet.create({
     color: color.ink,
     letterSpacing: -0.6,
     lineHeight: 36,
+    fontFamily: "Georgia",
   },
   lead: {
     fontSize: 15,
     lineHeight: 22,
     color: color.muted,
-    marginTop: -6,
-    maxWidth: 420,
+    marginTop: -4,
+    maxWidth: 480,
   },
+  addMemoryCta: {
+    marginTop: 4,
+    backgroundColor: color.ink,
+    borderRadius: radius.lg,
+    paddingVertical: 16,
+    paddingHorizontal: 18,
+  },
+  addMemoryCtaTitle: { color: "#FFF", fontSize: 17, fontWeight: "800" },
+  addMemoryCtaDetail: { color: "rgba(255,255,255,0.72)", marginTop: 4, fontSize: 13 },
   sectionHead: {
-    marginTop: 10,
-    gap: 4,
+    marginTop: 14,
+    flexDirection: "row",
+    alignItems: "baseline",
+    justifyContent: "space-between",
   },
   sectionTitle: {
     fontSize: 20,
     fontWeight: "800",
     color: color.ink,
     letterSpacing: -0.3,
+    fontFamily: "Georgia",
   },
-  cardRow: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    gap: 12,
-  },
-  memCard: {
-    marginBottom: 4,
-  },
-  memMedia: {
+  sectionAction: { fontSize: 13, fontWeight: "700", color: color.brand },
+  rail: { gap: 12, paddingVertical: 4 },
+  momentCard: { gap: 6 },
+  momentMedia: {
     width: "100%",
     aspectRatio: 4 / 5,
-    borderRadius: radius.xl,
+    borderRadius: radius.md,
     overflow: "hidden",
+    backgroundColor: "#E8E4DC",
+  },
+  momentMediaFallback: {
+    ...StyleSheet.absoluteFillObject,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "#D9D2C5",
+  },
+  momentMediaFallbackText: { fontSize: 13, fontWeight: "700", color: "#5A5348" },
+  privatePill: {
+    position: "absolute",
+    top: 8,
+    left: 8,
+    backgroundColor: "rgba(255,255,255,0.92)",
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 8,
+  },
+  privatePillText: { fontSize: 10, fontWeight: "800", color: "#222" },
+  momentTitle: { fontSize: 14, fontWeight: "700", color: color.ink, lineHeight: 18 },
+  momentMeta: { fontSize: 11, color: color.muted },
+  placeCard: { gap: 6 },
+  placeMedia: {
+    width: "100%",
+    aspectRatio: 1,
+    borderRadius: radius.md,
+    overflow: "hidden",
+    backgroundColor: "#E0DCD3",
+  },
+  placeMediaMuted: { backgroundColor: "#E8E4DC" },
+  placeTitle: { fontSize: 14, fontWeight: "700", color: color.ink },
+  placeMeta: { fontSize: 11, color: color.muted },
+  personCard: { width: 88, alignItems: "center", gap: 6 },
+  avatar: {
+    width: 64,
+    height: 64,
+    borderRadius: 32,
+    overflow: "hidden",
+    backgroundColor: "#DDD7CC",
     alignItems: "center",
     justifyContent: "center",
   },
-  memInitial: {
-    fontSize: 42,
-    fontWeight: "800",
-    color: "rgba(255,255,255,0.88)",
+  avatarInitial: { fontSize: 22, fontWeight: "800", color: "#5A5348" },
+  personName: { fontSize: 12, fontWeight: "700", color: color.ink, textAlign: "center" },
+  countLine: { fontSize: 12, color: color.muted, marginTop: -4 },
+  journeyList: { gap: 10 },
+  journeyRow: {
+    paddingVertical: 12,
+    paddingHorizontal: 14,
+    borderRadius: radius.md,
+    backgroundColor: "#F3EFE6",
+    borderWidth: 1,
+    borderColor: "rgba(0,0,0,0.06)",
   },
-  memLabelPill: {
-    position: "absolute",
-    left: 10,
-    top: 10,
-    backgroundColor: "rgba(0,0,0,0.55)",
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 999,
-  },
-  memLabelText: {
-    color: "#FFF",
-    fontSize: 10,
-    fontWeight: "800",
-    letterSpacing: 0.6,
-    textTransform: "uppercase",
-  },
-  memTitle: {
-    marginTop: 10,
-    fontSize: 15,
-    fontWeight: "800",
-    color: color.ink,
-  },
-  memDetail: {
-    marginTop: 2,
-    fontSize: 12,
-    lineHeight: 17,
-    color: color.muted,
-  },
-  previewRail: {
-    flexDirection: "row",
-    flexWrap: "wrap",
+  journeyCity: { fontSize: 16, fontWeight: "800", color: color.ink },
+  journeyMeta: { marginTop: 2, fontSize: 12, color: color.muted },
+  emptyRail: {
+    padding: 16,
+    borderRadius: radius.lg,
+    backgroundColor: "#F3EFE6",
+    borderWidth: 1,
+    borderColor: "rgba(0,0,0,0.06)",
     gap: 8,
   },
-  previewChip: {
-    backgroundColor: color.surface,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: color.hairline,
-    borderRadius: radius.md,
-    padding: 12,
+  emptyTitle: { fontSize: 16, fontWeight: "800", color: color.ink },
+  emptyBody: { fontSize: 13, lineHeight: 19, color: color.muted },
+  emptyCta: {
+    alignSelf: "flex-start",
+    marginTop: 4,
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    borderRadius: 999,
+    backgroundColor: color.ink,
   },
-  previewChipTitle: { fontSize: 13, fontWeight: "700", color: color.ink },
-  previewChipMeta: { marginTop: 4, fontSize: 11, color: color.muted },
+  emptyCtaText: { color: "#FFF", fontWeight: "700", fontSize: 13 },
+  linkRow: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
+  linkChip: {
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 999,
+    backgroundColor: "#F3EFE6",
+    borderWidth: 1,
+    borderColor: "rgba(0,0,0,0.08)",
+  },
+  linkChipText: { fontSize: 13, fontWeight: "700", color: color.ink },
   primaryNext: {
     backgroundColor: color.ink,
-    borderRadius: radius.xl,
-    paddingHorizontal: 20,
-    paddingVertical: 20,
+    borderRadius: radius.lg,
+    padding: 18,
   },
-  primaryNextTitle: {
-    fontSize: 22,
-    fontWeight: "800",
-    color: "#FFF",
-    letterSpacing: -0.4,
+  primaryNextTitle: { color: "#FFF", fontSize: 17, fontWeight: "800" },
+  primaryNextDetail: { color: "rgba(255,255,255,0.72)", marginTop: 6, fontSize: 13, lineHeight: 18 },
+  secondaryNext: {
+    borderRadius: radius.lg,
+    padding: 16,
+    backgroundColor: "#F3EFE6",
+    borderWidth: 1,
+    borderColor: "rgba(0,0,0,0.06)",
   },
-  primaryNextDetail: {
-    marginTop: 6,
-    fontSize: 14,
-    lineHeight: 20,
-    color: "rgba(255,255,255,0.75)",
-  },
-  connectGhost: {
-    marginTop: 8,
-    alignSelf: "center",
-    paddingVertical: 12,
-    paddingHorizontal: 16,
-  },
-  connectGhostText: {
-    fontSize: 14,
-    fontWeight: "700",
-    color: color.ink,
-    textDecorationLine: "underline",
-  },
+  secondaryNextTitle: { fontSize: 15, fontWeight: "800", color: color.ink },
+  secondaryNextDetail: { marginTop: 4, fontSize: 12, color: color.muted, lineHeight: 17 },
+  connectGhost: { marginTop: 4, paddingVertical: 10 },
+  connectGhostText: { color: color.ink, fontWeight: "700", textDecorationLine: "underline" },
 });

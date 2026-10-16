@@ -2,26 +2,43 @@
  * City Memory — traveler's permanent personal travel space.
  * NOT Hotel / Hotelier OS. Hotel tab remains stay companion services.
  */
-import { Stack, useRouter, type Href } from "expo-router";
-import React, { useMemo } from "react";
+import { Stack, useFocusEffect, useRouter, type Href } from "expo-router";
+import React, { useCallback, useMemo, useState } from "react";
 import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { AfterTripHome } from "@/components/guest-lifecycle/AfterTripHome";
+import { useAppState } from "@/contexts/AppStateContext";
 import { useAppBackScreenOptions } from "@/hooks/useAppBackScreenOptions";
 import { buildAfterTripHome } from "@/lib/guest-lifecycle/city-memory";
 import { useGuestLifecycle } from "@/lib/guest-lifecycle/useGuestLifecycle";
 import { transitionStartTripPlanning } from "@/lib/guest-lifecycle/transitions";
 import { usePremiumRefreshControl } from "@/lib/mobilePullToRefresh";
 import { color } from "@/lib/guestDesign";
+import { listTravelMemories, type TravelMemory } from "@/lib/travel-memory";
 
 export default function CityMemoryScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const { snap, state, loading, refresh } = useGuestLifecycle();
-  const [refreshing, setRefreshing] = React.useState(false);
+  const { getCurrentUser, activeIdentity } = useAppState();
+  const [refreshing, setRefreshing] = useState(false);
+  const [personalMoments, setPersonalMoments] = useState<TravelMemory[]>([]);
 
   const model = useMemo(() => (snap ? buildAfterTripHome(snap) : null), [snap]);
+
+  const loadMoments = useCallback(async () => {
+    const u = await getCurrentUser().catch(() => null);
+    const uid = u?.id || activeIdentity?.userId || null;
+    const list = await listTravelMemories(uid);
+    setPersonalMoments(list);
+  }, [activeIdentity?.userId, getCurrentUser]);
+
+  useFocusEffect(
+    useCallback(() => {
+      void loadMoments();
+    }, [loadMoments]),
+  );
 
   const screenOptions = useAppBackScreenOptions({
     title: "City Memory",
@@ -32,12 +49,12 @@ export default function CityMemoryScreen() {
     headerTintColor: color.ink,
   });
 
-  const onRefresh = React.useCallback(() => {
+  const onRefresh = useCallback(() => {
     setRefreshing(true);
-    void refresh()
+    void Promise.all([refresh(), loadMoments()])
       .catch(() => {})
       .finally(() => setRefreshing(false));
-  }, [refresh]);
+  }, [loadMoments, refresh]);
   const refreshControl = usePremiumRefreshControl(refreshing, onRefresh);
 
   if (loading && !model) {
@@ -68,6 +85,7 @@ export default function CityMemoryScreen() {
         <AfterTripHome
           model={model}
           state={state || "AFTER_TRIP"}
+          personalMoments={personalMoments}
           onPlanNextTrip={() => {
             void transitionStartTripPlanning({ intent: "Plan next trip" }).then(() => {
               void refresh();
@@ -83,6 +101,14 @@ export default function CityMemoryScreen() {
           <Text style={styles.emptyLead}>
             Places you save and banDits you follow gather here — before, during, and after stays.
           </Text>
+          <Pressable
+            style={styles.cta}
+            onPress={() => router.push("/memory/add" as Href)}
+            accessibilityRole="button"
+            testID="city-memory-empty-add"
+          >
+            <Text style={styles.ctaText}>Add a Memory</Text>
+          </Pressable>
           <Pressable
             style={styles.cta}
             onPress={() => router.push("/explore" as Href)}
