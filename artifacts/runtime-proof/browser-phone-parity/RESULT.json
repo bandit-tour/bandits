@@ -1,70 +1,75 @@
 {
-  "mission": "browser-phone-parity",
-  "at": "2026-10-17T13:23:00.000Z",
-  "gitTip": "71b0451",
-  "branch": "repair/guest-app-regression",
-  "ceoTestingReady": false,
-  "stripe": {
-    "mode": "test_ready",
-    "livePaymentsFlag": false
+  "generatedAt": "2026-10-17T13:42:30.000Z",
+  "mandate": "EXACT BROWSER↔PHONE PARITY",
+  "ceoReady": false,
+  "verdict": "BLOCKED — tip EAS preview builds FINISHED and installable; native route PASS requires on-device verification (adb empty; Ad Hoc iPhone not held by agent).",
+  "stripeLive": "OFF",
+  "commit": {
+    "guestCompletion": "a1ec0c079914cc58effbf7bcda6000dad244e9ae",
+    "tip": "c9b6bf7f7e2bd256acfb01a980c9169e0f86c885"
   },
-  "browserUrl": "https://bandits-two.vercel.app",
+  "browser": {
+    "url": "https://bandits-two.vercel.app",
+    "deploymentId": "dpl_9nD15uX3P2gqNgM8pYnWrSQ8jhc3",
+    "routeMatrix": "26/27 PASS",
+    "partial": ["Your Local Insider — Workspace/Stripe TEST"],
+    "evidence": [
+      "artifacts/runtime-proof/guest-app-completion/2026-10-17T13-15-33/",
+      "artifacts/runtime-proof/browser-phone-parity/browser-capture.json",
+      "artifacts/runtime-proof/browser-phone-parity/browser-route-smoke.json"
+    ]
+  },
   "builds": {
-    "android": {
-      "id": "68553a9d-4f88-4ef8-8dab-4dc16aefe760",
-      "profile": "preview",
-      "appVersion": "1.0.2",
-      "versionCode": 16,
-      "commit": "71b0451",
+    "android_tip": {
+      "id": "33c3a52e-da11-4871-95b2-d59bdfb4795b",
       "status": "FINISHED",
-      "page": "https://expo.dev/accounts/banditeam121275/projects/bandits/builds/68553a9d-4f88-4ef8-8dab-4dc16aefe760",
-      "apk": "https://expo.dev/artifacts/eas/xlmhjCQwvLAhOsYc37uC9BhmayTkYv3BFaKxOMoKgzA.apk",
-      "physicalVerify": "BLOCKED_NO_DEVICE"
+      "commit": "c9b6bf7",
+      "versionCode": 19,
+      "apk": "https://expo.dev/artifacts/eas/Q73wklYQQsl5FkGRb7F3AA3xEsl68I-6jR3WAVILJrE.apk",
+      "page": "https://expo.dev/accounts/banditeam121275/projects/bandits/builds/33c3a52e-da11-4871-95b2-d59bdfb4795b"
     },
-    "ios": {
-      "id": "8f6209b3-4f3b-4890-8528-94644a3c7f76",
-      "profile": "preview",
-      "appVersion": "1.0.2",
-      "buildNumber": 40,
-      "commit": "71b0451",
+    "ios_tip": {
+      "id": "2c023dd7-0931-4fbb-a1f8-cd46fffb0e6a",
       "status": "FINISHED",
-      "distribution": "internal_ad_hoc",
-      "page": "https://expo.dev/accounts/banditeam121275/projects/bandits/builds/8f6209b3-4f3b-4890-8528-94644a3c7f76",
-      "ipa": "https://expo.dev/artifacts/eas/rPiZydpDZxKuszzQfRHPzeqjf7KUYRPmN8e3bsMH2EE.ipa",
-      "testFlight": "BLOCKED_NO_ASC_APP_ID",
-      "physicalVerify": "BLOCKED_NOT_INSTALLED_HERE",
-      "provisionedDeviceUdid": "00008110-0019248C0A9A401E"
+      "commit": "c9b6bf7",
+      "buildNumber": 43,
+      "ipa": "https://expo.dev/artifacts/eas/PnvW_DVKzYohWfAf01r4PYB4quTfILMf91-PtOk_tVM.ipa",
+      "page": "https://expo.dev/accounts/banditeam121275/projects/bandits/builds/2c023dd7-0931-4fbb-a1f8-cd46fffb0e6a",
+      "adHocDevice": "00008110-0019248C0A9A401E"
+    },
+    "android_a1ec0c0": {
+      "id": "ad11e51b-aa36-4dc2-9b2f-1860e8a6623b",
+      "status": "FINISHED",
+      "apk": "https://expo.dev/artifacts/eas/Dn6yagonhBZVenv-fAfki-cHufME24LV-LxfBvfzPDE.apk"
+    },
+    "ios_a1ec0c0": {
+      "id": "62213240-b99f-494e-85a3-80d43f303f2b",
+      "status": "FINISHED",
+      "ipa": "https://expo.dev/artifacts/eas/mW_uKQVCjenMk2WuF-q4qydD5U_XjpyDklxEDck_S3A.ipa"
     }
   },
-  "browserCapture": {
-    "viewport": "390x844",
-    "routesCaptured": 25,
-    "artifact": "browser-capture.json"
+  "testFlight": {
+    "status": "BLOCKED",
+    "reason": "eas.json submit.production missing ascAppId; preview distribution is Ad Hoc"
   },
-  "parityMatrix": {
-    "passBothPlatforms": 0,
-    "browserOk": 27,
-    "nativeBlocked": 27,
-    "rule": "No PASS from shared source alone"
+  "parity": {
+    "browserPass": 26,
+    "browserPartial": 1,
+    "androidPass": 0,
+    "iosPass": 0,
+    "androidBlocked": 32,
+    "iosBlocked": 32,
+    "rule": "PASS only if verified on device/build"
   },
-  "crossDeviceSync": {
-    "apiBackendIdentity": "PASS",
-    "physicalPersistRefreshLogout": "BLOCKED_NO_DEVICE",
-    "artifact": "cross-device-sync.json"
-  },
-  "blockers": [
-    "P0 /profile crash PROFILE_STAY is not defined on prod+tip builds — fix in working tree awaiting commit+rebuild",
-    "Physical Android install+verify of APK vc16 @ 71b0451",
-    "Physical iOS Ad Hoc install+verify of IPA bn40 @ 71b0451",
-    "TestFlight blocked: eas.json missing ascAppId; preview is Ad Hoc",
-    "Cross-device persistence not exercised on phone",
-    "Shared lifecycle Home BEFORE ARRIVAL vs Menu After Trip inconsistency",
-    "Uncommitted local WIP not in tip builds"
-  ],
-  "profileFix": {
-    "file": "app/(tabs)/profile.tsx",
-    "status": "WORKING_TREE_ONLY",
-    "prodVerifiedError": "PROFILE_STAY is not defined"
-  },
-  "evidenceDir": "artifacts/runtime-proof/browser-phone-parity/"
+  "crossDeviceSync": "BLOCKED",
+  "preserved": ["Bottle Mix", "Premium prod paths", "no invented supply"],
+  "evidenceFiles": [
+    "PARITY-MATRIX.md",
+    "INSTALL-LINKS.md",
+    "BUILDS.json",
+    "CROSS-DEVICE-SYNC.json",
+    "tip-builds.json",
+    "browser-capture.json",
+    "browser-route-smoke.json"
+  ]
 }

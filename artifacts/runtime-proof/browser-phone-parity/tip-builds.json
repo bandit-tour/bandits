@@ -1,0 +1,16 @@
+﻿{
+    "android":  {
+                    "commit":  "c9b6bf7f7e2bd256acfb01a980c9169e0f86c885",
+                    "status":  "FINISHED",
+                    "apk":  "https://expo.dev/artifacts/eas/Q73wklYQQsl5FkGRb7F3AA3xEsl68I-6jR3WAVILJrE.apk",
+                    "versionCode":  "19",
+                    "id":  "33c3a52e-da11-4871-95b2-d59bdfb4795b"
+                },
+    "ios":  {
+                "commit":  "c9b6bf7f7e2bd256acfb01a980c9169e0f86c885",
+                "status":  "FINISHED",
+                "buildNumber":  "43",
+                "id":  "2c023dd7-0931-4fbb-a1f8-cd46fffb0e6a",
+                "ipa":  "https://expo.dev/artifacts/eas/PnvW_DVKzYohWfAf01r4PYB4quTfILMf91-PtOk_tVM.ipa"
+            }
+}

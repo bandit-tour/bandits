@@ -1,0 +1,76 @@
+{
+  "generatedAt": "2026-10-17T13:42:30.000Z",
+  "mandate": "EXACT BROWSER↔PHONE PARITY",
+  "gitTipAtEvidence": "c9b6bf7f7e2bd256acfb01a980c9169e0f86c885",
+  "guestCompletionCommit": "a1ec0c079914cc58effbf7bcda6000dad244e9ae",
+  "stripeLive": "OFF",
+  "browser": {
+    "productionUrl": "https://bandits-two.vercel.app",
+    "deploymentId": "dpl_9nD15uX3P2gqNgM8pYnWrSQ8jhc3",
+    "webMatrix": "26/27 PASS · Local Insider PARTIAL (Workspace/Stripe TEST)",
+    "evidence": "artifacts/runtime-proof/guest-app-completion/2026-10-17T13-15-33/"
+  },
+  "easProfile": "preview",
+  "distribution": "internal",
+  "builds": {
+    "android_tip": {
+      "id": "33c3a52e-da11-4871-95b2-d59bdfb4795b",
+      "platform": "Android",
+      "status": "FINISHED",
+      "profile": "preview",
+      "commit": "c9b6bf7f7e2bd256acfb01a980c9169e0f86c885",
+      "version": "1.0.2",
+      "versionCode": 19,
+      "prefer": true,
+      "page": "https://expo.dev/accounts/banditeam121275/projects/bandits/builds/33c3a52e-da11-4871-95b2-d59bdfb4795b",
+      "apk": "https://expo.dev/artifacts/eas/Q73wklYQQsl5FkGRb7F3AA3xEsl68I-6jR3WAVILJrE.apk",
+      "includes": [
+        "a1ec0c0 Guest completion (Octopus fulfillment honesty + settings prefs)",
+        "605cb4c /profile PROFILE_STAY crash fix",
+        "c9b6bf7 concierge voice / proof-required labels"
+      ]
+    },
+    "ios_tip": {
+      "id": "2c023dd7-0931-4fbb-a1f8-cd46fffb0e6a",
+      "platform": "iOS",
+      "status": "FINISHED",
+      "profile": "preview",
+      "commit": "c9b6bf7f7e2bd256acfb01a980c9169e0f86c885",
+      "version": "1.0.2",
+      "buildNumber": 43,
+      "prefer": true,
+      "page": "https://expo.dev/accounts/banditeam121275/projects/bandits/builds/2c023dd7-0931-4fbb-a1f8-cd46fffb0e6a",
+      "ipa": "https://expo.dev/artifacts/eas/PnvW_DVKzYohWfAf01r4PYB4quTfILMf91-PtOk_tVM.ipa",
+      "provisionedDevices": ["00008110-0019248C0A9A401E"]
+    },
+    "android_guest_completion": {
+      "id": "ad11e51b-aa36-4dc2-9b2f-1860e8a6623b",
+      "platform": "Android",
+      "status": "FINISHED",
+      "commit": "a1ec0c079914cc58effbf7bcda6000dad244e9ae",
+      "versionCode": 17,
+      "page": "https://expo.dev/accounts/banditeam121275/projects/bandits/builds/ad11e51b-aa36-4dc2-9b2f-1860e8a6623b",
+      "apk": "https://expo.dev/artifacts/eas/Dn6yagonhBZVenv-fAfki-cHufME24LV-LxfBvfzPDE.apk"
+    },
+    "ios_guest_completion": {
+      "id": "62213240-b99f-494e-85a3-80d43f303f2b",
+      "platform": "iOS",
+      "status": "FINISHED",
+      "commit": "a1ec0c079914cc58effbf7bcda6000dad244e9ae",
+      "buildNumber": 41,
+      "page": "https://expo.dev/accounts/banditeam121275/projects/bandits/builds/62213240-b99f-494e-85a3-80d43f303f2b",
+      "ipa": "https://expo.dev/artifacts/eas/mW_uKQVCjenMk2WuF-q4qydD5U_XjpyDklxEDck_S3A.ipa"
+    }
+  },
+  "testFlight": {
+    "status": "BLOCKED",
+    "reason": "eas.json submit.production has no ascAppId; preview profile is Ad Hoc (internal), not App Store distribution.",
+    "attemptedBuildId": "8f6209b3-4f3b-4890-8528-94644a3c7f76"
+  },
+  "deviceLab": {
+    "adbDevices": [],
+    "xcrun": false,
+    "os": "win32",
+    "blockedReason": "No Android device/emulator attached. No Xcode on Windows agent. Native route PASS requires physical install QA."
+  }
+}
