@@ -164,10 +164,10 @@ async function runExperiences(page, guest, probes) {
       await page.goto(`${GUEST}/experience/${LIVE_EXP}`, { waitUntil: "domcontentloaded", timeout: 120000 });
       await page.waitForTimeout(5000);
       await page.getByTestId("exp-book-cta").click({ timeout: 30000 }).catch(() => {});
-      await page.waitForTimeout(800);
-      const slot = page.locator('[class*="sheetSlot"]').first();
+      await page.waitForTimeout(1200);
+      const slot = page.locator('[data-testid^="exp-booking-slot-"]').first();
       if ((await slot.count()) > 0) {
-        await slot.click();
+        await slot.click({ force: true });
         await page.waitForTimeout(500);
         await page.getByText("Review booking").click();
         await page.waitForTimeout(500);
@@ -353,7 +353,7 @@ async function main() {
   });
   const page = await context.newPage();
 
-  await runOctopus(page, guest).catch((e) => {
+  await runOctopus().catch((e) => {
     setFeature("octopus_eur19_stay_pass", "FAIL", { error: String(e.message || e) });
   });
 

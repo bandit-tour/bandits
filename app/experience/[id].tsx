@@ -819,6 +819,7 @@ function BookingSheet({
               {exp.availability.map((slot) => (
                 <Pressable
                   key={slot.id}
+                  testID={`exp-booking-slot-${slot.id}`}
                   style={[
                     styles.sheetSlot,
                     selectedSlot?.id === slot.id && styles.sheetSlotOn,
