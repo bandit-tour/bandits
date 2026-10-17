@@ -46,7 +46,10 @@ export type GuestExperience = {
 /** Guest App editorial DNA ids (`exp_*`) — inspiration only, not live inventory. */
 export function isEditorialExperienceId(id: string | null | undefined): boolean {
   const raw = String(id || "").trim();
-  return /^exp_[a-z0-9_]+$/i.test(raw);
+  if (!/^exp_[a-z0-9_]+$/i.test(raw)) return false;
+  // Workspace live listings use exp_<hex> — must stay bookable, never editorial DNA.
+  if (/^exp_[0-9a-f]{8,}$/i.test(raw)) return false;
+  return true;
 }
 
 /** Mark a seed listing as preview (no Reserve/Pay, not counted as live). */

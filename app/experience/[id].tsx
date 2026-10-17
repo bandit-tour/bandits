@@ -57,10 +57,12 @@ export default function ExperienceDetailScreen() {
   const catalog = useMemo(() => (id ? getExperienceDetail(id) : undefined), [id]);
   const [liveExp, setLiveExp] = useState<ExperienceDetail | null>(null);
   const [liveFetchDone, setLiveFetchDone] = useState(false);
-  /** Editorial DNA (`exp_*`) — inspiration only; never Commerce checkout. */
-  const isPreview = Boolean(id && isEditorialExperienceId(id) && catalog);
+  /** Editorial DNA only when Workspace has no live row for this id. */
+  const isPreview = Boolean(
+    id && liveFetchDone && !liveExp && isEditorialExperienceId(id) && catalog,
+  );
   /** Live Workspace inventory wins over seed catalog for supplier price + basis. */
-  const exp = (isPreview ? catalog : liveExp ?? catalog) ?? undefined;
+  const exp = liveExp ?? catalog ?? undefined;
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const { width: SCREEN_W } = useWindowDimensions();
@@ -175,7 +177,7 @@ export default function ExperienceDetailScreen() {
 
   const confirmPay = useCallback(async () => {
     if (!exp || !selectedSlot) return;
-    if (isPreview || isEditorialExperienceId(exp.id)) {
+    if (isPreview) {
       setBookStep("review");
       setBookError("This is a preview experience — reservations are not open yet.");
       return;

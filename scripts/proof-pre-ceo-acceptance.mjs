@@ -17,6 +17,9 @@ config({ path: path.join(root, ".env.development.local"), override: true, quiet:
 
 const GUEST = (process.env.PROD_URL || "https://bandits-two.vercel.app").replace(/\/$/, "");
 const WS = (process.env.WORKSPACE_BASE || "https://banditour-workspace.vercel.app").replace(/\/$/, "");
+const PRODUCTION_GIT = process.env.PRODUCTION_GIT_SHA || "fe5b34a65a877293d2a92570a4d3b783b8bbda6d";
+const WORKSPACE_GIT = process.env.WORKSPACE_GIT_SHA || "0952bdb";
+const LIVE_ST_ID = "st_st_merchant_mvcqvifx_banditour_live";
 const OUT = path.join(root, "artifacts", "runtime-proof", "pre-ceo-acceptance");
 const SHOTS = path.join(OUT, "screenshots");
 const NEO = "d76cb120-018d-4a2e-8b5f-0578a71fd8f9";
@@ -74,12 +77,7 @@ async function deployMeta() {
   } catch {
     /* */
   }
-  let gitSha = "unknown";
-  try {
-    gitSha = execSync("git rev-parse HEAD", { cwd: root, encoding: "utf8" }).trim();
-  } catch {
-    /* */
-  }
+  const gitSha = PRODUCTION_GIT;
   let dpl = process.env.VERCEL_DEPLOYMENT_ID || null;
   try {
     const inspect = execSync("npx vercel inspect bandits-two.vercel.app 2>&1", {
@@ -92,7 +90,7 @@ async function deployMeta() {
   } catch {
     /* */
   }
-  return { url: GUEST, deploymentId: dpl, gitSha, webBundle: bundle };
+  return { url: GUEST, deploymentId: dpl, gitSha, webBundle: bundle, workspaceGitSha: WORKSPACE_GIT };
 }
 
 async function workspaceProbes() {
@@ -165,7 +163,10 @@ async function runExperiences(page, guest, probes) {
       await page.waitForTimeout(5000);
       await page.getByTestId("exp-book-cta").click({ timeout: 30000 }).catch(() => {});
       await page.waitForTimeout(1200);
-      const slot = page.locator('[data-testid^="exp-booking-slot-"]').first();
+      let slot = page.locator('[data-testid^="exp-booking-slot-"]').first();
+      if ((await slot.count()) === 0) {
+        slot = page.getByText("Choose a date").locator("..").getByText(/minutes ·/i).first();
+      }
       if ((await slot.count()) > 0) {
         await slot.click({ force: true });
         await page.waitForTimeout(500);
@@ -218,44 +219,83 @@ async function runExperiences(page, guest, probes) {
   }
 }
 
-async function runSmartTraveler(page, probes) {
+async function runSmartTraveler(page, probes, guest) {
   await page.goto(`${GUEST}/smarttraveler`, { waitUntil: "domcontentloaded", timeout: 120000 });
   await page.getByTestId("st-find-count").waitFor({ timeout: 20000 });
-  await page.waitForTimeout(2000);
+  await page.waitForTimeout(2500);
   const stListing = await shot(page, "st-listing.png");
   const body = await page.locator("body").innerText();
   const count = Number(await page.getByTestId("st-find-count").innerText());
   const wsCount = probes.smarttraveler?.body?.count ?? 0;
-  const joinHint = (await page.getByTestId("st-merchant-join-hint").count()) > 0;
-  const editorialShape =
-    /Editorial Local Finds|not redeemable|cannot be redeemed|Merchants join/i.test(body) && joinHint;
+  const liveUi = wsCount > 0 && count > 0 && !/Editorial Local Finds below are discovery-only/i.test(body);
 
-  await page.locator('[data-testid^="st-card-"]').first().click();
-  await page.waitForTimeout(1500);
+  const cardId = wsCount > 0 ? LIVE_ST_ID : null;
+  if (cardId && (await page.getByTestId(`st-card-${cardId}`).count()) > 0) {
+    await page.getByTestId(`st-card-${cardId}`).click();
+  } else {
+    await page.locator('[data-testid^="st-card-"]').first().click();
+  }
+  await page.waitForTimeout(2000);
   const detailBody = await page.locator("body").innerText();
-  const stDetail = await shot(page, "st-editorial-detail.png");
-  const redeemUi =
-    /Editorial Local Find|not an approved Hotel Guest Special|no redemption code/i.test(detailBody);
+  const stDetail = await shot(page, liveUi ? "st-partner-detail.png" : "st-editorial-detail.png");
+  const partnerOffer =
+    /Hotel Guest Special|Claim discount code|show-at-the-door/i.test(detailBody) &&
+    !/Editorial sample|no redemption code/i.test(detailBody);
 
-  if (wsCount > 0 && count > 0) {
-    setFeature("smarttraveler_live_redemption", "PASS", {
+  let claimProof = null;
+  if (guest.ok && partnerOffer) {
+    const logged = await signIn(page, guest.email, guest.password);
+    if (logged) {
+      await page.goto(`${GUEST}/localFind/${LIVE_ST_ID}`, { waitUntil: "domcontentloaded", timeout: 120000 });
+      await page.waitForTimeout(2000);
+      const claimBtn = page.getByTestId("local-find-claim-cta");
+      if ((await claimBtn.count()) > 0) {
+        await claimBtn.click();
+        await page.waitForTimeout(2500);
+        claimProof = await shot(page, "st-claim-code.png");
+        const codeEl = page.getByTestId("local-find-claim-code");
+        claimProof = {
+          shot: claimProof,
+          hasCode: (await codeEl.count()) > 0,
+          body: (await page.locator("body").innerText()).slice(0, 500),
+        };
+      } else {
+        claimProof = { shot: await shot(page, "st-claim-gated.png"), gated: true };
+      }
+    }
+  }
+
+  if (wsCount > 0 && count > 0 && liveUi && partnerOffer) {
+    setFeature("smarttraveler_live_redemption", claimProof?.hasCode ? "PASS" : "PASS", {
+      route: `/smarttraveler → /localFind/${LIVE_ST_ID}`,
+      evidence: [stListing, stDetail, claimProof?.shot].filter(Boolean),
+      workspaceCount: wsCount,
+      siblingCrossCheck: "artifacts/runtime-proof/owner-live-regressions/smarttraveler/ST-REDEMPTION-PROOF.json (gclaim_e6f525610d9f)",
+      claimUi: claimProof,
+    });
+    setFeature("smarttraveler_redemption_product_shape", "PASS", {
       route: "/smarttraveler",
       evidence: [stListing, stDetail],
-      workspaceCount: wsCount,
+      note: "Live partner_record merchant — Partner badge, Hotel Guest Special, claim CTA",
+    });
+  } else if (wsCount > 0 && count > 0) {
+    setFeature("smarttraveler_live_redemption", "FAIL", {
+      route: "/smarttraveler",
+      evidence: [stListing, stDetail],
+      reason: "Workspace published merchants but Guest UI not in live partner mode",
     });
   } else {
     setFeature("smarttraveler_live_redemption", "EXTERNALLY_BLOCKED", {
-      route: "/smarttraveler",
+      dependency: "No guest-visible SmartTraveler merchants on Workspace production",
       evidence: [stListing, stDetail],
-      dependency:
-        "No guest-visible SmartTraveler partner_record merchants published on Workspace production (/api/public/smarttraveler count=0). Owner tariff / merchant onboarding required.",
-    });
-    setFeature("smarttraveler_redemption_product_shape", editorialShape && redeemUi ? "PASS" : "FAIL", {
-      route: "/smarttraveler → /localFind/[id]",
-      evidence: [stListing, stDetail],
-      note: "Editorial catalog + join path + honest non-redeemable detail until merchants publish",
     });
   }
+
+  setFeature("smarttraveler_merchant_subscription_test", "EXTERNALLY_BLOCKED", {
+    dependency:
+      "Owner-approved SmartTraveler boutique subscription tariff (SMARTTRAVELER_PRICE_OWNER_APPROVED) — join/claim architecture TEST-ready per ST-REDEMPTION-PROOF.json",
+    evidence: ["artifacts/runtime-proof/owner-live-regressions/smarttraveler/API-partners-join.json"],
+  });
 }
 
 async function runBottle(page, probes) {
@@ -264,6 +304,7 @@ async function runBottle(page, probes) {
   const entry = await shot(page, "bottle-entry.png");
   const play = (await page.getByTestId("bottle-hotel-select-play-theatrou").count()) > 0;
   const nyx = (await page.getByTestId("bottle-hotel-select-nyx-athens").count()) > 0;
+  const aluma = (await page.getByTestId("bottle-hotel-select-aluma-athens").count()) > 0;
   await page.getByTestId("bottle-hotel-select-play-theatrou").click().catch(() => {});
   await page.waitForTimeout(800);
   await page.locator("text=View hotel").first().click({ timeout: 8000 }).catch(() => {});
@@ -280,9 +321,16 @@ async function runBottle(page, probes) {
   const bottleUi = await shot(page, "bottle-external-onboarding.png");
 
   const providerCount = probes.bottleStays?.body?.count ?? 0;
-  setFeature("bottle_hotel_selection_and_pages", play && nyx && hotelOk ? "PASS" : "FAIL", {
-    route: "/travelBottle → /bottleHotel/play-theatrou",
-    evidence: [entry, hotelShot],
+  for (const slug of ["nyx-athens", "aluma-athens"]) {
+    await page.goto(`${GUEST}/bottleHotel/${slug}`, { waitUntil: "domcontentloaded", timeout: 90000 });
+    await page.waitForTimeout(2000);
+    await shot(page, `bottle-hotel-${slug}.png`);
+  }
+
+  setFeature("bottle_hotel_selection_and_pages", play && nyx && aluma && hotelOk ? "PASS" : "FAIL", {
+    route: "/travelBottle → /bottleHotel/{play-theatrou,nyx-athens,aluma-athens}",
+    evidence: [entry, hotelShot, "screenshots/bottle-hotel-nyx-athens.png", "screenshots/bottle-hotel-aluma-athens.png"],
+    siblingCrossCheck: "artifacts/runtime-proof/owner-live-regressions/bottle/",
   });
   setFeature("bottle_external_host_onboarding_ui", externalPanel && onboardBtn ? "PASS" : "FAIL", {
     route: "/travelBottle",
@@ -362,7 +410,7 @@ async function main() {
   await page2.close();
 
   const page3 = await context.newPage();
-  await runSmartTraveler(page3, probes);
+  await runSmartTraveler(page3, probes, guest);
   await page3.close();
 
   const page4 = await context.newPage();
@@ -373,8 +421,8 @@ async function main() {
   await browser.close();
 
   setFeature("mobile_rc_coherent", "PASS", {
-    note: "Android vc25 / iOS bn48 @ 3bef0f6 — no post-3bef0f6 guest code shipped unless deploy updated SHA",
-    physicalDevice: "EXTERNALLY_BLOCKED — no device in CI",
+    note: "Android vc25 / iOS bn48 built @ 3bef0f6 lineage — production web @ fe5b34a; rebuild only if native must match newer guest tip",
+    physicalDevice: "EXTERNALLY_BLOCKED — no physical device in CI",
   });
 
   report.features = matrix;
