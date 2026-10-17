@@ -1,0 +1,59 @@
+{
+  "at": "2026-10-17T17:15:18.929Z",
+  "guest": "https://bandits-two.vercel.app",
+  "tests": {
+    "O1": {
+      "status": "PASS",
+      "route": "/bandit/d76cb120-018d-4a2e-8b5f-0578a71fd8f9",
+      "source": "BanditHeader showPremiumInsights",
+      "reason": "Your Local Insider CTA visible"
+    },
+    "O2": {
+      "status": "PASS",
+      "route": "/bandit/d76cb120-018d-4a2e-8b5f-0578a71fd8f9",
+      "source": "BanditOrchestraStrip → buildBanditCardCapabilities",
+      "reason": "Premium Insights chip visible"
+    },
+    "O3": {
+      "status": "PASS",
+      "route": "/bandit/d76cb120-018d-4a2e-8b5f-0578a71fd8f9",
+      "source": "GuestDiscoveryCard → PremiumUnlockModal",
+      "reason": "Modal shows €19 Stay Pass offer"
+    },
+    "O4": {
+      "status": "PASS",
+      "route": "/premium/d76cb120-018d-4a2e-8b5f-0578a71fd8f9",
+      "source": "resolveOctopusConciergeEntitlement + assertConciergeOpsAllowed",
+      "reason": "Sales gate or unlock shown — ops not exposed unpaid"
+    },
+    "API_BYPASS": {
+      "status": "PASS",
+      "reason": "Unpaid concierge POST rejected"
+    },
+    "O5": {
+      "status": "PASS",
+      "route": "/premium/d76cb120-018d-4a2e-8b5f-0578a71fd8f9",
+      "source": "startOctopusConciergeCheckout → Workspace purchaseStayPass",
+      "reason": "TEST/treasury payment confirmed — Concierge OS unlocked"
+    },
+    "O6": {
+      "status": "PASS",
+      "route": "/premium/d76cb120-018d-4a2e-8b5f-0578a71fd8f9",
+      "source": "commerce entitlements + view=track",
+      "reason": "Entitled Concierge OS after reload"
+    }
+  },
+  "unpaidApiBypass": {
+    "status": 403,
+    "premiumRequired": true,
+    "detail": "Premium required"
+  },
+  "paidTask": {
+    "fiveRequestsVisible": true
+  },
+  "lukasNeo": {
+    "lukasWithoutQa": "NONE",
+    "lukasWithQa": "TEST_DEMO",
+    "neoWithQa": "PRODUCTION"
+  }
+}

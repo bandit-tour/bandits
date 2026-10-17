@@ -1,4 +1,4 @@
-import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
+import { Stack, useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
@@ -50,6 +50,7 @@ import { logNativeNav } from '@/lib/nativeNavLog';
 import { routeParamString } from '@/lib/routeParams';
 import {
   fetchBanditPremiumVisibility,
+  invalidateBanditPremiumVisibilityCache,
   type BanditPremiumVisibility,
 } from '@/lib/guest-app/premium-visibility';
 import { OCTOPUS_CONCIERGE_OFFER } from '@/lib/octopus-concierge/principle';
@@ -139,19 +140,24 @@ export default function BanditScreen() {
   const [premiumUnlockOpen, setPremiumUnlockOpen] = useState(false);
   const askTargetBanditIdRef = useRef<string>('');
 
-  useEffect(() => {
+  const refreshPremiumVisibility = useCallback(() => {
     if (!id) {
       setPremiumVis(null);
       return;
     }
-    let cancelled = false;
-    void fetchBanditPremiumVisibility(id).then((v) => {
-      if (!cancelled) setPremiumVis(v);
-    });
-    return () => {
-      cancelled = true;
-    };
+    invalidateBanditPremiumVisibilityCache(id);
+    void fetchBanditPremiumVisibility(id).then(setPremiumVis);
   }, [id]);
+
+  useEffect(() => {
+    refreshPremiumVisibility();
+  }, [refreshPremiumVisibility]);
+
+  useFocusEffect(
+    useCallback(() => {
+      refreshPremiumVisibility();
+    }, [refreshPremiumVisibility]),
+  );
 
   useEffect(() => {
     if (!id) {

@@ -1,0 +1,11 @@
+{
+  "verifiedAt": "2026-10-17T17:15:00.000Z",
+  "guestAlias": "https://bandits-two.vercel.app",
+  "deploymentId": "dpl_8KWqhaL7MzhH8uUkxqF44WEcTGec",
+  "deploymentUrl": "https://bandits-hv65rxojm-bandiexchas-projects.vercel.app",
+  "webEntryBundle": "entry-d07e370647bd9eae3294b69479802016.js",
+  "preDeployGitSha": "6346f34a50e7054d4eb5607c11847929ce192675",
+  "stripeMode": "test_ready",
+  "livePayments": false,
+  "neoBanditId": "d76cb120-018d-4a2e-8b5f-0578a71fd8f9"
+}

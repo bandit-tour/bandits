@@ -188,6 +188,7 @@ async function waitPremiumReady(page) {
     const body4 = await page.locator("body").innerText();
     const opsWithoutPay = /Ask My banDit/i.test(body4) && !/Unlock Your Local Insider/i.test(body4);
     await shot(page, "O4-no-bypass-unpaid.png");
+    await shot(page, "eur19-purchase-screen.png");
     record("O4", opsWithoutPay ? "FAIL" : "PASS", {
       route: `/premium/${NEO}`,
       source: "resolveOctopusConciergeEntitlement + assertConciergeOpsAllowed",
@@ -197,6 +198,36 @@ async function waitPremiumReady(page) {
     });
   } else {
     record("O4", "BLOCKED", { reason: "No auth" });
+  }
+
+  // Unpaid API bypass — concierge POST without ACTIVE entitlement must reject (before O5 unlock)
+  if (loggedIn) {
+    const bypass = await api("/api/bandit/premium", guest.email, {
+      method: "POST",
+      body: {
+        action: "concierge_request",
+        banditId: NEO,
+        service: "Restaurant reservations",
+        note: "Proof bypass attempt — should not consume Stay Pass without entitlement.",
+      },
+    });
+    report.unpaidApiBypass = {
+      status: bypass.status,
+      premiumRequired:
+        bypass.status === 403 &&
+        (bypass.json?.error === "Premium required" ||
+          /premium required|not authorized/i.test(String(bypass.json?.error || ""))),
+      detail: bypass.json?.error || bypass.json?.detail || null,
+    };
+    fs.writeFileSync(
+      path.join(OUT, "unpaid-api-bypass.json"),
+      JSON.stringify(report.unpaidApiBypass, null, 2),
+    );
+    record("API_BYPASS", report.unpaidApiBypass.premiumRequired ? "PASS" : "FAIL", {
+      reason: report.unpaidApiBypass.premiumRequired
+        ? "Unpaid concierge POST rejected"
+        : `Unexpected ${bypass.status} — may have leaked fulfillment`,
+    });
   }
 
   // O5 — Stripe TEST / treasury checkout + entitlement
@@ -253,6 +284,23 @@ async function waitPremiumReady(page) {
     record("O6", report.tests.O5?.status === "PASS" ? "FAIL" : "BLOCKED", {
       reason: "Depends on O5 PASS",
     });
+  }
+
+  // Paid task surface after entitlement (O5 PASS)
+  if (loggedIn && report.tests.O5?.status === "PASS") {
+    await page.goto(`${GUEST}/premium/${NEO}`, { waitUntil: "domcontentloaded", timeout: 120000 });
+    await waitPremiumReady(page);
+    const ask = page.getByPlaceholder(/Ask .*book a table/i);
+    if ((await ask.count()) > 0) {
+      await ask.fill("Book a table for 2 tonight — quiet Greek taverna.");
+      await page.getByText(/^Ask /).first().click();
+      await page.waitForTimeout(2500);
+    }
+    await shot(page, "paid-task-screen.png");
+    const bodyTask = await page.locator("body").innerText();
+    const fiveLeft = /5 request|4 left|request.*left/i.test(bodyTask);
+    await shot(page, "five-request-unlock.png");
+    report.paidTask = { fiveRequestsVisible: fiveLeft };
   }
 
   // Lukas vs Neo permissions (API honesty)

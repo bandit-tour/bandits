@@ -602,6 +602,7 @@ export default function PremiumConciergeScreen() {
           contentContainerStyle={[styles.salesContent, { width: contentWidth }]}
           keyboardShouldPersistTaps="handled"
           showsVerticalScrollIndicator={false}
+          testID="local-insider-sales-screen"
         >
           <View style={styles.brandRow}>
             <LocalBanditOctopusIcon style={styles.brandIcon} />

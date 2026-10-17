@@ -56,6 +56,16 @@ export function workspaceOrigin(): string | null {
   return raw.replace(/\/$/, "");
 }
 
+/** Direct Workspace host — bypasses Guest `/__workspace` when proxy fails (visibility retry only). */
+export function workspaceDirectOrigin(): string {
+  const raw =
+    env("WORKSPACE_URL") ||
+    env("EXPO_PUBLIC_WORKSPACE_URL") ||
+    "";
+  if (raw) return raw.replace(/\/$/, "");
+  return "https://banditour-workspace.vercel.app";
+}
+
 /**
  * Commerce payments / entitlements / experience book.
  * MUST share the same bridge as Workspace visibility — never diverge to a
@@ -113,8 +123,9 @@ export type WorkspaceFetchResult<T> =
 export async function workspaceGet<T>(
   path: string,
   guestEmail?: string | null,
+  originOverride?: string | null,
 ): Promise<WorkspaceFetchResult<T>> {
-  const origin = workspaceOrigin();
+  const origin = originOverride ?? workspaceOrigin();
   if (!origin) return { ok: false, detail: "WORKSPACE_URL unset" };
   try {
     const res = await fetchWithTimeout(`${origin}${path.startsWith("/") ? path : `/${path}`}`, {

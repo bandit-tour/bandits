@@ -4,7 +4,7 @@
  * City Guide + Ask Me remain free for every Local banDit.
  */
 
-import { workspaceGet } from "@/lib/workspace/client";
+import { workspaceDirectOrigin, workspaceGet, workspaceOrigin } from "@/lib/workspace/client";
 
 export type BanditPremiumVisibility = {
   banditId: string;
@@ -36,6 +36,11 @@ function fallbackUnauthorized(banditId: string): BanditPremiumVisibility {
   };
 }
 
+export function invalidateBanditPremiumVisibilityCache(banditId?: string): void {
+  if (banditId) cache.delete(String(banditId).trim());
+  else cache.clear();
+}
+
 export async function fetchBanditPremiumVisibility(
   banditId: string,
   guestEmail?: string | null,
@@ -46,9 +51,21 @@ export async function fetchBanditPremiumVisibility(
   const hit = cache.get(id);
   if (hit && Date.now() - hit.at < TTL_MS) return hit.value;
 
-  const result = await workspaceGet<
+  const path = `/api/bandit/premium?view=visibility&banditId=${encodeURIComponent(id)}`;
+
+  let result = await workspaceGet<
     BanditPremiumVisibility & { product?: string; error?: string; authorizationClass?: string }
-  >(`/api/bandit/premium?view=visibility&banditId=${encodeURIComponent(id)}`, guestEmail);
+  >(path, guestEmail);
+
+  if (!result.ok) {
+    const primary = workspaceOrigin();
+    const direct = workspaceDirectOrigin();
+    if (primary && direct && primary.replace(/\/$/, "") !== direct.replace(/\/$/, "")) {
+      result = await workspaceGet<
+        BanditPremiumVisibility & { product?: string; error?: string; authorizationClass?: string }
+      >(path, guestEmail, direct);
+    }
+  }
 
   if (!result.ok) {
     // Never cache failures — SSR / cold proxy errors would hide premium for 60s.
@@ -70,6 +87,9 @@ export async function fetchBanditPremiumVisibility(
     blockers: result.data.blockers,
     authorizationClass,
   };
-  cache.set(id, { at: Date.now(), value });
+  // Only cache sellable bandits — do not pin showPremiumInsights:false from transient proxy errors.
+  if (value.showPremiumInsights) {
+    cache.set(id, { at: Date.now(), value });
+  }
   return value;
 }
