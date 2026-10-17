@@ -65,6 +65,15 @@ const QUICK_ACTIONS_AFTER: { key: string; title: string; subtitle: string; emoji
   { key: "reactivate", title: "Connect My New Stay", subtitle: "Verified booking", emoji: "🔑", href: "/reactivateStay" },
 ];
 
+/** Pre-arrival — discovery + connect stay; not the post-checkout After Trip rail. */
+const QUICK_ACTIONS_PRE: { key: string; title: string; subtitle: string; emoji: string; href: Href }[] = [
+  { key: "lf", title: "Local Friend", subtitle: "Meet someone local", emoji: "💬", href: "/localFriend" },
+  { key: "moments", title: "My Moments", subtitle: "Personal messages · Bottle discovery", emoji: "✨", href: "/myMoment" as Href },
+  { key: "alerts", title: "Safety alerts", subtitle: "bandiTEAM", emoji: "⚠", href: "/scam-alerts" },
+  { key: "bottle", title: "Travel in a Bottle", subtitle: "Plan your journey", emoji: "🌲", href: "/travelBottle" },
+  { key: "reactivate", title: "Connect My Stay", subtitle: "Verified booking", emoji: "🔑", href: "/reactivateStay" },
+];
+
 /**
  * Curated More IA — no accidental duplicates across Quick + groups.
  * Profile opens from the hero card (not repeated as a menu tile).
@@ -238,7 +247,11 @@ export default function MenuScreen() {
     [],
   );
 
-  const quickActions = isFullStay ? QUICK_ACTIONS_STAY : QUICK_ACTIONS_AFTER;
+  const quickActions = isFullStay
+    ? QUICK_ACTIONS_STAY
+    : isAfterTrip
+      ? QUICK_ACTIONS_AFTER
+      : QUICK_ACTIONS_PRE;
   const menuGroups = isFullStay ? MENU_GROUPS_STAY : MENU_GROUPS_AFTER;
 
   /** Card width without Yoga % + gap (historically fragile on Android). */
@@ -386,7 +399,11 @@ export default function MenuScreen() {
               <View style={styles.statusPill}>
                 <View style={styles.statusDot} />
                 <Text style={styles.statusText}>
-                  {isFullStay ? "Premium Guest" : "Members Club · After Trip"}
+                  {isFullStay
+                    ? "Premium Guest"
+                    : isAfterTrip
+                      ? "Members Club · After Trip"
+                      : "Members Club · Before arrival"}
                 </Text>
               </View>
               <View style={styles.profileCtaRow}>
