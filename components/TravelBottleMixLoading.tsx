@@ -13,7 +13,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 /**
  * Native Travel in a Bottle mix loading — reuses opening-intro `.mov`.
- * Web uses `TravelBottleMixLoading.web.tsx` (play-intro.mp4).
+ * Web uses `TravelBottleMixLoading.web.tsx` (`bottle-mix-loop.mp4` from intro `.mov` family).
  */
 
 const OVERLAY_LINES = [

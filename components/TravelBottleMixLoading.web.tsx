@@ -1,13 +1,12 @@
-import { BOTTLE_VIDEO_WEB_URI } from '@/lib/openingIntroAssets';
+import { BOTTLE_MIX_VIDEO_WEB_URI } from '@/lib/openingIntroAssets';
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { ActivityIndicator, Modal, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 /**
  * Web Travel in a Bottle mix loading.
- * Plays `/videos/play-intro.mp4` only while Mix search is pending.
- * NOTE: as of asset audit 17 Oct 2026 that file is PLAY branding, not ocean throw —
- * replace the file bytes when the owner supplies the original sea clip (same path).
+ * Plays `/videos/bottle-mix-loop.mp4` (from `local-friend-bottle.mov`) only while Mix search is pending.
+ * Submit flows and intro keep their own assets; do not use PLAY `play-intro.mp4` here.
  */
 
 const OVERLAY_LINES = [
@@ -145,7 +144,7 @@ export function TravelBottleMixLoading({ visible, statusHint }: Props) {
         accessibilityHint={
           reduceMotion
             ? 'Reduced motion: text loading'
-            : `Video ${BOTTLE_VIDEO_WEB_URI}${playbackError ? `; ${playbackError}` : ''}`
+            : `Video ${BOTTLE_MIX_VIDEO_WEB_URI}${playbackError ? `; ${playbackError}` : ''}`
         }
       >
         <View style={styles.stage}>
@@ -160,8 +159,8 @@ export function TravelBottleMixLoading({ visible, statusHint }: Props) {
                 ref: (node: HTMLVideoElement | null) => {
                   videoRef.current = node;
                 },
-                key: BOTTLE_VIDEO_WEB_URI,
-                src: BOTTLE_VIDEO_WEB_URI,
+                key: BOTTLE_MIX_VIDEO_WEB_URI,
+                src: BOTTLE_MIX_VIDEO_WEB_URI,
                 'data-testid': 'travel-bottle-mix-video',
                 autoPlay: true,
                 muted: true,
