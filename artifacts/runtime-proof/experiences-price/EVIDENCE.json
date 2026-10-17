@@ -1,0 +1,58 @@
+{
+  "base": "http://localhost:8082",
+  "checks": {
+    "comingSoonCount": 0,
+    "previewBadgeCount": 0,
+    "liveCardCount": 2,
+    "priceNodes": [
+      "€72 per experience",
+      "€72 per experience"
+    ],
+    "listingBodyHasNotBookable": true,
+    "listingPriceMatch": true,
+    "detailHasPrice": true,
+    "detailPreviewOnly": false,
+    "detailNotFound": false,
+    "checkoutHasPrice": true,
+    "tabNavMs": 1514
+  },
+  "workspaceApi": {
+    "status": 200,
+    "count": 1,
+    "experiences": [
+      {
+        "id": "exp_honesty_real",
+        "title": "Kypseli courtyard clay morning",
+        "status": "Open seats",
+        "when": "Sat 10:00",
+        "city": "Athens",
+        "neighborhood": "Kypseli",
+        "location": "Kypseli",
+        "photos": [
+          "https://cdn.athensmakers.gr/clay-1.jpg",
+          "https://cdn.athensmakers.gr/clay-2.jpg"
+        ],
+        "description": "A quiet courtyard morning with local makers — clay, coffee, and the side streets guests never find alone.",
+        "hostName": "Maria · Athens Makers",
+        "priceCents": 7200,
+        "priceBasis": "per_experience",
+        "seatsLeft": 6,
+        "bookingMode": "request",
+        "kind": "local_experience"
+      }
+    ]
+  },
+  "screenshots": {
+    "listing": "artifacts/runtime-proof/experiences-price/01-listing.png",
+    "detail": "artifacts/runtime-proof/experiences-price/02-detail.png",
+    "checkout": "artifacts/runtime-proof/experiences-price/03-checkout-sheet.png"
+  },
+  "expectedListingPrice": "€72",
+  "pass": {
+    "listingPrices": true,
+    "noComingSoon": true,
+    "listingDetailCheckout": true,
+    "nonBookableHonest": true,
+    "tabNav": true
+  }
+}

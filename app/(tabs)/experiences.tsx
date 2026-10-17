@@ -14,7 +14,7 @@ import { RatioImage } from "@/components/RatioImage";
 import {
   asEditorialPreview,
   experiencesWithValidCover,
-  formatEuro,
+  formatExperiencePrice,
   GUEST_EXPERIENCES,
   isValidExperienceImageUrl,
   type GuestExperience,
@@ -309,7 +309,7 @@ function ExperienceMarketplaceCard({
       accessibilityLabel={
         preview
           ? `${exp.title}, preview`
-          : `${exp.title}, ${formatEuro(exp.priceCents)}`
+          : `${exp.title}, ${formatExperiencePrice(exp.priceCents, exp.priceBasis, exp.currency)}`
       }
       testID={preview ? `exp-preview-card-${exp.id}` : `exp-live-card-${exp.id}`}
     >
@@ -328,11 +328,7 @@ function ExperienceMarketplaceCard({
             {categoryLine}
           </Text>
         </View>
-        {preview ? (
-          <View style={styles.previewBadge} testID="exp-preview-badge">
-            <Text style={styles.previewBadgeText}>Preview</Text>
-          </View>
-        ) : exp.availableToday ? (
+        {!preview && exp.availableToday ? (
           <View style={styles.todayBadge}>
             <Text style={styles.todayBadgeText}>Today</Text>
           </View>
@@ -372,14 +368,11 @@ function ExperienceMarketplaceCard({
         ) : null}
         <View style={styles.footer}>
           {preview ? (
-            <>
-              <Text style={styles.priceMuted}>Preview</Text>
-              <Text style={styles.ctaPreview}>Explore</Text>
-            </>
+            <Text style={styles.ctaPreview}>Explore</Text>
           ) : (
             <>
               <Text style={styles.price} testID={`exp-price-${exp.id}`}>
-                {formatEuro(exp.priceCents)}
+                {formatExperiencePrice(exp.priceCents, exp.priceBasis, exp.currency)}
               </Text>
               <Text style={styles.cta}>Book</Text>
             </>

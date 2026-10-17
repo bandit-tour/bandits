@@ -4,6 +4,7 @@
  */
 import { workspaceGet, workspaceOrigin } from "@/lib/workspace/client";
 import {
+  coerceExperiencePriceBasis,
   experienceCover,
   isValidExperienceImageUrl,
   type GuestExperience,
@@ -25,6 +26,8 @@ export type WorkspaceLocalExperience = {
   hostName?: string;
   partnerId?: string;
   priceCents?: number;
+  priceBasis?: "per_person" | "per_group" | "per_experience";
+  currency?: string;
   seatsLeft?: number;
   sessionId?: string;
   startsAt?: string;
@@ -33,6 +36,20 @@ export type WorkspaceLocalExperience = {
 };
 
 const FALLBACK_COVER = experienceCover("1516483638261-f4dbaf036963");
+
+/** Placeholder / offline supplier CDNs — never block authorized inventory + pricing. */
+const UNREACHABLE_PHOTO_HOSTS = /(?:cdn\.athensmakers\.gr|cdn\.tenant\.example)/i;
+
+function isGuestRenderablePhotoUrl(url: string | null | undefined): url is string {
+  if (!url || !isValidExperienceImageUrl(url)) return false;
+  try {
+    const host = new URL(url).hostname.toLowerCase();
+    if (UNREACHABLE_PHOTO_HOSTS.test(host)) return false;
+  } catch {
+    return false;
+  }
+  return true;
+}
 
 /** Workspace sometimes returns asset keys, not https URLs — map known keys, else fallback. */
 const ASSET_KEY_COVERS: Record<string, string> = {
@@ -71,6 +88,12 @@ function cleanProviderTitle(title: string): string {
     .trim();
 }
 
+/** Workspace row unit price — never substitute another listing's cents. */
+export function resolveWorkspaceExperienceUnitCents(row: Pick<WorkspaceLocalExperience, "priceCents">): number {
+  const cents = Number(row.priceCents);
+  return Number.isFinite(cents) && cents > 0 ? Math.round(cents) : 0;
+}
+
 /**
  * Defense-in-depth — reject test/orchestration shells; keep real provider rows.
  * Hash suffixes on titles are stripped for display, not used as a hard reject.
@@ -102,11 +125,11 @@ export function mapWorkspaceExperience(row: WorkspaceLocalExperience): GuestExpe
 
   const photos = (row.photos || [])
     .map((u) => resolveExperiencePhoto(u))
-    .filter((u): u is string => !!u && isValidExperienceImageUrl(u));
+    .filter(isGuestRenderablePhotoUrl);
   /** Prefer supplier media; allow approved asset-key / cover mapping when stock-only. */
   const nonStock = photos.filter((u) => !/images\.unsplash\.com/i.test(u));
-  const imageUrl = nonStock[0] || photos[0] || null;
-  if (!imageUrl || !isValidExperienceImageUrl(imageUrl)) return null;
+  const imageUrl = nonStock[0] || photos[0] || FALLBACK_COVER;
+  if (!isGuestRenderablePhotoUrl(imageUrl)) return null;
 
   const title = cleanProviderTitle(row.title) || String(row.title || "").trim();
   const host = cleanProviderTitle(row.hostName || "") || "Local host";
@@ -122,7 +145,9 @@ export function mapWorkspaceExperience(row: WorkspaceLocalExperience): GuestExpe
     rating: 0,
     story: row.description || title,
     when: row.when || row.duration || "Upcoming",
-    priceCents: row.priceCents || 0,
+    priceCents: resolveWorkspaceExperienceUnitCents(row),
+    priceBasis: coerceExperiencePriceBasis(row.priceBasis),
+    currency: String(row.currency || "EUR").toUpperCase() || "EUR",
     seatsLeft: row.seatsLeft ?? 0,
     host,
     meetingPoint: row.location || row.neighborhood || "Athens",
@@ -135,16 +160,17 @@ export function mapWorkspaceExperience(row: WorkspaceLocalExperience): GuestExpe
 }
 
 export function mapWorkspaceDetail(row: WorkspaceLocalExperience, base: GuestExperience): ExperienceDetail {
+  /** Same CDN honesty as listing — never keep blocked supplier hosts in the gallery. */
   const photos = (row.photos || [])
     .map((u) => resolveExperiencePhoto(u))
-    .filter((u): u is string => !!u && isValidExperienceImageUrl(u));
-  const gallery = photos.length ? photos : [base.imageUrl];
+    .filter(isGuestRenderablePhotoUrl);
+  const gallery = photos.length ? photos : [base.imageUrl || FALLBACK_COVER];
   const slot: ExperienceAvailabilitySlot = {
     id: row.sessionId || `sess_${row.id}`,
     label: row.when || "Upcoming session",
     timeRange: row.startsAt ? new Date(row.startsAt).toLocaleString() : row.duration || "See host",
     spotsLeft: row.seatsLeft ?? 0,
-    priceCents: row.priceCents || base.priceCents,
+    priceCents: resolveWorkspaceExperienceUnitCents(row) || base.priceCents,
     language: "English",
     startsAtIso: row.startsAt || new Date().toISOString(),
   };
@@ -180,7 +206,8 @@ export function mapWorkspaceDetail(row: WorkspaceLocalExperience, base: GuestExp
       },
     ],
     reviews: [],
-    availability: row.sessionId && (row.seatsLeft ?? 0) > 0 ? [slot] : [],
+    /** Open seats without sessionId still get a bookable date row (synthetic id). */
+    availability: (row.seatsLeft ?? 0) > 0 ? [slot] : [],
     meeting: {
       label: row.location || "Meeting point",
       address: row.location || row.neighborhood || "Athens",
@@ -225,7 +252,6 @@ export async function fetchLiveLocalExperiences(): Promise<LiveExperiencesFetch>
         return {
           experiences: stale?.experiences ?? [],
           detail: result.detail || "Workspace experiences unavailable",
-          origin: result.origin,
         };
       }
       /**

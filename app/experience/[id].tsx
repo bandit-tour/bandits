@@ -27,7 +27,13 @@ import {
   type ExperienceReview,
 } from "@/lib/guest-workspace/experienceDetail";
 import { fetchLiveExperienceDetail } from "@/lib/guest-workspace/liveExperiences";
-import { formatEuro, isEditorialExperienceId } from "@/lib/guest-workspace/productWorlds";
+import {
+  experienceBookingTotalCents,
+  formatEuro,
+  formatExperiencePrice,
+  formatMoney,
+  isEditorialExperienceId,
+} from "@/lib/guest-workspace/productWorlds";
 import { getCachedAuthUser, invalidateAuthUserCache } from "@/lib/authUserCache";
 import { ImageRatio, imageFocusStyle } from "@/lib/imageRatios";
 import { bookExperienceViaCommerce } from "@/lib/orchestra/commerceBook";
@@ -50,9 +56,11 @@ export default function ExperienceDetailScreen() {
   const id = routeParamString(raw.id);
   const catalog = useMemo(() => (id ? getExperienceDetail(id) : undefined), [id]);
   const [liveExp, setLiveExp] = useState<ExperienceDetail | null>(null);
-  const exp = catalog ?? liveExp ?? undefined;
+  const [liveFetchDone, setLiveFetchDone] = useState(false);
   /** Editorial DNA (`exp_*`) — inspiration only; never Commerce checkout. */
   const isPreview = Boolean(id && isEditorialExperienceId(id) && catalog);
+  /** Live Workspace inventory wins over seed catalog for supplier price + basis. */
+  const exp = (isPreview ? catalog : liveExp ?? catalog) ?? undefined;
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const { width: SCREEN_W } = useWindowDimensions();
@@ -77,9 +85,21 @@ export default function ExperienceDetailScreen() {
   const [availY, setAvailY] = useState(0);
 
   useEffect(() => {
-    if (!id || catalog) return;
-    void fetchLiveExperienceDetail(id).then((row) => setLiveExp(row));
-  }, [id, catalog]);
+    if (!id || isPreview) {
+      setLiveFetchDone(true);
+      return;
+    }
+    setLiveFetchDone(false);
+    let cancelled = false;
+    void fetchLiveExperienceDetail(id).then((row) => {
+      if (cancelled) return;
+      setLiveExp(row);
+      setLiveFetchDone(true);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [id, isPreview]);
 
   const liveGallery = useMemo(() => {
     if (!exp) return [] as string[];
@@ -214,6 +234,16 @@ export default function ExperienceDetailScreen() {
     setBookStep("done");
   }, [exp, selectedSlot, guestCount, isPreview]);
 
+  if (!exp && !liveFetchDone) {
+    return (
+      <View style={styles.missing}>
+        <Stack.Screen options={{ headerShown: false }} />
+        <ActivityIndicator color={ACCENT} />
+        <Text style={[styles.missingText, { marginTop: 12 }]}>Loading experience…</Text>
+      </View>
+    );
+  }
+
   if (!exp) {
     return (
       <View style={styles.missing}>
@@ -240,7 +270,10 @@ export default function ExperienceDetailScreen() {
   }
 
   const visibleReviews = showAllReviews ? exp.reviews : exp.reviews.slice(0, 2);
-  const priceLabel = formatEuro(selectedSlot?.priceCents ?? exp.priceCents);
+  const unitCents = selectedSlot?.priceCents ?? exp.priceCents;
+  const priceBasis = exp.priceBasis;
+  const priceCurrency = exp.currency || "EUR";
+  const stickyPriceLabel = formatExperiencePrice(unitCents, priceBasis, priceCurrency);
 
   return (
     <View style={styles.root}>
@@ -467,7 +500,7 @@ export default function ExperienceDetailScreen() {
                         {slot.spotsLeft} spots · {slot.language}
                       </Text>
                       <Text style={[styles.slotPrice, on && styles.slotPriceOn]}>
-                        {formatEuro(slot.priceCents)}
+                        {formatExperiencePrice(slot.priceCents, priceBasis, priceCurrency)}
                       </Text>
                     </Pressable>
                   );
@@ -591,9 +624,7 @@ export default function ExperienceDetailScreen() {
             </>
           ) : (
             <>
-              <Text style={styles.bookPrice}>
-                {priceLabel} <Text style={styles.bookPer}>/ guest</Text>
-              </Text>
+              <Text style={styles.bookPrice}>{stickyPriceLabel}</Text>
               <Text style={styles.bookCancel}>{exp.cancellationPolicyShort}</Text>
             </>
           )}
@@ -758,7 +789,9 @@ function BookingSheet({
 }) {
   const maxGuests = selectedSlot?.spotsLeft ?? 8;
   const unit = selectedSlot?.priceCents ?? exp.priceCents;
-  const total = unit * guestCount;
+  const priceBasis = exp.priceBasis;
+  const priceCurrency = exp.currency || "EUR";
+  const total = experienceBookingTotalCents(unit, guestCount, priceBasis);
 
   return (
     <Modal visible={visible} animationType="slide" transparent onRequestClose={onClose}>
@@ -803,7 +836,9 @@ function BookingSheet({
                       {slot.spotsLeft} spots · {slot.language}
                     </Text>
                   </View>
-                  <Text style={styles.sheetSlotPrice}>{formatEuro(slot.priceCents)}</Text>
+                  <Text style={styles.sheetSlotPrice}>
+                    {formatExperiencePrice(slot.priceCents, priceBasis, priceCurrency)}
+                  </Text>
                 </Pressable>
               ))}
             </ScrollView>
@@ -854,9 +889,11 @@ function BookingSheet({
               <Text style={styles.reviewMeta}>Meet · {exp.meeting.label}</Text>
               <View style={styles.totalRow}>
                 <Text style={styles.totalLabel}>
-                  {formatEuro(unit)} × {guestCount}
+                  {priceBasis === "per_person"
+                    ? `${formatMoney(unit, priceCurrency)} × ${guestCount}`
+                    : formatExperiencePrice(unit, priceBasis, priceCurrency)}
                 </Text>
-                <Text style={styles.totalValue}>{formatEuro(total)}</Text>
+                <Text style={styles.totalValue}>{formatMoney(total, priceCurrency)}</Text>
               </View>
               <Text style={styles.commerceNote}>
                 Checkout via Commerce OS · no local fake payment

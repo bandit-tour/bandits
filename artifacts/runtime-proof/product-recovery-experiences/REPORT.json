@@ -1,0 +1,86 @@
+{
+  "track": "Product recovery — Experiences catalog pricing E1–E6",
+  "closedAt": "2026-10-17T10:30:16.202Z",
+  "runtimeBase": "http://localhost:8082",
+  "workspaceOrigin": "http://localhost:3000",
+  "stripeLiveCharges": false,
+  "results": {
+    "E1_apiSupplierFields": "PASS",
+    "E1_note": {
+      "liveCount": 1,
+      "uniquePositivePrices": 1,
+      "ids": [
+        {
+          "id": "exp_honesty_real",
+          "priceCents": 7200,
+          "currency": "EUR"
+        }
+      ]
+    },
+    "E2_listingMatchesApi": "PASS",
+    "E2_cardChecks": [
+      {
+        "id": "exp_honesty_real",
+        "expected": "€72",
+        "ui": "€72",
+        "match": true
+      }
+    ],
+    "E3_detailMatchesListing": "PASS",
+    "E4_checkoutMatchesListing": "PASS",
+    "E3_E4_detailChecks": [
+      {
+        "id": "exp_honesty_real",
+        "expectedEuro": "€72",
+        "detail": "PASS",
+        "checkout": "PASS"
+      }
+    ],
+    "E5_noFalsePromoClutter": "PASS",
+    "E5_metrics": {
+      "comingSoon": 0,
+      "previewBadges": 0,
+      "hasNotBookableCopy": true
+    },
+    "E6_tabNavResponsive": "PASS",
+    "E6_navMs": 2017,
+    "E_multiDistinctSupplierPrices": "BLOCKED — need ≥2 guest-bookable listings in Workspace"
+  },
+  "screenshots": {
+    "E1_listing": "artifacts/runtime-proof/product-recovery-experiences/E1-listing.png",
+    "E3_detail_exp_honesty_real": "artifacts/runtime-proof/product-recovery-experiences/E3-detail-exp_honesty_real.png",
+    "E4_checkout_exp_honesty_real": "artifacts/runtime-proof/product-recovery-experiences/E4-checkout-exp_honesty_real.png",
+    "E5_listing_clutter": "artifacts/runtime-proof/product-recovery-experiences/E5-listing-clutter.png"
+  },
+  "workspaceDirect": {
+    "status": 200,
+    "body": {
+      "ok": true,
+      "product": "Local Experiences",
+      "count": 1,
+      "experiences": [
+        {
+          "id": "exp_honesty_real",
+          "title": "Kypseli courtyard clay morning",
+          "status": "Open seats",
+          "when": "Sat 10:00",
+          "city": "Athens",
+          "neighborhood": "Kypseli",
+          "location": "Kypseli",
+          "photos": [
+            "https://cdn.athensmakers.gr/clay-1.jpg",
+            "https://cdn.athensmakers.gr/clay-2.jpg"
+          ],
+          "description": "A quiet courtyard morning with local makers — clay, coffee, and the side streets guests never find alone.",
+          "hostName": "Maria · Athens Makers",
+          "priceCents": 7200,
+          "currency": "EUR",
+          "seatsLeft": 6,
+          "bookingMode": "request",
+          "kind": "local_experience"
+        }
+      ],
+      "experience": null
+    }
+  }
+}
