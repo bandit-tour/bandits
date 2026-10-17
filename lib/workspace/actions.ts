@@ -229,7 +229,11 @@ export async function bookExperienceViaWorkspace(input: {
     input.guestEmail,
   );
   if (!result.ok) return result;
-  const bookingId = result.data.booking?.id;
+  const eventMeta = (result.data as { event?: { meta?: { bookingId?: string } } }).event?.meta;
+  const bookingId =
+    result.data.booking?.id ||
+    eventMeta?.bookingId ||
+    (result.data as { bookingId?: string }).bookingId;
   if (!bookingId) return { ok: false, detail: "Workspace returned no booking id" };
   publishGuestLiveEvent({
     type: "experience.booked",
