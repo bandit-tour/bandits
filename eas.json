@@ -27,12 +27,28 @@
     },
     "production": {
       "environment": "production",
+      "env": {
+        "EXPO_PUBLIC_WORKSPACE_URL": "https://banditour-workspace.vercel.app",
+        "EXPO_PUBLIC_ORCHESTRA_OS_URL": "https://banditour-workspace.vercel.app"
+      },
       "ios": {
+        "autoIncrement": true
+      },
+      "android": {
+        "buildType": "app-bundle",
         "autoIncrement": true
       }
     }
   },
   "submit": {
-    "production": {}
+    "production": {
+      "ios": {
+        "ascAppId": "6760899422",
+        "appleTeamId": "T4R54U865M"
+      },
+      "android": {
+        "track": "internal"
+      }
+    }
   }
 }
