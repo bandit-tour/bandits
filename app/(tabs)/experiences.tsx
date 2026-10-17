@@ -308,8 +308,10 @@ function ExperienceMarketplaceCard({
       accessibilityRole="button"
       accessibilityLabel={
         preview
-          ? `${exp.title}, preview`
-          : `${exp.title}, ${formatExperiencePrice(exp.priceCents, exp.priceBasis, exp.currency)}`
+          ? `${exp.title}, inspiration, not bookable`
+          : exp.priceCents > 0
+            ? `${exp.title}, ${formatExperiencePrice(exp.priceCents, exp.priceBasis, exp.currency)}`
+            : `${exp.title}, price on request`
       }
       testID={preview ? `exp-preview-card-${exp.id}` : `exp-live-card-${exp.id}`}
     >
@@ -368,11 +370,23 @@ function ExperienceMarketplaceCard({
         ) : null}
         <View style={styles.footer}>
           {preview ? (
-            <Text style={styles.ctaPreview}>Explore</Text>
-          ) : (
+            <>
+              <Text style={styles.priceMuted} testID={`exp-price-${exp.id}`}>
+                Inspiration · not bookable
+              </Text>
+              <Text style={styles.ctaPreview}>Explore</Text>
+            </>
+          ) : exp.priceCents > 0 ? (
             <>
               <Text style={styles.price} testID={`exp-price-${exp.id}`}>
                 {formatExperiencePrice(exp.priceCents, exp.priceBasis, exp.currency)}
+              </Text>
+              <Text style={styles.cta}>Book</Text>
+            </>
+          ) : (
+            <>
+              <Text style={styles.priceMuted} testID={`exp-price-${exp.id}`}>
+                Price on request
               </Text>
               <Text style={styles.cta}>Book</Text>
             </>

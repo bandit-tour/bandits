@@ -1,0 +1,65 @@
+{
+  "at": "2026-10-17T17:15:00.000Z",
+  "stripeLive": false,
+  "guestPinned": {
+    "alias": "https://bandits-two.vercel.app",
+    "sha": "2bbf93b",
+    "deploymentId": "dpl_99CN4rd8ZZSUk6XDbpNjNFyFEdNY",
+    "redeployedThisTurn": false,
+    "reason": "Octopus €19 sibling restoring purchase screen — alias race avoided"
+  },
+  "workspace": {
+    "alias": "https://banditour-workspace.vercel.app",
+    "joinSha": "e315570"
+  },
+  "corrections": {
+    "P0A_experiences": {
+      "status": "CODE_READY",
+      "bookablePriceOnCard": true,
+      "editorialLabeledNotBookable": true,
+      "noInventedEur72Reuse": true,
+      "liveBookableCount": 1,
+      "liveBookablePriceCents": 7200
+    },
+    "P0B_smarttraveler": {
+      "status": "CODE_READY_SUPPLY_BLOCKED",
+      "claimCodeFromWorkspaceClaimId": true,
+      "editorialSeparated": true,
+      "publicBusinessCount": 0,
+      "subscriptionPriceOwnerApproved": false
+    },
+    "P0C_bottle": {
+      "status": "CODE_READY_SUPPLY_PARTIAL",
+      "hotelSearch": true,
+      "discoverableVsParticipating": true,
+      "localGalleryWhenNotLive": true,
+      "hostOnboardingCta": "https://banditour-workspace.vercel.app/join",
+      "verifiedSecondSleeps": 0,
+      "hotels": {
+        "play-theatrou": "published_LIVE",
+        "nyx-athens": "discoverable_not_LIVE",
+        "aluma-athens": "discoverable_not_LIVE"
+      }
+    }
+  },
+  "filesChanged": [
+    "app/(tabs)/experiences.tsx",
+    "app/(tabs)/smarttraveler.tsx",
+    "app/(tabs)/travelBottle.tsx",
+    "app/bottleHotel/[slug].tsx",
+    "app/localFind/[id].tsx",
+    "lib/guest-workspace/hotelBottleListing.ts",
+    "lib/workspace/actions.ts"
+  ],
+  "octopusFilesAvoided": [
+    "app/premium/[id].tsx",
+    "components/BanditHeader.tsx",
+    "components/PremiumUnlockModal.tsx",
+    "app/bandit/[id].tsx"
+  ],
+  "next": [
+    "Merge carefully after Octopus sibling lands",
+    "Deploy Guest with alias coordination",
+    "Browser evidence under owner-live-regressions/*/ screenshots"
+  ]
+}

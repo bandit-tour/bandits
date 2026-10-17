@@ -40,6 +40,8 @@ export default function LocalFindDetailScreen() {
   const [isDemo, setIsDemo] = useState(false);
   const [loading, setLoading] = useState(true);
   const [unlocked, setUnlocked] = useState(false);
+  const [claimCode, setClaimCode] = useState<string | null>(null);
+  const [claimStatus, setClaimStatus] = useState<string | null>(null);
   const [saved, setSaved] = useState(false);
   const [actionBusy, setActionBusy] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
@@ -188,8 +190,8 @@ export default function LocalFindDetailScreen() {
             </Text>
           </View>
         ) : place.guestPrivilege ? (
-          <View style={styles.privilegeCard}>
-            <Text style={styles.privilegeEyebrow}>Guest privilege</Text>
+          <View style={styles.privilegeCard} testID="local-find-offer">
+            <Text style={styles.privilegeEyebrow}>Hotel Guest Special</Text>
             <Text style={styles.privilegeTitle}>
               {place.guestPrivilege.label}
             </Text>
@@ -198,11 +200,26 @@ export default function LocalFindDetailScreen() {
             </Text>
             {!stayPerks ? (
               <Text style={styles.lockHint}>
-                Guest privileges unlock during an active hotel stay
+                Claim a verified show-at-the-door code during an active hotel stay
                 {!isFullStay ? " — activate your stay to unlock this perk." : "."}
               </Text>
+            ) : unlocked && claimCode ? (
+              <View style={styles.codeBlock} testID="local-find-claim-code">
+                <Text style={styles.codeEyebrow}>Show this code at the business</Text>
+                <Text style={styles.codeValue} selectable>
+                  {claimCode}
+                </Text>
+                <Text style={styles.unlocked}>
+                  {place.guestPrivilege.label}
+                  {claimStatus ? ` · ${claimStatus}` : " · pending merchant validation"}
+                </Text>
+                <Text style={styles.privilegeDetail}>
+                  Merchant validates this claim in Partner Workspace. Codes are server-issued — do not
+                  invent or reuse someone else’s code.
+                </Text>
+              </View>
             ) : unlocked ? (
-              <Text style={styles.unlocked}>
+              <Text style={styles.unlocked} testID="local-find-unlocked">
                 Ready to show at the door · {place.guestPrivilege.label}
               </Text>
             ) : (
@@ -223,12 +240,16 @@ export default function LocalFindDetailScreen() {
                       setActionError(r.detail);
                       return;
                     }
+                    const code = r.data?.claim?.id || null;
+                    setClaimCode(code);
+                    setClaimStatus(r.data?.claim?.status || "pending");
                     setUnlocked(true);
                   });
                 }}
+                testID="local-find-claim-cta"
               >
                 <Text style={styles.unlockCtaText}>
-                  {actionBusy ? "Unlocking…" : "Unlock Guest Privilege"}
+                  {actionBusy ? "Claiming…" : "Claim discount code"}
                 </Text>
               </Pressable>
             )}
@@ -441,6 +462,29 @@ const styles = StyleSheet.create({
     color: color.statusGreen,
     fontWeight: "700",
     fontSize: 13,
+  },
+  codeBlock: {
+    marginTop: 14,
+    padding: 14,
+    borderRadius: 12,
+    backgroundColor: "#111111",
+    borderWidth: 1,
+    borderColor: "#2A2A2A",
+  },
+  codeEyebrow: {
+    fontSize: 11,
+    fontWeight: "700",
+    letterSpacing: 0.5,
+    textTransform: "uppercase",
+    color: "#B0B0B0",
+  },
+  codeValue: {
+    marginTop: 8,
+    fontSize: 22,
+    fontWeight: "800",
+    letterSpacing: 1.2,
+    color: "#FFFFFF",
+    fontVariant: ["tabular-nums"],
   },
   actionError: {
     marginTop: 12,

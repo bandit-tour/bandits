@@ -51,9 +51,9 @@ function resolveSmartTravelerCity(opts: {
 }
 
 /**
- * SmartTraveler — curated secret city directory.
- * Places locals pass to each other. Place first; guest privilege secondary.
- * Live rows from Workspace; DEMO seed only when the live fetch fails.
+ * SmartTraveler — redeemable boutique merchant network for hotel guests.
+ * Live partner_record offers claim server-issued codes; editorial Local Finds stay
+ * separately labeled and never substitute for redeemable inventory.
  */
 type SmartTravelerScreenProps = {
   tabActive?: boolean;
@@ -130,14 +130,19 @@ export function SmartTravelerScreen({ tabActive = true }: SmartTravelerScreenPro
         <Text style={styles.title}>SmartTraveler</Text>
         <Text style={styles.subtitle}>
           {editorialMode
-            ? "Editorial Local Finds for Athens. Not approved Hotel Guest Specials."
-            : "Approved local partners for this stay."}
+            ? "Exclusive local discounts for guests of partner hotels — when merchants publish."
+            : "Exclusive local discounts for guests of partner hotels."}
         </Text>
         <Text style={styles.subtitleSecondary}>
           {editorialMode
-            ? "Browsing by destination, not GPS. These places are for discovery — discounts cannot be redeemed."
-            : "Cafés, shops and makers with a published partner profile."}
+            ? "No redeemable partner offers are published near you yet. Editorial Local Finds below are discovery-only — not claimable codes. Merchants join via Workspace → SmartTraveler business."
+            : "Discover handpicked places, claim your offer, and show the verified code at the business."}
         </Text>
+        {editorialMode ? (
+          <Text style={styles.subtitleSecondary} testID="st-merchant-join-hint">
+            Businesses: banditour-workspace.vercel.app/join → SmartTraveler business.
+          </Text>
+        ) : null}
       </View>
 
       <ScrollView

@@ -88,11 +88,10 @@ function isStockPhotoUrl(url: string): boolean {
 
 function propertyLocalGallery(wl: HotelWhiteLabelConfig): ImageSourcePropType[] {
   /**
-   * Logo-presented tenants (ALUMA → “Athens hospitality partner”) only have a
-   * branded entrance photo (ANISE / ALUMA HOTELS sign). That is not a gallery
-   * for a different public name.
+   * Bottle discovery may show authorized in-repo property photography even when
+   * Workspace tenant config is not LIVE yet. Never use logos as gallery frames.
+   * Logo-presented tenants still contribute intro/hero property stills only.
    */
-  if (wl.titlePresentation === "logo") return [];
   const excluded = new Set(
     [wl.logoSource, wl.brandMarkSource].map((src) => JSON.stringify(src)),
   );

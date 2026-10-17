@@ -166,7 +166,7 @@ export default function BottleHotelDetailScreen() {
     loadState === "loading"
       ? `Loading ${name} from Workspace…`
       : notPublished
-        ? `${name} is planned for Athens Bottle, but its public Workspace config is not LIVE yet. Guest will not invent photos, rates, or room inventory.`
+        ? `${name} is discoverable for Athens Bottle planning. Authorized partner branding may appear below; rates and room inventory wait until Workspace goes LIVE — Guest will not invent them.`
         : unreachable
           ? `Could not reach Workspace for ${name}. This is a connection issue, not a missing listing.`
           : raw.length > 40 &&
@@ -179,7 +179,13 @@ export default function BottleHotelDetailScreen() {
   const datesLabel =
     checkIn && checkOut ? `${humanDate(checkIn)} → ${humanDate(checkOut)}` : "Dates from your Bottle plan";
   const publishText =
-    loadState !== "ready" || !listing ? "Checking Workspace…" : publishLabel(listing);
+    loadState !== "ready" || !listing
+      ? "Checking Workspace…"
+      : listing.workspacePublishStatus === "published"
+        ? publishLabel(listing)
+        : listing.workspacePublishStatus === "not_published"
+          ? "Discoverable · not LIVE on Workspace yet"
+          : publishLabel(listing);
 
   return (
     <ScrollView style={styles.screen} contentContainerStyle={styles.content} testID="bottle-hotel-detail">
@@ -230,7 +236,7 @@ export default function BottleHotelDetailScreen() {
             <Text style={styles.galleryEmptyTitle}>{name}</Text>
             <Text style={styles.galleryEmptyBody}>
               {notPublished
-                ? "Not published — no property gallery until Hotelier goes LIVE with real photos."
+                ? "Discoverable profile — no approved property gallery frames yet. Guest will not invent photos."
                 : unreachable
                   ? "Workspace unreachable — gallery will load when the connection recovers."
                   : "No property photos published yet. Stock and third-party images are not shown."}

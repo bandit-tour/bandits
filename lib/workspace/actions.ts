@@ -38,6 +38,15 @@ export type GuestReflectionAction =
   | "validate_claim";
 
 /** Persist guest mutations on Workspace store — never invent success locally. */
+export type GuestReflectionClaim = {
+  id: string;
+  title?: string;
+  status?: string;
+  offerId?: string;
+  businessId?: string;
+  createdAt?: string;
+};
+
 export async function postGuestReflection(
   body: {
     action: GuestReflectionAction;
@@ -58,12 +67,20 @@ export async function postGuestReflection(
     nights?: number;
   },
   guestEmail?: string | null,
-): Promise<GuestActionResult<{ booking?: { id: string }; event?: { id: string }; reflection?: unknown }>> {
+): Promise<
+  GuestActionResult<{
+    booking?: { id: string };
+    event?: { id: string };
+    claim?: GuestReflectionClaim;
+    reflection?: unknown;
+  }>
+> {
   const result = await workspacePost<{
     ok?: boolean;
     error?: string;
     booking?: { id: string };
     event?: { id: string };
+    claim?: GuestReflectionClaim;
     reflection?: unknown;
   }>("/api/guest/reflection", body, guestEmail);
   return asAction(result);
@@ -247,7 +264,7 @@ export async function redeemSmartTravelerBenefit(input: {
   offerId?: string;
   title: string;
   guestEmail?: string | null;
-}): Promise<GuestActionResult> {
+}): Promise<GuestActionResult<{ claim?: GuestReflectionClaim; event?: { id: string } }>> {
   return postGuestReflection(
     {
       action: "redeem_benefit",

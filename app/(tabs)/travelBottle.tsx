@@ -3,6 +3,7 @@ import { Stack, useRouter, type Href } from "expo-router";
 import React, { useCallback, useMemo, useState } from "react";
 import {
   Image,
+  Linking,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -190,8 +191,6 @@ function JourneyMatchCard({
   );
 }
 
-const HOTEL_SERVICE_TAGS = ["Breakfast", "Restaurant", "Spa", "Rooftop", "Concierge"];
-
 function isInventedWelcome(text: string): boolean {
   return /message in a bottle|calm, personal|soft welcome before you/i.test(text);
 }
@@ -270,20 +269,37 @@ function HotelStayPresentation({
   const guestSummary =
     usableSummary ||
     `${name} is your hotel stay in ${area}. Bottle adds a second place to sleep around this stay — it does not replace the hotel.`;
-  const tags = (listing?.services?.length ? listing.services : HOTEL_SERVICE_TAGS).slice(0, 6);
+  const tags = (listing?.services?.length ? listing.services : []).slice(0, 6);
   const remote = listing?.remoteGalleryUrls || [];
   const local = listing?.localGallery || [];
   const publishStatus = listing?.workspacePublishStatus;
   const notPublished = publishStatus === "not_published";
   const unreachable = publishStatus === "unreachable";
-  /** When Workspace says not published, do not dress the panel as a live inventory listing. */
-  const showRemote = !notPublished && !unreachable ? remote : [];
-  const showLocal = notPublished || unreachable ? [] : local;
+  const publishedLive = publishStatus === "published" && !unreachable;
+  /**
+   * Discoverable ≠ bookable inventory. Authorized in-repo property photos stay visible
+   * for known Athens boutiques even when Workspace tenant config is not LIVE yet.
+   * Workspace remote gallery only when published.
+   */
+  const showRemote = publishedLive ? remote : [];
+  const showLocal = local;
   const photoCount = showRemote.length + showLocal.length;
+  const participationLabel = publishedLive
+    ? listing?.roomInventoryMissing
+      ? "Participating · gallery pending"
+      : "Participating · Workspace LIVE"
+    : notPublished
+      ? "Discoverable · not LIVE on Workspace"
+      : unreachable
+        ? "Discoverable · Workspace unreachable"
+        : "Discoverable";
 
   return (
     <View style={styles.hotelCard} testID="bottle-hotel-panel">
-      <Text style={styles.hotelKicker}>Current hotel stay</Text>
+      <Text style={styles.hotelKicker}>First sleep · hotel profile</Text>
+      <Text style={styles.hotelGapNote} testID="bottle-hotel-participation">
+        {participationLabel}
+      </Text>
       {showRemote[0] ? (
         <ExpoImage
           source={{ uri: showRemote[0] }}
@@ -298,7 +314,7 @@ function HotelStayPresentation({
           <Text style={styles.hotelHeroEmptyText}>{name}</Text>
           <Text style={styles.hotelHeroEmptySub} testID="bottle-hotel-publish-status">
             {notPublished
-              ? "Not published on Workspace yet"
+              ? "Discoverable profile — Workspace config not LIVE yet"
               : unreachable
                 ? "Workspace unreachable — try again later"
                 : "Property photos publish from the hotel"}
@@ -328,13 +344,13 @@ function HotelStayPresentation({
         </Text>
         {notPublished ? (
           <Text style={styles.hotelSummary} testID="bottle-hotel-not-published">
-            This boutique hotel is planned for Athens Bottle, but its public Workspace config is not LIVE yet.
-            Guest will not invent photos, rates, or room inventory.
+            Discoverable Athens boutique for Bottle planning. Partner branding is shown when approved in-app;
+            rates and room inventory appear only after Workspace goes LIVE — Guest will not invent them.
           </Text>
         ) : (
           <Text style={styles.hotelSummary}>{guestSummary}</Text>
         )}
-        {!notPublished && !unreachable ? (
+        {tags.length ? (
           <View style={styles.attrChips}>
             {tags.map((s) => (
               <View key={s} style={styles.attrChip}>
@@ -345,7 +361,7 @@ function HotelStayPresentation({
         ) : null}
         {notPublished ? (
           <Text style={styles.hotelGapNote} testID="bottle-hotel-not-published-note">
-            Not published — Hotelier must go LIVE with real branding before this property appears as inventory.
+            Selectable for Mix planning. Full bookable inventory waits on Hotelier LIVE + real photos.
           </Text>
         ) : unreachable ? (
           <Text style={styles.hotelGapNote}>Could not reach Workspace hotel config. This is a connection issue, not a missing listing.</Text>
@@ -417,6 +433,7 @@ export function BottleProductScreen() {
   const [saveMsg, setSaveMsg] = useState<string | null>(null);
   const [activeFilter, setActiveFilter] = useState<string | null>(null);
   const [selectedHotelSlug, setSelectedHotelSlug] = useState("play-theatrou");
+  const [hotelSearch, setHotelSearch] = useState("");
   const [hotelListings, setHotelListings] = useState<Record<string, HotelBottleListing>>({});
   const [externalStays, setExternalStays] = useState<WorkspaceBottleStay[]>([]);
   const [demoStayCount, setDemoStayCount] = useState(0);
@@ -445,6 +462,16 @@ export function BottleProductScreen() {
     connectedHotel?.name || selectedListing?.displayName || selectedListing?.whiteLabel?.title || "";
   const datesReady = Boolean(checkIn && checkOut && totalNights && totalNights >= 2);
   const canMix = destination.trim().length >= 2 && datesReady && travelers >= 1 && !mixing;
+
+  const searchableHotels = useMemo(() => {
+    const q = hotelSearch.trim().toLowerCase();
+    return BOTTLE_PLAN_HOTELS.filter((h) => {
+      if (!q) return true;
+      const listing = hotelListings[h.id];
+      const blob = `${h.name} ${h.city} ${listing?.displayName || ""} ${listing?.location || ""}`.toLowerCase();
+      return blob.includes(q);
+    });
+  }, [hotelSearch, hotelListings]);
 
   React.useEffect(() => {
     if (connectedHotel?.slug) {
@@ -699,28 +726,38 @@ export function BottleProductScreen() {
         ) : null}
 
         <View style={styles.planPanel} testID="bottle-athens-hotels">
-          <Text style={styles.planKicker}>First sleep</Text>
+          <Text style={styles.planKicker}>First sleep · Athens hotels</Text>
           <Text style={styles.planLead}>
-            Choose an Athens boutique hotel for night one. Each property uses its own Workspace photos — never
-            mixed.
+            Search and select a boutique hotel for night one. Discoverable profiles use that hotel’s own
+            approved photos — never mixed with another property. Participating (Workspace LIVE) unlocks
+            full inventory when published.
           </Text>
+          <TextInput
+            testID="bottle-hotel-search"
+            value={hotelSearch}
+            onChangeText={setHotelSearch}
+            placeholder="Search hotels (name or area)"
+            placeholderTextColor="#8A8178"
+            style={styles.askInput}
+            accessibilityLabel="Search Athens hotels"
+          />
           <View style={styles.planChips}>
-            {BOTTLE_PLAN_HOTELS.map((h) => {
+            {searchableHotels.map((h) => {
               const listing = hotelListings[h.id];
               const publish = listing?.workspacePublishStatus;
               const selected = plannedHotelSlug === h.id;
               const chipNote =
-                publish === "not_published"
-                  ? "Not published"
-                  : publish === "unreachable"
-                    ? "Workspace unreachable"
-                    : publish === "published" && listing?.roomInventoryMissing
-                      ? "Published · gallery pending"
-                      : publish === "published"
-                        ? null
+                publish === "published" && listing?.roomInventoryMissing
+                  ? "Participating · gallery pending"
+                  : publish === "published"
+                    ? "Participating"
+                    : publish === "not_published"
+                      ? "Discoverable"
+                      : publish === "unreachable"
+                        ? "Discoverable · offline"
                         : listing
-                          ? "Checking Workspace…"
-                          : null;
+                          ? "Checking…"
+                          : "Discoverable";
               return (
                 <Pressable
                   key={h.id}
@@ -728,20 +765,25 @@ export function BottleProductScreen() {
                   style={[styles.planChip, selected && styles.planChipOn]}
                   onPress={() => setSelectedHotelSlug(h.id)}
                   accessibilityRole="button"
+                  accessibilityState={{ selected }}
                 >
                   <Text style={[styles.planChipText, selected && styles.planChipTextOn]}>{h.name}</Text>
-                  {chipNote ? (
-                    <Text
-                      style={[styles.hotelGapNote, selected && { color: "rgba(255,255,255,0.75)" }]}
-                      testID={`bottle-hotel-status-${h.id}`}
-                    >
-                      {chipNote}
-                    </Text>
-                  ) : null}
+                  <Text
+                    style={[styles.hotelGapNote, selected && { color: "rgba(255,255,255,0.75)" }]}
+                    testID={`bottle-hotel-status-${h.id}`}
+                  >
+                    {chipNote}
+                  </Text>
                 </Pressable>
               );
             })}
           </View>
+          {searchableHotels.length === 0 ? (
+            <Text style={styles.empty} testID="bottle-hotel-search-empty">
+              No Athens hotels match “{hotelSearch.trim()}”. Clear search to see PLAY, NYX, and hospitality
+              partners.
+            </Text>
+          ) : null}
         </View>
 
         <HotelStayPresentation
@@ -775,13 +817,29 @@ export function BottleProductScreen() {
             Extraordinary external stays from Workspace hosts — only verified rows appear in Mix results.
           </Text>
           {externalStays.length === 0 ? (
-            <Text style={styles.empty} testID="bottle-external-empty">
-              No verified second sleeps are published in Workspace yet. Hosts onboard from Workspace
-              (Airbnb-standard listing fields) — Guest does not fabricate supply.
-              {demoStayCount > 0
-                ? ` ${demoStayCount} TEST/demo seed${demoStayCount === 1 ? "" : "s"} exist for host-workflow QA — NON-BOOKABLE.`
-                : ""}
-            </Text>
+            <View testID="bottle-external-empty">
+              <Text style={styles.empty}>
+                No verified second sleeps are published in Workspace yet. Guest does not fabricate supply.
+                {demoStayCount > 0
+                  ? ` ${demoStayCount} TEST/demo seed${demoStayCount === 1 ? "" : "s"} exist for host-workflow QA — NON-BOOKABLE.`
+                  : ""}
+              </Text>
+              <Text style={styles.planLead}>
+                Hosts register on Workspace as Travel in a Bottle hosts, then publish Airbnb-standard
+                listing fields (photos, capacity, calendar, prices, house rules) before Mix can return
+                matches.
+              </Text>
+              <Pressable
+                style={styles.hotelCta}
+                onPress={() =>
+                  void Linking.openURL("https://banditour-workspace.vercel.app/join").catch(() => undefined)
+                }
+                accessibilityRole="link"
+                testID="bottle-host-onboarding"
+              >
+                <Text style={styles.hotelCtaText}>Become a Bottle host</Text>
+              </Pressable>
+            </View>
           ) : (
             externalStays.map((stay) => <ExternalStayRow key={stay.id} stay={stay} />)
           )}
