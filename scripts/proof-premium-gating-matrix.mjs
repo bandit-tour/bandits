@@ -67,8 +67,14 @@ async function openPremium(page, banditId) {
 }
 
 function classify(body) {
-  const checkout = /Unlock Your Local Insider|€19|Already paid/i.test(body);
-  const ops = /Ask Neo|Ask Elia|Ask My banDit|Reserve a Restaurant|Stay Pass ·|Active Requests/i.test(body);
+  // Do NOT treat disclosure copy "Stay Pass (€19) covers…" as a checkout CTA.
+  const checkout =
+    /Unlock Your Local Insider|Renew Stay Pass —|Already paid/i.test(body) ||
+    (/Unlock Stay Pass/i.test(body) && /€19/i.test(body));
+  const ops =
+    /Ask Neo|Ask Elia|Ask My banDit|Reserve a Restaurant|Stay Pass ·|Active Requests|Active \/ Status/i.test(
+      body,
+    );
   const unavailable = /not available/i.test(body);
   return { checkout, ops, unavailable };
 }

@@ -1,0 +1,83 @@
+{
+  "pass": false,
+  "neo": "d76cb120-018d-4a2e-8b5f-0578a71fd8f9",
+  "sofia": "c7dea92f-403e-4e13-931c-15d706785d11",
+  "accounts": {
+    "A": {
+      "emailDomain": "banditour.proof",
+      "role": "fresh_unpaid"
+    },
+    "B": {
+      "emailDomain": "banditour.demo",
+      "role": "entitled_stay_pass",
+      "masked": "guest@***"
+    }
+  },
+  "entitlementStateB": {
+    "active": true,
+    "orderId": "ord_9971a413c2b0",
+    "requestsRemaining": 3,
+    "expiresAt": "2026-10-24T13:39:30.142Z",
+    "note": "Prior Stripe TEST Stay Pass — explains Concierge OS without new checkout"
+  },
+  "matrix": {
+    "A_fresh_checkout": {
+      "pass": true,
+      "classA": {
+        "checkout": true,
+        "ops": false,
+        "unavailable": false
+      },
+      "shotA": "artifacts/runtime-proof/premium-gating-matrix/A-fresh-neo-checkout.png"
+    },
+    "B_entitled_ops": {
+      "pass": false,
+      "classB": {
+        "checkout": true,
+        "ops": true,
+        "unavailable": false
+      },
+      "demoLogin": true,
+      "shotB": "artifacts/runtime-proof/premium-gating-matrix/B-entitled-neo-ops.png"
+    },
+    "C_unpaid_submit_blocked": {
+      "pass": true,
+      "status": 403,
+      "body": {
+        "error": "Premium required"
+      }
+    },
+    "D_sofia_free_only": {
+      "pass": true,
+      "classD": {
+        "checkout": false,
+        "ops": false,
+        "unavailable": true
+      },
+      "showPremiumInsights": false,
+      "shotD": "artifacts/runtime-proof/premium-gating-matrix/D-sofia-unavailable.png"
+    },
+    "E_decrement_once": {
+      "pass": true,
+      "remBefore": 5,
+      "remAfterSubmit": 4,
+      "remAfter": 4,
+      "status": 200
+    },
+    "F_reload_consistent": {
+      "pass": false,
+      "classF": {
+        "checkout": true,
+        "ops": true,
+        "unavailable": false
+      },
+      "shotF": "artifacts/runtime-proof/premium-gating-matrix/F-entitled-after-reload.png"
+    }
+  },
+  "layers": {
+    "octopusVerified": "bandit eligibility / sales visibility only",
+    "stayPassActive": "traveler paid entitlement — required for Concierge OS",
+    "preview": "sales screen with €19 CTA when verified + not entitled",
+    "submit": "Workspace 403 Premium required without ACTIVE entitlement"
+  }
+}
