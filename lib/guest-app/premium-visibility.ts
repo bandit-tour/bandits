@@ -51,9 +51,8 @@ export async function fetchBanditPremiumVisibility(
   >(`/api/bandit/premium?view=visibility&banditId=${encodeURIComponent(id)}`, guestEmail);
 
   if (!result.ok) {
-    const denied = fallbackUnauthorized(id);
-    cache.set(id, { at: Date.now(), value: denied });
-    return denied;
+    // Never cache failures — SSR / cold proxy errors would hide premium for 60s.
+    return fallbackUnauthorized(id);
   }
 
   const cls = result.data.authorizationClass;

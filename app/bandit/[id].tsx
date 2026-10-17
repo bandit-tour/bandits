@@ -31,8 +31,10 @@ import { getNotificationsBackendStatus } from '@/services/localFriend';
 
 import AppEscapeNav from '@/components/AppEscapeNav';
 import BanditHeader from '@/components/BanditHeader';
+import { BanditOrchestraStrip } from '@/components/BanditOrchestraStrip';
 import EventCard from '@/components/EventCard';
 import { GuestDiscoveryCard } from '@/components/GuestDiscoveryCard';
+import PremiumUnlockModal from '@/components/modals/PremiumUnlockModal';
 import ReviewCard from '@/components/ReviewCard';
 import TagChip from '@/components/TagChip';
 import { goToAppHome } from '@/lib/appNavigation';
@@ -46,6 +48,11 @@ import { resolveApprovedListHeroUrisByEventId } from '@/lib/recommendationImages
 import { trackEvent } from '@/lib/analytics';
 import { logNativeNav } from '@/lib/nativeNavLog';
 import { routeParamString } from '@/lib/routeParams';
+import {
+  fetchBanditPremiumVisibility,
+  type BanditPremiumVisibility,
+} from '@/lib/guest-app/premium-visibility';
+import { OCTOPUS_CONCIERGE_OFFER } from '@/lib/octopus-concierge/principle';
 
 type Bandit = Database['public']['Tables']['bandit']['Row'];
 
@@ -128,7 +135,23 @@ export default function BanditScreen() {
   const [askNotificationsHint, setAskNotificationsHint] = useState<string | null>(null);
   const [likeUserId, setLikeUserId] = useState<string | null>(null);
   const [galleryExtras, setGalleryExtras] = useState<string[]>([]);
+  const [premiumVis, setPremiumVis] = useState<BanditPremiumVisibility | null>(null);
+  const [premiumUnlockOpen, setPremiumUnlockOpen] = useState(false);
   const askTargetBanditIdRef = useRef<string>('');
+
+  useEffect(() => {
+    if (!id) {
+      setPremiumVis(null);
+      return;
+    }
+    let cancelled = false;
+    void fetchBanditPremiumVisibility(id).then((v) => {
+      if (!cancelled) setPremiumVis(v);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [id]);
 
   useEffect(() => {
     if (!id) {
@@ -478,7 +501,12 @@ export default function BanditScreen() {
           onMeet={handleAskMePress}
           categoryExpandBelow={categoryExpandBelow}
           galleryExtras={galleryExtras}
+          {...(premiumVis ? { premiumVisibility: premiumVis } : {})}
         />
+
+        <View style={styles.orchestraStripWrap}>
+          <BanditOrchestraStrip bandit={bandit} categories={categories} />
+        </View>
 
         <View style={[styles.profileBodyGrid, isDesktopWeb && styles.profileBodyGridDesktop]}>
           <View style={styles.profileMainCol}>
@@ -507,16 +535,20 @@ export default function BanditScreen() {
               </View>
             )}
 
-            <View style={{ marginBottom: 14 }}>
-              <GuestDiscoveryCard
-                promptId="bandit_local_insider"
-                eyebrow="Local Insider"
-                title={`Go deeper with ${bandit.name}`}
-                body="Your Local Insider unlocks premium concierge with eligible Local banDits — only when it fits this stay."
-                cta="Explore Local Insider"
-                href="/account/membership"
-              />
-            </View>
+            {premiumVis?.showPremiumInsights ? (
+              <View style={{ marginBottom: 14 }}>
+                <GuestDiscoveryCard
+                  promptId="bandit_local_insider"
+                  eyebrow="Local Insider"
+                  title={`Go deeper with ${bandit.name}`}
+                  body={`Stay Pass ${OCTOPUS_CONCIERGE_OFFER.priceLabel} — ${OCTOPUS_CONCIERGE_OFFER.periodLabel}. City Guide and Ask Me stay free.`}
+                  cta="See Stay Pass offer"
+                  href={`/premium/${encodeURIComponent(String(bandit.id))}`}
+                  onCtaPress={() => setPremiumUnlockOpen(true)}
+                  testID="bandit-journey-local-insider"
+                />
+              </View>
+            ) : null}
 
             <Text style={styles.whyFollowLabel}>
               {`Why follow ${bandit.name}?`}
@@ -565,6 +597,15 @@ export default function BanditScreen() {
           <Text style={styles.askMeText}>Ask me</Text>
         </Pressable>
       </ProfileScrollView>
+
+      {bandit && premiumVis?.showPremiumInsights ? (
+        <PremiumUnlockModal
+          visible={premiumUnlockOpen}
+          onClose={() => setPremiumUnlockOpen(false)}
+          banditId={String(bandit.id)}
+          banditName={String(bandit.name || 'Local banDit')}
+        />
+      ) : null}
 
       <Modal
         visible={askOpen}
@@ -742,6 +783,10 @@ const styles = StyleSheet.create({
     color: '#6B6B6B',
     fontSize: 13,
     lineHeight: 18,
+  },
+  orchestraStripWrap: {
+    paddingHorizontal: 16,
+    marginBottom: 8,
   },
   premiumEntry: {
     marginBottom: 12,

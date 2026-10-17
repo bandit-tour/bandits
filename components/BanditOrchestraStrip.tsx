@@ -95,6 +95,7 @@ export function BanditOrchestraStrip({
         {cap.chips.map((chip) => (
           <Pressable
             key={chip.id}
+            testID={chip.id === "premium" ? "bandit-premium-insights-chip" : undefined}
             onPress={() => open(chip)}
             style={[
               styles.chip,

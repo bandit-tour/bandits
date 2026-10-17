@@ -20,12 +20,18 @@ import {
   withLiveHotelName,
   withPlannedHotelNights,
   BOTTLE_PLAN_CITIES,
+  BOTTLE_PLAN_HOTELS,
   type BottleMatch,
 } from "@/lib/guest-workspace/productWorlds";
-import { loadBottleCatalog, searchMixedSleeps, type BottleCatalogMode } from "@/lib/guest-workspace/liveBottle";
 import {
-  type HotelBottleListing,
-} from "@/lib/guest-workspace/hotelBottleListing";
+  fetchLiveBottleStays,
+  loadBottleCatalog,
+  searchMixedSleeps,
+  type BottleCatalogMode,
+  type WorkspaceBottleStay,
+} from "@/lib/guest-workspace/liveBottle";
+import { loadHotelBottleListing, type HotelBottleListing } from "@/lib/guest-workspace/hotelBottleListing";
+import { normalizeHotelSlug } from "@/lib/hotelWhiteLabel";
 import { useGuestLifecycle } from "@/lib/guest-lifecycle/useGuestLifecycle";
 import { saveDreamDestination } from "@/lib/dream-destinations/store";
 import { recordLifecycleNotice } from "@/lib/lifecycle/notices";
@@ -190,6 +196,51 @@ function isInventedWelcome(text: string): boolean {
   return /message in a bottle|calm, personal|soft welcome before you/i.test(text);
 }
 
+function ExternalStayRow({ stay }: { stay: WorkspaceBottleStay }) {
+  const cover =
+    stay.coverPhoto && /^https?:\/\//i.test(stay.coverPhoto)
+      ? stay.coverPhoto
+      : (stay.photos || []).find((u) => /^https?:\/\//i.test(u));
+  const bookable =
+    stay.source === "provider_record" &&
+    stay.available !== false &&
+    (stay.availableDates?.length ?? 0) > 0;
+  const price =
+    stay.priceCentsPerNight > 0 ? `From €${Math.round(stay.priceCentsPerNight / 100)} / night` : null;
+  const amenityLine = (stay.amenities || []).slice(0, 3).join(" · ");
+  return (
+    <View style={styles.externalRow} testID={`bottle-external-stay-${stay.id}`}>
+      {cover ? (
+        <ExpoImage source={{ uri: cover }} style={styles.externalThumb} contentFit="cover" />
+      ) : (
+        <View style={[styles.externalThumb, styles.heroPending]} />
+      )}
+      <View style={styles.externalBody}>
+        <Text style={styles.externalTitle} numberOfLines={2}>
+          {stay.title}
+        </Text>
+        <Text style={styles.externalMeta} numberOfLines={2}>
+          {[stay.location, stay.hostName ? `Host · ${stay.hostName}` : null, stay.natureType]
+            .filter(Boolean)
+            .join(" · ")}
+        </Text>
+        {amenityLine ? (
+          <Text style={styles.externalMeta} numberOfLines={1}>
+            {amenityLine}
+          </Text>
+        ) : null}
+        {price ? <Text style={styles.externalMeta}>{price}</Text> : null}
+        {typeof stay.maxGuests === "number" ? (
+          <Text style={styles.externalMeta}>Up to {stay.maxGuests} guests</Text>
+        ) : null}
+        <Text style={styles.externalBadge}>
+          {bookable ? "Verified Workspace listing · dates on request" : "NON-BOOKABLE · inventory incomplete"}
+        </Text>
+      </View>
+    </View>
+  );
+}
+
 function HotelStayPresentation({
   listing,
   fallbackName,
@@ -222,24 +273,36 @@ function HotelStayPresentation({
   const tags = (listing?.services?.length ? listing.services : HOTEL_SERVICE_TAGS).slice(0, 6);
   const remote = listing?.remoteGalleryUrls || [];
   const local = listing?.localGallery || [];
-  const photoCount = remote.length + local.length;
+  const publishStatus = listing?.workspacePublishStatus;
+  const notPublished = publishStatus === "not_published";
+  const unreachable = publishStatus === "unreachable";
+  /** When Workspace says not published, do not dress the panel as a live inventory listing. */
+  const showRemote = !notPublished && !unreachable ? remote : [];
+  const showLocal = notPublished || unreachable ? [] : local;
+  const photoCount = showRemote.length + showLocal.length;
 
   return (
     <View style={styles.hotelCard} testID="bottle-hotel-panel">
       <Text style={styles.hotelKicker}>Current hotel stay</Text>
-      {remote[0] ? (
+      {showRemote[0] ? (
         <ExpoImage
-          source={{ uri: remote[0] }}
+          source={{ uri: showRemote[0] }}
           style={styles.hotelHero}
           contentFit="cover"
           testID="bottle-hotel-hero"
         />
-      ) : local[0] ? (
-        <Image source={local[0]} style={styles.hotelHero} resizeMode="cover" testID="bottle-hotel-hero" />
+      ) : showLocal[0] ? (
+        <Image source={showLocal[0]} style={styles.hotelHero} resizeMode="cover" testID="bottle-hotel-hero" />
       ) : (
         <View style={[styles.hotelHero, styles.hotelHeroEmpty]} testID="bottle-hotel-hero">
           <Text style={styles.hotelHeroEmptyText}>{name}</Text>
-          <Text style={styles.hotelHeroEmptySub}>Property photos publish from the hotel</Text>
+          <Text style={styles.hotelHeroEmptySub} testID="bottle-hotel-publish-status">
+            {notPublished
+              ? "Not published on Workspace yet"
+              : unreachable
+                ? "Workspace unreachable — try again later"
+                : "Property photos publish from the hotel"}
+          </Text>
         </View>
       )}
       {photoCount > 1 ? (
@@ -248,10 +311,10 @@ function HotelStayPresentation({
           showsHorizontalScrollIndicator={false}
           contentContainerStyle={styles.hotelGalleryRow}
         >
-          {remote.slice(remote[0] ? 1 : 0).map((uri) => (
+          {showRemote.slice(showRemote[0] ? 1 : 0).map((uri) => (
             <ExpoImage key={uri} source={{ uri }} style={styles.hotelGalleryImage} contentFit="cover" />
           ))}
-          {local.slice(remote[0] ? 0 : 1).map((src, idx) => (
+          {showLocal.slice(showRemote[0] ? 0 : 1).map((src, idx) => (
             <Image key={`loc-${idx}`} source={src} style={styles.hotelGalleryImage} resizeMode="cover" />
           ))}
         </ScrollView>
@@ -263,15 +326,30 @@ function HotelStayPresentation({
         <Text style={styles.hotelMeta}>
           {area} · {/night/i.test(datesLabel) ? datesLabel : `${nightsLabel} · ${datesLabel}`}
         </Text>
-        <Text style={styles.hotelSummary}>{guestSummary}</Text>
-        <View style={styles.attrChips}>
-          {tags.map((s) => (
-            <View key={s} style={styles.attrChip}>
-              <Text style={styles.attrChipText}>{s}</Text>
-            </View>
-          ))}
-        </View>
-        {photoCount < 4 ? (
+        {notPublished ? (
+          <Text style={styles.hotelSummary} testID="bottle-hotel-not-published">
+            This boutique hotel is planned for Athens Bottle, but its public Workspace config is not LIVE yet.
+            Guest will not invent photos, rates, or room inventory.
+          </Text>
+        ) : (
+          <Text style={styles.hotelSummary}>{guestSummary}</Text>
+        )}
+        {!notPublished && !unreachable ? (
+          <View style={styles.attrChips}>
+            {tags.map((s) => (
+              <View key={s} style={styles.attrChip}>
+                <Text style={styles.attrChipText}>{s}</Text>
+              </View>
+            ))}
+          </View>
+        ) : null}
+        {notPublished ? (
+          <Text style={styles.hotelGapNote} testID="bottle-hotel-not-published-note">
+            Not published — Hotelier must go LIVE with real branding before this property appears as inventory.
+          </Text>
+        ) : unreachable ? (
+          <Text style={styles.hotelGapNote}>Could not reach Workspace hotel config. This is a connection issue, not a missing listing.</Text>
+        ) : photoCount < 4 ? (
           <Text style={styles.hotelGapNote}>
             {photoCount === 0
               ? "No property photos published yet. This block will not borrow another hotel’s images."
@@ -338,6 +416,10 @@ export function BottleProductScreen() {
   const [notifyOk, setNotifyOk] = useState(false);
   const [saveMsg, setSaveMsg] = useState<string | null>(null);
   const [activeFilter, setActiveFilter] = useState<string | null>(null);
+  const [selectedHotelSlug, setSelectedHotelSlug] = useState("play-theatrou");
+  const [hotelListings, setHotelListings] = useState<Record<string, HotelBottleListing>>({});
+  const [externalStays, setExternalStays] = useState<WorkspaceBottleStay[]>([]);
+  const [demoStayCount, setDemoStayCount] = useState(0);
   const mixGenRef = React.useRef(0);
 
   const connectedHotel = activeStay?.hotelName
@@ -357,9 +439,37 @@ export function BottleProductScreen() {
   }, [checkIn, checkOut]);
 
   const hotelNights = totalNights && totalNights >= 2 ? totalNights - 1 : 1;
-  const hotelName = connectedHotel?.name || "";
+  const plannedHotelSlug = normalizeHotelSlug(connectedHotel?.slug || selectedHotelSlug);
+  const selectedListing = hotelListings[plannedHotelSlug] ?? null;
+  const hotelName =
+    connectedHotel?.name || selectedListing?.displayName || selectedListing?.whiteLabel?.title || "";
   const datesReady = Boolean(checkIn && checkOut && totalNights && totalNights >= 2);
   const canMix = destination.trim().length >= 2 && datesReady && travelers >= 1 && !mixing;
+
+  React.useEffect(() => {
+    if (connectedHotel?.slug) {
+      setSelectedHotelSlug(normalizeHotelSlug(connectedHotel.slug));
+    }
+  }, [connectedHotel?.slug]);
+
+  React.useEffect(() => {
+    let cancelled = false;
+    void (async () => {
+      const pairs = await Promise.all(
+        BOTTLE_PLAN_HOTELS.map(async (h) => [h.id, await loadHotelBottleListing(h.id)] as const),
+      );
+      if (!cancelled) setHotelListings(Object.fromEntries(pairs));
+    })();
+    void fetchLiveBottleStays().then((rows) => {
+      if (!cancelled) setExternalStays(rows);
+    });
+    void loadBottleCatalog().then((cat) => {
+      if (!cancelled) setDemoStayCount(cat.workspaceDemoStubCount);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   const mixSleepingExperiences = useCallback(async () => {
     const place = destination.trim();
@@ -591,6 +701,102 @@ export function BottleProductScreen() {
           </Text>
         ) : null}
 
+        <View style={styles.planPanel} testID="bottle-athens-hotels">
+          <Text style={styles.planKicker}>First sleep</Text>
+          <Text style={styles.planLead}>
+            Choose an Athens boutique hotel for night one. Each property uses its own Workspace photos — never
+            mixed.
+          </Text>
+          <View style={styles.planChips}>
+            {BOTTLE_PLAN_HOTELS.map((h) => {
+              const listing = hotelListings[h.id];
+              const publish = listing?.workspacePublishStatus;
+              const selected = plannedHotelSlug === h.id;
+              const chipNote =
+                publish === "not_published"
+                  ? "Not published"
+                  : publish === "unreachable"
+                    ? "Workspace unreachable"
+                    : publish === "published" && listing?.roomInventoryMissing
+                      ? "Published · gallery pending"
+                      : publish === "published"
+                        ? null
+                        : listing
+                          ? "Checking Workspace…"
+                          : null;
+              return (
+                <Pressable
+                  key={h.id}
+                  testID={`bottle-hotel-select-${h.id}`}
+                  style={[styles.planChip, selected && styles.planChipOn]}
+                  onPress={() => setSelectedHotelSlug(h.id)}
+                  accessibilityRole="button"
+                >
+                  <Text style={[styles.planChipText, selected && styles.planChipTextOn]}>{h.name}</Text>
+                  {chipNote ? (
+                    <Text
+                      style={[styles.hotelGapNote, selected && { color: "rgba(255,255,255,0.75)" }]}
+                      testID={`bottle-hotel-status-${h.id}`}
+                    >
+                      {chipNote}
+                    </Text>
+                  ) : null}
+                </Pressable>
+              );
+            })}
+          </View>
+        </View>
+
+        <HotelStayPresentation
+          listing={selectedListing}
+          fallbackName={
+            BOTTLE_PLAN_HOTELS.find((h) => h.id === plannedHotelSlug)?.name || "Athens boutique hotel"
+          }
+          city={selectedListing?.location || "Athens"}
+          nightsLabel={nightLabel(hotelNights)}
+          datesLabel={
+            checkIn && checkOut ? `${humanDate(checkIn)} → ${humanDate(checkOut)}` : "Dates from your plan above"
+          }
+          onViewHotel={() => {
+            // Bottle first-sleep detail — never `/hotel/*` QR messaging / flip-card entry.
+            const qs = [
+              checkIn ? `checkIn=${encodeURIComponent(checkIn)}` : "",
+              checkOut ? `checkOut=${encodeURIComponent(checkOut)}` : "",
+              `travelers=${travelers}`,
+            ]
+              .filter(Boolean)
+              .join("&");
+            router.push((`/bottleHotel/${plannedHotelSlug}?${qs}`) as Href);
+          }}
+          onHotelServices={() => router.push("/hotelier" as Href)}
+          onContactHotel={() => router.push("/hotelier/concierge" as Href)}
+        />
+
+        <View style={styles.planPanel} testID="bottle-external-stays">
+          <Text style={styles.planKicker}>Second sleep</Text>
+          <Text style={styles.planLead}>
+            Extraordinary external stays from Workspace hosts — only verified rows appear in Mix results.
+          </Text>
+          {externalStays.length === 0 ? (
+            <Text style={styles.empty} testID="bottle-external-empty">
+              No verified second sleeps are published in Workspace yet. Hosts onboard from Workspace
+              (Airbnb-standard listing fields) — Guest does not fabricate supply.
+              {demoStayCount > 0
+                ? ` ${demoStayCount} TEST/demo seed${demoStayCount === 1 ? "" : "s"} exist for host-workflow QA — NON-BOOKABLE.`
+                : ""}
+            </Text>
+          ) : (
+            externalStays.map((stay) => <ExternalStayRow key={stay.id} stay={stay} />)
+          )}
+        </View>
+
+        <Text style={styles.section} testID="bottle-second-stay-intro">
+          Plan your second stay
+        </Text>
+        <Text style={styles.lead}>
+          Mix pairs your hotel nights with one extraordinary second sleep experience outside the city.
+        </Text>
+
         {formError ? (
           <Text style={styles.formError} testID="bottle-form-error">
             {formError}
@@ -628,7 +834,7 @@ export function BottleProductScreen() {
         <View style={styles.sampleBanner} testID="bottle-sample-banner">
           <Text style={styles.sampleBannerTitle}>Sample inspiration</Text>
           <Text style={styles.sampleBannerBody}>
-            Preview only. These pairings are not live inventory and cannot be booked or paid for.
+            NON-BOOKABLE preview only. These pairings are not live inventory and cannot be booked or paid for.
           </Text>
         </View>
       ) : null}
@@ -948,6 +1154,28 @@ const styles = StyleSheet.create({
     borderColor: "#E0D8CC",
   },
   hotelCtaGhostText: { color: "#1A1510", fontWeight: "700", fontSize: 13 },
+  externalRow: {
+    flexDirection: "row",
+    gap: 12,
+    marginTop: 12,
+    padding: 10,
+    borderRadius: 14,
+    backgroundColor: "#FAF9F7",
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: "#E5DFD6",
+  },
+  externalThumb: { width: 72, height: 72, borderRadius: 12, backgroundColor: "#E8E2D8" },
+  externalBody: { flex: 1, justifyContent: "center" },
+  externalTitle: { fontSize: 15, fontWeight: "800", color: "#1A1510" },
+  externalMeta: { fontSize: 12, color: "#6B645A", marginTop: 4 },
+  externalBadge: {
+    marginTop: 6,
+    fontSize: 11,
+    fontWeight: "700",
+    color: "#8B6914",
+    textTransform: "uppercase",
+    letterSpacing: 0.3,
+  },
   sampleBanner: {
     marginHorizontal: 16,
     marginTop: 12,

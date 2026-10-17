@@ -1,0 +1,10 @@
+{
+  "track": "Experiences P1 product recovery — catalog pricing E1–E6",
+  "guestRepo": "C:/Users/blonj/Documents/bandits",
+  "workspaceOrigin": "http://localhost:3000",
+  "runtimeBase": "http://localhost:8082",
+  "proofScript": "scripts/proof-product-recovery-experiences.mjs",
+  "report": "artifacts/runtime-proof/product-recovery-experiences/REPORT.json",
+  "noMocks": true,
+  "noLiveStripe": true
+}

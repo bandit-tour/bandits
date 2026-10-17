@@ -1,0 +1,122 @@
+{
+  "generatedAt": "2026-10-17T10:29:10.081Z",
+  "guestBase": "http://localhost:8082",
+  "workspaceBase": "http://localhost:3000",
+  "fix": {
+    "viewHotel": "router.push(/bottleHotel/:slug) — was /hotel/:slug → HotelEntryScreen messaging",
+    "detailRoute": "app/bottleHotel/[slug].tsx",
+    "listing": "lib/guest-workspace/hotelBottleListing.ts (rooms/address/policies/rates when authorized)"
+  },
+  "proofs": {
+    "T1": {
+      "status": "PASS",
+      "shot": "C:\\Users\\blonj\\Documents\\bandits\\artifacts\\runtime-proof\\product-recovery-bottle\\T01-mix-entry-form.png",
+      "route": "/travelBottle",
+      "source": "app/(tabs)/travelBottle.tsx · testID bottle-questions",
+      "reason": "Destination, dates, travelers, Mix CTA present."
+    },
+    "T2": {
+      "status": "PASS",
+      "shot": "C:\\Users\\blonj\\Documents\\bandits\\artifacts\\runtime-proof\\product-recovery-bottle\\T02-athens-hotel-discovery.png",
+      "route": "/travelBottle",
+      "source": "BOTTLE_PLAN_HOTELS + bottle-athens-hotels",
+      "reason": "Athens boutique chips include PLAY and NYX."
+    },
+    "T3": {
+      "status": "PASS",
+      "shot": "C:\\Users\\blonj\\Documents\\bandits\\artifacts\\runtime-proof\\product-recovery-bottle\\T03-dates-guests.png",
+      "route": "/travelBottle",
+      "source": "BottleDateRangeField + travelers controls",
+      "reason": "Dates + travelers controls present."
+    },
+    "T4": {
+      "status": "PASS",
+      "shot": "C:\\Users\\blonj\\Documents\\bandits\\artifacts\\runtime-proof\\product-recovery-bottle\\T04-select-play.png",
+      "route": "/travelBottle",
+      "source": "HotelStayPresentation · bottle-hotel-panel",
+      "reason": "Panel shows PLAY Theatrou Athens."
+    },
+    "T5": {
+      "status": "PASS",
+      "shot": "C:\\Users\\blonj\\Documents\\bandits\\artifacts\\runtime-proof\\product-recovery-bottle\\T05-view-hotel-route.png",
+      "route": "/bottleHotel/play-theatrou",
+      "source": "onViewHotel → /bottleHotel/[slug] (was /hotel/[slug])",
+      "reason": "View Hotel opens Bottle hotel detail; QR messaging not shown."
+    },
+    "T6": {
+      "status": "PASS",
+      "shot": "C:\\Users\\blonj\\Documents\\bandits\\artifacts\\runtime-proof\\product-recovery-bottle\\T06-play-hotel-detail.png",
+      "route": "/bottleHotel/play-theatrou",
+      "source": "app/bottleHotel/[slug].tsx + loadHotelBottleListing",
+      "reason": "PLAY detail sections present. Publish: Workspace · LIVE. Rooms/rates honest when missing.",
+      "publish": "Workspace · LIVE",
+      "workspace": {
+        "status": 200,
+        "ok": true,
+        "tenantStatus": "LIVE",
+        "hasRoomTypes": false,
+        "hasPhotos": false
+      }
+    },
+    "T7": {
+      "status": "PASS",
+      "shot": "C:\\Users\\blonj\\Documents\\bandits\\artifacts\\runtime-proof\\product-recovery-bottle\\T07-nyx-hotel-detail.png",
+      "route": "/bottleHotel/nyx-athens",
+      "source": "bottleHotel/nyx-athens · workspacePublishStatus",
+      "reason": "NYX shown with honest status: Not published on Workspace.",
+      "workspace": {
+        "status": 404,
+        "ok": false
+      }
+    },
+    "T8": {
+      "status": "PASS",
+      "shot": "C:\\Users\\blonj\\Documents\\bandits\\artifacts\\runtime-proof\\product-recovery-bottle\\T08-hotel-services-boundary.png",
+      "route": "/hotelier",
+      "source": "onHotelServices → /hotelier",
+      "reason": "Hotel services correctly opens Hotel tab (/hotelier)."
+    },
+    "T9": {
+      "status": "BLOCKED",
+      "shot": "C:\\Users\\blonj\\Documents\\bandits\\artifacts\\runtime-proof\\product-recovery-bottle\\T09-external-stays.png",
+      "route": "/travelBottle",
+      "source": "GET /api/public/bottle/stays · ExternalStayRow",
+      "reason": "No verified second sleeps are published in Workspace yet. Hosts onboard from Workspace (Airbnb-standard listing fields) — Guest does not fabricate supply.",
+      "workspace": {
+        "status": 200,
+        "ok": true,
+        "count": 0,
+        "provider": 0,
+        "demo": 0
+      }
+    },
+    "T10": {
+      "status": "BLOCKED",
+      "shot": "C:\\Users\\blonj\\Documents\\bandits\\artifacts\\runtime-proof\\product-recovery-bottle\\T10-mix-engine.png",
+      "route": "/travelBottle",
+      "source": "searchMixedSleeps · liveBottle.ts",
+      "reason": "Mix form gate OK; verified provider_record supply unavailable — engine correctly cannot invent matches.",
+      "workspace": {
+        "status": 200,
+        "ok": true,
+        "count": 0,
+        "provider": 0,
+        "demo": 0
+      }
+    },
+    "T11": {
+      "status": "PASS",
+      "shot": "C:\\Users\\blonj\\Documents\\bandits\\artifacts\\runtime-proof\\product-recovery-bottle\\T11-qr-hotel-entry-intact.png",
+      "route": "/hotel/play-theatrou",
+      "source": "app/hotel/* HotelEntryScreen / PlayTheatrouHotelIntro",
+      "reason": "QR/hotel-entry messaging product remains on /hotel/* (separate from Bottle)."
+    },
+    "T12": {
+      "status": "PASS",
+      "shot": "C:\\Users\\blonj\\Documents\\bandits\\artifacts\\runtime-proof\\product-recovery-bottle\\T12-product-boundaries.png",
+      "route": "/travelBottle",
+      "source": "TiB vs Hotel tab vs Experiences vs Octopus boundaries",
+      "reason": "Bottle surface is stay-planning (hotel+second sleep), not Experiences catalog or QR story."
+    }
+  }
+}

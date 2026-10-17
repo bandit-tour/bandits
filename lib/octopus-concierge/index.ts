@@ -16,8 +16,18 @@ export {
   startOctopusConciergeCheckout,
   assertConciergeOpsAllowed,
   submitConciergeRequestToWorkspace,
+  fetchConciergeTrack,
+  mergeTrackIntoTasks,
+  mapTrackStatusToTaskStatus,
   type OctopusEntitlement,
   type OctopusEntitlementState,
   type OctopusCheckoutResult,
+  type ConciergeTrackRequest,
 } from "@/lib/octopus-concierge/entitlement";
 export { createConciergeTaskStub } from "@/lib/octopus-concierge/tasks";
+export {
+  resolveConciergeOperatorType,
+  isSubstantiveConciergeNote,
+  type ConciergeOperatorType,
+  type ConciergeOperatorResolution,
+} from "@/lib/octopus-concierge/operatorType";

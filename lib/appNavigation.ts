@@ -67,7 +67,8 @@ export function getLowerTabFromPath(pathname: string | null): LowerTabKey | null
     pathname.includes("/menu") ||
     pathname.includes("/operatorDesk") ||
     pathname.includes("/cityMemory") ||
-    pathname.includes("/travelBottle")
+    pathname.includes("/travelBottle") ||
+    pathname.includes("/bottleHotel")
   ) {
     return "menu";
   }
@@ -107,7 +108,13 @@ export function getUpperTabFromPath(pathname: string | null): UpperTabKey | null
   if (pathname.includes("/experiences")) return "experiences";
   if (pathname.includes("/smarttraveler")) return "smarttraveler";
   /** TiB is More / contextual — never lights a discovery-rail chip. */
-  if (pathname.includes("/travelBottle") || pathname.includes("/bottle")) return null;
+  if (
+    pathname.includes("/travelBottle") ||
+    pathname.includes("/bottleHotel") ||
+    pathname.includes("/bottle")
+  ) {
+    return null;
+  }
   if (pathname.includes("/shop")) return "shop";
   if (
     pathname.includes("/bandiTeam") ||

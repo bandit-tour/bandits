@@ -23,16 +23,28 @@ import {
   OCTOPUS_CONCIERGE_PRODUCT_LAW,
   assertConciergeOpsAllowed,
   createConciergeTaskStub,
+  fetchConciergeTrack,
   guestFacingConciergeStatus,
+  isSubstantiveConciergeNote,
+  mergeTrackIntoTasks,
+  resolveConciergeOperatorType,
   resolveOctopusConciergeEntitlement,
   startOctopusConciergeCheckout,
   submitConciergeRequestToWorkspace,
+  type ConciergeOperatorResolution,
   type ConciergeTask,
   type OctopusEntitlement,
 } from "@/lib/octopus-concierge";
 import { routeParamString } from "@/lib/routeParams";
 import { syncWorkspacePremiumEntitlement } from "@/lib/workspace/actions";
-import { fetchBanditPremiumVisibility } from "@/lib/guest-app/premium-visibility";
+import { CHECKOUT_UI_WALL_MS } from "@/lib/workspace/client";
+import {
+  fetchBanditPremiumVisibility,
+  type BanditPremiumVisibility,
+} from "@/lib/guest-app/premium-visibility";
+
+const RECOVERABLE_CHECKOUT_TIMEOUT =
+  "Checkout timed out. No charge completed — try Unlock again.";
 
 /** Compact premium service grid — icon + title + one-line explanation. */
 const BENEFIT_CARDS = [
@@ -101,8 +113,8 @@ const BOOK_ACTIONS = [
 
 /**
  * Octopus Concierge entry.
- * BEFORE entitlement ACTIVE → white/red/coral sales + €29 Commerce checkout only.
- * AFTER payment confirms ACTIVE → Concierge OS (Ask + quick actions + requests).
+ * BEFORE entitlement ACTIVE â†’ white/red/coral sales + €29 Commerce checkout only.
+ * AFTER payment confirms ACTIVE â†’ Concierge OS (Ask + quick actions + requests).
  */
 export default function PremiumConciergeScreen() {
   const params = useLocalSearchParams<{
@@ -128,11 +140,16 @@ export default function PremiumConciergeScreen() {
   const [banditPortrait, setBanditPortrait] = useState<string | null>(null);
   const [loadingBandit, setLoadingBandit] = useState(Boolean(id));
   const [banditAuthorized, setBanditAuthorized] = useState<boolean | null>(null);
+  const [visibility, setVisibility] = useState<BanditPremiumVisibility | null>(null);
+  const [operatorResolution, setOperatorResolution] = useState<ConciergeOperatorResolution | null>(
+    null,
+  );
   const [entitlement, setEntitlement] = useState<OctopusEntitlement | null>(null);
   const [entitlementLoading, setEntitlementLoading] = useState(true);
   const [checkoutBusy, setCheckoutBusy] = useState(false);
   const [checkoutMsg, setCheckoutMsg] = useState<string | null>(null);
   const [claimingPaid, setClaimingPaid] = useState(false);
+  const [trackHydration, setTrackHydration] = useState<"idle" | "ok" | "missing">("idle");
 
   const [askText, setAskText] = useState("");
   const [tasks, setTasks] = useState<ConciergeTask[]>([]);
@@ -166,15 +183,26 @@ export default function PremiumConciergeScreen() {
     let cancelled = false;
     if (!id) {
       setBanditAuthorized(false);
+      setOperatorResolution(null);
       return;
     }
     void fetchBanditPremiumVisibility(id, guestEmail).then((v) => {
-      if (!cancelled) setBanditAuthorized(v.showPremiumInsights === true);
+      if (cancelled) return;
+      setVisibility(v);
+      // Sales surface follows visibility; checkout alone requires commerceOperational.
+      setBanditAuthorized(v.showPremiumInsights === true);
+      // Operator type from Workspace fields only — never from name/portrait.
+      setOperatorResolution(
+        resolveConciergeOperatorType({
+          visibility: v,
+          banditFirstName: banditName.trim().split(/\s+/)[0] || "your banDit",
+        }),
+      );
     });
     return () => {
       cancelled = true;
     };
-  }, [id, guestEmail]);
+  }, [id, guestEmail, banditName]);
 
   useEffect(() => {
     let cancelled = false;
@@ -254,7 +282,7 @@ export default function PremiumConciergeScreen() {
     void refreshEntitlement();
   }, [refreshEntitlement]);
 
-  /** Return from Commerce success URL (?paid=1&order=…) → claim entitlement → open ops. */
+  /** Return from Commerce success URL (?paid=1&order=…) â†’ claim entitlement â†’ open ops. */
   useEffect(() => {
     if (!id || paidFlag !== "1" || !orderFromUrl || claimingPaid || !guestEmail) return;
     let cancelled = false;
@@ -284,8 +312,24 @@ export default function PremiumConciergeScreen() {
       setCheckoutMsg("Sign in to unlock Your Local Insider.");
       return;
     }
+    // Eligibility gate — never leave Unlock stuck on Confirming for ineligible sellers.
+    if (!visibility?.showPremiumInsights || !visibility.commerceOperational) {
+      setCheckoutMsg(
+        "Your Local Insider isn't available with this Local banDit yet. City Guide and Ask Me stay free.",
+      );
+      setBanditAuthorized(false);
+      return;
+    }
+    const isTestDemo = visibility.authorizationClass === "TEST_DEMO";
     setCheckoutBusy(true);
-    setCheckoutMsg(null);
+    setCheckoutMsg(isTestDemo ? "Confirming TEST payment…" : "Confirming payment…");
+    let settled = false;
+    const wall = setTimeout(() => {
+      if (settled) return;
+      settled = true;
+      setCheckoutBusy(false);
+      setCheckoutMsg(RECOVERABLE_CHECKOUT_TIMEOUT);
+    }, CHECKOUT_UI_WALL_MS);
     try {
       const result = await startOctopusConciergeCheckout({
         guestId,
@@ -295,48 +339,111 @@ export default function PremiumConciergeScreen() {
         successPath: `/premium/${encodeURIComponent(id)}`,
         cancelPath: `/premium/${encodeURIComponent(id)}`,
       });
+      if (settled) return;
       if (!result.ok) {
         setCheckoutMsg(result.detail);
         return;
       }
       // Commerce OS captured payment — create entitlement association and open Concierge OS.
+      // Stay Pass uses server PaymentIntent / treasury confirm — not hosted checkout.stripe.com.
       if (result.paymentConfirmed && result.orderId) {
-        setCheckoutMsg("Payment confirmed — unlocking Concierge…");
+        const hosted =
+          "checkoutUrl" in result &&
+          typeof result.checkoutUrl === "string" &&
+          /checkout\.stripe\.com/i.test(result.checkoutUrl);
+        setCheckoutMsg(
+          hosted
+            ? "Payment confirmed — unlocking Concierge…"
+            : isTestDemo
+              ? "TEST payment confirmed (server TEST confirm — not hosted Stripe Checkout) — unlocking Concierge…"
+              : "Payment confirmed (server capture — not hosted Stripe Checkout) — unlocking Concierge…",
+        );
         await syncWorkspacePremiumEntitlement({
           banditId: id,
           orderId: result.orderId,
           guestEmail,
           guestId,
         });
+        if (settled) return;
         await refreshEntitlement();
         return;
       }
       // Redirect checkout (external) — still never fake unlock locally.
       if ("checkoutUrl" in result && result.checkoutUrl) {
-        setCheckoutMsg("Completing secure payment…");
+        const isHostedStripe = /checkout\.stripe\.com/i.test(result.checkoutUrl);
+        setCheckoutMsg(
+          isHostedStripe
+            ? "Opening Stripe Checkout…"
+            : "Completing TEST payment return…",
+        );
         if (typeof window !== "undefined" && result.checkoutUrl.includes("paid=1")) {
-          // Same-origin success URL from Workspace demo capture — claim without leaving the app.
+          // Same-origin success URL from Workspace demo/treasury capture — claim without leaving.
           const url = new URL(result.checkoutUrl, window.location.origin);
           const orderId = url.searchParams.get("order") || result.sessionId || "";
           if (orderId) {
+            setCheckoutMsg(
+              "TEST payment confirmed (server TEST confirm — not hosted Stripe Checkout) — unlocking Concierge…",
+            );
             await syncWorkspacePremiumEntitlement({
               banditId: id,
               orderId,
               guestEmail,
               guestId,
             });
+            if (settled) return;
             await refreshEntitlement();
             return;
           }
         }
         const { Linking } = await import("react-native");
         await Linking.openURL(result.checkoutUrl);
+        if (settled) return;
         await refreshEntitlement();
       }
+    } catch (e) {
+      if (settled) return;
+      setCheckoutMsg(
+        e instanceof Error
+          ? e.message
+          : "Checkout failed. No charge completed — try Unlock again.",
+      );
     } finally {
-      setCheckoutBusy(false);
+      if (!settled) {
+        settled = true;
+        setCheckoutBusy(false);
+      }
+      clearTimeout(wall);
     }
   };
+
+  /** Hydrate Active / Status / Completed from Workspace view=track (bounded poll). */
+  const refreshTrack = useCallback(async () => {
+    if (!id || !guestEmail || !entitled) return;
+    const track = await fetchConciergeTrack({ banditId: id, guestEmail });
+    if (!track.ok) {
+      setTrackHydration("missing");
+      return;
+    }
+    setTrackHydration("ok");
+    const guestKey = guestId || guestEmail;
+    setTasks((prev) =>
+      mergeTrackIntoTasks(prev, track.requests, banditName, guestKey, id),
+    );
+  }, [banditName, entitled, guestEmail, guestId, id]);
+
+  useEffect(() => {
+    if (!entitled || !id || !guestEmail) return;
+    let cancelled = false;
+    void refreshTrack();
+    // Minimal poll so provider replies appear without inventing a second entitlement system.
+    const timer = setInterval(() => {
+      if (!cancelled) void refreshTrack();
+    }, 12_000);
+    return () => {
+      cancelled = true;
+      clearInterval(timer);
+    };
+  }, [entitled, guestEmail, id, refreshTrack]);
 
   const submitAsk = (serviceLabel = "Special requests") => {
     if (!entitlement || !assertConciergeOpsAllowed(entitlement)) return;
@@ -352,7 +459,21 @@ export default function PremiumConciergeScreen() {
       return;
     }
     const t = askText.trim();
-    if (!t) return;
+    const substantive = isSubstantiveConciergeNote(t, [
+      ...BOOK_ACTIONS.map((a) => a.title),
+      ...BOOK_ACTIONS.map((a) => a.service),
+      activeAction || "",
+      serviceLabel,
+    ]);
+    if (!substantive.ok) {
+      setSentMsg(
+        substantive.reason === "prefix_only" || substantive.reason === "empty"
+          ? "Add request details before sending — this does not use a Stay Pass request."
+          : "Add a bit more detail so your banDit can act — this does not use a Stay Pass request.",
+      );
+      setTimeout(() => setSentMsg(null), 4500);
+      return;
+    }
     const task = createConciergeTaskStub(entitlement, {
       request: t,
       banditDisplayName: banditName,
@@ -360,7 +481,11 @@ export default function PremiumConciergeScreen() {
     if (!task) return;
     setTasks((prev) => [task, ...prev]);
     setAskText("");
-    setSentMsg(OCTOPUS_CONCIERGE_PRODUCT_LAW.guestVoice.handling(first));
+    const handling =
+      operatorResolution && !operatorResolution.canGuestTrustHumanClaim
+        ? `${operatorResolution.guestLabel} · request received`
+        : OCTOPUS_CONCIERGE_PRODUCT_LAW.guestVoice.handling(first);
+    setSentMsg(handling);
     void submitConciergeRequestToWorkspace({
       banditId: id,
       service: serviceLabel,
@@ -369,25 +494,32 @@ export default function PremiumConciergeScreen() {
       guestId: entitlement.guestId,
     }).then((r) => {
       if (!r.ok) {
+        // Roll back optimistic local task — do not pretend fulfillment started.
+        setTasks((prev) => prev.filter((x) => x.id !== task.id));
         setSentMsg(
           r.code === "premium_required"
             ? "Premium required — unlock Your Local Insider to send requests."
-            : `Could not send · ${r.detail}`,
+            : r.code === "validation"
+              ? r.detail
+              : `Could not send · ${r.detail}`,
         );
         void refreshEntitlement();
         return;
       }
+      // Bind local stub to Workspace request id so view=track merges correctly.
+      setTasks((prev) =>
+        prev.map((x) => (x.id === task.id ? { ...x, id: r.requestId, status: "assigned_to_bandit" } : x)),
+      );
       if (typeof r.requestsRemaining === "number") {
         setEntitlement((prev) =>
           prev ? { ...prev, requestsRemaining: r.requestsRemaining ?? prev.requestsRemaining } : prev,
         );
-        setSentMsg(
-          `${OCTOPUS_CONCIERGE_PRODUCT_LAW.guestVoice.handling(first)} · #${r.requestId} · ${r.requestsRemaining} left`,
-        );
+        setSentMsg(`${handling} · #${r.requestId} · ${r.requestsRemaining} left`);
       } else {
-        setSentMsg(`${OCTOPUS_CONCIERGE_PRODUCT_LAW.guestVoice.handling(first)} · #${r.requestId}`);
+        setSentMsg(`${handling} · #${r.requestId}`);
         void refreshEntitlement();
       }
+      void refreshTrack();
     });
     setTimeout(() => setSentMsg(null), 4500);
   };
@@ -432,9 +564,17 @@ export default function PremiumConciergeScreen() {
       <View style={styles.salesScreen}>
         <Stack.Screen options={salesHeader} />
         <View style={[styles.salesContent, { width: contentWidth, paddingTop: 48 }]}>
-          <Text style={styles.salesTitle}>Your Local Insider not available</Text>
+          <Text style={styles.salesTitle} testID="local-insider-ineligible">
+            Your Local Insider not available
+          </Text>
           <Text style={styles.salesLead}>
             {`${first} still offers free City Guide and Ask Me. Octopus Concierge appears only when this Local banDit is Octopus Verified.`}
+          </Text>
+          <Text style={styles.secureHint} testID="local-insider-ineligible-detail">
+            {visibility?.authorizationClass === "NONE" || !visibility?.showPremiumInsights
+              ? "This Local banDit is not commercially authorized for Stay Pass."
+              : visibility.blockers?.[0] ||
+                "Purchases open only for Octopus Verified Local banDits."}
           </Text>
         </View>
       </View>
@@ -444,13 +584,16 @@ export default function PremiumConciergeScreen() {
   const entitlementEnded =
     entitlement?.state === "exhausted" || entitlement?.state === "expired";
 
-  // ─── SALES / RENEWAL — concise: headline, price, ≤3 benefits, one CTA ────
+  // SALES / RENEWAL — concise: headline, price, <=3 benefits, one CTA
   if (!entitled) {
-    const commerceReady = entitlement?.state !== "unavailable" && Boolean(guestEmail);
+    const commerceReady =
+      visibility?.commerceOperational === true &&
+      entitlement?.state !== "unavailable" &&
+      Boolean(guestEmail);
     const compactBenefits = [
       `Up to 5 requests with ${first} this stay`,
       "Tables, tickets and transfers handled for you",
-      "City Guide stays free — this is paid execution",
+      "City Guide stays free - this is paid execution",
     ] as const;
     return (
       <View style={styles.salesScreen}>
@@ -462,7 +605,11 @@ export default function PremiumConciergeScreen() {
         >
           <View style={styles.brandRow}>
             <LocalBanditOctopusIcon style={styles.brandIcon} />
-            <Text style={styles.kicker}>OCTOPUS CONCIERGE</Text>
+            <Text style={styles.kicker}>
+              {visibility?.authorizationClass === "TEST_DEMO"
+                ? "OCTOPUS CONCIERGE · TEST"
+                : "OCTOPUS CONCIERGE"}
+            </Text>
           </View>
           <Text style={styles.salesTitle}>Your Local Insider</Text>
           <Text style={styles.salesLead}>Your city. Your insider.</Text>
@@ -482,7 +629,7 @@ export default function PremiumConciergeScreen() {
           <View style={styles.outcomeList}>
             {compactBenefits.map((line) => (
               <Text key={line} style={styles.outcomeLine}>
-                {`· ${line}`}
+                {`- ${line}`}
               </Text>
             ))}
           </View>
@@ -497,7 +644,11 @@ export default function PremiumConciergeScreen() {
             >
               <Text style={styles.unlockCtaText}>
                 {checkoutBusy
-                  ? "Processing…"
+                  ? checkoutMsg?.startsWith("Confirming")
+                    ? checkoutMsg
+                    : visibility?.authorizationClass === "TEST_DEMO"
+                      ? "Confirming TEST payment…"
+                      : "Confirming payment…"
                   : entitlementEnded
                     ? `Renew Stay Pass — ${OCTOPUS_CONCIERGE_OFFER.priceLabel}`
                     : `Unlock Your Local Insider — ${OCTOPUS_CONCIERGE_OFFER.priceLabel}`}
@@ -518,10 +669,16 @@ export default function PremiumConciergeScreen() {
           )}
 
           <Text style={styles.secureHint}>
-            Payment unlocks only after confirmation · third-party costs billed separately · terms in details
+            {visibility?.authorizationClass === "TEST_DEMO"
+              ? "QA TEST_DEMO only — server TEST confirm / treasury · not hosted Stripe Checkout · LIVE off · not a PRODUCTION seller"
+              : "Server payment confirm (not hosted Stripe Checkout by default) · third-party costs billed separately · terms in details"}
           </Text>
 
-          {checkoutMsg ? <Text style={styles.checkoutMsg}>{checkoutMsg}</Text> : null}
+          {checkoutMsg ? (
+            <Text style={styles.checkoutMsg} testID="local-insider-checkout-msg">
+              {checkoutMsg}
+            </Text>
+          ) : null}
 
           <Pressable onPress={() => void refreshEntitlement()} style={styles.verifyLink} accessibilityRole="button">
             <Text style={styles.verifyLinkText}>Already paid? Verify access</Text>
@@ -531,7 +688,7 @@ export default function PremiumConciergeScreen() {
     );
   }
 
-  // ─── CONCIERGE OS (entitled only) ──────────────────────────────────────
+  // â”€â”€â”€ CONCIERGE OS (entitled only) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   const remaining =
     typeof entitlement?.requestsRemaining === "number" ? entitlement.requestsRemaining : null;
   return (
@@ -546,10 +703,21 @@ export default function PremiumConciergeScreen() {
           <Text style={styles.opsKicker}>PREMIUM INSIGHTS</Text>
         </View>
         <Text style={styles.opsIdentity}>{banditName}</Text>
+        {operatorResolution ? (
+          <Text style={styles.opsOperatorType} testID="concierge-operator-type">
+            {operatorResolution.operatorType === "UNDECLARED"
+              ? "Operator type not declared by Workspace — Concierge is request-queue based, not a chatbot."
+              : `Operator: ${operatorResolution.guestLabel}`}
+          </Text>
+        ) : null}
         <Text style={styles.opsTagline}>
           {remaining != null
             ? `${first}'s Athens is unlocked — ${remaining} request${remaining === 1 ? "" : "s"} left this stay.`
             : `${first}'s Athens is unlocked — ask anything, or pick what ${first} can handle.`}
+        </Text>
+        <Text style={styles.opsDisclosure}>
+          Stay Pass (€19) covers coordination. Third-party costs (tables, tickets, rides, delivery) need your explicit
+          approval before money moves — never from chat text alone.
         </Text>
 
         <View style={styles.askCard}>
@@ -588,16 +756,27 @@ export default function PremiumConciergeScreen() {
         </View>
 
         <Text style={styles.opsSection}>Active Requests</Text>
+        {trackHydration === "missing" ? (
+          <Text style={styles.emptyTasks} testID="concierge-track-missing">
+            Request updates unavailable right now — pull to retry or ask again later.
+          </Text>
+        ) : null}
         {activeTasks.length === 0 ? (
           <Text style={styles.emptyTasks}>No active requests yet — ask {first} anything above.</Text>
         ) : (
           activeTasks.map((r) => (
-            <Pressable key={r.id} style={styles.requestRow}>
+            <Pressable key={r.id} style={styles.requestRow} testID={`concierge-active-${r.id}`}>
               <View style={{ flex: 1 }}>
                 <Text style={styles.requestTitle}>
                   {r.request.length > 48 ? `${r.request.slice(0, 48)}…` : r.request}
                 </Text>
-                <Text style={styles.requestWhen}>{r.updatedAt.slice(0, 16).replace("T", " ")}</Text>
+                {r.providerReply ? (
+                  <Text style={styles.requestWhen} testID={`concierge-reply-${r.id}`}>
+                    {r.providerReply}
+                  </Text>
+                ) : (
+                  <Text style={styles.requestWhen}>{r.updatedAt.slice(0, 16).replace("T", " ")}</Text>
+                )}
               </View>
               <Text style={styles.status}>{guestFacingConciergeStatus(r.status, first)}</Text>
             </Pressable>
@@ -614,6 +793,11 @@ export default function PremiumConciergeScreen() {
                 <Text style={styles.requestTitle}>
                   {r.request.length > 48 ? `${r.request.slice(0, 48)}…` : r.request}
                 </Text>
+                {r.providerReply ? (
+                  <Text style={styles.requestWhen} testID={`concierge-status-reply-${r.id}`}>
+                    {r.providerReply}
+                  </Text>
+                ) : null}
               </View>
               <Text style={styles.status}>{guestFacingConciergeStatus(r.status, first)}</Text>
             </View>
@@ -625,11 +809,14 @@ export default function PremiumConciergeScreen() {
           <Text style={styles.emptyTasks}>Nothing completed yet.</Text>
         ) : (
           completedTasks.map((r) => (
-            <View key={`done_${r.id}`} style={styles.requestRow}>
+            <View key={`done_${r.id}`} style={styles.requestRow} testID={`concierge-done-${r.id}`}>
               <View style={{ flex: 1 }}>
                 <Text style={styles.requestTitle}>
                   {r.request.length > 48 ? `${r.request.slice(0, 48)}…` : r.request}
                 </Text>
+                {r.providerReply ? (
+                  <Text style={styles.requestWhen}>{r.providerReply}</Text>
+                ) : null}
               </View>
               <Text style={[styles.status, { color: color.statusGreen }]}>Done</Text>
             </View>
@@ -918,12 +1105,25 @@ const styles = StyleSheet.create({
     fontWeight: "800",
     letterSpacing: -0.3,
   },
+  opsOperatorType: {
+    marginTop: 6,
+    color: color.muted,
+    fontSize: 12,
+    lineHeight: 17,
+    fontWeight: "600",
+  },
   opsTagline: {
     marginTop: 8,
-    marginBottom: 20,
+    marginBottom: 8,
     color: color.inkSoft,
     fontSize: 15,
     lineHeight: 22,
+  },
+  opsDisclosure: {
+    marginBottom: 20,
+    color: color.muted,
+    fontSize: 12,
+    lineHeight: 17,
   },
   askCard: {
     backgroundColor: color.surface,

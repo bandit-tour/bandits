@@ -82,6 +82,7 @@ export async function transitionCheckout(opts?: {
     await recordLifecycleNotice({
       id: `after_checkout_${snap.lifecycle.userId}`,
       userId: snap.lifecycle.userId,
+      notificationClass: "marketing",
       title: "Your journey doesn't end here.",
       message: "Explore your memories. City Memory stays with you.",
       href: "/cityMemory",
@@ -94,7 +95,7 @@ export async function transitionCheckout(opts?: {
 
 /** Explicit check-in → ACTIVE_STAY + FULL_STAY. */
 export async function transitionCheckIn(stayId?: string): Promise<GuestLifecycleSnapshot> {
-  return persistBundle((bundle) => {
+  const snap = await persistBundle((bundle) => {
     const from = bundle.lifecycle.state;
     const t = nowIso();
     const targetId = stayId ?? bundle.lifecycle.activeStayId ?? bundle.stays[0]?.id;
@@ -135,6 +136,24 @@ export async function transitionCheckIn(stayId?: string): Promise<GuestLifecycle
     syncTransitionToWorkspace("check_in", { stayId: targetId });
     return next;
   });
+  try {
+    const stay = snap.stays.find((s) => s.id === snap.lifecycle.activeStayId && s.status === "checked_in");
+    if (stay) {
+      const { recordLifecycleNotice } = await import("@/lib/lifecycle/notices");
+      await recordLifecycleNotice({
+        id: `stay_check_in_${stay.id}`,
+        userId: snap.lifecycle.userId,
+        notificationClass: "service",
+        type: "stay_check_in",
+        title: "Check-in confirmed",
+        message: "Room instructions and stay details are on your hotel page.",
+        href: "/hotelier",
+      });
+    }
+  } catch {
+    /* inbox notice is best-effort */
+  }
+  return snap;
 }
 
 /** User plans another trip → NEXT_TRIP_PLANNING (keeps City Memory). */
@@ -161,6 +180,7 @@ export async function transitionStartTripPlanning(opts?: {
       recordLifecycleNotice({
         id: `between_trips_${uid}`,
         userId: uid,
+        notificationClass: "marketing",
         title: "Where would you love to go next?",
         message: "Choose a Dream Destination when you want inspiration — not a new booking.",
         href: "/dreamDestinations",

@@ -23,9 +23,12 @@ import { usePremiumRefreshControl } from "@/lib/mobilePullToRefresh";
 import { resolveMenuAuthSnapshot } from "@/lib/pilotDeskGate";
 import { getHotelEntry } from "@/lib/pilotSession";
 import { logNativeNav } from "@/lib/nativeNavLog";
+import { REGISTERED_BANDIT } from "@/lib/guest-workspace/registeredBanditIds";
 import { supabase } from "@/lib/supabase";
 
 const LOGO = require("@/assets/icons/logobanditourapp.png");
+/** Menu → Local Insider sales for the sole PRODUCTION Octopus seller (Neo). */
+const LOCAL_INSIDER_HREF = `/premium/${REGISTERED_BANDIT.neo}` as Href;
 
 type MenuCard = {
   key: string;
@@ -89,7 +92,7 @@ const MENU_GROUPS_STAY: MenuGroup[] = [
     id: "privileges",
     title: "My Privileges",
     cards: [
-      { key: "premium", emoji: "⭐", title: "Your Local Insider", href: "/account/membership" },
+      { key: "premium", emoji: "⭐", title: "Your Local Insider", href: LOCAL_INSIDER_HREF },
       { key: "moments", emoji: "✨", title: "My Moments", href: "/myMoment" as Href },
       { key: "impact", emoji: "🌍", title: "Impact / Passport", href: "/impact" },
     ],
@@ -152,7 +155,7 @@ const MENU_GROUPS_AFTER: MenuGroup[] = [
     id: "privileges",
     title: "My Privileges",
     cards: [
-      { key: "premium", emoji: "⭐", title: "Your Local Insider", href: "/account/membership" },
+      { key: "premium", emoji: "⭐", title: "Your Local Insider", href: LOCAL_INSIDER_HREF },
       /** Connect My New Stay stays in Quick Actions only — avoid duplicate tiles. */
     ],
   },

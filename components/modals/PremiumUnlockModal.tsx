@@ -103,6 +103,7 @@ export default function PremiumUnlockModal({
         style={styles.scroll}
         contentContainerStyle={styles.content}
         showsVerticalScrollIndicator={false}
+        testID="premium-unlock-modal"
       >
         <View style={styles.brandRow}>
           <LocalBanditOctopusIcon style={styles.brandIcon} />

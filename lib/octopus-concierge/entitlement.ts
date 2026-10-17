@@ -5,10 +5,12 @@
  */
 
 import { OCTOPUS_CONCIERGE_OFFER } from "@/lib/octopus-concierge/principle";
+import type { ConciergeTask, ConciergeTaskStatus } from "@/lib/octopus-concierge/types";
 import {
   commerceGet,
   commerceOrigin,
   commercePost,
+  workspaceGet,
   workspacePost,
 } from "@/lib/workspace/client";
 
@@ -311,6 +313,112 @@ export function assertConciergeOpsAllowed(entitlement: OctopusEntitlement): bool
   return entitlement.entitled === true && entitlement.state === "active";
 }
 
+export type ConciergeTrackRequest = {
+  id: string;
+  service?: string;
+  note?: string;
+  status?: string;
+  createdAt?: string;
+  decidedAt?: string;
+  bookingDetails?: string | null;
+  messages?: Array<{ id?: string; from?: string; body?: string; at?: string }>;
+};
+
+/** Map Workspace premium request status → Guest ConciergeTask status. */
+export function mapTrackStatusToTaskStatus(raw: string | undefined | null): ConciergeTaskStatus {
+  const s = String(raw || "").trim().toLowerCase();
+  if (s === "completed" || s === "done") return "completed";
+  if (s === "cancelled" || s === "declined" || s === "unavailable" || s === "failed") return "cancelled";
+  if (s === "confirmed") return "confirmed";
+  if (s === "awaiting_guest") return "awaiting_guest";
+  if (s === "accepted" || s === "in_progress" || s === "booking") return "in_progress";
+  if (s === "assigned" || s === "paid") return "assigned_to_bandit";
+  return "requested";
+}
+
+export async function fetchConciergeTrack(input: {
+  banditId: string;
+  guestEmail?: string | null;
+}): Promise<
+  | { ok: true; requests: ConciergeTrackRequest[] }
+  | { ok: false; detail: string }
+> {
+  const banditId = String(input.banditId || "").trim();
+  const guestEmail = requireGuestEmail(input.guestEmail);
+  if (!guestEmail) return { ok: false, detail: "Sign in required" };
+  if (!banditId) return { ok: false, detail: "Missing bandit id" };
+  const result = await workspaceGet<{
+    requests?: ConciergeTrackRequest[];
+    error?: string;
+  }>(`/api/bandit/premium?view=track&banditId=${encodeURIComponent(banditId)}`, guestEmail);
+  if (!result.ok) return { ok: false, detail: result.detail };
+  return { ok: true, requests: Array.isArray(result.data.requests) ? result.data.requests : [] };
+}
+
+/**
+ * Merge Workspace track rows into local task list (by request id).
+ * Creates rows for server-only requests so Active/Completed survive refresh.
+ */
+export function mergeTrackIntoTasks(
+  local: ConciergeTask[],
+  track: ConciergeTrackRequest[],
+  banditDisplayName: string,
+  guestId: string,
+  banditId: string,
+): ConciergeTask[] {
+  const byId = new Map<string, ConciergeTask>();
+  for (const t of local) byId.set(t.id, t);
+
+  for (const row of track) {
+    const id = String(row.id || "").trim();
+    if (!id) continue;
+    const status = mapTrackStatusToTaskStatus(row.status);
+    const reply =
+      [...(row.messages || [])]
+        .filter((m) => String(m.from || "").toLowerCase() === "bandit" && String(m.body || "").trim())
+        .sort((a, b) => String(a.at || "").localeCompare(String(b.at || "")))
+        .map((m) => String(m.body).trim())
+        .pop() ||
+      (row.bookingDetails ? String(row.bookingDetails).trim() : null) ||
+      null;
+    const note = String(row.note || row.service || "Concierge request").trim();
+    const existing = byId.get(id);
+    const now = new Date().toISOString();
+    if (existing) {
+      byId.set(id, {
+        ...existing,
+        status,
+        providerReply: reply ?? existing.providerReply,
+        confirmation: row.bookingDetails ? String(row.bookingDetails) : existing.confirmation,
+        updatedAt: row.decidedAt || now,
+      });
+    } else {
+      byId.set(id, {
+        id,
+        request: note,
+        guestId,
+        banditId,
+        banditDisplayName,
+        category: "other",
+        deadline: null,
+        location: null,
+        budget: null,
+        executionMethod: "HUMAN",
+        status,
+        confirmation: row.bookingDetails ? String(row.bookingDetails) : null,
+        providerReply: reply,
+        cost: null,
+        commission: null,
+        evidence: [],
+        createdAt: row.createdAt || now,
+        updatedAt: row.decidedAt || row.createdAt || now,
+      });
+    }
+  }
+
+  return Array.from(byId.values()).sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
+}
+
 export async function submitConciergeRequestToWorkspace(input: {
   banditId: string;
   service: string;
@@ -325,6 +433,31 @@ export async function submitConciergeRequestToWorkspace(input: {
   if (!guestEmail) {
     return { ok: false, detail: "Sign in required to send a concierge request.", code: "auth" };
   }
+  // Client refuse (defense in depth). Workspace consumeStayPassRequest also refuses
+  // empty/non-substantive notes server-side without consuming Stay Pass.
+  const note = String(input.note || "").trim();
+  const service = String(input.service || "").trim();
+  if (!note) {
+    return {
+      ok: false,
+      detail: "Add request details before sending — empty notes are not accepted.",
+      code: "validation",
+    };
+  }
+  if (!service) {
+    return {
+      ok: false,
+      detail: "Choose a service before sending.",
+      code: "validation",
+    };
+  }
+  if (note.length < 8) {
+    return {
+      ok: false,
+      detail: "Add a bit more detail so your banDit can act on this request.",
+      code: "validation",
+    };
+  }
   const result = await workspacePost<{
     ok?: boolean;
     request?: { id: string };
@@ -335,8 +468,8 @@ export async function submitConciergeRequestToWorkspace(input: {
     {
       action: "concierge_request",
       banditId: input.banditId,
-      service: input.service,
-      note: input.note,
+      service,
+      note,
       guestId: input.guestId || guestEmail,
       user_id: guestEmail,
     },
@@ -346,7 +479,11 @@ export async function submitConciergeRequestToWorkspace(input: {
     const detail = result.detail || "Request blocked";
     const code = /premium required|entitlement|not entitled|exhausted/i.test(detail)
       ? "premium_required"
-      : "error";
+      : /empty notes|Stay Pass not consumed|details required|Add more detail|Add request details/i.test(
+            detail,
+          )
+        ? "validation"
+        : "error";
     return { ok: false, detail, code };
   }
   const id = result.data.request?.id;

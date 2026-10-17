@@ -22,6 +22,10 @@ export type GuestExperience = {
   story: string;
   when: string;
   priceCents: number;
+  /** Supplier-published unit — omitted when Workspace did not publish a basis. */
+  priceBasis?: ExperiencePriceBasis;
+  /** ISO currency from Workspace (defaults to EUR display only when API sends it). */
+  currency?: string;
   seatsLeft: number;
   host: string;
   meetingPoint: string;
@@ -2441,7 +2445,56 @@ export const IMPACT_VIEW = {
   ],
 };
 
+export type ExperiencePriceBasis = "per_person" | "per_group" | "per_experience";
+
+export function coerceExperiencePriceBasis(
+  raw?: string | null,
+): ExperiencePriceBasis | undefined {
+  const s = String(raw || "").trim();
+  if (s === "per_person" || s === "per_group" || s === "per_experience") return s;
+  return undefined;
+}
+
+export function experiencePriceBasisLabel(basis: ExperiencePriceBasis): string {
+  if (basis === "per_person") return "per person";
+  if (basis === "per_group") return "per group";
+  return "per experience";
+}
+
 export function formatEuro(cents: number) {
   if (!Number.isFinite(cents) || cents <= 0) return "Price on request";
   return `€${(cents / 100).toFixed(cents % 100 === 0 ? 0 : 2)}`;
+}
+
+/** Supplier currency — EUR uses €; other ISO codes stay explicit. */
+export function formatMoney(cents: number, currency = "EUR"): string {
+  if (!Number.isFinite(cents) || cents <= 0) return "Price on request";
+  const code = String(currency || "EUR").toUpperCase();
+  if (code === "EUR") return formatEuro(cents);
+  const major = (cents / 100).toFixed(cents % 100 === 0 ? 0 : 2);
+  return `${code} ${major}`;
+}
+
+/** Listing / detail / checkout — no invented unit label when basis is missing. */
+export function formatExperiencePrice(
+  cents: number,
+  basis?: ExperiencePriceBasis,
+  currency = "EUR",
+): string {
+  const amount = formatMoney(cents, currency);
+  if (amount === "Price on request") return amount;
+  if (!basis) return amount;
+  return `${amount} ${experiencePriceBasisLabel(basis)}`;
+}
+
+/** Commerce total — per-person multiplies by guests; flat fees match Workspace book_experience. */
+export function experienceBookingTotalCents(
+  unitCents: number,
+  guestCount: number,
+  basis?: ExperiencePriceBasis,
+): number {
+  if (!Number.isFinite(unitCents) || unitCents <= 0) return 0;
+  const guests = Math.max(1, Math.floor(guestCount) || 1);
+  if (basis === "per_person") return unitCents * guests;
+  return unitCents;
 }

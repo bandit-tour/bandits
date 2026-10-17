@@ -28,9 +28,19 @@ export function workspaceOrigin(): string | null {
     env("WORKSPACE_URL") ||
     env("EXPO_PUBLIC_WORKSPACE_URL") ||
     "";
+  /**
+   * Local dual-dev: never silently route commerce/entitlements to Vercel Stay Pass
+   * (unconfirmable PaymentIntents / stuck Unlock). Opt into remote with
+   * EXPO_PUBLIC_WORKSPACE_FORCE_REMOTE=1.
+   */
+  if (
+    __DEV__ &&
+    env("EXPO_PUBLIC_WORKSPACE_FORCE_REMOTE") !== "1" &&
+    (!raw || /vercel\.app/i.test(raw))
+  ) {
+    return "http://localhost:3000";
+  }
   if (!raw) {
-    /** Local default when developing both apps side-by-side. */
-    if (__DEV__) return "http://localhost:3000";
     /**
      * Production Guest App must always reach Workspace for Octopus / Premium Insights.
      * Expo web export can omit EXPO_PUBLIC_* if Vercel env is missing — never blank out identity.
@@ -41,23 +51,27 @@ export function workspaceOrigin(): string | null {
 }
 
 /**
- * Commerce payments / entitlements / experience book — Orchestra OS when set,
- * otherwise Workspace (which mirrors commerce routes for Guest bridge).
- * Production must never return null: empty EXPO_PUBLIC_* on Vercel used to gate
- * Stay Pass with "Checkout unavailable" / Failed to fetch.
+ * Commerce payments / entitlements / experience book.
+ * MUST share the same bridge as Workspace visibility — never diverge to a
+ * second entitlement system (e.g. direct Vercel while UI reads via __workspace).
+ * Orchestra OS only when explicitly configured.
  */
 export function commerceOrigin(): string | null {
-  const raw =
-    env("ORCHESTRA_OS_URL") ||
-    env("EXPO_PUBLIC_ORCHESTRA_OS_URL") ||
-    env("WORKSPACE_URL") ||
-    env("EXPO_PUBLIC_WORKSPACE_URL") ||
-    "";
-  if (!raw) {
-    /** Same production fallback as workspaceOrigin — commerce is Workspace-hosted. */
-    return workspaceOrigin();
+  /** Web localhost: always same-origin __workspace bridge as visibility (avoids CORS on checkout). */
+  try {
+    if (typeof window !== "undefined") {
+      const host = String(window.location.hostname || "");
+      if (host === "localhost" || host === "127.0.0.1") {
+        return workspaceOrigin();
+      }
+    }
+  } catch {
+    /* native */
   }
-  return raw.replace(/\/$/, "");
+  const orchestra =
+    env("ORCHESTRA_OS_URL") || env("EXPO_PUBLIC_ORCHESTRA_OS_URL") || "";
+  if (orchestra) return orchestra.replace(/\/$/, "");
+  return workspaceOrigin();
 }
 
 export function guestBridgeHeaders(guestEmail?: string | null): Record<string, string> {
@@ -93,7 +107,7 @@ export async function workspaceGet<T>(
   const origin = workspaceOrigin();
   if (!origin) return { ok: false, detail: "WORKSPACE_URL unset" };
   try {
-    const res = await fetch(`${origin}${path.startsWith("/") ? path : `/${path}`}`, {
+    const res = await fetchWithTimeout(`${origin}${path.startsWith("/") ? path : `/${path}`}`, {
       headers: guestBridgeHeaders(guestEmail),
     });
     if (!res.ok) return { ok: false, detail: `${res.status} ${path}` };
@@ -111,7 +125,7 @@ export async function workspacePost<T>(
   const origin = workspaceOrigin();
   if (!origin) return { ok: false, detail: "WORKSPACE_URL unset" };
   try {
-    const res = await fetch(`${origin}${path.startsWith("/") ? path : `/${path}`}`, {
+    const res = await fetchWithTimeout(`${origin}${path.startsWith("/") ? path : `/${path}`}`, {
       method: "POST",
       headers: guestBridgeHeaders(guestEmail),
       body: JSON.stringify(body),
@@ -135,7 +149,43 @@ function guestCommerceDetail(raw: string): string {
   if (/ORCHESTRA|WORKSPACE_URL|EXPO_PUBLIC_|unset/i.test(s)) {
     return "Purchases aren’t available yet. City Guide and Ask Me stay free.";
   }
+  if (/timed out|AbortError/i.test(s)) {
+    return "Checkout timed out. No charge completed — try Unlock again.";
+  }
+  if (/Complete PaymentIntent|status=processing|client-side if required/i.test(s)) {
+    return "Payment could not be confirmed. No charge completed — try Unlock again.";
+  }
+  if (/not authorized for Premium Insights/i.test(s)) {
+    return "Your Local Insider isn’t available with this Local banDit yet. City Guide and Ask Me stay free.";
+  }
   return s || "Commerce temporarily unavailable.";
+}
+
+/** Bounded commerce / Workspace waits — Unlock must never sit on Confirming forever. */
+export const COMMERCE_FETCH_TIMEOUT_MS = 35_000;
+/** UI wall slightly above fetch abort so checkoutMsg always recovers. */
+export const CHECKOUT_UI_WALL_MS = COMMERCE_FETCH_TIMEOUT_MS + 5_000;
+
+async function fetchWithTimeout(
+  url: string,
+  init: RequestInit,
+  timeoutMs = COMMERCE_FETCH_TIMEOUT_MS,
+): Promise<Response> {
+  const controller = typeof AbortController !== "undefined" ? new AbortController() : null;
+  const timer = controller
+    ? setTimeout(() => controller.abort(), timeoutMs)
+    : null;
+  try {
+    return await fetch(url, controller ? { ...init, signal: controller.signal } : init);
+  } catch (e) {
+    const name = e instanceof Error ? e.name : "";
+    if (name === "AbortError") {
+      throw new Error("Checkout timed out. No charge completed — try Unlock again.");
+    }
+    throw e;
+  } finally {
+    if (timer) clearTimeout(timer);
+  }
 }
 
 /** Commerce GET — Orchestra OS preferred. */
@@ -151,7 +201,7 @@ export async function commerceGet<T>(
     };
   }
   try {
-    const res = await fetch(`${origin}${path.startsWith("/") ? path : `/${path}`}`, {
+    const res = await fetchWithTimeout(`${origin}${path.startsWith("/") ? path : `/${path}`}`, {
       headers: guestBridgeHeaders(guestEmail),
     });
     if (!res.ok) return { ok: false, detail: guestCommerceDetail(`${res.status} ${path}`) };
@@ -164,7 +214,7 @@ export async function commerceGet<T>(
   }
 }
 
-/** Commerce POST — Orchestra OS preferred. */
+/** Commerce POST — same origin as Workspace bridge. */
 export async function commercePost<T>(
   path: string,
   body: Record<string, unknown>,
@@ -178,7 +228,7 @@ export async function commercePost<T>(
     };
   }
   try {
-    const res = await fetch(`${origin}${path.startsWith("/") ? path : `/${path}`}`, {
+    const res = await fetchWithTimeout(`${origin}${path.startsWith("/") ? path : `/${path}`}`, {
       method: "POST",
       headers: guestBridgeHeaders(guestEmail),
       body: JSON.stringify(body),

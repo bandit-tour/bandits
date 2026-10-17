@@ -54,6 +54,8 @@ interface BanditHeaderProps {
   categoryExpandBelow?: React.ReactNode;
   /** Extra https gallery URIs (e.g. Local picks / spot photos) for Airbnb-style mosaic. */
   galleryExtras?: string[];
+  /** When parent already loaded Workspace visibility, reuse it (profile page). */
+  premiumVisibility?: BanditPremiumVisibility | null;
 }
 
 const LOCAL_FALLBACK = require('@/assets/images/play_athens_bg.png');
@@ -103,6 +105,7 @@ function BanditHeaderImpl({
   onCategoryPress,
   categoryExpandBelow,
   galleryExtras,
+  premiumVisibility,
 }: BanditHeaderProps) {
   const {
     id,
@@ -159,6 +162,10 @@ function BanditHeaderImpl({
   }, [id, isListVariant, face_image_url, image_url, galleryExtras]);
 
   useEffect(() => {
+    if (premiumVisibility) {
+      setPremiumVis(premiumVisibility);
+      return;
+    }
     let cancelled = false;
     setPremiumVis(null);
     void fetchBanditPremiumVisibility(String(id)).then((v) => {
@@ -167,7 +174,7 @@ function BanditHeaderImpl({
     return () => {
       cancelled = true;
     };
-  }, [id]);
+  }, [id, premiumVisibility]);
 
   const showPremiumInsights = premiumVis?.showPremiumInsights === true;
   const showOctopusBadge = premiumVis?.octopusVerified === true;
@@ -429,17 +436,25 @@ function BanditHeaderImpl({
               ]}
               onPress={openPremiumInsights}
               accessibilityRole="button"
-              accessibilityLabel={`Your Local Insider · ${displayFirstName}`}
+              accessibilityLabel={
+                octopusIsTestDemo
+                  ? `Your Local Insider TEST · ${displayFirstName}`
+                  : `Your Local Insider · ${displayFirstName}`
+              }
               testID="bandit-premium-insights-cta"
             >
               <LocalBanditOctopusIcon style={styles.conciergeIcon} />
               <View style={styles.conciergeCopy}>
-                <Text style={styles.conciergeEyebrow}>YOUR LOCAL INSIDER</Text>
+                <Text style={styles.conciergeEyebrow}>
+                  {octopusIsTestDemo ? "YOUR LOCAL INSIDER · TEST" : "YOUR LOCAL INSIDER"}
+                </Text>
                 <Text style={styles.conciergePrimary} numberOfLines={1}>
                   {`Unlock ${displayFirstName}'s Athens`}
                 </Text>
                 <Text style={styles.conciergeSecondary} numberOfLines={1}>
-                  {`Octopus Concierge · ${displayFirstName} handles it`}
+                  {octopusIsTestDemo
+                    ? `QA TEST_DEMO · not PRODUCTION · ${displayFirstName}`
+                    : `Octopus Concierge · ${displayFirstName} handles it`}
                 </Text>
               </View>
             </Pressable>

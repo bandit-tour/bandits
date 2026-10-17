@@ -1,0 +1,47 @@
+{
+  "at": "2026-10-17T10:33:22.184Z",
+  "guest": "http://localhost:8082",
+  "tests": {
+    "O1": {
+      "status": "PASS",
+      "route": "/bandit/d76cb120-018d-4a2e-8b5f-0578a71fd8f9",
+      "source": "BanditHeader showPremiumInsights",
+      "reason": "Your Local Insider CTA visible"
+    },
+    "O2": {
+      "status": "PASS",
+      "route": "/bandit/d76cb120-018d-4a2e-8b5f-0578a71fd8f9",
+      "source": "BanditOrchestraStrip → buildBanditCardCapabilities",
+      "reason": "Premium Insights chip visible"
+    },
+    "O3": {
+      "status": "PASS",
+      "route": "/bandit/d76cb120-018d-4a2e-8b5f-0578a71fd8f9",
+      "source": "GuestDiscoveryCard → PremiumUnlockModal",
+      "reason": "Modal shows €19 Stay Pass offer"
+    },
+    "O4": {
+      "status": "PASS",
+      "route": "/premium/d76cb120-018d-4a2e-8b5f-0578a71fd8f9",
+      "source": "resolveOctopusConciergeEntitlement + assertConciergeOpsAllowed",
+      "reason": "Sales gate or unlock shown — ops not exposed unpaid"
+    },
+    "O5": {
+      "status": "PASS",
+      "route": "/premium/d76cb120-018d-4a2e-8b5f-0578a71fd8f9",
+      "source": "startOctopusConciergeCheckout → Workspace purchaseStayPass",
+      "reason": "TEST/treasury payment confirmed — Concierge OS unlocked"
+    },
+    "O6": {
+      "status": "PASS",
+      "route": "/premium/d76cb120-018d-4a2e-8b5f-0578a71fd8f9",
+      "source": "commerce entitlements + view=track",
+      "reason": "Entitled Concierge OS after reload"
+    }
+  },
+  "lukasNeo": {
+    "lukasWithoutQa": "NONE",
+    "lukasWithQa": "TEST_DEMO",
+    "neoWithQa": "PRODUCTION"
+  }
+}

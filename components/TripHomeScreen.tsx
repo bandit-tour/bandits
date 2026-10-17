@@ -200,17 +200,31 @@ export default function TripHomeScreen() {
   }, [phase]);
 
   useEffect(() => {
-    if (phase === 'unknown' || phase === 'before_stay' || phase === 'during_stay') return;
+    if (phase === 'unknown' || phase === 'before_stay') return;
     const memoryCity = activeStay?.city || snap?.lifecycle.lastCity || 'your';
-    const stayId = activeStay?.id || snap?.lifecycle.activeStayId || 'stay';
+    const stayId = activeStay?.id || snap?.lifecycle.activeStayId || '';
     void (async () => {
+      const { ensureAnonymousSession } = await import('@/lib/pilotSession');
+      await ensureAnonymousSession().catch(() => undefined);
       const user = await getCurrentUser().catch(() => null);
-      const uid = user?.id || activeIdentity?.userId;
+      const uid = user?.id || activeIdentity?.userId || '';
       if (!uid) return;
+      if ((phase === 'during_stay' || phase === 'near_checkout') && activeStay?.status === 'checked_in' && stayId) {
+        await recordLifecycleNotice({
+          id: `stay_check_in_${stayId}`,
+          userId: uid,
+          notificationClass: 'service',
+          type: 'stay_check_in',
+          title: 'Check-in confirmed',
+          message: 'Room instructions and stay details are on your hotel page.',
+          href: '/hotelier',
+        });
+      }
       if (phase === 'near_checkout') {
         await recordLifecycleNotice({
-          id: `near_checkout_${stayId}`,
+          id: `near_checkout_${stayId || 'stay'}`,
           userId: uid,
+          notificationClass: 'marketing',
           title: `Your ${memoryCity} memories are yours to keep.`,
           message: 'Open City Memory whenever you want them. This stay is still yours tonight.',
           href: '/cityMemory',
@@ -220,6 +234,7 @@ export default function TripHomeScreen() {
         await recordLifecycleNotice({
           id: `after_checkout_${uid}`,
           userId: uid,
+          notificationClass: 'marketing',
           title: "Your journey doesn't end here.",
           message: 'Explore your memories.',
           href: '/cityMemory',
@@ -229,6 +244,7 @@ export default function TripHomeScreen() {
         await recordLifecycleNotice({
           id: `between_trips_${uid}`,
           userId: uid,
+          notificationClass: 'marketing',
           title: 'Where would you love to go next?',
           message: 'Choose a Dream Destination when you want inspiration — not a new booking.',
           href: '/dreamDestinations',
@@ -239,6 +255,7 @@ export default function TripHomeScreen() {
     activeIdentity?.userId,
     activeStay?.city,
     activeStay?.id,
+    activeStay?.status,
     getCurrentUser,
     phase,
     snap?.lifecycle.activeStayId,

@@ -62,6 +62,8 @@ export type ConciergeTask = {
   executionMethod: ConciergeExecutionMethod;
   status: ConciergeTaskStatus;
   confirmation: string | null;
+  /** Latest provider message from Workspace view=track (if any). */
+  providerReply: string | null;
   cost: ConciergeMoney | null;
   commission: ConciergeMoney | null;
   evidence: string[];

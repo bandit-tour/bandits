@@ -1,0 +1,106 @@
+{
+  "track": "Experiences P1 — price display consistency",
+  "closedAt": "2026-10-17T13:04:28+03:00",
+  "verdict": "PASS",
+  "guestHeadSha": "a7ebab3dad4b6677c77e5b0f9829d1a249552fa1",
+  "runtimeBase": "http://localhost:8082",
+  "workspaceOrigin": "http://localhost:3000",
+  "workspaceProxy": "http://localhost:8082/__workspace",
+  "diskFreeGbAtProof": 4.76,
+  "stripeLiveCharges": false,
+  "pricingUiRebuilt": false,
+  "apiDiagnosis": {
+    "endpoint": "/__workspace/api/public/experiences",
+    "beforeFix": {
+      "httpStatus": "timeout / no response",
+      "contentType": null,
+      "bodySnippet": null,
+      "cause": "Hung Node Workspace (PID 28464) still bound to :3000; Metro proxy target is localhost:3000. Upstream never answered, so browser fetch().json() failed (non-JSON / parse error). A fresh next dev had fallen back to :3001 with healthy JSON, but Guest proxy did not use :3001."
+    },
+    "afterFix": {
+      "httpStatus": 200,
+      "contentType": "application/json",
+      "bodySnippet": "{\"ok\":true,\"product\":\"Local Experiences\",\"count\":1,\"experiences\":[{\"id\":\"exp_honesty_real\",\"priceCents\":7200,\"priceBasis\":\"per_experience\"…}]}",
+      "causeResolved": "Killed hung :3000 process; restarted Workspace next dev on :3000. Proxy and direct Workspace both return identical JSON. No Guest pricing UI changes."
+    }
+  },
+  "workspaceApiSample": {
+    "endpoint": "/api/public/experiences",
+    "via": "http://localhost:8082/__workspace/api/public/experiences",
+    "verified": {
+      "count": 1,
+      "id": "exp_honesty_real",
+      "priceCents": 7200,
+      "priceBasis": "per_experience",
+      "currencyDisplay": "EUR (€) — Guest formatEuro; API body has no currency field",
+      "title": "Kypseli courtyard clay morning"
+    },
+    "mocks": false
+  },
+  "observedUiPrice": {
+    "listing": "€72 per experience",
+    "detail": "€72 / experience",
+    "checkout": "€72 per experience"
+  },
+  "screenshots": {
+    "listing": "artifacts/runtime-proof/experiences-price/01-listing.png",
+    "detail": "artifacts/runtime-proof/experiences-price/02-detail.png",
+    "checkout": "artifacts/runtime-proof/experiences-price/03-checkout-sheet.png",
+    "capturedAt": {
+      "listing": "2026-10-17T13:02:04+03:00",
+      "detail": "2026-10-17T13:03:36+03:00",
+      "checkout": "2026-10-17T13:03:52+03:00"
+    },
+    "cdnFallback": "Live card remained mounted with fallback cover when cdn.athensmakers.gr hosts fail"
+  },
+  "passFail": {
+    "listingPrices": "PASS — live card shows €72 per experience (Workspace priceCents 7200 + priceBasis per_experience)",
+    "currencyConsistency": "PASS — € / EUR display matches formatEuro(priceCents) from same Workspace row",
+    "priceBasisConsistency": "PASS — listing, detail sticky, checkout sheet all show per-experience basis",
+    "listingDetailCheckoutConsistency": "PASS — listing €72 per experience; detail €72 / experience; checkout €72 per experience",
+    "noComingSoonSpam": "PASS — 0× Coming soon; Preview badges removed",
+    "nonBookableSamplesHonest": "PASS — editorial section includes not bookable; live inventory uses Book CTA",
+    "tabNavNotBlocked": "PASS — tab switch ~1514ms in QA harness",
+    "workspaceProxyJson": "PASS — after hung-:3000 restart; 200 application/json",
+    "noStripeLive": "PASS — no LIVE Stripe / real charges in this track"
+  },
+  "commitStatus": {
+    "committed": false,
+    "note": "Do not commit unless explicitly asked. Guest App uncommitted work preserved.",
+    "headSha": "a7ebab3dad4b6677c77e5b0f9829d1a249552fa1",
+    "relevantUncommitted": [
+      "M .env",
+      "M app/(tabs)/experiences.tsx",
+      "M app/(tabs)/menu.tsx",
+      "M app/(tabs)/notifications.tsx",
+      "M app/(tabs)/travelBottle.tsx",
+      "M app/account/membership.tsx",
+      "M app/bandit/[id].tsx",
+      "M app/dreamDestinations.tsx",
+      "M app/experience/[id].tsx",
+      "M app/premium/[id].tsx",
+      "M app/settings.tsx",
+      "M components/BanditHeader.tsx",
+      "M components/LifecycleInboxHeader.tsx",
+      "M components/TripHomeScreen.tsx",
+      "M components/guest-lifecycle/HotelCheckoutInvite.tsx",
+      "M lib/guest-lifecycle/transitions.ts",
+      "M lib/guest-moment/connection.ts",
+      "M lib/guest-workspace/hotelBottleListing.ts",
+      "M lib/guest-workspace/liveExperiences.ts",
+      "M lib/guest-workspace/productWorlds.ts",
+      "M lib/lifecycle/notices.ts",
+      "M lib/octopus-concierge/*",
+      "M lib/workspace/client.ts",
+      "M metro.config.js",
+      "?? artifacts/runtime-proof/experiences-price/",
+      "?? lib/notifications/",
+      "?? scripts/proof-experiences-price.mjs"
+    ]
+  },
+  "notes": [
+    "Infra-only fix: restarted hung Workspace on :3000. No Experiences pricing UI rebuild.",
+    "Installed Playwright Chromium for proof harness (sandbox cache missing browsers).",
+    "Proof script exit 0; EVIDENCE.json overwritten with fresh run."
+  ]
+}

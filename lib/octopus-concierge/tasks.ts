@@ -65,6 +65,7 @@ export function createConciergeTaskStub(
     executionMethod: input.executionMethod ?? defaultMethod(category),
     status: "requested",
     confirmation: null,
+    providerReply: null,
     cost: null,
     commission: null,
     evidence: [],

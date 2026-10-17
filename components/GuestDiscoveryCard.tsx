@@ -16,6 +16,8 @@ type Props = {
   body: string;
   cta: string;
   href: Href;
+  /** When set, runs instead of router.push(href) — e.g. open PremiumUnlockModal. */
+  onCtaPress?: () => void;
   testID?: string;
 };
 
@@ -29,6 +31,7 @@ export function GuestDiscoveryCard({
   body,
   cta,
   href,
+  onCtaPress,
   testID,
 }: Props) {
   const router = useRouter();
@@ -69,7 +72,7 @@ export function GuestDiscoveryCard({
       <Text style={styles.body}>{body}</Text>
       <Pressable
         style={styles.cta}
-        onPress={() => router.push(href)}
+        onPress={() => (onCtaPress ? onCtaPress() : router.push(href))}
         accessibilityRole="button"
         accessibilityLabel={cta}
       >

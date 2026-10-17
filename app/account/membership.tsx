@@ -10,7 +10,8 @@ import {
   startOctopusConciergeCheckout,
   type OctopusEntitlement,
 } from "@/lib/octopus-concierge";
-import { LOCAL_FRIENDS } from "@/lib/guest-workspace/profileMemory";
+import { REGISTERED_BANDIT } from "@/lib/guest-workspace/registeredBanditIds";
+import { CHECKOUT_UI_WALL_MS } from "@/lib/workspace/client";
 
 const INCLUDED = [
   "Octopus Concierge — restaurants, tickets, taxis, transfers",
@@ -22,8 +23,8 @@ const INCLUDED = [
 
 /**
  * Premium Membership — NOT Impact.
- * Unsubscribed → sales → payment → unlock.
- * Subscribed → membership management.
+ * Canonical production seller today: Neo (organic Octopus Verified™).
+ * Never bind checkout to an unauthorized Local Friend (e.g. Sofia).
  */
 export default function MembershipScreen() {
   const router = useRouter();
@@ -33,7 +34,9 @@ export default function MembershipScreen() {
     fallback: "/menu" as Href,
     showBack: true,
   });
-  const banditId = LOCAL_FRIENDS[0]?.id ?? "local-friend";
+  /** Sole PRODUCTION organic seller — Workspace visibility is source of truth. */
+  const banditId = REGISTERED_BANDIT.neo;
+  const premiumHref = `/premium/${encodeURIComponent(banditId)}` as Href;
   const [entitlement, setEntitlement] = useState<OctopusEntitlement | null>(null);
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
@@ -43,7 +46,8 @@ export default function MembershipScreen() {
     void (async () => {
       const user = await getCurrentUser().catch(() => null);
       const guestId = activeIdentity?.userId ?? user?.id ?? null;
-      const ent = await resolveOctopusConciergeEntitlement({ guestId, banditId });
+      const guestEmail = (user as { email?: string } | null)?.email ?? null;
+      const ent = await resolveOctopusConciergeEntitlement({ guestId, banditId, guestEmail });
       if (alive) setEntitlement(ent);
     })();
     return () => {
@@ -56,30 +60,61 @@ export default function MembershipScreen() {
   const onUpgrade = async () => {
     setBusy(true);
     setMsg(null);
+    let settled = false;
+    const wall = setTimeout(() => {
+      if (settled) return;
+      settled = true;
+      setBusy(false);
+      setMsg("Checkout timed out. No charge completed — try Unlock again.");
+    }, CHECKOUT_UI_WALL_MS);
     try {
       const user = await getCurrentUser().catch(() => null);
       const guestId = activeIdentity?.userId ?? user?.id ?? null;
+      const guestEmail = (user as { email?: string } | null)?.email ?? null;
+      if (!guestEmail) {
+        setMsg("Sign in to unlock Your Local Insider.");
+        router.push(premiumHref);
+        return;
+      }
       const result = await startOctopusConciergeCheckout({
         guestId,
         banditId,
-        successPath: "/account/membership",
-        cancelPath: "/account/membership",
+        guestEmail,
+        stayId: "current_stay",
+        successPath: `/premium/${encodeURIComponent(banditId)}`,
+        cancelPath: `/premium/${encodeURIComponent(banditId)}`,
       });
+      if (settled) return;
       if (result.ok) {
         if (result.paymentConfirmed) {
-          setMsg("Payment confirmed — Concierge unlocked.");
+          setMsg(
+            "TEST payment confirmed (server TEST confirm — not hosted Stripe Checkout) — Concierge unlocked.",
+          );
+        } else if (
+          "checkoutUrl" in result &&
+          typeof result.checkoutUrl === "string" &&
+          /checkout\.stripe\.com/i.test(result.checkoutUrl)
+        ) {
+          setMsg("Opening Stripe Checkout…");
         } else {
-          setMsg("Checkout ready — complete payment to unlock.");
+          setMsg(
+            "Payment return ready (not hosted Stripe Checkout) — open Your Local Insider to finish.",
+          );
         }
-        router.push(`/premium/${encodeURIComponent(banditId)}` as Href);
+        router.push(premiumHref);
       } else {
-        setMsg(result.detail ?? "Checkout unavailable. Open Octopus Concierge to continue.");
-        router.push(`/premium/${encodeURIComponent(banditId)}` as Href);
+        setMsg(result.detail ?? "Checkout unavailable. Open Your Local Insider to continue.");
+        router.push(premiumHref);
       }
     } catch (e) {
+      if (settled) return;
       setMsg(e instanceof Error ? e.message : "Could not start checkout");
     } finally {
-      setBusy(false);
+      if (!settled) {
+        settled = true;
+        setBusy(false);
+      }
+      clearTimeout(wall);
     }
   };
 
@@ -122,11 +157,8 @@ export default function MembershipScreen() {
             </Text>
             <Text style={styles.cardSub}>{entitlement?.detail}</Text>
           </View>
-          <Pressable
-            style={styles.primary}
-            onPress={() => router.push(`/premium/${encodeURIComponent(banditId)}` as Href)}
-          >
-            <Text style={styles.primaryText}>Open Octopus Concierge</Text>
+          <Pressable style={styles.primary} onPress={() => router.push(premiumHref)}>
+            <Text style={styles.primaryText}>Open Your Local Insider</Text>
           </Pressable>
           <Pressable style={styles.secondary} onPress={() => router.push("/account/payments" as Href)}>
             <Text style={styles.secondaryText}>Payment methods & invoices</Text>
@@ -140,16 +172,18 @@ export default function MembershipScreen() {
         </>
       ) : (
         <>
-          <Pressable style={styles.primary} disabled={busy} onPress={() => void onUpgrade()}>
+          <Pressable
+            style={styles.primary}
+            disabled={busy}
+            onPress={() => void onUpgrade()}
+            testID="membership-upgrade-cta"
+          >
             <Text style={styles.primaryText}>
-              {busy ? "Opening checkout…" : `Upgrade · ${OCTOPUS_CONCIERGE_OFFER.priceLabel}`}
+              {busy ? "Confirming payment…" : `Upgrade · ${OCTOPUS_CONCIERGE_OFFER.priceLabel}`}
             </Text>
           </Pressable>
-          <Pressable
-            style={styles.secondary}
-            onPress={() => router.push(`/premium/${encodeURIComponent(banditId)}` as Href)}
-          >
-            <Text style={styles.secondaryText}>See Octopus Concierge details</Text>
+          <Pressable style={styles.secondary} onPress={() => router.push(premiumHref)}>
+            <Text style={styles.secondaryText}>See Your Local Insider details</Text>
           </Pressable>
         </>
       )}
