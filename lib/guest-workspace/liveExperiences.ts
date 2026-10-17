@@ -147,7 +147,7 @@ export function mapWorkspaceExperience(row: WorkspaceLocalExperience): GuestExpe
     story: row.description || title,
     when: row.when || row.duration || "Upcoming",
     priceCents: resolveWorkspaceExperienceUnitCents(row),
-    priceBasis: coerceExperiencePriceBasis(row.priceBasis),
+    priceBasis: coerceExperiencePriceBasis(row.priceBasis) ?? "per_experience",
     currency: String(row.currency || "EUR").toUpperCase() || "EUR",
     seatsLeft: row.seatsLeft ?? 0,
     host,

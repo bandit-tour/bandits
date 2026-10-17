@@ -330,7 +330,11 @@ function ExperienceMarketplaceCard({
             {categoryLine}
           </Text>
         </View>
-        {!preview && exp.availableToday ? (
+        {preview ? (
+          <View style={styles.previewBadge}>
+            <Text style={styles.previewBadgeText}>Preview</Text>
+          </View>
+        ) : exp.availableToday ? (
           <View style={styles.todayBadge}>
             <Text style={styles.todayBadgeText}>Today</Text>
           </View>

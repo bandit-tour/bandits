@@ -119,9 +119,21 @@ function mapGuestPrivilege(
   };
 }
 
+/** Orchestration / QA merchants — never Guest redeemable inventory (matches Workspace durable gate). */
+export function isGuestVisibleSmartTravelerRow(row: WorkspaceSmartTravelerRow): boolean {
+  const email = String(row.email || "").toLowerCase();
+  if (!row?.id || !row.businessName) return false;
+  if (email.endsWith("@banditour.test") || email.endsWith("@banditour.proof")) return false;
+  if (email.endsWith("@banditour.demo")) return false;
+  if (email.startsWith("orch.st.") || email.startsWith("op.st") || email.startsWith("dbg.st.")) return false;
+  const biz = String(row.businessName || "").trim();
+  if (/\s(mu[a-z0-9]{6,10}|mt[a-z0-9]{5,10}|muy[a-z0-9]{5,10})$/i.test(biz)) return false;
+  return true;
+}
+
 /** When `source` is present, keep partner_record only. Absent source (discover) is allowed. */
 export function isLivePartnerRow(row: WorkspaceSmartTravelerRow): boolean {
-  if (!row?.id || !row.businessName) return false;
+  if (!isGuestVisibleSmartTravelerRow(row)) return false;
   if (row.source == null || row.source === "") return true;
   return row.source === "partner_record";
 }
@@ -227,24 +239,39 @@ export async function fetchLiveSmartTravelers(opts?: {
     const mapped = filterByCity(rowsFromPublicPayload(publicResult.data), opts?.city)
       .map(mapWorkspaceSmartTraveler)
       .filter(Boolean) as SmartTravelerPartner[];
-    return { ok: true, partners: mapped, via: "public" };
+    if (mapped.length > 0) {
+      return { ok: true, partners: mapped, via: "public" };
+    }
   }
 
-  if (String(publicResult.detail || "").startsWith("404")) {
-    const discover = await workspaceGet<{
-      ok?: boolean;
-      partners?: WorkspaceSmartTravelerRow[];
-    }>("/api/discover");
-    if (!discover.ok) {
-      return { ok: false, partners: [], via: "none", detail: discover.detail };
-    }
+  const discover = await workspaceGet<{
+    ok?: boolean;
+    partners?: WorkspaceSmartTravelerRow[];
+  }>("/api/discover");
+  if (discover.ok) {
     const mapped = filterByCity(discover.data.partners || [], opts?.city)
+      .filter(isGuestVisibleSmartTravelerRow)
       .map(mapWorkspaceSmartTraveler)
       .filter(Boolean) as SmartTravelerPartner[];
-    return { ok: true, partners: mapped, via: "discover" };
+    if (mapped.length > 0) {
+      return { ok: true, partners: mapped, via: "discover" };
+    }
   }
 
-  return { ok: false, partners: [], via: "none", detail: publicResult.detail };
+  if (publicResult.ok) {
+    return { ok: false, partners: [], via: "none", detail: "No guest-visible SmartTraveler partners published yet." };
+  }
+
+  if (String(publicResult.detail || "").startsWith("404") && discover.ok) {
+    return { ok: false, partners: [], via: "none", detail: "No guest-visible SmartTraveler partners published yet." };
+  }
+
+  return {
+    ok: false,
+    partners: [],
+    via: "none",
+    detail: publicResult.detail || discover.detail || "SmartTraveler unavailable",
+  };
 }
 
 export async function fetchLiveSmartTravelerDetail(
