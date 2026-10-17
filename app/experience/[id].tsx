@@ -34,7 +34,7 @@ import {
   formatMoney,
   isEditorialExperienceId,
 } from "@/lib/guest-workspace/productWorlds";
-import { getCachedAuthUser, invalidateAuthUserCache } from "@/lib/authUserCache";
+import { supabase } from "@/lib/supabase";
 import { ImageRatio, imageFocusStyle } from "@/lib/imageRatios";
 import { bookExperienceViaCommerce } from "@/lib/orchestra/commerceBook";
 import { ensureAnonymousSession } from "@/lib/pilotSession";
