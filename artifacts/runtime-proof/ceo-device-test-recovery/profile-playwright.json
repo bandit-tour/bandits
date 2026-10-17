@@ -1,0 +1,13 @@
+{
+  "at": "2026-10-17T16:59:37.482Z",
+  "url": "https://bandits-two.vercel.app/profile",
+  "pageErrors": [],
+  "consoleErrors": [
+    "Failed to load resource: the server responded with a status of 401 ()",
+    "Failed to load resource: the server responded with a status of 400 ()"
+  ],
+  "hasProfileStayError": false,
+  "bodyStartsWith": " Profile G Guest bandiTour No stay connected yet Connect My New Stay to unlock hotel stay context Guest STATUS — TRAVEL SCORE Soon LEVEL My Moment Your status today — may appear on a bottle scan YOUR",
+  "screenshot": "profile-browser.png",
+  "browserStatus": "PASS"
+}

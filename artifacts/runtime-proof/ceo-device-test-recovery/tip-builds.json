@@ -1,0 +1,114 @@
+{
+  "prefer": {
+    "android": {
+      "id": "d9ceb6f8-28d8-4b70-845a-a1e080a27d7d",
+      "platform": "ANDROID",
+      "status": "FINISHED",
+      "git": "2bbf93beee6944e17b16ec98c5c2649772db8e5d",
+      "ver": "21",
+      "url": "https://expo.dev/artifacts/eas/EQtdE1_rFXpz_Z78As2O4CwDRphrQZBu8X480AHU3fA.apk",
+      "page": "https://expo.dev/accounts/banditeam121275/projects/bandits/builds/d9ceb6f8-28d8-4b70-845a-a1e080a27d7d",
+      "createdAt": "2026-10-17T16:49:10.099Z"
+    },
+    "ios": {
+      "id": "2385fbe6-06a2-4201-8a7c-9bcb23cd5775",
+      "platform": "IOS",
+      "status": "FINISHED",
+      "git": "2bbf93beee6944e17b16ec98c5c2649772db8e5d",
+      "ver": "45",
+      "url": "https://expo.dev/artifacts/eas/mL1yftlhdkw2xmCmUk5Cx8cRUxbMjrAjNQ83sQPsTM0.ipa",
+      "page": "https://expo.dev/accounts/banditeam121275/projects/bandits/builds/2385fbe6-06a2-4201-8a7c-9bcb23cd5775",
+      "createdAt": "2026-10-17T16:52:24.333Z"
+    },
+    "mine": {
+      "android": "e0b28d36-1920-4fb0-a868-1982ec52c187",
+      "ios": "0a2db204-dcef-4486-b122-d8da3a9e57e5"
+    }
+  },
+  "all": [
+    {
+      "id": "2385fbe6-06a2-4201-8a7c-9bcb23cd5775",
+      "platform": "IOS",
+      "status": "FINISHED",
+      "git": "2bbf93beee6944e17b16ec98c5c2649772db8e5d",
+      "ver": "45",
+      "url": "https://expo.dev/artifacts/eas/mL1yftlhdkw2xmCmUk5Cx8cRUxbMjrAjNQ83sQPsTM0.ipa",
+      "page": "https://expo.dev/accounts/banditeam121275/projects/bandits/builds/2385fbe6-06a2-4201-8a7c-9bcb23cd5775",
+      "createdAt": "2026-10-17T16:52:24.333Z"
+    },
+    {
+      "id": "d9ceb6f8-28d8-4b70-845a-a1e080a27d7d",
+      "platform": "ANDROID",
+      "status": "FINISHED",
+      "git": "2bbf93beee6944e17b16ec98c5c2649772db8e5d",
+      "ver": "21",
+      "url": "https://expo.dev/artifacts/eas/EQtdE1_rFXpz_Z78As2O4CwDRphrQZBu8X480AHU3fA.apk",
+      "page": "https://expo.dev/accounts/banditeam121275/projects/bandits/builds/d9ceb6f8-28d8-4b70-845a-a1e080a27d7d",
+      "createdAt": "2026-10-17T16:49:10.099Z"
+    },
+    {
+      "id": "0a2db204-dcef-4486-b122-d8da3a9e57e5",
+      "platform": "IOS",
+      "status": "FINISHED",
+      "git": "2bbf93beee6944e17b16ec98c5c2649772db8e5d",
+      "ver": "44",
+      "msg": "ceo-device-test tip 2bbf93b lifecycle+profile",
+      "url": "https://expo.dev/artifacts/eas/uBGjugxQahVB8R-Q8ycpjQ_oCk9UIwFCRjU_V9zDUhM.ipa",
+      "page": "https://expo.dev/accounts/banditeam121275/projects/bandits/builds/0a2db204-dcef-4486-b122-d8da3a9e57e5",
+      "createdAt": "2026-10-17T16:47:44.839Z"
+    },
+    {
+      "id": "e0b28d36-1920-4fb0-a868-1982ec52c187",
+      "platform": "ANDROID",
+      "status": "FINISHED",
+      "git": "2bbf93beee6944e17b16ec98c5c2649772db8e5d",
+      "ver": "20",
+      "msg": "ceo-device-test tip 2bbf93b lifecycle+profile",
+      "url": "https://expo.dev/artifacts/eas/5owGmyjd1N6Ds8SiWvNwna8qpQSyZbjMOvgy8a3rVbc.apk",
+      "page": "https://expo.dev/accounts/banditeam121275/projects/bandits/builds/e0b28d36-1920-4fb0-a868-1982ec52c187",
+      "createdAt": "2026-10-17T16:46:02.584Z"
+    },
+    {
+      "id": "2c023dd7-0931-4fbb-a1f8-cd46fffb0e6a",
+      "platform": "IOS",
+      "status": "FINISHED",
+      "git": "c9b6bf7f7e2bd256acfb01a980c9169e0f86c885",
+      "ver": "43",
+      "msg": "browser-phone parity tip c9b6bf7",
+      "url": "https://expo.dev/artifacts/eas/PnvW_DVKzYohWfAf01r4PYB4quTfILMf91-PtOk_tVM.ipa",
+      "page": "https://expo.dev/accounts/banditeam121275/projects/bandits/builds/2c023dd7-0931-4fbb-a1f8-cd46fffb0e6a",
+      "createdAt": "2026-10-17T13:34:56.110Z"
+    },
+    {
+      "id": "33c3a52e-da11-4871-95b2-d59bdfb4795b",
+      "platform": "ANDROID",
+      "status": "FINISHED",
+      "git": "c9b6bf7f7e2bd256acfb01a980c9169e0f86c885",
+      "ver": "19",
+      "msg": "browser-phone parity tip c9b6bf7",
+      "url": "https://expo.dev/artifacts/eas/Q73wklYQQsl5FkGRb7F3AA3xEsl68I-6jR3WAVILJrE.apk",
+      "page": "https://expo.dev/accounts/banditeam121275/projects/bandits/builds/33c3a52e-da11-4871-95b2-d59bdfb4795b",
+      "createdAt": "2026-10-17T13:33:40.511Z"
+    },
+    {
+      "id": "55346f31-a408-450a-a919-0a3ccb014da4",
+      "platform": "IOS",
+      "status": "FINISHED",
+      "git": "c9b6bf7f7e2bd256acfb01a980c9169e0f86c885",
+      "ver": "42",
+      "url": "https://expo.dev/artifacts/eas/jXCzuhNYh9toWhg5gQ3wRynQNI7UlrENhap-R2CjhLQ.ipa",
+      "page": "https://expo.dev/accounts/banditeam121275/projects/bandits/builds/55346f31-a408-450a-a919-0a3ccb014da4",
+      "createdAt": "2026-10-17T13:32:01.422Z"
+    },
+    {
+      "id": "00df642a-3dd8-4f36-a7e1-e80ccbf3cd16",
+      "platform": "ANDROID",
+      "status": "FINISHED",
+      "git": "605cb4cafed4e6445ca5c65d490de922a4c93328",
+      "ver": "18",
+      "url": "https://expo.dev/artifacts/eas/CKk6srdq-h46HVuG_aYmKh5mfp4qbgtLcbf0Lw3kr6A.apk",
+      "page": "https://expo.dev/accounts/banditeam121275/projects/bandits/builds/00df642a-3dd8-4f36-a7e1-e80ccbf3cd16",
+      "createdAt": "2026-10-17T13:30:27.791Z"
+    }
+  ]
+}

@@ -1,0 +1,126 @@
+﻿node.exe : npm warn Unknown env config "devdir". This will stop working in the next major version of npm.
+At line:1 char:1
++ & "C:\Program Files\nodejs/node.exe" "C:\Program Files\nodejs/node_mo ...
++ ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (npm warn Unknow...version of npm.:String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+Ôÿà eas-cli@25.1.1 is now available.
+To upgrade, run:
+npm install -g eas-cli
+Proceeding with outdated version.
+
+Environment variables with visibility "Plain text" and "Sensitive" loaded from the "preview" environment on EAS: 
+EXPO_PUBLIC_PERF_LOG.
+Environment variables loaded from the "preview" build profile "env" configuration: EXPO_PUBLIC_PERF_LOG, 
+EXPO_PUBLIC_WORKSPACE_URL, EXPO_PUBLIC_ORCHESTRA_OS_URL.
+The following environment variables are defined in both the "preview" build profile "env" configuration and the 
+"preview" environment on EAS: EXPO_PUBLIC_PERF_LOG. The values from the build profile configuration will be used.
+
+- Incrementing buildNumber from 44 to 45.
+ÔêÜ Incremented buildNumber from 44 to 45.
+
+You've used 97% of your included build credits for this month. 
+ÔûêÔûêÔûêÔûêÔûêÔûêÔûêÔûêÔûêÔûêÔûêÔûêÔûêÔûêÔûêÔûêÔûêÔûêÔûêÔûêÔûêÔûêÔûêÔûêÔûêÔûêÔûêÔûêÔûêÔûæ
+Additional usage beyond your limit will be charged at pay-as-you-go rates. See usage in billing.: 
+https://expo.dev/accounts/banditeam121275/settings/billing
+
+ios.buildNumber field in app config is ignored when version source is set to remote, but this value will still be in 
+the manifest available via expo-constants. It's recommended to remove this value from app config.
+ÔêÜ Using remote iOS credentials (Expo server)
+
+Distribution Certificate is not validated for non-interactive builds.
+Skipping Provisioning Profile validation on Apple Servers because we aren't authenticated.
+
+Project Credentials Configuration
+
+Project                   @banditeam121275/bandits
+Bundle Identifier         com.yuvaldafni.bandits
+                          
+Ad Hoc Configuration      
+                          
+Distribution Certificate  
+Serial Number             2FEE9B192452DFD169533DB6387FB3D4
+Expiration Date           Thu, 18 Mar 2027 08:35:32 GMT+0200
+Apple Team                T4R54U865M (Avishay Ben Eli (Company/Organization))
+Updated                   7 months ago
+                          
+Provisioning Profile      
+Developer Portal ID       3C58373YZ3
+Status                    active
+Expiration                Thu, 18 Mar 2027 08:35:32 GMT+0200
+Apple Team                T4R54U865M (Avishay Ben Eli (Company/Organization))
+Provisioned devices       - iPhone (UDID: 00008110-0019248C0A9A401E)
+Updated                   4 months ago
+                          
+All credentials are ready to build @banditeam121275/bandits (com.yuvaldafni.bandits)
+
+
+Compressing project files and uploading to EAS Build. Learn more: https://expo.fyi/eas-build-archive
+- Compressing project files
+Your project archive is 275 MB. You can reduce its size and the time it takes to upload by excluding files that are 
+unnecessary for the build process in .easignore file. Learn more: https://expo.fyi/eas-build-archive
+- Uploading to EAS Build (0 / 275 MB)
+ÔêÜ Uploaded to EAS 16s
+- Computing project fingerprint
+Ôîø´©Å Computing the project fingerprint is taking longer than expected...
+ÔÅ® To skip this step, set the environment variable: EAS_SKIP_AUTO_FINGERPRINT=1
+ÔêÜ Computed project fingerprint
+
+See logs: https://expo.dev/accounts/banditeam121275/projects/bandits/builds/2385fbe6-06a2-4201-8a7c-9bcb23cd5775
+
+Waiting for build to complete. You can press Ctrl+C to exit.
+- Waiting for build to complete.
+ÔêÜ Build finished
+[
+  {
+    "id": "2385fbe6-06a2-4201-8a7c-9bcb23cd5775",
+    "status": "FINISHED",
+    "platform": "IOS",
+    "artifacts": {
+      "buildUrl": "https://expo.dev/artifacts/eas/mL1yftlhdkw2xmCmUk5Cx8cRUxbMjrAjNQ83sQPsTM0.ipa",
+      "xcodeBuildLogsUrl": "https://storage.googleapis.com/eas-workflows-production/logs/02867d6d-fb41-4f54-80ad-aae3d6831060/2385fbe6-06a2-4201-8a7c-9bcb23cd5775/2026-10-17T16%3A52%3A27Z-2385fbe6-06a2-4201-8a7c-9bcb23cd5775-xcode.txt?X-Goog-Algorithm=GOOG4-RSA-SHA256&X-Goog-Credential=www-production%40exponentjs.iam.gserviceaccount.com%2F20261017%2Fauto%2Fstorage%2Fgoog4_request&X-Goog-Date=20261017T165833Z&X-Goog-Expires=900&X-Goog-SignedHeaders=host&X-Goog-Signature=3f5832c664e8909c89d06412ee79518640104727ce0420ea988d4270e9737fc478672f99f91e3e83c4850d7436067dc8f8844751f1e02573aaef1df5f7e73a5a8c52632b08468cf2b265ba9560bb71b82b3fc7125fca834a164e1e1fa2bd86563c584d8da566e91cf8c7a3fe3316b0fa13467bac24520c31e1d849e05778e07557628c370dc27314e8b52721db687f3cb2c6a5072f1453f44d432eacff2417a1534ed0457865c8a7c6948a4d3ca6d84cd1d7a1cb0def2cc7095a15cada3f434b23f06a5e979628347ee1be354c14b8ed7f257445291d581553a6d4cdc8e172a9e2e0fa55a84d888ced67ba9b78403164b2faaa13f94815dd0191e9a47410768d",
+      "applicationArchiveUrl": "https://expo.dev/artifacts/eas/mL1yftlhdkw2xmCmUk5Cx8cRUxbMjrAjNQ83sQPsTM0.ipa"
+    },
+    "fingerprint": {
+      "id": "01a14a05-eba9-7662-ad16-19b5a54c72fd",
+      "hash": "9496902e7151f1a5a3ddc3611eabeef2a4ad42ca"
+    },
+    "initiatingActor": {
+      "id": "df4dc4ba-d727-4249-99c9-9633e7ead643",
+      "displayName": "banditeam121275"
+    },
+    "logFiles": [
+      "https://storage.googleapis.com/eas-workflows-production/logs/02867d6d-fb41-4f54-80ad-aae3d6831060/2385fbe6-06a2-4201-8a7c-9bcb23cd5775/2026-10-17T16%3A52%3A27Z-2385fbe6-06a2-4201-8a7c-9bcb23cd5775-xcode.txt?X-Goog-Algorithm=GOOG4-RSA-SHA256&X-Goog-Credential=www-production%40exponentjs.iam.gserviceaccount.com%2F20261017%2Fauto%2Fstorage%2Fgoog4_request&X-Goog-Date=20261017T165833Z&X-Goog-Expires=900&X-Goog-SignedHeaders=host&X-Goog-Signature=3f5832c664e8909c89d06412ee79518640104727ce0420ea988d4270e9737fc478672f99f91e3e83c4850d7436067dc8f8844751f1e02573aaef1df5f7e73a5a8c52632b08468cf2b265ba9560bb71b82b3fc7125fca834a164e1e1fa2bd86563c584d8da566e91cf8c7a3fe3316b0fa13467bac24520c31e1d849e05778e07557628c370dc27314e8b52721db687f3cb2c6a5072f1453f44d432eacff2417a1534ed0457865c8a7c6948a4d3ca6d84cd1d7a1cb0def2cc7095a15cada3f434b23f06a5e979628347ee1be354c14b8ed7f257445291d581553a6d4cdc8e172a9e2e0fa55a84d888ced67ba9b78403164b2faaa13f94815dd0191e9a47410768d",
+      "https://storage.googleapis.com/eas-workflows-production/logs/02867d6d-fb41-4f54-80ad-aae3d6831060/2385fbe6-06a2-4201-8a7c-9bcb23cd5775/2026-10-17T16%3A52%3A27Z-f5cdf662-a5b4-4203-943f-d1ec46b162c7.txt?X-Goog-Algorithm=GOOG4-RSA-SHA256&X-Goog-Credential=www-production%40exponentjs.iam.gserviceaccount.com%2F20261017%2Fauto%2Fstorage%2Fgoog4_request&X-Goog-Date=20261017T165833Z&X-Goog-Expires=900&X-Goog-SignedHeaders=host&X-Goog-Signature=64154b0ebddfd0cc197f08c1b33ff88ebb674988a5f6a37807fd9b86287328a3f59181aa8d5758af110f4b1a9fb20cdc0c135084c1185db176014f3b93535aa26a3e015772754554b7964706331872633dc60ee0a93278c1cfaa4c8389322a7d5f2bac21abb7d4d132f584b7a1d4a45f96bdca9fa36abca9782757fbb140f820d3e1ff270a234dbc0addf36383382e691ba167383729c39e021c49c9c1dff8a32129af18e7e5f284ff0e1c33623f4143d98d67f0a00dd70c30cc8d02940cf1fc7ffa7eb3439f3aa1b452f7792fa86b84abbd5eca90227f4bc8e2e5a1f8b7ce72c8b05ad1ce15bc3d484f9f7c8c2916afd10a9a3ef329a6ace7e2c1b90d231293"
+    ],
+    "project": {
+      "id": "02867d6d-fb41-4f54-80ad-aae3d6831060",
+      "name": "bandits",
+      "slug": "bandits",
+      "ownerAccount": {
+        "id": "6036e696-670d-4a2a-90c9-02537b357bea",
+        "name": "banditeam121275"
+      }
+    },
+    "distribution": "INTERNAL",
+    "buildProfile": "preview",
+    "sdkVersion": "54.0.0",
+    "appVersion": "1.0.2",
+    "appBuildVersion": "45",
+    "runtimeVersion": "exposdk:54.0.0",
+    "gitCommitHash": "2bbf93beee6944e17b16ec98c5c2649772db8e5d",
+    "gitCommitMessage": "fix(menu): align More tab with pre-arrival lifecycle\n\nHome already shows before_stay for PRE_TRIP; More wrongly labeled every\nnon-stay guest as After Trip and surfaced post-checkout quick actions.\nGate status pill and quick actions on isAfterTrip so CEO device QA matches Home.\n\nCo-authored-by: Cursor <cursoragent@cursor.com>",
+    "priority": "HIGH",
+    "createdAt": "2026-10-17T16:52:24.333Z",
+    "updatedAt": "2026-10-17T16:58:30.886Z",
+    "completedAt": "2026-10-17T16:58:30.726Z",
+    "expirationDate": "2027-01-15T16:52:24.373Z",
+    "isForIosSimulator": false,
+    "metrics": {
+      "buildWaitTime": 2807,
+      "buildQueueTime": 8917,
+      "buildDuration": 354669
+    }
+  }
+]

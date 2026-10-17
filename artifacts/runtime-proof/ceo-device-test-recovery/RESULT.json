@@ -1,0 +1,58 @@
+{
+  "recoveryWave": "ceo-device-test-recovery",
+  "timestamp": "2026-10-17T17:00:00Z",
+  "branch": "repair/guest-app-regression",
+  "verifiedCommitSha": "2bbf93beee6944e17b16ec98c5c2649772db8e5d",
+  "profileStayFixCommit": "605cb4cafed4e6445ca5c65d490de922a4c93328",
+  "menuLifecycleFixCommit": "2bbf93beee6944e17b16ec98c5c2649772db8e5d",
+  "stripeLive": "OFF",
+  "stripeNote": "Guest builds use EAS preview env; commerce uses ff_payments_live gate — no LIVE deploy change requested.",
+  "web": {
+    "url": "https://bandits-two.vercel.app",
+    "deployId": "dpl_KrFQXBoNz7NSXdMNas3Pav1HRfPt",
+    "inspectorUrl": "https://vercel.com/bandiexchas-projects/bandits/KrFQXBoNz7NSXdMNas3Pav1HRfPt",
+    "buildPass": true
+  },
+  "native": {
+    "profile": "preview",
+    "distribution": "INTERNAL",
+    "gitCommitHash": "2bbf93beee6944e17b16ec98c5c2649772db8e5d",
+    "android": {
+      "easBuildId": "d9ceb6f8-28d8-4b70-845a-a1e080a27d7d",
+      "versionCode": 21,
+      "apkUrl": "https://expo.dev/artifacts/eas/EQtdE1_rFXpz_Z78As2O4CwDRphrQZBu8X480AHU3fA.apk",
+      "status": "FINISHED",
+      "replacesVc19Bn43": true
+    },
+    "ios": {
+      "easBuildId": "2385fbe6-06a2-4201-8a7c-9bcb23cd5775",
+      "buildNumber": 45,
+      "ipaUrl": "https://expo.dev/artifacts/eas/mL1yftlhdkw2xmCmUk5Cx8cRUxbMjrAjNQ83sQPsTM0.ipa",
+      "signing": "Ad Hoc",
+      "bundleIdentifier": "com.yuvaldafni.bandits",
+      "provisionedDevices": ["00008110-0019248C0A9A401E"],
+      "status": "FINISHED",
+      "replacesVc19Bn43": true
+    }
+  },
+  "qualityGates": {
+    "npmRunBuild": "PASS",
+    "expoLint": "BLOCKED — eslint module missing locally",
+    "tscNoEmit": "FAIL — pre-existing repo errors (not introduced this wave)",
+    "webRouteSmoke": "PASS — see web-route-smoke.json",
+    "profileStayReferenceError": false,
+    "menuPreTripLabel": "Members Club · Before arrival",
+    "physicalDevice": "BLOCKED — no install verification in this session"
+  },
+  "testFlight": {
+    "status": "NOT_USED",
+    "reason": "CEO candidates are Ad Hoc preview builds, not App Store distribution.",
+    "requirementsIfPromotingLater": [
+      "Create/link App Store Connect app for bundle id com.yuvaldafni.bandits",
+      "Set eas.json submit.production.ios.ascAppId to the numeric App Store Connect Apple ID",
+      "Use production (or custom) profile with store distribution + valid App Store provisioning",
+      "Run eas submit -p ios after a store-signed build; configure Apple Team T4R54U865M credentials in EAS"
+    ]
+  },
+  "wipExcluded": [".env", "STRIPE-TEST-BOOKING.json", "untracked proof artifacts outside this folder"]
+}

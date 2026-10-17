@@ -1,0 +1,40 @@
+﻿{
+  "deployCheck": "dpl_KrFQXBoNz7NSXdMNas3Pav1HRfPt",
+  "commit": "2bbf93b",
+  "routes": {
+    "/profile": {
+      "url": "https://bandits-two.vercel.app/profile",
+      "pageErrors": [],
+      "hasProfileStayError": false,
+      "snippet": " You need to enable JavaScript to run this app. ¯ƒ┤ProfileGGuestbandiTourNo stay connected yetConnect My New Stay to unlock hotel stay contextGuestStatusÔÇöTravel scoreSoonLe"
+    },
+    "/menu": {
+      "url": "https://bandits-two.vercel.app/menu",
+      "pageErrors": [],
+      "hasProfileStayError": false,
+      "snippet": " You need to enable JavaScript to run this app. ¯ƒ┤GGuestPRE TRIP ┬À account activeMembers Club ┬À Before arrivalView My ProfileÔåÆÔÇ║Quick actions­ƒÆ¼Local FriendMeet someone loca"
+    },
+    "/bandits": {
+      "url": "https://bandits-two.vercel.app/bandits",
+      "pageErrors": [],
+      "hasProfileStayError": false,
+      "snippet": " You need to enable JavaScript to run this app. ¯ƒ┤Local banDitsExperiencesSmartTravelerbandiTEAMbanDiShopExploreMapAllCoffeeFoodNightlifeShoppingCultureArtLGBTQ+WellnessNa"
+    },
+    "/explore": {
+      "url": "https://bandits-two.vercel.app/explore",
+      "pageErrors": [],
+      "hasProfileStayError": false,
+      "snippet": " You need to enable JavaScript to run this app. ¯ƒ┤Local banDitsExperiencesSmartTravelerbandiTEAMbanDiShopExploreMapAllCoffeeFoodNightlifeShoppingCultureArtLGBTQ+WellnessNa"
+    },
+    "/experiences": {
+      "url": "https://bandits-two.vercel.app/experiences",
+      "pageErrors": [],
+      "hasProfileStayError": false,
+      "snippet": " You need to enable JavaScript to run this app. ¯ƒ┤Local banDitsExperiencesSmartTravelerbandiTEAMbanDiShopExploreMapAllCoffeeFoodNightlifeShoppingCultureArtLGBTQ+WellnessNa"
+    }
+  },
+  "menuLifecycle": {
+    "beforeArrival": true,
+    "afterTrip": false
+  }
+}

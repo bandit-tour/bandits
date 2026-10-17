@@ -1,0 +1,96 @@
+﻿node.exe : npm warn Unknown env config "devdir". This will stop working in the next major version of npm.
+At line:1 char:1
++ & "C:\Program Files\nodejs/node.exe" "C:\Program Files\nodejs/node_mo ...
++ ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (npm warn Unknow...version of npm.:String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+Ôÿà eas-cli@25.1.1 is now available.
+To upgrade, run:
+npm install -g eas-cli
+Proceeding with outdated version.
+
+Environment variables with visibility "Plain text" and "Sensitive" loaded from the "preview" environment on EAS: 
+EXPO_PUBLIC_PERF_LOG.
+Environment variables loaded from the "preview" build profile "env" configuration: EXPO_PUBLIC_PERF_LOG, 
+EXPO_PUBLIC_WORKSPACE_URL, EXPO_PUBLIC_ORCHESTRA_OS_URL.
+The following environment variables are defined in both the "preview" build profile "env" configuration and the 
+"preview" environment on EAS: EXPO_PUBLIC_PERF_LOG. The values from the build profile configuration will be used.
+
+- Incrementing versionCode from 20 to 21.
+ÔêÜ Incremented versionCode from 20 to 21.
+
+You've used 97% of your included build credits for this month. 
+ÔûêÔûêÔûêÔûêÔûêÔûêÔûêÔûêÔûêÔûêÔûêÔûêÔûêÔûêÔûêÔûêÔûêÔûêÔûêÔûêÔûêÔûêÔûêÔûêÔûêÔûêÔûêÔûêÔûêÔûæ
+Additional usage beyond your limit will be charged at pay-as-you-go rates. See usage in billing.: 
+https://expo.dev/accounts/banditeam121275/settings/billing
+
+android.versionCode field in app config is ignored when version source is set to remote, but this value will still be 
+in the manifest available via expo-constants. It's recommended to remove this value from app config.
+ÔêÜ Using remote Android credentials (Expo server)
+ÔêÜ Using Keystore from configuration: Build Credentials tbsR4sA6LD (default)
+
+Compressing project files and uploading to EAS Build. Learn more: https://expo.fyi/eas-build-archive
+- Compressing project files
+Your project archive is 275 MB. You can reduce its size and the time it takes to upload by excluding files that are 
+unnecessary for the build process in .easignore file. Learn more: https://expo.fyi/eas-build-archive
+- Uploading to EAS Build (0 / 275 MB)
+ÔêÜ Uploaded to EAS 16s
+- Computing project fingerprint
+ÔêÜ Computed project fingerprint
+
+See logs: https://expo.dev/accounts/banditeam121275/projects/bandits/builds/d9ceb6f8-28d8-4b70-845a-a1e080a27d7d
+
+Waiting for build to complete. You can press Ctrl+C to exit.
+- Waiting for build to complete.
+ÔêÜ Build finished
+[
+  {
+    "id": "d9ceb6f8-28d8-4b70-845a-a1e080a27d7d",
+    "status": "FINISHED",
+    "platform": "ANDROID",
+    "artifacts": {
+      "buildUrl": "https://expo.dev/artifacts/eas/EQtdE1_rFXpz_Z78As2O4CwDRphrQZBu8X480AHU3fA.apk",
+      "applicationArchiveUrl": "https://expo.dev/artifacts/eas/EQtdE1_rFXpz_Z78As2O4CwDRphrQZBu8X480AHU3fA.apk"
+    },
+    "fingerprint": {
+      "id": "01a14a05-ed9d-7615-b225-52a5e8b28741",
+      "hash": "6d765a4b712b4ac7771e5e036f67aecfeb8445cc"
+    },
+    "initiatingActor": {
+      "id": "df4dc4ba-d727-4249-99c9-9633e7ead643",
+      "displayName": "banditeam121275"
+    },
+    "logFiles": [
+      "https://storage.googleapis.com/eas-workflows-production/logs/02867d6d-fb41-4f54-80ad-aae3d6831060/d9ceb6f8-28d8-4b70-845a-a1e080a27d7d/2026-10-17T16%3A49%3A12Z-b09eb7f5-bf74-4db8-aa08-99177c2d59d5.txt?X-Goog-Algorithm=GOOG4-RSA-SHA256&X-Goog-Credential=www-production%40exponentjs.iam.gserviceaccount.com%2F20261017%2Fauto%2Fstorage%2Fgoog4_request&X-Goog-Date=20261017T165001Z&X-Goog-Expires=900&X-Goog-SignedHeaders=host&X-Goog-Signature=4956b5ee6fb870890f9c85214fa5140aed5e2fce5c03bba58ca5fc8e26d38f76cbba25b95ca3fa5e2727d1da8e98d792f225a2b85c08a502d127b85b1eeb1675d6912f84e9b40ffb5a361569e01d6cf1f4f80cf70ca0fb8ff4a1bd37064aa17070e793176137fbd4f59f1821b61da9cce4edfb40aa725c4d939b4f7283872429fb5adbcfd611993d03658350c0646a7644d535c0b8af2f16cbb2de9ed2b873185c468eb88792af19bd0a5a743241352d6b387fea78861c5e47c7bb0a6b65b1528a5a6eb864a5525bca1f5aadf38d9c9003dc1965188295215f37e354ac4077efdd16d906bc0d18c7b123e53980baf1384741bf85627f6096e7647c6deb2984e4"
+    ],
+    "project": {
+      "id": "02867d6d-fb41-4f54-80ad-aae3d6831060",
+      "name": "bandits",
+      "slug": "bandits",
+      "ownerAccount": {
+        "id": "6036e696-670d-4a2a-90c9-02537b357bea",
+        "name": "banditeam121275"
+      }
+    },
+    "distribution": "INTERNAL",
+    "buildProfile": "preview",
+    "sdkVersion": "54.0.0",
+    "appVersion": "1.0.2",
+    "appBuildVersion": "21",
+    "runtimeVersion": "exposdk:54.0.0",
+    "gitCommitHash": "2bbf93beee6944e17b16ec98c5c2649772db8e5d",
+    "gitCommitMessage": "fix(menu): align More tab with pre-arrival lifecycle\n\nHome already shows before_stay for PRE_TRIP; More wrongly labeled every\nnon-stay guest as After Trip and surfaced post-checkout quick actions.\nGate status pill and quick actions on isAfterTrip so CEO device QA matches Home.\n\nCo-authored-by: Cursor <cursoragent@cursor.com>",
+    "priority": "HIGH",
+    "createdAt": "2026-10-17T16:49:10.099Z",
+    "updatedAt": "2026-10-17T16:57:41.209Z",
+    "completedAt": "2026-10-17T16:57:41.072Z",
+    "expirationDate": "2027-01-15T16:49:10.177Z",
+    "isForIosSimulator": false,
+    "metrics": {
+      "buildWaitTime": 2018,
+      "buildQueueTime": 4807,
+      "buildDuration": 504148
+    }
+  }
+]
