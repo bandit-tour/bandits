@@ -1,0 +1,62 @@
+{
+  "desktop": {
+    "label": "chrome-motion-no-reduce",
+    "reducedMotion": "no-preference",
+    "reducedEl": 0,
+    "videoCount": 1,
+    "videoMeta": {
+      "tag": "VIDEO",
+      "src": "http://localhost:8082/videos/play-intro.mp4",
+      "paused": true,
+      "readyState": 0,
+      "networkState": 3,
+      "error": 4,
+      "w": 0,
+      "h": 0,
+      "t": 0
+    },
+    "api": [
+      "http://localhost:8082/__workspace/api/public/bottle/stays?destination=Athens&checkIn=2026-11-02&checkOut=2026-11-10&travelers=2",
+      "http://localhost:8082/videos/play-intro.mp4",
+      "http://localhost:8082/videos/play-intro.mp4",
+      "http://localhost:8082/videos/play-intro.mp4"
+    ],
+    "empty": 0
+  },
+  "desktopReduce": {
+    "label": "chrome-motion-reduce",
+    "reducedMotion": "reduce",
+    "reducedEl": 1,
+    "videoCount": 0,
+    "videoMeta": null,
+    "api": [
+      "http://localhost:8082/__workspace/api/public/bottle/stays?destination=Athens&checkIn=2026-11-02&checkOut=2026-11-10&travelers=2"
+    ],
+    "empty": 0
+  },
+  "mobile": {
+    "label": "chrome-mobile",
+    "reducedMotion": "no-preference",
+    "reducedEl": 0,
+    "videoCount": 1,
+    "videoMeta": {
+      "tag": "VIDEO",
+      "src": "http://localhost:8082/videos/play-intro.mp4",
+      "paused": true,
+      "readyState": 0,
+      "networkState": 3,
+      "error": 4,
+      "w": 0,
+      "h": 0,
+      "t": 0
+    },
+    "api": [
+      "http://localhost:8082/__workspace/api/public/bottle/stays?destination=Athens&checkIn=2026-11-02&checkOut=2026-11-10&travelers=2",
+      "http://localhost:8082/videos/play-intro.mp4",
+      "http://localhost:8082/videos/play-intro.mp4",
+      "http://localhost:8082/videos/play-intro.mp4"
+    ],
+    "empty": 0
+  },
+  "note": "play-intro.mp4 is PLAY branding not ocean; see ASSET-AUDIT.md"
+}

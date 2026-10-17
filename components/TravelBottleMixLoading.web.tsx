@@ -4,8 +4,10 @@ import { ActivityIndicator, Modal, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 /**
- * Web Travel in a Bottle mix loading — reuses `/videos/play-intro.mp4`
- * (same ocean bottle clip as opening intro). No expo-video on web.
+ * Web Travel in a Bottle mix loading.
+ * Plays `/videos/play-intro.mp4` only while Mix search is pending.
+ * NOTE: as of asset audit 17 Oct 2026 that file is PLAY branding, not ocean throw —
+ * replace the file bytes when the owner supplies the original sea clip (same path).
  */
 
 const OVERLAY_LINES = [
@@ -18,7 +20,7 @@ type Props = {
   statusHint?: string;
 };
 
-function useReduceMotion(visible: boolean): boolean {
+function useReduceMotion(): boolean {
   const [reduce, setReduce] = useState(false);
   useEffect(() => {
     if (typeof window === 'undefined' || !window.matchMedia) return;
@@ -27,17 +29,26 @@ function useReduceMotion(visible: boolean): boolean {
     apply();
     mq.addEventListener?.('change', apply);
     return () => mq.removeEventListener?.('change', apply);
-  }, [visible]);
+  }, []);
   return reduce;
 }
 
 export function TravelBottleMixLoading({ visible, statusHint }: Props) {
   const insets = useSafeAreaInsets();
-  const reduceMotion = useReduceMotion(visible);
+  const reduceMotion = useReduceMotion();
   const videoRef = useRef<HTMLVideoElement | null>(null);
+  const [playbackError, setPlaybackError] = useState<string | null>(null);
+  const [isPlaying, setIsPlaying] = useState(false);
   const line = useMemo(() => {
     const i = Math.floor(Date.now() / 4000) % OVERLAY_LINES.length;
     return OVERLAY_LINES[i]!;
+  }, [visible]);
+
+  useEffect(() => {
+    if (!visible) {
+      setPlaybackError(null);
+      setIsPlaying(false);
+    }
   }, [visible]);
 
   useEffect(() => {
@@ -50,16 +61,70 @@ export function TravelBottleMixLoading({ visible, statusHint }: Props) {
       } catch {
         /* ignore */
       }
+      setIsPlaying(false);
       return;
     }
+
+    let cancelled = false;
+    const tryPlay = () => {
+      if (cancelled || !videoRef.current) return;
+      const v = videoRef.current;
+      v.muted = true;
+      v.defaultMuted = true;
+      v.loop = true;
+      v.playsInline = true;
+      v.setAttribute('playsinline', 'true');
+      v.setAttribute('webkit-playsinline', 'true');
+      const p = v.play();
+      if (p && typeof p.then === 'function') {
+        void p
+          .then(() => {
+            if (!cancelled) {
+              setIsPlaying(true);
+              setPlaybackError(null);
+            }
+          })
+          .catch((err: unknown) => {
+            if (!cancelled) {
+              setIsPlaying(false);
+              setPlaybackError(err instanceof Error ? err.message : 'autoplay blocked');
+            }
+          });
+      }
+    };
+
+    const onCanPlay = () => tryPlay();
+    const onPlaying = () => {
+      if (!cancelled) setIsPlaying(true);
+    };
+    const onError = () => {
+      if (!cancelled) {
+        setIsPlaying(false);
+        setPlaybackError(el.error?.message || `media error ${el.error?.code ?? '?'}`);
+      }
+    };
+
+    el.addEventListener('canplay', onCanPlay);
+    el.addEventListener('playing', onPlaying);
+    el.addEventListener('error', onError);
     try {
-      el.muted = true;
-      el.loop = true;
-      el.playsInline = true;
-      void el.play().catch(() => undefined);
+      el.load();
+      tryPlay();
     } catch {
       /* ignore */
     }
+
+    return () => {
+      cancelled = true;
+      el.removeEventListener('canplay', onCanPlay);
+      el.removeEventListener('playing', onPlaying);
+      el.removeEventListener('error', onError);
+      try {
+        el.pause();
+      } catch {
+        /* ignore */
+      }
+    };
   }, [visible, reduceMotion]);
 
   if (!visible) return null;
@@ -76,6 +141,12 @@ export function TravelBottleMixLoading({ visible, statusHint }: Props) {
         accessibilityRole="progressbar"
         accessibilityLabel={a11yLabel}
         testID="travel-bottle-mix-loading"
+        accessibilityState={{ busy: true, checked: isPlaying }}
+        accessibilityHint={
+          reduceMotion
+            ? 'Reduced motion: text loading'
+            : `Video ${BOTTLE_VIDEO_WEB_URI}${playbackError ? `; ${playbackError}` : ''}`
+        }
       >
         <View style={styles.stage}>
           {reduceMotion ? (
@@ -84,30 +155,43 @@ export function TravelBottleMixLoading({ visible, statusHint }: Props) {
               <Text style={styles.reducedHint}>Searching sleeping stays…</Text>
             </View>
           ) : (
-            React.createElement('video', {
-              ref: (node: HTMLVideoElement | null) => {
-                videoRef.current = node;
-              },
-              src: BOTTLE_VIDEO_WEB_URI,
-              'data-testid': 'travel-bottle-mix-video',
-              style: {
-                width: '100%',
-                height: '100%',
-                objectFit: 'cover',
-                backgroundColor: '#0A0908',
-              },
-              muted: true,
-              playsInline: true,
-              loop: true,
-              controls: false,
-              'aria-hidden': true,
-            })
+            <>
+              {React.createElement('video', {
+                ref: (node: HTMLVideoElement | null) => {
+                  videoRef.current = node;
+                },
+                key: BOTTLE_VIDEO_WEB_URI,
+                src: BOTTLE_VIDEO_WEB_URI,
+                'data-testid': 'travel-bottle-mix-video',
+                autoPlay: true,
+                muted: true,
+                defaultMuted: true,
+                playsInline: true,
+                loop: true,
+                preload: 'auto',
+                controls: false,
+                'aria-hidden': true,
+                style: {
+                  position: 'absolute',
+                  top: 0,
+                  left: 0,
+                  width: '100%',
+                  height: '100%',
+                  objectFit: 'cover',
+                  backgroundColor: '#0A0908',
+                },
+              })}
+              {playbackError && !isPlaying ? (
+                <View style={styles.neutral} testID="travel-bottle-mix-video-error">
+                  <Text style={styles.reducedHint}>Searching sleeping stays…</Text>
+                </View>
+              ) : null}
+            </>
           )}
           <View style={styles.scrim} pointerEvents="none" />
           <View style={styles.copyBlock} pointerEvents="none">
             <Text style={styles.kicker}>Travel in a Bottle</Text>
             <Text style={styles.line}>{line}</Text>
-            {null}
           </View>
         </View>
       </View>
@@ -133,23 +217,27 @@ const styles = StyleSheet.create({
     backgroundColor: '#0A0908',
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: 'rgba(238, 216, 180, 0.35)',
+    position: 'relative',
   },
   neutral: {
-    flex: 1,
+    ...StyleSheet.absoluteFillObject,
     alignItems: 'center',
     justifyContent: 'center',
     gap: 12,
     backgroundColor: '#141210',
+    zIndex: 1,
   },
   scrim: {
     ...StyleSheet.absoluteFillObject,
-    backgroundColor: 'rgba(8, 7, 6, 0.42)',
+    backgroundColor: 'rgba(8, 7, 6, 0.28)',
+    zIndex: 2,
   },
   copyBlock: {
     position: 'absolute',
     left: 18,
     right: 18,
     bottom: 28,
+    zIndex: 3,
   },
   kicker: {
     color: '#EED8B4',
