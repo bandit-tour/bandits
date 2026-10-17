@@ -33,11 +33,19 @@
       "destination": "/api/push?action=notify"
     },
     {
+      "source": "/__workspace",
+      "destination": "https://banditour-workspace.vercel.app"
+    },
+    {
+      "source": "/__workspace/:path*",
+      "destination": "https://banditour-workspace.vercel.app/:path*"
+    },
+    {
       "source": "/hotel/:path*",
       "destination": "/index.html"
     },
     {
-      "source": "/((?!api\\/).*)",
+      "source": "/((?!api\\/|__workspace(?:/|$)).*)",
       "destination": "/index.html"
     }
   ],

@@ -10,13 +10,19 @@ function env(key: string): string {
 
 export function workspaceOrigin(): string | null {
   /**
-   * Web localhost: same-origin Metro/Vercel proxy avoids CORS emptying
-   * Experiences / public inventories in the browser (Workspace blocks localhost origins).
+   * Web: same-origin `/__workspace` proxy avoids CORS emptying Experiences /
+   * premium visibility / public inventories.
+   * - localhost → Metro proxy (metro.config.js)
+   * - *.vercel.app Guest web → vercel.json rewrite → banditour-workspace
    */
   try {
     if (typeof window !== "undefined" && window.location?.origin) {
       const host = String(window.location.hostname || "");
-      if (host === "localhost" || host === "127.0.0.1") {
+      if (
+        host === "localhost" ||
+        host === "127.0.0.1" ||
+        /\.vercel\.app$/i.test(host)
+      ) {
         return `${window.location.origin}/__workspace`;
       }
     }
@@ -57,11 +63,15 @@ export function workspaceOrigin(): string | null {
  * Orchestra OS only when explicitly configured.
  */
 export function commerceOrigin(): string | null {
-  /** Web localhost: always same-origin __workspace bridge as visibility (avoids CORS on checkout). */
+  /** Web: always same-origin __workspace bridge as visibility (avoids CORS on checkout). */
   try {
     if (typeof window !== "undefined") {
       const host = String(window.location.hostname || "");
-      if (host === "localhost" || host === "127.0.0.1") {
+      if (
+        host === "localhost" ||
+        host === "127.0.0.1" ||
+        /\.vercel\.app$/i.test(host)
+      ) {
         return workspaceOrigin();
       }
     }
