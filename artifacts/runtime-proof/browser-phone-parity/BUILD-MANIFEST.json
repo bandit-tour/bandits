@@ -1,0 +1,33 @@
+﻿{
+    "branch":  "repair/guest-app-regression",
+    "gitTip":  "71b0451",
+    "appVersion":  "1.0.2",
+    "livePaymentsFlag":  false,
+    "at":  "2026-10-17T16:22:47.5122216+03:00",
+    "browserUrl":  "https://bandits-two.vercel.app",
+    "stripeMode":  "test_ready",
+    "builds":  {
+                   "android":  {
+                                   "id":  "68553a9d-4f88-4ef8-8dab-4dc16aefe760",
+                                   "apk":  "https://expo.dev/artifacts/eas/xlmhjCQwvLAhOsYc37uC9BhmayTkYv3BFaKxOMoKgzA.apk",
+                                   "commit":  "71b0451",
+                                   "profile":  "preview",
+                                   "versionCode":  16,
+                                   "page":  "https://expo.dev/accounts/banditeam121275/projects/bandits/builds/68553a9d-4f88-4ef8-8dab-4dc16aefe760",
+                                   "status":  "FINISHED"
+                               },
+                   "ios":  {
+                               "buildNumber":  40,
+                               "id":  "8f6209b3-4f3b-4890-8528-94644a3c7f76",
+                               "testFlight":  "NOT_FROM_PREVIEW_PROFILE",
+                               "provisionedDevice":  "iPhone UDID 00008110-0019248C0A9A401E",
+                               "profile":  "preview",
+                               "ipa":  "https://expo.dev/artifacts/eas/rPiZydpDZxKuszzQfRHPzeqjf7KUYRPmN8e3bsMH2EE.ipa",
+                               "page":  "https://expo.dev/accounts/banditeam121275/projects/bandits/builds/8f6209b3-4f3b-4890-8528-94644a3c7f76",
+                               "commit":  "71b0451",
+                               "distribution":  "internal_ad_hoc",
+                               "status":  "FINISHED"
+                           }
+               },
+    "note":  "Uncommitted local WIP (notifications prefs, octopus entitlement, commerceBook, settings) NOT included in these builds — tip commit only."
+}

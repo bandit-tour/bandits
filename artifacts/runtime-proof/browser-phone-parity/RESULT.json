@@ -1,0 +1,70 @@
+{
+  "mission": "browser-phone-parity",
+  "at": "2026-10-17T13:23:00.000Z",
+  "gitTip": "71b0451",
+  "branch": "repair/guest-app-regression",
+  "ceoTestingReady": false,
+  "stripe": {
+    "mode": "test_ready",
+    "livePaymentsFlag": false
+  },
+  "browserUrl": "https://bandits-two.vercel.app",
+  "builds": {
+    "android": {
+      "id": "68553a9d-4f88-4ef8-8dab-4dc16aefe760",
+      "profile": "preview",
+      "appVersion": "1.0.2",
+      "versionCode": 16,
+      "commit": "71b0451",
+      "status": "FINISHED",
+      "page": "https://expo.dev/accounts/banditeam121275/projects/bandits/builds/68553a9d-4f88-4ef8-8dab-4dc16aefe760",
+      "apk": "https://expo.dev/artifacts/eas/xlmhjCQwvLAhOsYc37uC9BhmayTkYv3BFaKxOMoKgzA.apk",
+      "physicalVerify": "BLOCKED_NO_DEVICE"
+    },
+    "ios": {
+      "id": "8f6209b3-4f3b-4890-8528-94644a3c7f76",
+      "profile": "preview",
+      "appVersion": "1.0.2",
+      "buildNumber": 40,
+      "commit": "71b0451",
+      "status": "FINISHED",
+      "distribution": "internal_ad_hoc",
+      "page": "https://expo.dev/accounts/banditeam121275/projects/bandits/builds/8f6209b3-4f3b-4890-8528-94644a3c7f76",
+      "ipa": "https://expo.dev/artifacts/eas/rPiZydpDZxKuszzQfRHPzeqjf7KUYRPmN8e3bsMH2EE.ipa",
+      "testFlight": "BLOCKED_NO_ASC_APP_ID",
+      "physicalVerify": "BLOCKED_NOT_INSTALLED_HERE",
+      "provisionedDeviceUdid": "00008110-0019248C0A9A401E"
+    }
+  },
+  "browserCapture": {
+    "viewport": "390x844",
+    "routesCaptured": 25,
+    "artifact": "browser-capture.json"
+  },
+  "parityMatrix": {
+    "passBothPlatforms": 0,
+    "browserOk": 27,
+    "nativeBlocked": 27,
+    "rule": "No PASS from shared source alone"
+  },
+  "crossDeviceSync": {
+    "apiBackendIdentity": "PASS",
+    "physicalPersistRefreshLogout": "BLOCKED_NO_DEVICE",
+    "artifact": "cross-device-sync.json"
+  },
+  "blockers": [
+    "P0 /profile crash PROFILE_STAY is not defined on prod+tip builds — fix in working tree awaiting commit+rebuild",
+    "Physical Android install+verify of APK vc16 @ 71b0451",
+    "Physical iOS Ad Hoc install+verify of IPA bn40 @ 71b0451",
+    "TestFlight blocked: eas.json missing ascAppId; preview is Ad Hoc",
+    "Cross-device persistence not exercised on phone",
+    "Shared lifecycle Home BEFORE ARRIVAL vs Menu After Trip inconsistency",
+    "Uncommitted local WIP not in tip builds"
+  ],
+  "profileFix": {
+    "file": "app/(tabs)/profile.tsx",
+    "status": "WORKING_TREE_ONLY",
+    "prodVerifiedError": "PROFILE_STAY is not defined"
+  },
+  "evidenceDir": "artifacts/runtime-proof/browser-phone-parity/"
+}

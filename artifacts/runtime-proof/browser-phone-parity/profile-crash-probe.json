@@ -1,0 +1,13 @@
+{
+  "at": "2026-10-17T13:25:00.000Z",
+  "url": "https://bandits-two.vercel.app/profile",
+  "pageError": "PROFILE_STAY is not defined",
+  "bodyLength": 0,
+  "screenshot": "browser-profile.png",
+  "fixWorkingTree": {
+    "file": "app/(tabs)/profile.tsx",
+    "change": "Import PROFILE_STAY; gate sample travel score/badges behind showSampleJournal",
+    "committed": false
+  },
+  "impactOnTipBuilds": "Android 68553a9d and iOS 8f6209b3 @ 71b0451 still crash on /profile until rebuild after commit"
+}

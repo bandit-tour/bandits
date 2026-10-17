@@ -22,6 +22,7 @@ import {
   LOCAL_FRIENDS,
   MEMORY_PHOTOS,
   PROFILE_EXPERIENCES,
+  PROFILE_STAY,
   REWARD_BADGES,
   type ProfileExperience,
 } from "@/lib/guest-workspace/profileMemory";
@@ -454,23 +455,35 @@ export default function ProfileHubScreen() {
         </Pressable>
       ))}
 
-      {/* Rewards */}
+      {/* Rewards — never present PROFILE_STAY sample score as a live guest record */}
       <Text style={styles.sectionTitle}>Rewards</Text>
-      <View style={styles.rewardsHero}>
-        <Text style={styles.rewardsScore}>{PROFILE_STAY.travelScore}</Text>
-        <Text style={styles.rewardsScoreLabel}>Travel score</Text>
-        <Text style={styles.rewardsLevel}>
-          {PROFILE_STAY.travelLevel} · {PROFILE_STAY.premiumStatus}
-        </Text>
+      <View style={styles.rewardsHero} testID="profile-rewards-hero">
+        {showSampleJournal ? (
+          <>
+            <Text style={styles.rewardsScore}>{PROFILE_STAY.travelScore}</Text>
+            <Text style={styles.rewardsScoreLabel}>Travel score (sample)</Text>
+            <Text style={styles.rewardsLevel}>
+              {PROFILE_STAY.travelLevel} · {PROFILE_STAY.premiumStatus}
+            </Text>
+          </>
+        ) : (
+          <>
+            <Text style={[styles.rewardsScore, styles.sampleMuted]}>—</Text>
+            <Text style={styles.rewardsScoreLabel}>Travel score</Text>
+            <Text style={styles.rewardsLevel}>Earn from verified stays & discoveries</Text>
+          </>
+        )}
       </View>
       <View style={styles.badgeGrid}>
-        {REWARD_BADGES.map((badge) => (
-          <View key={badge.id} style={[styles.badgeCard, !badge.earned && styles.badgeLocked]}>
-            <Text style={styles.badgeTitle}>{badge.title}</Text>
-            <Text style={styles.badgeDetail}>{badge.detail}</Text>
-            <Text style={styles.badgeState}>{badge.earned ? "Earned" : "Locked"}</Text>
-          </View>
-        ))}
+        {(showSampleJournal ? REWARD_BADGES : REWARD_BADGES.map((b) => ({ ...b, earned: false }))).map(
+          (badge) => (
+            <View key={badge.id} style={[styles.badgeCard, !badge.earned && styles.badgeLocked]}>
+              <Text style={styles.badgeTitle}>{badge.title}</Text>
+              <Text style={styles.badgeDetail}>{badge.detail}</Text>
+              <Text style={styles.badgeState}>{badge.earned ? "Earned" : "Locked"}</Text>
+            </View>
+          ),
+        )}
       </View>
       <Pressable style={styles.secondaryLink} onPress={() => go("/impact" as Href)}>
         <Text style={styles.secondaryLinkText}>Impact Passport & loyalty →</Text>

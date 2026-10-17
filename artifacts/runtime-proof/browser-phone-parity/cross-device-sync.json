@@ -1,0 +1,18 @@
+﻿{
+    "stripeMode":  "test_ready",
+    "nativePreviewWorkspace":  "https://banditour-workspace.vercel.app (eas.json preview env)",
+    "bottleCount":  0,
+    "experiencesMatch":  true,
+    "premiumShow":  true,
+    "experiencesCountDirect":  1,
+    "experiencesCountGuest":  1,
+    "method":  "API_BACKEND_IDENTITY",
+    "premiumAuthorized":  true,
+    "livePaymentsFlag":  false,
+    "bottleInventory":  "none",
+    "at":  "2026-10-17T16:23:03.4455563+03:00",
+    "physicalCrossDevice":  "BLOCKED_NO_DEVICE",
+    "note":  "Native device install unavailable in this agent environment (adb empty; no emulator). Backend identity confirms browser+native preview env point at same Workspace TEST commerce.",
+    "premiumUnlocked":  false,
+    "browserWorkspaceBridge":  "https://bandits-two.vercel.app/__workspace"
+}
