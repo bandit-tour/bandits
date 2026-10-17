@@ -21,8 +21,11 @@ import LocalBanditOctopusIcon from '@/components/LocalBanditOctopusIcon';
 import { Database } from '@/lib/database.types';
 import { color, firstNameOf, shortIntro, space } from '@/lib/guestDesign';
 import { fetchBanditPremiumVisibility } from '@/lib/guest-app/premium-visibility';
+import { readCacheStale, seedAppDataCache } from '@/lib/appDataCache';
 
 const LOCAL_FALLBACK = require('@/assets/images/play_athens_bg.png');
+const LANE_CACHE_KEY = 'explore:bandit-lane:v1';
+const OCTOPUS_CACHE_KEY = 'explore:bandit-lane:octopus:v1';
 
 type Bandit = Database['public']['Tables']['bandit']['Row'] & {
   bandit_tags?: { tags: { id: string; name: string } | null }[] | null;
@@ -57,33 +60,56 @@ type Props = {
 export default function ExploreBanditLane({ onMeet, onSeeAll, excludeBanditId }: Props) {
   const { width } = useWindowDimensions();
   const cardW = Math.min(width - 40, 340);
-  const [bandits, setBandits] = useState<Bandit[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [octopusById, setOctopusById] = useState<Record<string, boolean>>({});
+  const cached = readCacheStale<Bandit[]>(LANE_CACHE_KEY) ?? [];
+  const cachedOctopus = readCacheStale<Record<string, boolean>>(OCTOPUS_CACHE_KEY) ?? {};
+  const [bandits, setBandits] = useState<Bandit[]>(() => cached);
+  const [loading, setLoading] = useState(() => cached.length === 0);
+  const [octopusById, setOctopusById] = useState<Record<string, boolean>>(() => cachedOctopus);
 
   useEffect(() => {
     let cancelled = false;
+    const exclude = String(excludeBanditId || '').trim();
+    const applySlice = (list: Bandit[]) => {
+      const filtered = exclude ? list.filter((b) => String(b.id) !== exclude) : list;
+      return filtered.slice(0, 8);
+    };
+    const cachedList = readCacheStale<Bandit[]>(LANE_CACHE_KEY);
+    if (cachedList?.length) {
+      const slice = applySlice(cachedList);
+      setBandits(slice);
+      setLoading(false);
+    }
     void (async () => {
       try {
+        if (cachedList?.length) {
+          /** Soft refresh only — do not block return navigation. */
+          await new Promise((r) => setTimeout(r, 500));
+        }
         const list = (await getBanditsWithTags().catch(() => [])) as Bandit[];
         if (cancelled) return;
-        const exclude = String(excludeBanditId || '').trim();
-        const filtered = exclude
-          ? list.filter((b) => String(b.id) !== exclude)
-          : list;
-        const slice = filtered.slice(0, 8);
+        const slice = applySlice(list);
         setBandits(slice);
-        const vis = await Promise.all(
-          slice.map(async (b) => {
-            const v = await fetchBanditPremiumVisibility(String(b.id));
-            return [b.id, v?.octopusVerified === true] as const;
-          }),
-        );
-        if (!cancelled) {
-          const map: Record<string, boolean> = {};
-          for (const [id, ok] of vis) map[id] = ok;
-          setOctopusById(map);
+        seedAppDataCache(LANE_CACHE_KEY, list);
+        setLoading(false);
+        const cachedBadges = readCacheStale<Record<string, boolean>>(OCTOPUS_CACHE_KEY);
+        if (cachedBadges && Object.keys(cachedBadges).length > 0) {
+          setOctopusById(cachedBadges);
+          return;
         }
+        /** One badge refresh for the lead card only — never storm 8 Workspace calls on tab open. */
+        const lead = slice[0];
+        if (!lead) return;
+        setTimeout(() => {
+          void fetchBanditPremiumVisibility(String(lead.id)).then((v) => {
+            if (cancelled) return;
+            const map = { [lead.id]: v?.octopusVerified === true };
+            setOctopusById((prev) => {
+              const next = { ...prev, ...map };
+              seedAppDataCache(OCTOPUS_CACHE_KEY, next);
+              return next;
+            });
+          });
+        }, 1200);
       } finally {
         if (!cancelled) setLoading(false);
       }

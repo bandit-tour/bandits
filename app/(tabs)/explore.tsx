@@ -172,6 +172,9 @@ export function ExploreScreen({ tabActive }: ExploreScreenProps = {}) {
 
   const exploreInitialLoadDoneRef = useRef(false);
   const diskHydratedRef = useRef(false);
+  /** Keep list warm under parked overlay — remounting FlatList costs ~2s on return. */
+  const keepWarmRef = useRef(false);
+  const likesFetchedAtRef = useRef(0);
 
   const [events, setEvents] = useState<Event[]>(() => readCacheStale<Event[]>(exploreCacheKey) ?? []);
   const [likedEventIds, setLikedEventIds] = useState<Set<string>>(new Set());
@@ -343,10 +346,15 @@ export function ExploreScreen({ tabActive }: ExploreScreenProps = {}) {
 
   useEffect(() => {
     if (!screenActive) return;
+    const LIKES_TTL_MS = 5 * 60 * 1000;
+    if (Date.now() - likesFetchedAtRef.current < LIKES_TTL_MS && likedEventIdsRef.current.size >= 0 && likesFetchedAtRef.current > 0) {
+      return;
+    }
     let cancelled = false;
     void getUserLikedEvents()
       .then((liked) => {
         if (cancelled) return;
+        likesFetchedAtRef.current = Date.now();
         setLikedEventIds(new Set(liked.map((e) => e.id)));
         setLikesEpoch((n) => n + 1);
       })
@@ -360,6 +368,14 @@ export function ExploreScreen({ tabActive }: ExploreScreenProps = {}) {
     if (!screenActive) return;
     perfMark('explore_screen_active', 'render');
   }, [screenActive]);
+
+  const [banditLaneReady, setBanditLaneReady] = useState(false);
+  useEffect(() => {
+    if (!screenActive) return;
+    if (banditLaneReady) return;
+    const t = setTimeout(() => setBanditLaneReady(true), 450);
+    return () => clearTimeout(t);
+  }, [screenActive, banditLaneReady]);
 
   const toggleLike = useCallback(async (eventId: string) => {
     const currentlyLiked = likedEventIdsRef.current.has(eventId);
@@ -402,13 +418,13 @@ export function ExploreScreen({ tabActive }: ExploreScreenProps = {}) {
     () => filterEventsByExploreCategory(events, categoryChip),
     [events, categoryChip],
   );
-  const listEvents = useMemo(
-    () =>
-      filteredEvents.filter(
-        (e) => eventHasVenueMediaSource(e) && !hiddenHeroEventIds.has(e.id),
-      ),
-    [filteredEvents, hiddenHeroEventIds],
-  );
+  const listEvents = useMemo(() => {
+    const visible = filteredEvents.filter((e) => !hiddenHeroEventIds.has(e.id));
+    const withMedia = visible.filter((e) => eventHasVenueMediaSource(e));
+    /** Prefer media-ready rows; never leave the feed empty while Places recovery runs. */
+    if (withMedia.length > 0) return withMedia;
+    return visible.slice(0, 12);
+  }, [filteredEvents, hiddenHeroEventIds]);
 
   const filteredEventIdsKey = useMemo(
     () => filteredEvents.map((e) => e.id).join('|'),
@@ -446,64 +462,68 @@ export function ExploreScreen({ tabActive }: ExploreScreenProps = {}) {
   useEffect(() => {
     if (!screenActive) return;
     let cancelled = false;
-    const needLive = filteredEvents.filter((e) => {
-      if (liveRecoveryDoneIdsRef.current[e.id]) return false;
-      return eventNeedsLivePlacesHeroRecovery(e, {
-        liveUri: liveHeroByEventIdRef.current[e.id],
-        approvedUri: approvedHeroById[e.id],
-        failedUris: failedHeroUrisRef.current,
+    /** Let the tab paint and respond before Places recovery steals the network. */
+    const start = setTimeout(() => {
+      const needLive = filteredEvents.filter((e) => {
+        if (liveRecoveryDoneIdsRef.current[e.id]) return false;
+        return eventNeedsLivePlacesHeroRecovery(e, {
+          liveUri: liveHeroByEventIdRef.current[e.id],
+          approvedUri: approvedHeroById[e.id],
+          failedUris: failedHeroUrisRef.current,
+        });
       });
-    });
-    /** Cap first wave per filter change — rest drains on next kick / scroll settle. */
-    const wave = needLive.slice(0, 12);
-    if (wave.length === 0) return;
+      /** Cap first wave — rest drains later. */
+      const wave = needLive.slice(0, 4);
+      if (wave.length === 0) return;
 
-    void (async () => {
-      const heroUpdates: Record<string, string> = {};
-      const doneUpdates: Record<string, true> = {};
-      for (let i = 0; i < wave.length; i += 4) {
-        if (cancelled) return;
-        const batch = wave.slice(i, i + 4);
-        for (const event of batch) {
+      void (async () => {
+        const heroUpdates: Record<string, string> = {};
+        const doneUpdates: Record<string, true> = {};
+        for (let i = 0; i < wave.length; i += 2) {
           if (cancelled) return;
-          doneUpdates[event.id] = true;
-          try {
-            const placeId = (event as { google_place_id?: string | null }).google_place_id ?? null;
-            let urls = placeId ? await fetchTrustedPlaceIdPhotoUrls(placeId, 4) : [];
-            if (urls.length === 0) {
-              urls = await fetchGooglePlacePhotoUrls({
-                placeId,
-                name: String(event.name ?? ''),
-                address: String(event.address ?? ''),
-                city: String(event.city ?? ''),
-                neighborhood: String(event.neighborhood ?? ''),
-                limit: 4,
-              });
+          const batch = wave.slice(i, i + 2);
+          for (const event of batch) {
+            if (cancelled) return;
+            doneUpdates[event.id] = true;
+            try {
+              const placeId = (event as { google_place_id?: string | null }).google_place_id ?? null;
+              let urls = placeId ? await fetchTrustedPlaceIdPhotoUrls(placeId, 4) : [];
+              if (urls.length === 0) {
+                urls = await fetchGooglePlacePhotoUrls({
+                  placeId,
+                  name: String(event.name ?? ''),
+                  address: String(event.address ?? ''),
+                  city: String(event.city ?? ''),
+                  neighborhood: String(event.neighborhood ?? ''),
+                  limit: 4,
+                });
+              }
+              const failed = failedHeroUrisRef.current;
+              const cleaned = urls
+                .map((u) => normalizeEventImageUri(u) ?? u)
+                .filter((u) => /^https?:\/\//i.test(u) && !failed[u]);
+              if (cleaned.length === 0) continue;
+              heroUpdates[event.id] = cleaned[0];
+            } catch {
+              /* EventCard may still recover */
             }
-            const failed = failedHeroUrisRef.current;
-            const cleaned = urls
-              .map((u) => normalizeEventImageUri(u) ?? u)
-              .filter((u) => /^https?:\/\//i.test(u) && !failed[u]);
-            if (cleaned.length === 0) continue;
-            heroUpdates[event.id] = cleaned[0];
-          } catch {
-            /* EventCard may still recover */
+          }
+          if (!cancelled) {
+            if (Object.keys(heroUpdates).length > 0) {
+              setLiveHeroByEventId((prev) => ({ ...prev, ...heroUpdates }));
+            }
+            setLiveRecoveryDoneIds((prev) => ({ ...prev, ...doneUpdates }));
           }
         }
-        if (!cancelled) {
-          if (Object.keys(heroUpdates).length > 0) {
-            setLiveHeroByEventId((prev) => ({ ...prev, ...heroUpdates }));
-          }
-          setLiveRecoveryDoneIds((prev) => ({ ...prev, ...doneUpdates }));
+        if (!cancelled && needLive.length > wave.length) {
+          setRecoveryKick((k) => k + 1);
         }
-      }
-      if (!cancelled && needLive.length > wave.length) {
-        setRecoveryKick((k) => k + 1);
-      }
-    })();
+      })();
+    }, 900);
 
     return () => {
       cancelled = true;
+      clearTimeout(start);
     };
   }, [screenActive, filteredEventIdsKey, filteredEvents, approvedHeroById, recoveryKick]);
 
@@ -512,8 +532,10 @@ export function ExploreScreen({ tabActive }: ExploreScreenProps = {}) {
     perfMark('explore_map_mode_opened', 'map', { eventCount: filteredEvents.length });
   }, [viewMode, filteredEvents.length]);
 
+  const banditBulkKeyRef = useRef<string>('');
   useEffect(() => {
     if (!screenActive || !filteredEventIdsKey) return;
+    if (banditBulkKeyRef.current === filteredEventIdsKey) return;
     let cancelled = false;
     const ids = filteredEventIdsKey.split('|').filter(Boolean);
     const timer = setTimeout(() => {
@@ -524,6 +546,7 @@ export function ExploreScreen({ tabActive }: ExploreScreenProps = {}) {
       void getEventBanditRecommendationsBulk(loadIds)
         .then((map) => {
           if (cancelled) return;
+          banditBulkKeyRef.current = filteredEventIdsKey;
           setBanditsByEventId((prev) => {
             const next = new Map(prev);
             for (const [id, rows] of map.entries()) next.set(id, rows);
@@ -688,13 +711,17 @@ export function ExploreScreen({ tabActive }: ExploreScreenProps = {}) {
     );
   }
 
-  /** Inactive overlay panes must not mount FlatList/WebView (steals JS from navigation). */
-  if (!screenActive) {
+  if (screenActive) keepWarmRef.current = true;
+  /**
+   * First visit while inactive: stay empty (do not steal JS).
+   * After a warm paint: keep FlatList mounted under the parked overlay so return is instant.
+   */
+  if (!screenActive && !keepWarmRef.current && events.length === 0) {
     return <View style={styles.container} />;
   }
 
   return (
-    <View style={styles.container}>
+    <View style={styles.container} pointerEvents={screenActive ? 'auto' : 'none'}>
       <View style={styles.headerContainer}>
         <View style={styles.headerSide}>
           {banditId ? (
@@ -703,7 +730,7 @@ export function ExploreScreen({ tabActive }: ExploreScreenProps = {}) {
             </Pressable>
           ) : null}
         </View>
-        <Text style={styles.headerText} numberOfLines={1}>
+        <Text style={styles.headerText} numberOfLines={1} testID="explore-screen-title">
           {title}
         </Text>
         <View style={[styles.headerSide, styles.headerSideRight]}>
@@ -751,7 +778,7 @@ export function ExploreScreen({ tabActive }: ExploreScreenProps = {}) {
             columnWrapperStyle={columns > 1 ? styles.row : undefined}
             contentContainerStyle={[styles.gridContent, { paddingBottom: listBottomPad }]}
             ListHeaderComponent={
-              !banditId ? (
+              !banditId && banditLaneReady ? (
                 <ExploreBanditLane
                   onMeet={handleBanditPress}
                   onSeeAll={() =>

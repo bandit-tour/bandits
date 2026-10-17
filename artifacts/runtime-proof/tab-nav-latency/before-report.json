@@ -1,0 +1,436 @@
+{
+  "label": "before",
+  "base": "http://localhost:8082",
+  "cold": [
+    {
+      "name": "home→explore",
+      "visualMs": 2132,
+      "contentMs": 2171,
+      "requestCount": 14,
+      "firstRequests": [
+        {
+          "t": 145,
+          "u": "http://localhost:8082/__workspace/api/bandit/premium?view=visibility&banditId=d76cb120-018d-4a2e-8b5f-0578a71fd8f9"
+        },
+        {
+          "t": 291,
+          "u": "http://localhost:8082/__workspace/api/bandit/premium?view=visibility&banditId=d6db5a96-339b-4016-ba80-b785fbdfb8e8"
+        },
+        {
+          "t": 291,
+          "u": "http://localhost:8082/__workspace/api/bandit/premium?view=visibility&banditId=d7f053c0-a4c5-4f70-a82c-037d82005808"
+        },
+        {
+          "t": 292,
+          "u": "http://localhost:8082/__workspace/api/bandit/premium?view=visibility&banditId=dc2c9269-5b64-4b75-8bb0-1eb6f965c2ed"
+        },
+        {
+          "t": 292,
+          "u": "http://localhost:8082/__workspace/api/bandit/premium?view=visibility&banditId=218e9d35-f9cf-400c-aeae-60b14f86e7c7"
+        },
+        {
+          "t": 298,
+          "u": "http://localhost:8082/__workspace/api/bandit/premium?view=visibility&banditId=cc705328-dd9e-4c2e-8764-b2e1077f9385"
+        },
+        {
+          "t": 298,
+          "u": "http://localhost:8082/__workspace/api/bandit/premium?view=visibility&banditId=2c5fbe9a-8d4b-4de0-a21c-518211431a91"
+        },
+        {
+          "t": 298,
+          "u": "http://localhost:8082/__workspace/api/bandit/premium?view=visibility&banditId=dc477c6f-a0d5-4f40-a99f-5550780dded3"
+        },
+        {
+          "t": 298,
+          "u": "http://localhost:8082/__workspace/api/bandit/premium?view=visibility&banditId=0e615630-d0a3-4eed-82b6-220d6c056d1b"
+        },
+        {
+          "t": 1976,
+          "u": "https://zubcakeamyfqatdmleqx.supabase.co/rest/v1/event_user_likes?select=event%3Aevent%28*%29&user_id=eq.e1459a14-8020-4e35-aff7-f8aa60a7d5f2"
+        }
+      ]
+    },
+    {
+      "name": "explore→experiences",
+      "visualMs": 1036,
+      "contentMs": 1054,
+      "requestCount": 10,
+      "firstRequests": [
+        {
+          "t": 92,
+          "u": "https://zubcakeamyfqatdmleqx.supabase.co/rest/v1/bandit_event?select=event_id%2Cbandit%3Abandit%28id%2Cimage_url%29&event_id=in.%284dd946b6-f8a7-4d57-99c8-ba5a882cc98a%2C2005b9b1-b"
+        },
+        {
+          "t": 98,
+          "u": "http://localhost:8082/__workspace/api/bandit/premium?view=visibility&banditId=d76cb120-018d-4a2e-8b5f-0578a71fd8f9"
+        },
+        {
+          "t": 99,
+          "u": "http://localhost:8082/__workspace/api/bandit/premium?view=visibility&banditId=d6db5a96-339b-4016-ba80-b785fbdfb8e8"
+        },
+        {
+          "t": 99,
+          "u": "http://localhost:8082/__workspace/api/bandit/premium?view=visibility&banditId=d7f053c0-a4c5-4f70-a82c-037d82005808"
+        },
+        {
+          "t": 99,
+          "u": "http://localhost:8082/__workspace/api/bandit/premium?view=visibility&banditId=dc2c9269-5b64-4b75-8bb0-1eb6f965c2ed"
+        },
+        {
+          "t": 99,
+          "u": "http://localhost:8082/__workspace/api/bandit/premium?view=visibility&banditId=218e9d35-f9cf-400c-aeae-60b14f86e7c7"
+        },
+        {
+          "t": 99,
+          "u": "http://localhost:8082/__workspace/api/bandit/premium?view=visibility&banditId=cc705328-dd9e-4c2e-8764-b2e1077f9385"
+        },
+        {
+          "t": 99,
+          "u": "http://localhost:8082/__workspace/api/bandit/premium?view=visibility&banditId=2c5fbe9a-8d4b-4de0-a21c-518211431a91"
+        },
+        {
+          "t": 100,
+          "u": "http://localhost:8082/__workspace/api/bandit/premium?view=visibility&banditId=dc477c6f-a0d5-4f40-a99f-5550780dded3"
+        },
+        {
+          "t": 858,
+          "u": "http://localhost:8082/__workspace/api/public/experiences"
+        }
+      ]
+    },
+    {
+      "name": "experiences→smarttraveler",
+      "visualMs": 576,
+      "contentMs": 602,
+      "requestCount": 1,
+      "firstRequests": [
+        {
+          "t": 433,
+          "u": "http://localhost:8082/__workspace/api/public/smarttraveler"
+        }
+      ]
+    },
+    {
+      "name": "→hotelier",
+      "visualMs": 373,
+      "contentMs": 380,
+      "requestCount": 0,
+      "firstRequests": []
+    },
+    {
+      "name": "→chat",
+      "visualMs": 144,
+      "contentMs": 150,
+      "requestCount": 2,
+      "firstRequests": [
+        {
+          "t": 130,
+          "u": "https://zubcakeamyfqatdmleqx.supabase.co/rest/v1/notifications?select=id%2Cuser_id%2Ctype%2Cis_read%2Creference_id%2Creference_type%2Ccreated_at&user_id=eq.e1459a14-8020-4e35-aff7-"
+        },
+        {
+          "t": 130,
+          "u": "https://zubcakeamyfqatdmleqx.supabase.co/auth/v1/user"
+        }
+      ]
+    },
+    {
+      "name": "→more",
+      "visualMs": 400,
+      "contentMs": 406,
+      "requestCount": 1,
+      "firstRequests": [
+        {
+          "t": 361,
+          "u": "https://zubcakeamyfqatdmleqx.supabase.co/auth/v1/user"
+        }
+      ]
+    }
+  ],
+  "warm": [
+    {
+      "name": "return→explore",
+      "visualMs": 2125,
+      "contentMs": 2151,
+      "requestCount": 5,
+      "firstRequests": [
+        {
+          "t": 2028,
+          "u": "https://zubcakeamyfqatdmleqx.supabase.co/rest/v1/event_user_likes?select=event%3Aevent%28*%29&user_id=eq.e1459a14-8020-4e35-aff7-f8aa60a7d5f2"
+        },
+        {
+          "t": 2028,
+          "u": "https://zubcakeamyfqatdmleqx.supabase.co/rest/v1/event_user_likes?select=event%3Aevent%28*%29&user_id=eq.e1459a14-8020-4e35-aff7-f8aa60a7d5f2"
+        },
+        {
+          "t": 2028,
+          "u": "https://zubcakeamyfqatdmleqx.supabase.co/rest/v1/bandit_user_likes?select=bandit_id&user_id=eq.e1459a14-8020-4e35-aff7-f8aa60a7d5f2"
+        },
+        {
+          "t": 2028,
+          "u": "https://zubcakeamyfqatdmleqx.supabase.co/rest/v1/bandit_user_likes?select=bandit_id&user_id=eq.e1459a14-8020-4e35-aff7-f8aa60a7d5f2"
+        },
+        {
+          "t": 2082,
+          "u": "https://zubcakeamyfqatdmleqx.supabase.co/rest/v1/bandit_event?select=event_id%2Cbandit%3Abandit%28id%2Cimage_url%29&event_id=in.%2832373a43-33d3-4cbc-b838-76df2efba2ab%2C823d3cda-a"
+        }
+      ]
+    },
+    {
+      "name": "return→experiences",
+      "visualMs": 642,
+      "contentMs": 660,
+      "requestCount": 4,
+      "firstRequests": [
+        {
+          "t": 47,
+          "u": "https://zubcakeamyfqatdmleqx.supabase.co/rest/v1/bandit?select=*%2Cbandit_tags%28tags%28id%2Cname%29%29&order=created_at.desc"
+        },
+        {
+          "t": 521,
+          "u": "http://localhost:8082/__workspace/api/public/experiences"
+        },
+        {
+          "t": 528,
+          "u": "https://zubcakeamyfqatdmleqx.supabase.co/rest/v1/bandit_event?select=event_id%2Cbandit%3Abandit%28id%2Cimage_url%29&event_id=in.%286bc152bf-059b-4b92-8c6b-ef1da099f344%2Cdb0f6020-c"
+        },
+        {
+          "t": 528,
+          "u": "https://zubcakeamyfqatdmleqx.supabase.co/rest/v1/bandit?select=*%2Cbandit_tags%28tags%28id%2Cname%29%29&order=created_at.desc"
+        }
+      ]
+    },
+    {
+      "name": "return→home",
+      "visualMs": 127,
+      "contentMs": 131,
+      "requestCount": 3,
+      "firstRequests": [
+        {
+          "t": 118,
+          "u": "https://zubcakeamyfqatdmleqx.supabase.co/rest/v1/bandit_user_likes?select=bandit_id&user_id=eq.e1459a14-8020-4e35-aff7-f8aa60a7d5f2"
+        },
+        {
+          "t": 118,
+          "u": "https://zubcakeamyfqatdmleqx.supabase.co/rest/v1/bandit_user_likes?select=bandit_id&user_id=eq.e1459a14-8020-4e35-aff7-f8aa60a7d5f2"
+        },
+        {
+          "t": 126,
+          "u": "https://zubcakeamyfqatdmleqx.supabase.co/rest/v1/bandit_event?select=event_id%2Cbandit%3Abandit%28id%2Cimage_url%29&event_id=in.%284dd946b6-f8a7-4d57-99c8-ba5a882cc98a%2C2005b9b1-b"
+        }
+      ]
+    }
+  ],
+  "repeat": [
+    {
+      "name": "thrash-explore-0",
+      "visualMs": 1349,
+      "contentMs": 1354,
+      "requestCount": 7,
+      "firstRequests": [
+        {
+          "t": 1258,
+          "u": "https://zubcakeamyfqatdmleqx.supabase.co/rest/v1/event_user_likes?select=event%3Aevent%28*%29&user_id=eq.e1459a14-8020-4e35-aff7-f8aa60a7d5f2"
+        },
+        {
+          "t": 1258,
+          "u": "https://zubcakeamyfqatdmleqx.supabase.co/rest/v1/event_user_likes?select=event%3Aevent%28*%29&user_id=eq.e1459a14-8020-4e35-aff7-f8aa60a7d5f2"
+        },
+        {
+          "t": 1258,
+          "u": "https://zubcakeamyfqatdmleqx.supabase.co/rest/v1/bandit_user_likes?select=bandit_id&user_id=eq.e1459a14-8020-4e35-aff7-f8aa60a7d5f2"
+        },
+        {
+          "t": 1258,
+          "u": "https://zubcakeamyfqatdmleqx.supabase.co/rest/v1/bandit_user_likes?select=bandit_id&user_id=eq.e1459a14-8020-4e35-aff7-f8aa60a7d5f2"
+        },
+        {
+          "t": 1317,
+          "u": "https://zubcakeamyfqatdmleqx.supabase.co/rest/v1/bandit_event?select=event_id%2Cbandit%3Abandit%28id%2Cimage_url%29&event_id=in.%2832373a43-33d3-4cbc-b838-76df2efba2ab%2C823d3cda-a"
+        },
+        {
+          "t": 1333,
+          "u": "https://zubcakeamyfqatdmleqx.supabase.co/rest/v1/bandit?select=*%2Cbandit_tags%28tags%28id%2Cname%29%29&order=created_at.desc"
+        },
+        {
+          "t": 1334,
+          "u": "https://zubcakeamyfqatdmleqx.supabase.co/rest/v1/bandit?select=*%2Cbandit_tags%28tags%28id%2Cname%29%29&order=created_at.desc"
+        }
+      ]
+    },
+    {
+      "name": "thrash-home-0",
+      "visualMs": 242,
+      "contentMs": 246,
+      "requestCount": 5,
+      "firstRequests": [
+        {
+          "t": 91,
+          "u": "https://zubcakeamyfqatdmleqx.supabase.co/rest/v1/bandit?select=*%2Cbandit_tags%28tags%28id%2Cname%29%29&order=created_at.desc"
+        },
+        {
+          "t": 225,
+          "u": "https://zubcakeamyfqatdmleqx.supabase.co/rest/v1/bandit_user_likes?select=bandit_id&user_id=eq.e1459a14-8020-4e35-aff7-f8aa60a7d5f2"
+        },
+        {
+          "t": 226,
+          "u": "https://zubcakeamyfqatdmleqx.supabase.co/rest/v1/bandit_user_likes?select=bandit_id&user_id=eq.e1459a14-8020-4e35-aff7-f8aa60a7d5f2"
+        },
+        {
+          "t": 240,
+          "u": "https://zubcakeamyfqatdmleqx.supabase.co/rest/v1/bandit_event?select=event_id%2Cbandit%3Abandit%28id%2Cimage_url%29&event_id=in.%286bc152bf-059b-4b92-8c6b-ef1da099f344%2Cdb0f6020-c"
+        },
+        {
+          "t": 244,
+          "u": "https://zubcakeamyfqatdmleqx.supabase.co/rest/v1/bandit?select=*%2Cbandit_tags%28tags%28id%2Cname%29%29&order=created_at.desc"
+        }
+      ]
+    },
+    {
+      "name": "thrash-explore-1",
+      "visualMs": 1506,
+      "contentMs": 1510,
+      "requestCount": 8,
+      "firstRequests": [
+        {
+          "t": 1423,
+          "u": "https://zubcakeamyfqatdmleqx.supabase.co/rest/v1/event_user_likes?select=event%3Aevent%28*%29&user_id=eq.e1459a14-8020-4e35-aff7-f8aa60a7d5f2"
+        },
+        {
+          "t": 1423,
+          "u": "https://zubcakeamyfqatdmleqx.supabase.co/rest/v1/event_user_likes?select=event%3Aevent%28*%29&user_id=eq.e1459a14-8020-4e35-aff7-f8aa60a7d5f2"
+        },
+        {
+          "t": 1423,
+          "u": "https://zubcakeamyfqatdmleqx.supabase.co/rest/v1/bandit_user_likes?select=bandit_id&user_id=eq.e1459a14-8020-4e35-aff7-f8aa60a7d5f2"
+        },
+        {
+          "t": 1423,
+          "u": "https://zubcakeamyfqatdmleqx.supabase.co/rest/v1/bandit_user_likes?select=bandit_id&user_id=eq.e1459a14-8020-4e35-aff7-f8aa60a7d5f2"
+        },
+        {
+          "t": 1471,
+          "u": "https://zubcakeamyfqatdmleqx.supabase.co/rest/v1/bandit_event?select=event_id%2Cbandit%3Abandit%28id%2Cimage_url%29&event_id=in.%2832373a43-33d3-4cbc-b838-76df2efba2ab%2C823d3cda-a"
+        },
+        {
+          "t": 1498,
+          "u": "https://zubcakeamyfqatdmleqx.supabase.co/rest/v1/bandit?select=*%2Cbandit_tags%28tags%28id%2Cname%29%29&order=created_at.desc"
+        },
+        {
+          "t": 1499,
+          "u": "https://zubcakeamyfqatdmleqx.supabase.co/rest/v1/bandit_event?select=event_id%2Cbandit%3Abandit%28id%2Cimage_url%29&event_id=in.%284dd946b6-f8a7-4d57-99c8-ba5a882cc98a%2C2005b9b1-b"
+        },
+        {
+          "t": 1500,
+          "u": "https://zubcakeamyfqatdmleqx.supabase.co/rest/v1/bandit?select=*%2Cbandit_tags%28tags%28id%2Cname%29%29&order=created_at.desc"
+        }
+      ]
+    },
+    {
+      "name": "thrash-home-1",
+      "visualMs": 174,
+      "contentMs": 179,
+      "requestCount": 4,
+      "firstRequests": [
+        {
+          "t": 160,
+          "u": "https://zubcakeamyfqatdmleqx.supabase.co/rest/v1/bandit_user_likes?select=bandit_id&user_id=eq.e1459a14-8020-4e35-aff7-f8aa60a7d5f2"
+        },
+        {
+          "t": 161,
+          "u": "https://zubcakeamyfqatdmleqx.supabase.co/rest/v1/bandit_user_likes?select=bandit_id&user_id=eq.e1459a14-8020-4e35-aff7-f8aa60a7d5f2"
+        },
+        {
+          "t": 170,
+          "u": "https://zubcakeamyfqatdmleqx.supabase.co/rest/v1/bandit?select=*%2Cbandit_tags%28tags%28id%2Cname%29%29&order=created_at.desc"
+        },
+        {
+          "t": 173,
+          "u": "https://zubcakeamyfqatdmleqx.supabase.co/rest/v1/bandit_event?select=event_id%2Cbandit%3Abandit%28id%2Cimage_url%29&event_id=in.%286bc152bf-059b-4b92-8c6b-ef1da099f344%2Cdb0f6020-c"
+        }
+      ]
+    },
+    {
+      "name": "thrash-explore-2",
+      "visualMs": 1204,
+      "contentMs": 1208,
+      "requestCount": 9,
+      "firstRequests": [
+        {
+          "t": 23,
+          "u": "https://zubcakeamyfqatdmleqx.supabase.co/rest/v1/bandit?select=*%2Cbandit_tags%28tags%28id%2Cname%29%29&order=created_at.desc"
+        },
+        {
+          "t": 1104,
+          "u": "https://zubcakeamyfqatdmleqx.supabase.co/rest/v1/event_user_likes?select=event%3Aevent%28*%29&user_id=eq.e1459a14-8020-4e35-aff7-f8aa60a7d5f2"
+        },
+        {
+          "t": 1104,
+          "u": "https://zubcakeamyfqatdmleqx.supabase.co/rest/v1/event_user_likes?select=event%3Aevent%28*%29&user_id=eq.e1459a14-8020-4e35-aff7-f8aa60a7d5f2"
+        },
+        {
+          "t": 1104,
+          "u": "https://zubcakeamyfqatdmleqx.supabase.co/rest/v1/bandit_user_likes?select=bandit_id&user_id=eq.e1459a14-8020-4e35-aff7-f8aa60a7d5f2"
+        },
+        {
+          "t": 1104,
+          "u": "https://zubcakeamyfqatdmleqx.supabase.co/rest/v1/bandit_user_likes?select=bandit_id&user_id=eq.e1459a14-8020-4e35-aff7-f8aa60a7d5f2"
+        },
+        {
+          "t": 1152,
+          "u": "https://zubcakeamyfqatdmleqx.supabase.co/rest/v1/bandit_event?select=event_id%2Cbandit%3Abandit%28id%2Cimage_url%29&event_id=in.%2832373a43-33d3-4cbc-b838-76df2efba2ab%2C823d3cda-a"
+        },
+        {
+          "t": 1195,
+          "u": "https://zubcakeamyfqatdmleqx.supabase.co/rest/v1/bandit?select=*%2Cbandit_tags%28tags%28id%2Cname%29%29&order=created_at.desc"
+        },
+        {
+          "t": 1197,
+          "u": "https://zubcakeamyfqatdmleqx.supabase.co/rest/v1/bandit_event?select=event_id%2Cbandit%3Abandit%28id%2Cimage_url%29&event_id=in.%284dd946b6-f8a7-4d57-99c8-ba5a882cc98a%2C2005b9b1-b"
+        },
+        {
+          "t": 1198,
+          "u": "https://zubcakeamyfqatdmleqx.supabase.co/rest/v1/bandit?select=*%2Cbandit_tags%28tags%28id%2Cname%29%29&order=created_at.desc"
+        }
+      ]
+    },
+    {
+      "name": "thrash-home-2",
+      "visualMs": 167,
+      "contentMs": 173,
+      "requestCount": 4,
+      "firstRequests": [
+        {
+          "t": 45,
+          "u": "https://zubcakeamyfqatdmleqx.supabase.co/rest/v1/bandit?select=*%2Cbandit_tags%28tags%28id%2Cname%29%29&order=created_at.desc"
+        },
+        {
+          "t": 160,
+          "u": "https://zubcakeamyfqatdmleqx.supabase.co/rest/v1/bandit_user_likes?select=bandit_id&user_id=eq.e1459a14-8020-4e35-aff7-f8aa60a7d5f2"
+        },
+        {
+          "t": 160,
+          "u": "https://zubcakeamyfqatdmleqx.supabase.co/rest/v1/bandit_user_likes?select=bandit_id&user_id=eq.e1459a14-8020-4e35-aff7-f8aa60a7d5f2"
+        },
+        {
+          "t": 167,
+          "u": "https://zubcakeamyfqatdmleqx.supabase.co/rest/v1/bandit_event?select=event_id%2Cbandit%3Abandit%28id%2Cimage_url%29&event_id=in.%286bc152bf-059b-4b92-8c6b-ef1da099f344%2Cdb0f6020-c"
+        }
+      ]
+    }
+  ],
+  "notes": [],
+  "experiences": {
+    "comingSoonCount": 0,
+    "hasPreview": false,
+    "hasEuroPrice": false,
+    "storyInsteadOfPrice": false,
+    "liveBanner": false
+  },
+  "summary": {
+    "coldContentMax": 2171,
+    "warmContentMax": 2151,
+    "coldVisualMax": 2132,
+    "warmVisualMax": 2125,
+    "thrashExploreMax": 1510
+  }
+}

@@ -210,21 +210,36 @@ export type LiveExperiencesFetch = {
   origin?: string;
 };
 
+const EXPERIENCES_SWR_KEY = "workspace:public:experiences";
+const EXPERIENCES_TTL_MS = 3 * 60 * 1000;
+
 export async function fetchLiveLocalExperiences(): Promise<LiveExperiencesFetch> {
-  const result = await workspaceGet<{ ok?: boolean; experiences?: WorkspaceLocalExperience[] }>(
-    "/api/public/experiences",
-  );
-  if (!result.ok) {
-    return { experiences: [], detail: result.detail || "Workspace experiences unavailable" };
+  const { fetchCached, readCacheStale } = await import("@/lib/appDataCache");
+  const stale = readCacheStale<LiveExperiencesFetch>(EXPERIENCES_SWR_KEY);
+  try {
+    return await fetchCached<LiveExperiencesFetch>(EXPERIENCES_SWR_KEY, EXPERIENCES_TTL_MS, async () => {
+      const result = await workspaceGet<{ ok?: boolean; experiences?: WorkspaceLocalExperience[] }>(
+        "/api/public/experiences",
+      );
+      if (!result.ok) {
+        return {
+          experiences: stale?.experiences ?? [],
+          detail: result.detail || "Workspace experiences unavailable",
+          origin: result.origin,
+        };
+      }
+      /**
+       * Workspace honesty gate strips partnerId/hostEmail/source from guest cards.
+       * Accept id+title rows; client honesty filter drops orch shells.
+       */
+      const published = (result.data.experiences || []).filter(
+        (e) => Boolean(e?.id && e?.title) && isHonestGuestExperienceRow(e),
+      );
+      return { experiences: published, origin: result.origin };
+    });
+  } catch {
+    return stale ?? { experiences: [], detail: "Workspace experiences unavailable" };
   }
-  /**
-   * Workspace honesty gate strips partnerId/hostEmail/source from guest cards.
-   * Accept id+title rows; client honesty filter drops orch shells.
-   */
-  const published = (result.data.experiences || []).filter(
-    (e) => Boolean(e?.id && e?.title) && isHonestGuestExperienceRow(e),
-  );
-  return { experiences: published, origin: result.origin };
 }
 
 export async function fetchLiveExperienceDetail(id: string): Promise<ExperienceDetail | null> {

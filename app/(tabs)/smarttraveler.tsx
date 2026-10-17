@@ -55,7 +55,11 @@ function resolveSmartTravelerCity(opts: {
  * Places locals pass to each other. Place first; guest privilege secondary.
  * Live rows from Workspace; DEMO seed only when the live fetch fails.
  */
-export function SmartTravelerScreen() {
+type SmartTravelerScreenProps = {
+  tabActive?: boolean;
+};
+
+export function SmartTravelerScreen({ tabActive = true }: SmartTravelerScreenProps = {}) {
   const router = useRouter();
   const { width } = useWindowDimensions();
   const { access, isFullStay, activeStay, snap } = useGuestLifecycle();
@@ -65,7 +69,8 @@ export function SmartTravelerScreen() {
 
   const [live, setLive] = useState<SmartTravelerPartner[]>([]);
   const [liveOk, setLiveOk] = useState(false);
-  const [loading, setLoading] = useState(true);
+  /** Editorial catalog paints immediately; live inventory upgrades silently. */
+  const [loading, setLoading] = useState(false);
 
   const city = resolveSmartTravelerCity({
     stayCity: activeStay?.city,
@@ -75,8 +80,8 @@ export function SmartTravelerScreen() {
   });
 
   useEffect(() => {
+    if (!tabActive) return;
     let cancelled = false;
-    setLoading(true);
     void fetchLiveSmartTravelers({ city }).then((result) => {
       if (cancelled) return;
       if (result.ok) {
@@ -91,7 +96,7 @@ export function SmartTravelerScreen() {
     return () => {
       cancelled = true;
     };
-  }, [city]);
+  }, [city, tabActive]);
 
   const cols = offerMarketplaceColumns(width);
   const cardW = cardWidthForColumns(width, cols, GRID_PAD, GRID_GAP);

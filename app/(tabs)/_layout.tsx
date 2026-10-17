@@ -55,7 +55,8 @@ export default function TabsLayout() {
 
   useEffect(() => {
     if (!selectedCity) return;
-    const delay = Platform.OS === "android" ? 1200 : 1800;
+    /** Warm Explore immediately so the first tap is not waiting on a delayed preload. */
+    const delay = Platform.OS === "android" ? 200 : 0;
     const timer = setTimeout(() => {
       preloadExploreEvents(selectedCity);
     }, delay);
@@ -81,14 +82,26 @@ export default function TabsLayout() {
     path.includes("/bandiTeam") ||
     path.includes("/scam-alerts") ||
     path.includes("/alerts");
-  const showUpperOverlay = upperTab !== null;
   const [optimisticUpperTab, setOptimisticUpperTab] = useState<UpperTabKey | null>(null);
+  /** Paint discovery host on press — do not wait for the router pathname. */
+  const showUpperOverlay = upperTab !== null || optimisticUpperTab !== null;
+  /** Keep last discovery pane warm under Home/Hotel/Chat/More so return paints immediately. */
+  const [retainedUpperTab, setRetainedUpperTab] = useState<UpperTabKey>("explore");
+  const [hostRetained, setHostRetained] = useState(false);
   /** Null on Home = no rail chip selected (Explore container has no duplicate chip). */
   const displayUpperTab = (optimisticUpperTab ?? upperTab) as UpperTabKey | null;
+  const hostActiveTab = (displayUpperTab ?? retainedUpperTab) as UpperTabKey;
+  const showDiscoveryHost = showUpperOverlay || hostRetained;
 
   useEffect(() => {
     setOptimisticUpperTab(null);
   }, [pathname]);
+
+  useEffect(() => {
+    if (!displayUpperTab) return;
+    setHostRetained(true);
+    setRetainedUpperTab(displayUpperTab);
+  }, [displayUpperTab]);
 
   /** Active: near-black text; underline uses brand red below */
   const tabColor = colorScheme === "dark" ? "#FFFFFF" : guestColor.ink;
@@ -132,7 +145,7 @@ export default function TabsLayout() {
   }, []);
 
   useEffect(() => {
-    const delay = Platform.OS === "android" ? 800 : 2500;
+    const delay = Platform.OS === "android" ? 400 : 600;
     const timer = setTimeout(() => {
       void import("@/app/(tabs)/explore");
       void import("@/app/(tabs)/experiences");
@@ -177,7 +190,7 @@ export default function TabsLayout() {
       <NearbyContextRunner />
       <UpperTabHostProvider
         enabled={showUpperOverlay}
-        active={displayUpperTab ?? "explore"}
+        active={hostActiveTab}
       >
         <View style={styles.container}>
           <GuestChromeBar />
@@ -213,18 +226,25 @@ export default function TabsLayout() {
               }}
             />
             {/**
-             * Upper overlay only for Explore-lane routes — never on TripHome `/home`.
-             * Unmount (not hide) so iOS cannot keep a full-screen host intercepting Home taps
-             * after return from Explore / Local banDits / other rail destinations.
+             * Discovery host stays mounted after first visit (parked, pointerEvents none)
+             * so Home/Hotel/Chat taps stay free while Explore/Experiences return instantly.
              */}
-            {showUpperOverlay && displayUpperTab ? (
+            {showDiscoveryHost ? (
               <View
-                style={styles.upperTabOverlay}
-                pointerEvents="auto"
+                style={[
+                  styles.upperTabOverlay,
+                  !showUpperOverlay && styles.upperTabOverlayParked,
+                ]}
+                pointerEvents={showUpperOverlay ? "auto" : "none"}
                 collapsable={false}
                 testID="guest-upper-tab-overlay"
+                accessibilityElementsHidden={!showUpperOverlay}
+                importantForAccessibility={showUpperOverlay ? "yes" : "no-hide-descendants"}
               >
-                <UpperTabScreens active={displayUpperTab} />
+                {showUpperOverlay ? (
+                  <View testID="discovery-shell-active" style={styles.discoveryActiveMarker} />
+                ) : null}
+                <UpperTabScreens active={hostActiveTab} shellVisible={showUpperOverlay} />
               </View>
             ) : null}
           </View>
@@ -233,7 +253,7 @@ export default function TabsLayout() {
             <MainBottomNav
               activeTab={lowerTab}
               onHome={() => goLowerTab("/home", "home")}
-              onExplore={() => goLowerTab("/explore", "explore")}
+              onExplore={() => goUpperTab("explore")}
               onHotelier={() => goLowerTab("/hotelier", "hotelier")}
               onLocalFriend={() => goLowerTab("/localFriend", "localFriend")}
               onChat={() => goLowerTab("/community", "chat")}
@@ -314,6 +334,18 @@ const styles = StyleSheet.create({
     ...StyleSheet.absoluteFillObject,
     zIndex: 10,
     backgroundColor: "#FFFFFF",
+  },
+  /** Opacity only — `visibility:hidden` made warm Explore returns wait on a full re-layout. */
+  upperTabOverlayParked: {
+    opacity: 0,
+    zIndex: -1,
+  },
+  discoveryActiveMarker: {
+    position: "absolute",
+    width: 1,
+    height: 1,
+    opacity: 0,
+    zIndex: 0,
   },
   upperTabs: {
     borderBottomWidth: StyleSheet.hairlineWidth,

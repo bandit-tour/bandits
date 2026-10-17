@@ -2442,6 +2442,6 @@ export const IMPACT_VIEW = {
 };
 
 export function formatEuro(cents: number) {
-  if (cents <= 0) return "Story";
+  if (!Number.isFinite(cents) || cents <= 0) return "Price on request";
   return `€${(cents / 100).toFixed(cents % 100 === 0 ? 0 : 2)}`;
 }

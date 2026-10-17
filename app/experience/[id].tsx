@@ -606,7 +606,7 @@ export default function ExperienceDetailScreen() {
             accessibilityRole="button"
             accessibilityLabel="Back to Experiences"
           >
-            <Text style={styles.bookCtaText}>Coming soon</Text>
+            <Text style={styles.bookCtaText}>Preview only</Text>
           </Pressable>
         ) : (
           <Pressable style={styles.bookCta} onPress={scrollToDates} testID="exp-book-cta">

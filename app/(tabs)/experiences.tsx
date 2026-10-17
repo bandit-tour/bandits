@@ -51,12 +51,16 @@ function matchesFilter(exp: GuestExperience, filter: (typeof CATEGORIES)[number]
   return label.includes(filter.toLowerCase());
 }
 
+type ExperiencesScreenProps = {
+  tabActive?: boolean;
+};
+
 /**
  * Experiences — bandiTour DNA marketplace.
  * Live Workspace inventory first; editorial DNA always available as Preview inspiration.
  * NO VALID IMAGE = DO NOT RENDER THE LISTING.
  */
-export function ExperiencesScreen() {
+export function ExperiencesScreen({ tabActive = true }: ExperiencesScreenProps = {}) {
   const router = useRouter();
   const { width } = useWindowDimensions();
   const [filter, setFilter] = useState<(typeof CATEGORIES)[number]>("All");
@@ -66,18 +70,28 @@ export function ExperiencesScreen() {
   const [live, setLive] = useState<GuestExperience[]>([]);
   const [liveReady, setLiveReady] = useState(false);
   const [liveTransportFailed, setLiveTransportFailed] = useState(false);
+  const fetchedOnceRef = React.useRef(false);
 
   useEffect(() => {
+    if (!tabActive && fetchedOnceRef.current) return;
+    let cancelled = false;
     void fetchLiveLocalExperiences()
       .then((res) => {
+        if (cancelled) return;
         const mapped = res.experiences
           .map(mapWorkspaceExperience)
           .filter(Boolean) as GuestExperience[];
         setLive(mapped);
         setLiveTransportFailed(Boolean(res.detail));
+        fetchedOnceRef.current = true;
       })
-      .finally(() => setLiveReady(true));
-  }, []);
+      .finally(() => {
+        if (!cancelled) setLiveReady(true);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [tabActive]);
 
   const columns = experienceColumns(width);
   const cardW = cardWidthForColumns(width, columns, GRID_PAD, GRID_GAP);
@@ -124,11 +138,20 @@ export function ExperiencesScreen() {
     });
   };
 
-  const showInspiration = liveReady;
-  const hasAny = liveRows.length > 0 || (showInspiration && editorialRows.length > 0);
+  /** Editorial paints immediately; live inventory upgrades the grid when Workspace answers. */
+  const showInspiration = editorialRows.length > 0;
+  const hasAny = liveRows.length > 0 || showInspiration;
+
+  if (!tabActive && !fetchedOnceRef.current && live.length === 0) {
+    return <View style={styles.screen} />;
+  }
 
   return (
-    <ScrollView style={styles.screen} contentContainerStyle={styles.content}>
+    <ScrollView
+      style={styles.screen}
+      contentContainerStyle={styles.content}
+      pointerEvents={tabActive ? "auto" : "none"}
+    >
       <View style={styles.titleStrip}>
         <Text style={styles.kicker}>Impossible to Google</Text>
         <Text style={styles.title}>Experiences</Text>
@@ -139,13 +162,13 @@ export function ExperiencesScreen() {
           <Text style={[styles.lead, { marginTop: 8 }]} testID="exp-live-banner">
             Hosted by locals near you — book the ones that feel right.
           </Text>
-        ) : liveReady ? (
+        ) : (
           <Text style={[styles.lead, { marginTop: 8 }]} testID="exp-inspiration-banner">
             {liveTransportFailed
               ? "Inspiration from the bandiTour DNA catalog. Live host bookings open when Workspace providers are reachable."
               : "Inspiration & previews while local hosts finish publishing. Reservations open only on authorized live listings."}
           </Text>
-        ) : null}
+        )}
       </View>
 
       <ScrollView
@@ -350,12 +373,14 @@ function ExperienceMarketplaceCard({
         <View style={styles.footer}>
           {preview ? (
             <>
-              <Text style={styles.priceMuted}>Coming soon</Text>
+              <Text style={styles.priceMuted}>Preview</Text>
               <Text style={styles.ctaPreview}>Explore</Text>
             </>
           ) : (
             <>
-              <Text style={styles.price}>{formatEuro(exp.priceCents)}</Text>
+              <Text style={styles.price} testID={`exp-price-${exp.id}`}>
+                {formatEuro(exp.priceCents)}
+              </Text>
               <Text style={styles.cta}>Book</Text>
             </>
           )}
