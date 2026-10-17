@@ -10,6 +10,8 @@
 
 # Dev / proof / export dumps
 artifacts/
+python_scripts/
+data_uploader/
 tmp/
 tmp-*/
 dist/

@@ -38,7 +38,8 @@ export type WorkspaceLocalExperience = {
 const FALLBACK_COVER = experienceCover("1516483638261-f4dbaf036963");
 
 /** Placeholder / offline supplier CDNs — never block authorized inventory + pricing. */
-const UNREACHABLE_PHOTO_HOSTS = /(?:cdn\.athensmakers\.gr|cdn\.tenant\.example)/i;
+const UNREACHABLE_PHOTO_HOSTS =
+  /(?:cdn\.athensmakers\.gr|cdn\.tenant\.example|cdn\.banditour\.live)/i;
 
 function isGuestRenderablePhotoUrl(url: string | null | undefined): url is string {
   if (!url || !isValidExperienceImageUrl(url)) return false;

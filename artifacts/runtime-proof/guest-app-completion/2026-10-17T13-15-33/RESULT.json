@@ -1,0 +1,296 @@
+{
+  "generatedAt": "2026-10-17T13:17:35.880Z",
+  "guestBase": "https://bandits-two.vercel.app",
+  "workspaceBase": "https://banditour-workspace.vercel.app",
+  "deploymentNote": "dpl_9nD15uX3P2gqNgM8pYnWrSQ8jhc3",
+  "matrix": [
+    {
+      "id": "welcome",
+      "path": "/",
+      "label": "Welcome / Opening intro",
+      "group": "Welcome",
+      "status": "PASS",
+      "reason": "Returning guest: intro skipped → Home (expected)",
+      "screenshot": "C:\\Users\\blonj\\Documents\\bandits\\artifacts\\runtime-proof\\guest-app-completion\\2026-10-17T13-15-33\\welcome.png",
+      "url": "https://bandits-two.vercel.app/home"
+    },
+    {
+      "id": "home",
+      "path": "/home",
+      "label": "Home (Trip brain)",
+      "group": "Home",
+      "status": "PASS",
+      "reason": null,
+      "screenshot": "C:\\Users\\blonj\\Documents\\bandits\\artifacts\\runtime-proof\\guest-app-completion\\2026-10-17T13-15-33\\home.png",
+      "url": "https://bandits-two.vercel.app/home"
+    },
+    {
+      "id": "explore",
+      "path": "/explore",
+      "label": "Explore container",
+      "group": "Explore",
+      "status": "PASS",
+      "reason": null,
+      "screenshot": "C:\\Users\\blonj\\Documents\\bandits\\artifacts\\runtime-proof\\guest-app-completion\\2026-10-17T13-15-33\\explore.png",
+      "url": "https://bandits-two.vercel.app/explore"
+    },
+    {
+      "id": "bandits",
+      "path": "/bandits",
+      "label": "Local banDits",
+      "group": "Explore",
+      "status": "PASS",
+      "reason": null,
+      "screenshot": "C:\\Users\\blonj\\Documents\\bandits\\artifacts\\runtime-proof\\guest-app-completion\\2026-10-17T13-15-33\\bandits.png",
+      "url": "https://bandits-two.vercel.app/bandits"
+    },
+    {
+      "id": "experiences",
+      "path": "/experiences",
+      "label": "Experiences",
+      "group": "Experiences",
+      "status": "PASS",
+      "reason": null,
+      "screenshot": "C:\\Users\\blonj\\Documents\\bandits\\artifacts\\runtime-proof\\guest-app-completion\\2026-10-17T13-15-33\\experiences.png",
+      "url": "https://bandits-two.vercel.app/experiences"
+    },
+    {
+      "id": "experience-detail",
+      "path": "/experience/exp_costume_warehouse",
+      "label": "Experience detail (editorial)",
+      "group": "Experiences",
+      "status": "PASS",
+      "reason": null,
+      "screenshot": "C:\\Users\\blonj\\Documents\\bandits\\artifacts\\runtime-proof\\guest-app-completion\\2026-10-17T13-15-33\\experience-detail.png",
+      "url": "https://bandits-two.vercel.app/experience/exp_costume_warehouse"
+    },
+    {
+      "id": "smarttraveler",
+      "path": "/smarttraveler",
+      "label": "SmartTraveler",
+      "group": "SmartTraveler",
+      "status": "PASS",
+      "reason": null,
+      "screenshot": "C:\\Users\\blonj\\Documents\\bandits\\artifacts\\runtime-proof\\guest-app-completion\\2026-10-17T13-15-33\\smarttraveler.png",
+      "url": "https://bandits-two.vercel.app/smarttraveler"
+    },
+    {
+      "id": "shop",
+      "path": "/shop",
+      "label": "banDiShop",
+      "group": "Explore",
+      "status": "PASS",
+      "reason": null,
+      "screenshot": "C:\\Users\\blonj\\Documents\\bandits\\artifacts\\runtime-proof\\guest-app-completion\\2026-10-17T13-15-33\\shop.png",
+      "url": "https://bandits-two.vercel.app/shop"
+    },
+    {
+      "id": "banditeam",
+      "path": "/scam-alerts",
+      "label": "bandiTEAM / Safety alerts",
+      "group": "Explore",
+      "status": "PASS",
+      "reason": null,
+      "screenshot": "C:\\Users\\blonj\\Documents\\bandits\\artifacts\\runtime-proof\\guest-app-completion\\2026-10-17T13-15-33\\banditeam.png",
+      "url": "https://bandits-two.vercel.app/scam-alerts"
+    },
+    {
+      "id": "hotelier",
+      "path": "/hotelier",
+      "label": "Hotel hub",
+      "group": "Hotel",
+      "status": "PASS",
+      "reason": null,
+      "screenshot": "C:\\Users\\blonj\\Documents\\bandits\\artifacts\\runtime-proof\\guest-app-completion\\2026-10-17T13-15-33\\hotelier.png",
+      "url": "https://bandits-two.vercel.app/hotelier"
+    },
+    {
+      "id": "localFriend",
+      "path": "/localFriend",
+      "label": "Local Friend",
+      "group": "Local Friend",
+      "status": "PASS",
+      "reason": null,
+      "screenshot": "C:\\Users\\blonj\\Documents\\bandits\\artifacts\\runtime-proof\\guest-app-completion\\2026-10-17T13-15-33\\localFriend.png",
+      "url": "https://bandits-two.vercel.app/localFriend"
+    },
+    {
+      "id": "chat",
+      "path": "/community",
+      "label": "Chat (community tab)",
+      "group": "Messages",
+      "status": "PASS",
+      "reason": null,
+      "screenshot": "C:\\Users\\blonj\\Documents\\bandits\\artifacts\\runtime-proof\\guest-app-completion\\2026-10-17T13-15-33\\chat.png",
+      "url": "https://bandits-two.vercel.app/community"
+    },
+    {
+      "id": "notifications",
+      "path": "/notifications",
+      "label": "Notifications / Inbox",
+      "group": "Messages",
+      "status": "PASS",
+      "reason": null,
+      "screenshot": "C:\\Users\\blonj\\Documents\\bandits\\artifacts\\runtime-proof\\guest-app-completion\\2026-10-17T13-15-33\\notifications.png",
+      "url": "https://bandits-two.vercel.app/notifications"
+    },
+    {
+      "id": "menu",
+      "path": "/menu",
+      "label": "More / Menu",
+      "group": "Profile",
+      "status": "PASS",
+      "reason": null,
+      "screenshot": "C:\\Users\\blonj\\Documents\\bandits\\artifacts\\runtime-proof\\guest-app-completion\\2026-10-17T13-15-33\\menu.png",
+      "url": "https://bandits-two.vercel.app/menu"
+    },
+    {
+      "id": "profile",
+      "path": "/my-profile",
+      "label": "Profile",
+      "group": "Profile",
+      "status": "PASS",
+      "reason": null,
+      "screenshot": "C:\\Users\\blonj\\Documents\\bandits\\artifacts\\runtime-proof\\guest-app-completion\\2026-10-17T13-15-33\\profile.png",
+      "url": "https://bandits-two.vercel.app/my-profile"
+    },
+    {
+      "id": "settings",
+      "path": "/settings",
+      "label": "Settings",
+      "group": "Settings",
+      "status": "PASS",
+      "reason": null,
+      "screenshot": "C:\\Users\\blonj\\Documents\\bandits\\artifacts\\runtime-proof\\guest-app-completion\\2026-10-17T13-15-33\\settings.png",
+      "url": "https://bandits-two.vercel.app/settings"
+    },
+    {
+      "id": "impact",
+      "path": "/impact",
+      "label": "Impact / Passport",
+      "group": "Passport",
+      "status": "PASS",
+      "reason": null,
+      "screenshot": "C:\\Users\\blonj\\Documents\\bandits\\artifacts\\runtime-proof\\guest-app-completion\\2026-10-17T13-15-33\\impact.png",
+      "url": "https://bandits-two.vercel.app/impact"
+    },
+    {
+      "id": "travelBottle",
+      "path": "/travelBottle",
+      "label": "Travel in a Bottle",
+      "group": "Bottle",
+      "status": "PASS",
+      "reason": "Mix UI complete; honest empty second-sleep inventory",
+      "screenshot": "C:\\Users\\blonj\\Documents\\bandits\\artifacts\\runtime-proof\\guest-app-completion\\2026-10-17T13-15-33\\travelBottle.png",
+      "url": "https://bandits-two.vercel.app/travelBottle"
+    },
+    {
+      "id": "bottleHotel",
+      "path": "/bottleHotel/play-theatrou",
+      "label": "Bottle hotel profile",
+      "group": "Bottle",
+      "status": "PASS",
+      "reason": null,
+      "screenshot": "C:\\Users\\blonj\\Documents\\bandits\\artifacts\\runtime-proof\\guest-app-completion\\2026-10-17T13-15-33\\bottleHotel.png",
+      "url": "https://bandits-two.vercel.app/bottleHotel/play-theatrou"
+    },
+    {
+      "id": "bookings",
+      "path": "/bookings",
+      "label": "Bookings",
+      "group": "Trips",
+      "status": "PASS",
+      "reason": null,
+      "screenshot": "C:\\Users\\blonj\\Documents\\bandits\\artifacts\\runtime-proof\\guest-app-completion\\2026-10-17T13-15-33\\bookings.png",
+      "url": "https://bandits-two.vercel.app/bookings"
+    },
+    {
+      "id": "dreamDestinations",
+      "path": "/dreamDestinations",
+      "label": "Dream Destinations",
+      "group": "Trips",
+      "status": "PASS",
+      "reason": null,
+      "screenshot": "C:\\Users\\blonj\\Documents\\bandits\\artifacts\\runtime-proof\\guest-app-completion\\2026-10-17T13-15-33\\dreamDestinations.png",
+      "url": "https://bandits-two.vercel.app/dreamDestinations"
+    },
+    {
+      "id": "cityMemory",
+      "path": "/cityMemory",
+      "label": "City Memory",
+      "group": "Trips",
+      "status": "PASS",
+      "reason": null,
+      "screenshot": "C:\\Users\\blonj\\Documents\\bandits\\artifacts\\runtime-proof\\guest-app-completion\\2026-10-17T13-15-33\\cityMemory.png",
+      "url": "https://bandits-two.vercel.app/cityMemory"
+    },
+    {
+      "id": "premium",
+      "path": "/premium/d76cb120-018d-4a2e-8b5f-0578a71fd8f9",
+      "label": "Your Local Insider (Neo)",
+      "group": "Octopus",
+      "status": "PARTIAL",
+      "reason": "Octopus shell; entitlement/checkout WORKSPACE-dependent",
+      "screenshot": "C:\\Users\\blonj\\Documents\\bandits\\artifacts\\runtime-proof\\guest-app-completion\\2026-10-17T13-15-33\\premium.png",
+      "url": "https://bandits-two.vercel.app/premium/d76cb120-018d-4a2e-8b5f-0578a71fd8f9"
+    },
+    {
+      "id": "account",
+      "path": "/account",
+      "label": "Account",
+      "group": "Settings",
+      "status": "PASS",
+      "reason": null,
+      "screenshot": "C:\\Users\\blonj\\Documents\\bandits\\artifacts\\runtime-proof\\guest-app-completion\\2026-10-17T13-15-33\\account.png",
+      "url": "https://bandits-two.vercel.app/account"
+    },
+    {
+      "id": "account-faq",
+      "path": "/account/faq",
+      "label": "Support / FAQ",
+      "group": "Support",
+      "status": "PASS",
+      "reason": null,
+      "screenshot": "C:\\Users\\blonj\\Documents\\bandits\\artifacts\\runtime-proof\\guest-app-completion\\2026-10-17T13-15-33\\account-faq.png",
+      "url": "https://bandits-two.vercel.app/account/faq"
+    },
+    {
+      "id": "account-emergency",
+      "path": "/account/emergency",
+      "label": "Emergency support",
+      "group": "Support",
+      "status": "PASS",
+      "reason": null,
+      "screenshot": "C:\\Users\\blonj\\Documents\\bandits\\artifacts\\runtime-proof\\guest-app-completion\\2026-10-17T13-15-33\\account-emergency.png",
+      "url": "https://bandits-two.vercel.app/account/emergency"
+    },
+    {
+      "id": "reactivateStay",
+      "path": "/reactivateStay",
+      "label": "Connect My New Stay",
+      "group": "Trips",
+      "status": "PASS",
+      "reason": null,
+      "screenshot": "C:\\Users\\blonj\\Documents\\bandits\\artifacts\\runtime-proof\\guest-app-completion\\2026-10-17T13-15-33\\reactivateStay.png",
+      "url": "https://bandits-two.vercel.app/reactivateStay"
+    },
+    {
+      "id": "hotel-entry",
+      "path": "/hotel/play-theatrou",
+      "label": "Hotel QR entry (PLAY)",
+      "group": "Welcome",
+      "status": "PASS",
+      "reason": null,
+      "screenshot": "C:\\Users\\blonj\\Documents\\bandits\\artifacts\\runtime-proof\\guest-app-completion\\2026-10-17T13-15-33\\hotel-entry.png",
+      "url": "https://bandits-two.vercel.app/hotel/play-theatrou"
+    }
+  ],
+  "journeys": {
+    "bottle_mix_to_empty_or_sample": "PASS",
+    "bottle_hotel_profile": "PASS"
+  },
+  "workspaceBlockers": [
+    "Bottle second-sleep provider inventory empty"
+  ],
+  "pageErrors": []
+}

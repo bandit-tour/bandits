@@ -1,6 +1,7 @@
 ﻿/**
  * Experience booking — Workspace operator store + Orchestra Commerce ledger.
  * Never invents payment success. Returns MISSING / ERROR honestly.
+ * CONFIRMED only after verified payment (or explicit free/no-pay reservation).
  */
 
 import { orchestraOsOrigin, type OrchestraFetchResult } from "@/lib/orchestra/client";
@@ -20,6 +21,9 @@ export type ExperienceBookInput = {
   guestCount: number;
   slotLabel: string;
   guestEmail?: string | null;
+  /** When true and amount is 0, allow reservation without card. */
+  noPayReservation?: boolean;
+  amountCents?: number;
 };
 
 export type ExperienceBookOrder = {
@@ -36,9 +40,20 @@ export type ExperienceBookResult = OrchestraFetchResult<{
   workspaceBookingId?: string;
 }>;
 
+function isPaidOrderStatus(status: string | undefined): boolean {
+  const s = String(status || "").toLowerCase();
+  return (
+    s === "paid" ||
+    s === "fulfilled" ||
+    s === "succeeded" ||
+    s === "captured" ||
+    s === "confirmed_paid"
+  );
+}
+
 /**
- * 1) Workspace book_experience — operator receives booking + seat decrement
- * 2) Orchestra Commerce book — payment ledger when product mapped + OS reachable
+ * 1) Workspace book_experience — creates requested booking + seat hold
+ * 2) Orchestra / Commerce checkout — payment required before guest-facing CONFIRMED
  */
 export async function bookExperienceViaCommerce(
   input: ExperienceBookInput,
@@ -61,30 +76,50 @@ export async function bookExperienceViaCommerce(
 
   const origin = orchestraOsOrigin();
   const paymentsLive = isFeatureEnabled("ff_payments_live");
+  const amountCents = typeof input.amountCents === "number" ? input.amountCents : undefined;
+  const freeNoPay =
+    input.noPayReservation === true && (amountCents === 0 || amountCents == null);
 
   if (!origin) {
     if (workspaceBook.ok) {
-      const order: ExperienceBookOrder = {
-        id: workspaceBook.data.bookingId,
-        status: "confirmed",
-        source: "workspace",
-      };
-      publishGuestLiveEvent({
-        type: "commerce.booking.confirmed",
-        title: `Booked · ${input.experienceTitle}`,
-        entityId: input.experienceId,
-        detail: input.slotLabel,
-        sourceRef: `workspace:${workspaceBook.data.bookingId}`,
-      });
+      if (freeNoPay) {
+        publishGuestLiveEvent({
+          type: "commerce.booking.confirmed",
+          title: `Reserved · ${input.experienceTitle}`,
+          entityId: input.experienceId,
+          detail: `${input.slotLabel} · no-pay reservation`,
+          sourceRef: `workspace:${workspaceBook.data.bookingId}`,
+        });
+        return {
+          ok: true,
+          data: {
+            order: {
+              id: workspaceBook.data.bookingId,
+              status: "confirmed",
+              source: "workspace_no_pay",
+            },
+            raw: workspaceBook.data,
+            workspaceBookingId: workspaceBook.data.bookingId,
+          },
+          source: "orchestra_os",
+        };
+      }
+      // Honest: hold exists, payment missing — never claim CONFIRMED.
       return {
-        ok: true,
+        ok: false,
+        status: "MISSING",
+        detail:
+          "Experience request recorded, but payment is required before confirmation. Complete Stripe TEST checkout — booking stays requested until paid.",
         data: {
-          order,
+          order: {
+            id: workspaceBook.data.bookingId,
+            status: "requested",
+            source: "workspace_unpaid",
+          },
           raw: workspaceBook.data,
           workspaceBookingId: workspaceBook.data.bookingId,
         },
-        source: "orchestra_os",
-      };
+      } as ExperienceBookResult;
     }
     return {
       ok: false,
@@ -124,22 +159,27 @@ export async function bookExperienceViaCommerce(
       order?: ExperienceBookOrder;
       errors?: string[];
       detail?: string;
+      payment_confirmed?: boolean;
     };
 
     if ((!res.ok || raw.ok === false) && workspaceBook.ok) {
       return {
-        ok: true,
+        ok: false,
+        status: "ERROR",
+        detail:
+          (Array.isArray(raw.errors) && raw.errors.join("; ")) ||
+          raw.detail ||
+          "Payment not confirmed — experience stays requested until Stripe TEST checkout succeeds.",
         data: {
           order: {
             id: workspaceBook.data.bookingId,
-            status: "confirmed",
-            note: "Workspace booked; Commerce ledger deferred",
+            status: "requested",
+            note: "Workspace hold; Commerce payment missing",
           },
           raw,
           workspaceBookingId: workspaceBook.data.bookingId,
         },
-        source: "orchestra_os",
-      };
+      } as ExperienceBookResult;
     }
 
     if (!res.ok || raw.ok === false) {
@@ -151,25 +191,39 @@ export async function bookExperienceViaCommerce(
     }
 
     if (!raw.order) {
-      if (workspaceBook.ok) {
-        return {
-          ok: true,
-          data: {
-            order: { id: workspaceBook.data.bookingId, status: "confirmed" },
-            raw,
-            workspaceBookingId: workspaceBook.data.bookingId,
-          },
-          source: "orchestra_os",
-        };
-      }
       return {
         ok: false,
         status: "ERROR",
         detail: "Commerce OS returned no order — payment not confirmed.",
-      };
+        data: workspaceBook.ok
+          ? {
+              order: { id: workspaceBook.data.bookingId, status: "requested" },
+              raw,
+              workspaceBookingId: workspaceBook.data.bookingId,
+            }
+          : undefined,
+      } as ExperienceBookResult;
     }
 
     const order = raw.order;
+    const paid =
+      raw.payment_confirmed === true ||
+      isPaidOrderStatus(String(order.status)) ||
+      freeNoPay;
+
+    if (!paid) {
+      return {
+        ok: false,
+        status: "ERROR",
+        detail: "Payment not verified — booking will not show as confirmed.",
+        data: {
+          order: { ...order, status: "requested" },
+          raw,
+          workspaceBookingId: workspaceBook.ok ? workspaceBook.data.bookingId : undefined,
+        },
+      };
+    }
+
     publishGuestLiveEvent({
       type: "experience.booked",
       title: input.experienceTitle,
@@ -195,7 +249,7 @@ export async function bookExperienceViaCommerce(
     return {
       ok: true,
       data: {
-        order,
+        order: { ...order, status: freeNoPay ? "confirmed" : order.status || "paid" },
         raw,
         workspaceBookingId: workspaceBook.ok ? workspaceBook.data.bookingId : undefined,
       },
@@ -204,14 +258,15 @@ export async function bookExperienceViaCommerce(
   } catch (e) {
     if (workspaceBook.ok) {
       return {
-        ok: true,
+        ok: false,
+        status: "ERROR",
+        detail: e instanceof Error ? e.message : "Checkout request failed",
         data: {
-          order: { id: workspaceBook.data.bookingId, status: "confirmed" },
+          order: { id: workspaceBook.data.bookingId, status: "requested" },
           raw: { error: e instanceof Error ? e.message : "fetch failed" },
           workspaceBookingId: workspaceBook.data.bookingId,
         },
-        source: "orchestra_os",
-      };
+      } as ExperienceBookResult;
     }
     return {
       ok: false,

@@ -1,0 +1,89 @@
+﻿{
+    "experiences":  {
+                        "ok":  true,
+                        "product":  "Local Experiences",
+                        "count":  1,
+                        "experiences":  [
+                                            {
+                                                "id":  "exp_36947a59d888",
+                                                "title":  "Kypseli courtyard clay morning",
+                                                "status":  "Open seats",
+                                                "when":  "90 minutes",
+                                                "city":  "Athens",
+                                                "neighborhood":  "Kypseli",
+                                                "location":  "Kypseli, Athens",
+                                                "lat":  37.9838,
+                                                "lng":  23.7275,
+                                                "duration":  "90 minutes",
+                                                "photos":  [
+                                                               "https://cdn.banditour.live/exp/clay-1.jpg",
+                                                               "https://cdn.banditour.live/exp/clay-2.jpg"
+                                                           ],
+                                                "description":  "A quiet courtyard morning with local makers â clay, coffee, and the side streets guests never find alone.",
+                                                "hostName":  "Athens Makers Guide",
+                                                "priceCents":  7200,
+                                                "currency":  "EUR",
+                                                "seatsLeft":  5,
+                                                "sessionId":  "sess_6ae711f26e8f",
+                                                "startsAt":  "2026-10-20T13:03:43.423Z",
+                                                "cancellation":  "Full refund 48h before",
+                                                "bookingMode":  "request",
+                                                "kind":  "local_experience"
+                                            }
+                                        ],
+                        "experience":  null
+                    },
+    "checkedAt":  "2026-10-17T16:11:06.8128001+03:00",
+    "health":  {
+                   "ok":  true,
+                   "databaseKind":  "postgres",
+                   "identities":  20,
+                   "vercel":  true,
+                   "stripeConfigured":  true,
+                   "stripeMode":  "test_ready",
+                   "stripeLive":  {
+                                      "mode":  "test_ready",
+                                      "livePaymentsFlag":  false,
+                                      "secretKeyPrefix":  "sk_testâ¦",
+                                      "publishableKeyPrefix":  null,
+                                      "publishableMatchesMode":  false,
+                                      "webhookSecretConfigured":  false,
+                                      "connectDestinationConfigured":  false,
+                                      "treasuryForced":  false,
+                                      "sandboxPayAllowed":  false,
+                                      "status":  "TEST_READY",
+                                      "note":  "Sandbox/test is not live-money proof"
+                                  }
+               },
+    "bottleStays":  {
+                        "ok":  true,
+                        "product":  "Travel in a Bottle",
+                        "moment":  "POST_STAY_NEXT_TRIP",
+                        "count":  0,
+                        "stays":  [
+
+                                  ],
+                        "stay":  null,
+                        "demoStays":  [
+                                          {
+                                              "id":  "stay_treehouse",
+                                              "title":  "Parnitha forest treehouse",
+                                              "location":  "Mount Parnitha Â· 40 min from Athens",
+                                              "source":  "demo_seed",
+                                              "labelled":  "DEMO â not production inventory",
+                                              "status":  "live"
+                                          },
+                                          {
+                                              "id":  "stay_vineyard",
+                                              "title":  "Attica vineyard loft",
+                                              "location":  "Mesogeia Â· 45 min from Athens",
+                                              "source":  "demo_seed",
+                                              "labelled":  "DEMO â not production inventory",
+                                              "status":  "live"
+                                          }
+                                      ],
+                        "inventory":  "none",
+                        "query":  null
+                    },
+    "premiumNeo":  null
+}

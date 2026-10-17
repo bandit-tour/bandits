@@ -1,62 +1,40 @@
 {
-  "desktop": {
-    "label": "chrome-motion-no-reduce",
-    "reducedMotion": "no-preference",
-    "reducedEl": 0,
-    "videoCount": 1,
-    "videoMeta": {
-      "tag": "VIDEO",
-      "src": "http://localhost:8082/videos/play-intro.mp4",
-      "paused": true,
-      "readyState": 0,
-      "networkState": 3,
-      "error": 4,
-      "w": 0,
-      "h": 0,
-      "t": 0
+  "auditDate": "2026-10-17",
+  "pass": false,
+  "verdict": "SOURCE_MISSING",
+  "oceanMasterFound": false,
+  "mixRewirePerformed": false,
+  "playIntroMasterPreserved": true,
+  "searchRoots": [
+    "C:\\Users\\blonj\\Documents\\bandits",
+    "C:\\Users\\blonj\\banditour workspace system",
+    "C:\\Users\\blonj\\banDit",
+    "C:\\Users\\blonj\\bandiTour-future-labs",
+    "C:\\Users\\blonj\\bandiTour partner platform",
+    "C:\\Users\\blonj\\ibottle",
+    "C:\\Users\\blonj\\Desktop\\athens banditour",
+    "C:\\Users\\blonj\\Desktop\\ibottle",
+    "C:\\Users\\blonj\\Desktop\\the unpublished museum",
+    "C:\\Users\\blonj\\Downloads",
+    "C:\\Users\\blonj\\Videos",
+    "C:\\Users\\blonj\\OneDrive",
+    "C:\\Users\\blonj\\cooliglo studio"
+  ],
+  "guestAppWiredAssets": {
+    "webMix": {
+      "uri": "/videos/play-intro.mp4",
+      "path": "C:\\Users\\blonj\\Documents\\bandits\\public\\videos\\play-intro.mp4",
+      "durationSec": 17.8,
+      "verdict": "REJECT_PLAY_BRANDING"
     },
-    "api": [
-      "http://localhost:8082/__workspace/api/public/bottle/stays?destination=Athens&checkIn=2026-11-02&checkOut=2026-11-10&travelers=2",
-      "http://localhost:8082/videos/play-intro.mp4",
-      "http://localhost:8082/videos/play-intro.mp4",
-      "http://localhost:8082/videos/play-intro.mp4"
-    ],
-    "empty": 0
+    "nativeMix": {
+      "path": "C:\\Users\\blonj\\Documents\\bandits\\assets\\images\\local-friend-bottle.mov",
+      "durationSec": 7.2,
+      "verdict": "REJECT_CGI_STUDIO"
+    }
   },
-  "desktopReduce": {
-    "label": "chrome-motion-reduce",
-    "reducedMotion": "reduce",
-    "reducedEl": 1,
-    "videoCount": 0,
-    "videoMeta": null,
-    "api": [
-      "http://localhost:8082/__workspace/api/public/bottle/stays?destination=Athens&checkIn=2026-11-02&checkOut=2026-11-10&travelers=2"
-    ],
-    "empty": 0
-  },
-  "mobile": {
-    "label": "chrome-mobile",
-    "reducedMotion": "no-preference",
-    "reducedEl": 0,
-    "videoCount": 1,
-    "videoMeta": {
-      "tag": "VIDEO",
-      "src": "http://localhost:8082/videos/play-intro.mp4",
-      "paused": true,
-      "readyState": 0,
-      "networkState": 3,
-      "error": 4,
-      "w": 0,
-      "h": 0,
-      "t": 0
-    },
-    "api": [
-      "http://localhost:8082/__workspace/api/public/bottle/stays?destination=Athens&checkIn=2026-11-02&checkOut=2026-11-10&travelers=2",
-      "http://localhost:8082/videos/play-intro.mp4",
-      "http://localhost:8082/videos/play-intro.mp4",
-      "http://localhost:8082/videos/play-intro.mp4"
-    ],
-    "empty": 0
-  },
-  "note": "play-intro.mp4 is PLAY branding not ocean; see ASSET-AUDIT.md"
+  "frameEvidencePrefix": "recovery-",
+  "frameEvidenceDir": "artifacts/runtime-proof/bottle-video-qa",
+  "rejectedCandidateCount": 13,
+  "requiredAssetSummary": "Live-action bottle thrown into open sea; 720p+ H.264/AAC; 3-15s loop; deliver as new file (e.g. bottle-ocean-mix.mp4) without overwriting play-intro.mp4"
 }

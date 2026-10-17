@@ -322,17 +322,54 @@ export type ConciergeTrackRequest = {
   decidedAt?: string;
   bookingDetails?: string | null;
   messages?: Array<{ id?: string; from?: string; body?: string; at?: string }>;
+  fulfillmentEvidence?: {
+    confirmationNumber?: string | null;
+    receiptUrl?: string | null;
+    evidenceNote?: string | null;
+    supplierName?: string | null;
+  } | null;
 };
 
+/** Operator "completed" without fulfillment evidence must NOT become guest CONFIRMED. */
+export function trackHasFulfillmentEvidence(
+  row:
+    | {
+        fulfillmentEvidence?: ConciergeTrackRequest["fulfillmentEvidence"];
+        bookingDetails?: string | null;
+      }
+    | null
+    | undefined,
+): boolean {
+  const ev = row?.fulfillmentEvidence;
+  if (!ev) return false;
+  const conf = String(ev.confirmationNumber || "").trim();
+  const receipt = String(ev.receiptUrl || "").trim();
+  const note = String(ev.evidenceNote || "").trim();
+  const supplier = String(ev.supplierName || "").trim();
+  const hasArtifact = conf.length >= 3 || /^https?:\/\//i.test(receipt);
+  const hasAttribution = supplier.length >= 2 || note.length >= 8;
+  return hasArtifact && hasAttribution;
+}
+
 /** Map Workspace premium request status → Guest ConciergeTask status. */
-export function mapTrackStatusToTaskStatus(raw: string | undefined | null): ConciergeTaskStatus {
+export function mapTrackStatusToTaskStatus(
+  raw: string | undefined | null,
+  row?: ConciergeTrackRequest | null,
+): ConciergeTaskStatus {
   const s = String(raw || "").trim().toLowerCase();
-  if (s === "completed" || s === "done") return "completed";
-  if (s === "cancelled" || s === "declined" || s === "unavailable" || s === "failed") return "cancelled";
-  if (s === "confirmed") return "confirmed";
+  if (s === "cancelled" || s === "declined" || s === "unavailable" || s === "failed") {
+    return "cancelled";
+  }
   if (s === "awaiting_guest") return "awaiting_guest";
   if (s === "accepted" || s === "in_progress" || s === "booking") return "in_progress";
   if (s === "assigned" || s === "paid") return "assigned_to_bandit";
+  // confirmed/completed require evidence — otherwise show as in_progress (coordination only).
+  if (s === "confirmed" || s === "completed" || s === "done") {
+    if (trackHasFulfillmentEvidence(row)) {
+      return s === "confirmed" ? "confirmed" : "completed";
+    }
+    return "in_progress";
+  }
   return "requested";
 }
 
@@ -372,7 +409,7 @@ export function mergeTrackIntoTasks(
   for (const row of track) {
     const id = String(row.id || "").trim();
     if (!id) continue;
-    const status = mapTrackStatusToTaskStatus(row.status);
+    const status = mapTrackStatusToTaskStatus(row.status, row);
     const reply =
       [...(row.messages || [])]
         .filter((m) => String(m.from || "").toLowerCase() === "bandit" && String(m.body || "").trim())
@@ -381,6 +418,21 @@ export function mergeTrackIntoTasks(
         .pop() ||
       (row.bookingDetails ? String(row.bookingDetails).trim() : null) ||
       null;
+    const evidenceBits = [
+      row.fulfillmentEvidence?.confirmationNumber
+        ? `conf:${row.fulfillmentEvidence.confirmationNumber}`
+        : null,
+      row.fulfillmentEvidence?.receiptUrl || null,
+      row.fulfillmentEvidence?.supplierName
+        ? `supplier:${row.fulfillmentEvidence.supplierName}`
+        : null,
+    ].filter(Boolean) as string[];
+    const confirmation =
+      trackHasFulfillmentEvidence(row) && row.fulfillmentEvidence?.confirmationNumber
+        ? String(row.fulfillmentEvidence.confirmationNumber)
+        : trackHasFulfillmentEvidence(row) && row.bookingDetails
+          ? String(row.bookingDetails)
+          : null;
     const note = String(row.note || row.service || "Concierge request").trim();
     const existing = byId.get(id);
     const now = new Date().toISOString();
@@ -389,7 +441,8 @@ export function mergeTrackIntoTasks(
         ...existing,
         status,
         providerReply: reply ?? existing.providerReply,
-        confirmation: row.bookingDetails ? String(row.bookingDetails) : existing.confirmation,
+        confirmation: confirmation ?? existing.confirmation,
+        evidence: evidenceBits.length ? evidenceBits : existing.evidence,
         updatedAt: row.decidedAt || now,
       });
     } else {
@@ -405,11 +458,11 @@ export function mergeTrackIntoTasks(
         budget: null,
         executionMethod: "HUMAN",
         status,
-        confirmation: row.bookingDetails ? String(row.bookingDetails) : null,
+        confirmation,
         providerReply: reply,
         cost: null,
         commission: null,
-        evidence: [],
+        evidence: evidenceBits,
         createdAt: row.createdAt || now,
         updatedAt: row.decidedAt || row.createdAt || now,
       });

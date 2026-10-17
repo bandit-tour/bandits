@@ -500,10 +500,8 @@ export function BottleProductScreen() {
     setSaveMsg(null);
     const gen = ++mixGenRef.current;
     setMixing(true);
+    setShowVideo(true);
     setCatalogError(null);
-    const videoTimer = setTimeout(() => {
-      if (gen === mixGenRef.current) setShowVideo(true);
-    }, 280);
     try {
       const result = await searchMixedSleeps({
         destination: place,
@@ -525,7 +523,6 @@ export function BottleProductScreen() {
       setCatalogError(e instanceof Error ? e.message : "Could not mix sleeping stays.");
       setSearched(true);
     } finally {
-      clearTimeout(videoTimer);
       if (gen === mixGenRef.current) {
         setShowVideo(false);
         setMixing(false);

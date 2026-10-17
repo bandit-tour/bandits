@@ -12,10 +12,12 @@ config({ path: ".env", quiet: true });
 config({ path: ".env.development.local", override: true, quiet: true });
 
 const GUEST = process.env.RUNTIME_BASE_URL || "http://localhost:8082";
-const WS = `${GUEST}/__workspace`;
+const WS = (process.env.WORKSPACE_API_BASE || `${GUEST}/__workspace`).replace(/\/$/, "");
 const NEO = "d76cb120-018d-4a2e-8b5f-0578a71fd8f9";
 const LUKAS = "218e9d35-f9cf-400c-aeae-60b14f86e7c7";
-const OUT = path.resolve("artifacts/runtime-proof/product-recovery-octopus");
+const OUT = path.resolve(
+  process.env.PRODUCT_RECOVERY_OUT || "artifacts/runtime-proof/product-recovery-octopus",
+);
 const BRIDGE = {
   Accept: "application/json",
   "Content-Type": "application/json",
@@ -116,10 +118,9 @@ async function waitPremiumReady(page) {
     record("auth", "BLOCKED", { reason: "Could not sign in test guest", source: "Supabase" });
   }
 
-  // O1 — profile progressive journey CTA (BanditHeader) — open via Local banDits so Supabase row resolves
-  await page.goto(`${GUEST}/bandits`, { waitUntil: "domcontentloaded", timeout: 120000 });
+  // O1 — profile progressive journey CTA (BanditHeader)
+  await page.goto(`${GUEST}/bandit/${NEO}`, { waitUntil: "domcontentloaded", timeout: 120000 });
   await page.waitForTimeout(2500);
-  await page.getByRole("button", { name: /Meet Neo/i }).first().click();
   await page
     .waitForSelector('[data-testid="bandit-premium-insights-cta"]', { timeout: 45000 })
     .catch(() => {});

@@ -38,6 +38,8 @@ import { trackEvent } from '@/lib/analytics';
 import { perfMark, perfStart, perfTraceNetwork } from '@/lib/perfTiming';
 import { getDismissedNotificationIds } from '@/lib/dismissedThreads';
 import { formatInboxSentAt } from '@/lib/inboxSentAtLabel';
+import { classifyNotification, decideDelivery } from '@/lib/notifications/policy';
+import { readNoticePrefs } from '@/lib/notifications/prefs';
 import { dismissInboxNotifications } from '@/lib/inboxNotificationManage';
 import { BANDITS_NOTIFICATIONS_REFRESH } from '@/lib/notificationEvents';
 import {
@@ -391,9 +393,33 @@ export default function NotificationsScreen() {
       filteredRows = filteredRows.filter((n) => !shouldHideAskGuestMirrorForPilotOperator(n, uid, opId));
 
       const { rows: dedupedAsk, supersededIds } = dedupeAskMeGuestNotifications(filteredRows);
-      filteredRows = dedupedAsk.sort(
-        (a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime(),
+      const prefs = await readNoticePrefs();
+      filteredRows = dedupedAsk.filter((n) =>
+        decideDelivery({
+          type: n.type,
+          title: n.title,
+          message: n.message,
+          referenceType: n.reference_type,
+          prefs,
+          alreadyDelivered: true,
+        }).allow,
       );
+      filteredRows = filteredRows.sort((a, b) => {
+        const rank = { service: 0, social: 1, marketing: 2 };
+        const ca = classifyNotification({
+          type: a.type,
+          title: a.title,
+          message: a.message,
+          referenceType: a.reference_type,
+        });
+        const cb = classifyNotification({
+          type: b.type,
+          title: b.title,
+          message: b.message,
+          referenceType: b.reference_type,
+        });
+        return rank[ca] - rank[cb] || new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
+      });
 
       const unreadRepliesBeforeRead = filteredRows.filter(
         (n) => !n.is_read && n.type === 'bandit_reply',
@@ -654,16 +680,24 @@ export default function NotificationsScreen() {
   }, [loadInbox]);
 
   const sections = useMemo(() => {
-    const nearby = rows.filter((r) => r.notification.reference_type === 'nearby_route');
-    const rest = rows.filter((r) => r.notification.reference_type !== 'nearby_route');
-    const out: { title: string | null; data: InboxListItem[] }[] = [];
-    if (nearby.length > 0) {
-      out.push({ title: 'Around You', data: nearby });
+    const groups: Record<'service' | 'social' | 'marketing', InboxListItem[]> = {
+      service: [],
+      social: [],
+      marketing: [],
+    };
+    for (const row of rows) {
+      const kind = classifyNotification({
+        type: row.notification.type,
+        title: row.notification.title,
+        message: row.notification.message,
+        referenceType: row.notification.reference_type,
+      });
+      groups[kind].push(row);
     }
-    if (rest.length > 0) {
-      out.push({ title: null, data: rest });
-    }
-    return out;
+    const titles = { service: 'Service', social: 'Social', marketing: 'Marketing' } as const;
+    return (['service', 'social', 'marketing'] as const)
+      .filter((kind) => groups[kind].length > 0)
+      .map((kind) => ({ title: titles[kind], data: groups[kind] }));
   }, [rows]);
 
   const openItem = useCallback(
@@ -814,6 +848,7 @@ export default function NotificationsScreen() {
       const selected = selectedIds.has(item.id);
       const inner = (
         <Pressable
+          testID={`inbox-item-${item.id}`}
           style={[styles.card, selected && styles.cardSelected]}
           onPress={() => {
             if (selectMode) {
@@ -834,6 +869,19 @@ export default function NotificationsScreen() {
               </View>
             ) : null}
             <View style={styles.cardBody}>
+              <Text style={styles.classLabel} testID={`inbox-class-${classifyNotification({
+                type: item.notification.type,
+                title: item.notification.title,
+                message: item.notification.message,
+                referenceType: item.notification.reference_type,
+              })}`}>
+                {classifyNotification({
+                  type: item.notification.type,
+                  title: item.notification.title,
+                  message: item.notification.message,
+                  referenceType: item.notification.reference_type,
+                })}
+              </Text>
               <View style={styles.cardTop}>
                 <Text style={styles.banditName}>{item.banditName}</Text>
                 <Text style={styles.time}>{item.timestampLabel}</Text>
@@ -886,7 +934,11 @@ export default function NotificationsScreen() {
           extraData={inboxListExtraData}
           renderItem={renderItem}
           renderSectionHeader={({ section }) =>
-            section.title ? <Text style={styles.sectionHeader}>{section.title}</Text> : null
+            section.title ? (
+              <Text style={styles.sectionHeader} testID={`inbox-section-${section.title.toLowerCase()}`}>
+                {section.title}
+              </Text>
+            ) : null
           }
           SectionSeparatorComponent={() => <View style={{ height: 4 }} />}
           contentContainerStyle={styles.list}
@@ -958,6 +1010,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginBottom: 8,
   },
+  classLabel: { fontSize: 11, fontWeight: '800', letterSpacing: 0.4, color: '#5C6B73', textTransform: 'uppercase', marginBottom: 4 },
   banditName: {
     flex: 1,
     marginRight: 8,

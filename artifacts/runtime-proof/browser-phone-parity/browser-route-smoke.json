@@ -1,0 +1,132 @@
+﻿{
+    "checkedAt":  "2026-10-17T16:12:08.2695685+03:00",
+    "routes":  [
+                   {
+                       "ok":  true,
+                       "status":  200,
+                       "route":  "/"
+                   },
+                   {
+                       "ok":  true,
+                       "status":  200,
+                       "route":  "/home"
+                   },
+                   {
+                       "ok":  true,
+                       "status":  200,
+                       "route":  "/explore"
+                   },
+                   {
+                       "ok":  true,
+                       "status":  200,
+                       "route":  "/bandits"
+                   },
+                   {
+                       "ok":  true,
+                       "status":  200,
+                       "route":  "/experiences"
+                   },
+                   {
+                       "ok":  true,
+                       "status":  200,
+                       "route":  "/smarttraveler"
+                   },
+                   {
+                       "ok":  true,
+                       "status":  200,
+                       "route":  "/travelBottle"
+                   },
+                   {
+                       "ok":  true,
+                       "status":  200,
+                       "route":  "/shop"
+                   },
+                   {
+                       "ok":  true,
+                       "status":  200,
+                       "route":  "/alerts"
+                   },
+                   {
+                       "ok":  true,
+                       "status":  200,
+                       "route":  "/localFriend"
+                   },
+                   {
+                       "ok":  true,
+                       "status":  200,
+                       "route":  "/chat"
+                   },
+                   {
+                       "ok":  true,
+                       "status":  200,
+                       "route":  "/menu"
+                   },
+                   {
+                       "ok":  true,
+                       "status":  200,
+                       "route":  "/profile"
+                   },
+                   {
+                       "ok":  true,
+                       "status":  200,
+                       "route":  "/impact"
+                   },
+                   {
+                       "ok":  true,
+                       "status":  200,
+                       "route":  "/bookings"
+                   },
+                   {
+                       "ok":  true,
+                       "status":  200,
+                       "route":  "/account"
+                   },
+                   {
+                       "ok":  true,
+                       "status":  200,
+                       "route":  "/account/payments"
+                   },
+                   {
+                       "ok":  true,
+                       "status":  200,
+                       "route":  "/account/membership"
+                   },
+                   {
+                       "ok":  true,
+                       "status":  200,
+                       "route":  "/account/faq"
+                   },
+                   {
+                       "ok":  true,
+                       "status":  200,
+                       "route":  "/account/technical-support"
+                   },
+                   {
+                       "ok":  true,
+                       "status":  200,
+                       "route":  "/dreamDestinations"
+                   },
+                   {
+                       "ok":  true,
+                       "status":  200,
+                       "route":  "/cityMemory"
+                   },
+                   {
+                       "ok":  true,
+                       "status":  200,
+                       "route":  "/myMoment"
+                   },
+                   {
+                       "ok":  true,
+                       "status":  200,
+                       "route":  "/premium/d76cb120-018d-4a2e-8b5f-0578a71fd8f9"
+                   },
+                   {
+                       "ok":  true,
+                       "status":  200,
+                       "route":  "/bottleHotel/play-theatrou"
+                   }
+               ],
+    "tip":  "71b0451",
+    "base":  "https://bandits-two.vercel.app"
+}

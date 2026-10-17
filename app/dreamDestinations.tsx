@@ -91,6 +91,8 @@ export default function DreamDestinationsScreen() {
         await recordLifecycleNotice({
           id: `dream_saved_${row.id}`,
           userId,
+          notificationClass: "marketing",
+          explicitConsent: true,
           title: "Dream destination saved",
           message: `${row.name} is your next-trip focus. Open this note to return to the list.`,
           href: "/dreamDestinations",

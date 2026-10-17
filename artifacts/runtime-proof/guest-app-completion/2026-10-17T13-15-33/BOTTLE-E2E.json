@@ -1,0 +1,15 @@
+{
+  "source": "product-recovery-bottle/run-proof.mjs (intro skip) + guest-app-completion journey",
+  "guestBase": "https://bandits-two.vercel.app",
+  "T1_mix_form": "PASS",
+  "T2_athens_hotels": "PASS",
+  "T3_dates_guests": "PASS",
+  "T4_select_play": "PASS",
+  "T5_view_hotel_route": "PASS",
+  "journey_mix_honest_empty": "PASS",
+  "journey_bottle_hotel_profile": "PASS",
+  "workspace": {
+    "bottleStaysProviderCount": 0,
+    "note": "Empty second-sleep inventory — Guest shows honest empty/sample states only."
+  }
+}

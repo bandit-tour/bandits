@@ -163,6 +163,20 @@ export async function respondMomentConnection(args: {
       reference_type: GUEST_MOMENT_CONNECTION_REF,
       is_read: false,
     });
+    try {
+      const { recordLifecycleNotice } = await import("@/lib/lifecycle/notices");
+      await recordLifecycleNotice({
+        id: `social_accept_${threadId}`,
+        userId: user.id,
+        notificationClass: "social",
+        type: GUEST_MOMENT_CONNECTION_TYPE,
+        title: "Connection accepted",
+        message: "You can now message each other in Chat.",
+        href: `/chat?notificationType=guest_moment&referenceId=${encodeURIComponent(threadId)}`,
+      });
+    } catch {
+      /* local inbox is best-effort */
+    }
   }
 
   requestNotificationsRefresh();

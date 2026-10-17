@@ -87,9 +87,9 @@ export function guestFacingConciergeStatus(
     case "awaiting_guest":
       return "Waiting for you";
     case "confirmed":
-      return "Reservation confirmed";
+      return "Confirmed with proof";
     case "completed":
-      return "Done";
+      return "Completed with proof";
     case "cancelled":
       return "Cancelled";
     default:

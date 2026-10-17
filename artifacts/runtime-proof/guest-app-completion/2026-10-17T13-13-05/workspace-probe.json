@@ -1,0 +1,26 @@
+{
+  "experiences": {
+    "status": 200,
+    "ok": true,
+    "count": 1
+  },
+  "bottleStays": {
+    "status": 200,
+    "ok": true,
+    "count": 0,
+    "provider": 0
+  },
+  "commerceReady": null,
+  "hotels": {
+    "play-theatrou": {
+      "status": 200,
+      "ok": true,
+      "statusField": "LIVE",
+      "photos": 0
+    },
+    "nyx-athens": {
+      "status": 404,
+      "ok": false
+    }
+  }
+}

@@ -74,7 +74,15 @@ function record(id, status, extra = {}) {
 }
 
 const browser = await chromium.launch({ headless: true, channel: "chrome" });
-const page = await browser.newPage({ viewport: { width: 1280, height: 900 } });
+const context = await browser.newContext({ viewport: { width: 1280, height: 900 } });
+await context.addInitScript(() => {
+  try {
+    localStorage.setItem("@bandits_opening_intro_v2", "1");
+  } catch {
+    /* ignore */
+  }
+});
+const page = await context.newPage();
 
 try {
   const ws = await workspaceProbe();

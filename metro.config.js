@@ -8,11 +8,25 @@ const { URL } = require("url");
  * Experiences / Shop / Bottle public inventories on localhost:8082.
  */
 function workspaceTargetOrigin() {
+  /**
+   * Local Guest web QA must hit local Workspace treasury (:3000).
+   * Vercel Stay Pass still fails with unconfirmable PaymentIntents (no Guest
+   * Stripe Elements) — EXPO_PUBLIC_WORKSPACE_URL often points at vercel.app.
+   * Opt into remote with EXPO_PUBLIC_WORKSPACE_FORCE_REMOTE=1.
+   */
+  const local = String(
+    process.env.EXPO_PUBLIC_WORKSPACE_LOCAL_URL || "http://localhost:3000",
+  ).replace(/\/$/, "");
+  const forceRemote =
+    String(process.env.EXPO_PUBLIC_WORKSPACE_FORCE_REMOTE || "").trim() === "1";
   const raw =
     process.env.EXPO_PUBLIC_WORKSPACE_URL ||
     process.env.EXPO_PUBLIC_ORCHESTRA_OS_URL ||
-    "https://banditour-workspace.vercel.app";
-  return String(raw).replace(/\/$/, "");
+    "";
+  if (!forceRemote && (!raw || /vercel\.app/i.test(raw))) {
+    return local;
+  }
+  return String(raw || "https://banditour-workspace.vercel.app").replace(/\/$/, "");
 }
 
 function proxyWorkspace(req, res) {
@@ -68,10 +82,19 @@ module.exports = (() => {
     babelTransformerPath: require.resolve("react-native-svg-transformer"),
   };
 
+  const blockList = [
+    ...(Array.isArray(resolver.blockList)
+      ? resolver.blockList
+      : resolver.blockList
+        ? [resolver.blockList]
+        : []),
+    /playwright-core[/\\]\.local-browsers/,
+  ];
   config.resolver = {
     ...resolver,
     assetExts: resolver.assetExts.filter((ext) => ext !== "svg"),
     sourceExts: [...resolver.sourceExts, "svg"],
+    blockList,
   };
 
   const prevEnhance = config.server?.enhanceMiddleware;

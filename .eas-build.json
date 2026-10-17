@@ -1,0 +1,52 @@
+﻿[
+  {
+    "id": "fecaa5a6-6aac-4022-a975-2f170c4af1df",
+    "status": "ERRORED",
+    "platform": "ANDROID",
+    "error": {
+      "errorCode": "EAS_BUILD_UNKNOWN_GRADLE_ERROR",
+      "message": "Gradle build failed with unknown error. See logs for the \"Run gradlew\" phase for more information."
+    },
+    "artifacts": {},
+    "fingerprint": {
+      "id": "019e24fc-fa03-7b92-a844-d33e091ba64a",
+      "hash": "1da340b25ec3e8d4283b7c45308508dfd2884285"
+    },
+    "initiatingActor": {
+      "id": "df4dc4ba-d727-4249-99c9-9633e7ead643",
+      "displayName": "banditeam121275"
+    },
+    "logFiles": [
+      "https://storage.googleapis.com/eas-workflows-production/logs/02867d6d-fb41-4f54-80ad-aae3d6831060/fecaa5a6-6aac-4022-a975-2f170c4af1df/2026-05-14T05%3A37%3A01Z-76996623-2bcc-4366-a907-ccb37571657f.txt?X-Goog-Algorithm=GOOG4-RSA-SHA256&X-Goog-Credential=www-production%40exponentjs.iam.gserviceaccount.com%2F20260514%2Fauto%2Fstorage%2Fgoog4_request&X-Goog-Date=20260514T070316Z&X-Goog-Expires=900&X-Goog-SignedHeaders=host&X-Goog-Signature=b43d693a74389bd2f5c3209d1ae7ab0c37e18f0a1371403280e069654de8c087a50047504c7849fdb5bb5ce4ee2421d7546741e29ffa90959d0c507f9bc9965e1f78e743131178e41690554d042b18cd298839ba9a3d761c819ff8dde07b33c56fd90c3eb086a99b04b709eeb624750aacf8effb08c015b8c1227c8dfd7f31f6908efe0d0b2d1eb3d679d4eb1c5e9153f036e441508f149a9e2a77b35bbc55a22ff005557094f61aa9ccc6c3bebb32de0f4f356af5db93cc4656141194b443e7cf109b51d09657c2330ffb4060c0cb056dd9ef82502e6e1fd61e7ca752ac09e287f58fd6f0a51cfbe76f229d21b4fcc782c0c424e433ea0aff4e65c0423db577"
+    ],
+    "project": {
+      "id": "02867d6d-fb41-4f54-80ad-aae3d6831060",
+      "name": "bandits",
+      "slug": "bandits",
+      "ownerAccount": {
+        "id": "6036e696-670d-4a2a-90c9-02537b357bea",
+        "name": "banditeam121275"
+      }
+    },
+    "distribution": "INTERNAL",
+    "buildProfile": "preview",
+    "sdkVersion": "54.0.0",
+    "appVersion": "1.0.2",
+    "appBuildVersion": "1",
+    "runtimeVersion": "exposdk:54.0.0",
+    "gitCommitHash": "9d71941ee698cdc5cb9a49d5d1aa774d629d1ef1",
+    "gitCommitMessage": "tighten place match confidence + broaden duplicate image audit\n\n- Require exact normalized name OR strong+address/city alignment for place confidence\n- Keep ambiguous place matches out of recommendation imagery\n- Extend verify-unique-guide-images audit to collect recommendation labels across multiple swipes and report broader set coverage\n\nCo-authored-by: Cursor <cursoragent@cursor.com>",
+    "priority": "HIGH",
+    "createdAt": "2026-05-14T05:36:59.361Z",
+    "updatedAt": "2026-05-14T05:43:46.175Z",
+    "message": "1.0.2 Android APK: CNG prebuild + all latest fixes",
+    "completedAt": "2026-05-14T05:43:45.447Z",
+    "expirationDate": "2026-08-12T05:36:59.385Z",
+    "isForIosSimulator": false,
+    "metrics": {
+      "buildWaitTime": 840,
+      "buildQueueTime": 5913,
+      "buildDuration": 399333
+    }
+  }
+]

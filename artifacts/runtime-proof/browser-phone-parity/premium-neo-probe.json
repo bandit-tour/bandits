@@ -1,0 +1,210 @@
+﻿{
+    "product":  "Premium Insights",
+    "authorized":  true,
+    "showPremiumInsights":  true,
+    "octopusVerified":  true,
+    "octopusLevel":  "Octopus Verifiedâ¢",
+    "rule":  "A Local Bandit is an entrepreneur operating a personal travel business inside bandiTour â not simply a content creator. Premium is never standardized. Every Bandit defines their own brand, services, pricing, and insights. Guests pay for perspective and relationship. All Premium purchases settle through Orchestra Commerce OS.",
+    "unlocked":  false,
+    "entitlement":  null,
+    "business":  {
+                     "premiumName":  "Ioanna Â· Athens Stay Concierge",
+                     "premiumDescription":  "Organic Octopus Verifiedâ¢ Local Bandit â Stay Pass unlocks my judgment for your stay: reservations, routing, and local coordination.",
+                     "travelStyle":  "Neighborhood Â· food Â· practical help",
+                     "expertise":  [
+                                       "Local knowledge",
+                                       "Reservations",
+                                       "Neighborhood routing"
+                                   ],
+                     "displayName":  "Ioanna Live musq9j2v",
+                     "city":  "Athens",
+                     "languages":  [
+                                       "Greek",
+                                       "English"
+                                   ],
+                     "timeZone":  "Europe/Athens",
+                     "workingHours":  "Daily Â· 10:00â22:00",
+                     "liveStatus":  "open",
+                     "usuallyRepliesWithin":  "Usually replies within 3 hours"
+                 },
+    "free":  {
+                 "displayName":  "Ioanna Live musq9j2v",
+                 "bio":  "Ioanna Live musq9j2v â Octopus Verifiedâ¢ Local Bandit in Athens.",
+                 "city":  "Athens",
+                 "interests":  [
+                                   "Local knowledge",
+                                   "Reservations",
+                                   "Neighborhood routing"
+                               ],
+                 "freeTeaser":  "Ask Me is free. Stay Pass unlocks concierge during your stay.",
+                 "liveStatus":  "open",
+                 "usuallyRepliesWithin":  "Usually replies within 3 hours",
+                 "premiumName":  "Ioanna Â· Athens Stay Concierge"
+             },
+    "pricing":  [
+                    {
+                        "id":  "prem_bandit_live_musq9j2v_2ad6_trip",
+                        "model":  "one_trip",
+                        "label":  "Stay Pass",
+                        "blurb":  "Up to 5 requests during your stay",
+                        "amountCents":  1900,
+                        "durationDays":  7,
+                        "featured":  true
+                    }
+                ],
+    "insights":  null,
+    "lockedPreview":  {
+                          "premiumName":  "Ioanna Â· Athens Stay Concierge",
+                          "servicesCount":  2,
+                          "insightsCount":  1,
+                          "exclusivesCount":  1,
+                          "itinerariesCount":  1,
+                          "galleryCount":  3,
+                          "sections":  [
+                                           "Insights (personal knowledge)",
+                                           "Exclusive recommendations",
+                                           "Custom itineraries",
+                                           "Concierge requests",
+                                           "Premium gallery",
+                                           "Services this Bandit offers"
+                                       ]
+                      },
+    "banditId":  "d76cb120-018d-4a2e-8b5f-0578a71fd8f9",
+    "statusLabels":  {
+                         "open":  "Open",
+                         "available_today":  "Open",
+                         "busy":  "Busy",
+                         "offline":  "Busy",
+                         "vacation":  "Vacation"
+                     },
+    "visibility":  {
+                       "banditId":  "d76cb120-018d-4a2e-8b5f-0578a71fd8f9",
+                       "commercialBanditId":  "bandit_live_musq9j2v_2ad6",
+                       "octopusVerified":  true,
+                       "octopusLevel":  "Octopus Verifiedâ¢",
+                       "premiumConciergeEnabled":  true,
+                       "premiumConciergeAllowed":  true,
+                       "showPremiumInsights":  true,
+                       "commerceOperational":  true,
+                       "profileConfigured":  true,
+                       "freeAskMe":  true,
+                       "cityGuide":  true,
+                       "blockers":  [
+
+                                    ],
+                       "authorizationClass":  "PRODUCTION"
+                   },
+    "commerce":  {
+                     "visibility":  {
+                                        "banditId":  "d76cb120-018d-4a2e-8b5f-0578a71fd8f9",
+                                        "commercialBanditId":  "bandit_live_musq9j2v_2ad6",
+                                        "octopusVerified":  true,
+                                        "octopusLevel":  "Octopus Verifiedâ¢",
+                                        "premiumConciergeEnabled":  true,
+                                        "premiumConciergeAllowed":  true,
+                                        "showPremiumInsights":  true,
+                                        "commerceOperational":  true,
+                                        "profileConfigured":  true,
+                                        "freeAskMe":  true,
+                                        "cityGuide":  true,
+                                        "blockers":  [
+
+                                                     ],
+                                        "authorizationClass":  "PRODUCTION"
+                                    },
+                     "authorized":  true,
+                     "catalog":  {
+                                     "currency":  "EUR",
+                                     "oneRequestDefaultFeeCents":  900,
+                                     "stayPassDefaultFeeCents":  1900,
+                                     "stayPassDefaultDurationDays":  7,
+                                     "stayPassDefaultAllowance":  5,
+                                     "additionalRequestFeeCents":  900,
+                                     "disclosure":  {
+                                                        "serviceFeeCovers":  "You pay for the Local Banditâs time, assistance, local knowledge, and coordination â not a guarantee of third-party availability.",
+                                                        "thirdPartyNotIncluded":  "Restaurant bills, tickets, transfer fares, and other provider charges are separate. They require your explicit approval before booking commitment."
+                                                    },
+                                     "status":  "demo_configurable"
+                                 },
+                     "bandit":  {
+                                    "id":  "d76cb120-018d-4a2e-8b5f-0578a71fd8f9",
+                                    "commercialBanditId":  "bandit_live_musq9j2v_2ad6",
+                                    "displayName":  "Ioanna Live musq9j2v",
+                                    "premiumName":  "Ioanna Â· Athens Stay Concierge",
+                                    "premiumDescription":  "Organic Octopus Verifiedâ¢ Local Bandit â Stay Pass unlocks my judgment for your stay: reservations, routing, and local coordination.",
+                                    "languages":  [
+                                                      "Greek",
+                                                      "English"
+                                                  ],
+                                    "expertise":  [
+                                                      "Local knowledge",
+                                                      "Reservations",
+                                                      "Neighborhood routing"
+                                                  ],
+                                    "workingHours":  "Daily Â· 10:00â22:00",
+                                    "city":  "Athens",
+                                    "services":  [
+                                                     {
+                                                         "id":  "s1",
+                                                         "name":  "Restaurant reservations",
+                                                         "detail":  "Tables locals still use"
+                                                     },
+                                                     {
+                                                         "id":  "s2",
+                                                         "name":  "Neighborhood routing",
+                                                         "detail":  "What to do tonight without tourist theater"
+                                                     }
+                                                 ],
+                                    "conciergeOffers":  [
+                                                            {
+                                                                "id":  "c1",
+                                                                "name":  "Restaurant reservations"
+                                                            },
+                                                            {
+                                                                "id":  "c2",
+                                                                "name":  "Taxi arrangements"
+                                                            },
+                                                            {
+                                                                "id":  "c3",
+                                                                "name":  "Local shopping list"
+                                                            }
+                                                        ]
+                                },
+                     "offers":  {
+                                    "oneRequest":  {
+                                                       "sku":  "premium_one_request",
+                                                       "label":  "One Request",
+                                                       "amountCents":  900,
+                                                       "currency":  "EUR",
+                                                       "disclosure":  {
+                                                                          "serviceFeeCovers":  "You pay for the Local Banditâs time, assistance, local knowledge, and coordination â not a guarantee of third-party availability.",
+                                                                          "thirdPartyNotIncluded":  "Restaurant bills, tickets, transfer fares, and other provider charges are separate. They require your explicit approval before booking commitment."
+                                                                      },
+                                                       "serviceExamples":  [
+                                                                               "Restaurant reservations",
+                                                                               "Taxi arrangements",
+                                                                               "Local shopping list"
+                                                                           ]
+                                                   },
+                                    "stayPass":  {
+                                                     "sku":  "premium_stay_pass",
+                                                     "label":  "Stay Pass",
+                                                     "amountCents":  1900,
+                                                     "currency":  "EUR",
+                                                     "durationDays":  7,
+                                                     "allowance":  5,
+                                                     "pricingOfferId":  "prem_bandit_live_musq9j2v_2ad6_trip",
+                                                     "disclosure":  {
+                                                                        "serviceFeeCovers":  "You pay for the Local Banditâs time, assistance, local knowledge, and coordination â not a guarantee of third-party availability.",
+                                                                        "thirdPartyNotIncluded":  "Restaurant bills, tickets, transfer fares, and other provider charges are separate. They require your explicit approval before booking commitment."
+                                                                    },
+                                                     "blurb":  "Up to 5 requests during your stay"
+                                                 }
+                                },
+                     "stayPass":  null,
+                     "requests":  [
+
+                                  ],
+                     "unlocked":  false
+                 }
+}
