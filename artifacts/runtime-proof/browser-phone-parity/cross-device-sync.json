@@ -1,18 +1,34 @@
 ﻿{
-    "stripeMode":  "test_ready",
-    "nativePreviewWorkspace":  "https://banditour-workspace.vercel.app (eas.json preview env)",
-    "bottleCount":  0,
-    "experiencesMatch":  true,
-    "premiumShow":  true,
-    "experiencesCountDirect":  1,
-    "experiencesCountGuest":  1,
-    "method":  "API_BACKEND_IDENTITY",
-    "premiumAuthorized":  true,
-    "livePaymentsFlag":  false,
-    "bottleInventory":  "none",
-    "at":  "2026-10-17T16:23:03.4455563+03:00",
-    "physicalCrossDevice":  "BLOCKED_NO_DEVICE",
-    "note":  "Native device install unavailable in this agent environment (adb empty; no emulator). Backend identity confirms browser+native preview env point at same Workspace TEST commerce.",
-    "premiumUnlocked":  false,
-    "browserWorkspaceBridge":  "https://bandits-two.vercel.app/__workspace"
+  "generatedAt": "2026-10-17T13:35:00.000Z",
+  "status": "BLOCKED",
+  "account": null,
+  "reason": "Same-account browser+phone sync requires an installed preview build on a physical device. Agent has no adb device and cannot install Ad Hoc IPA without the registered iPhone in hand.",
+  "plannedTests": [
+    {
+      "id": "auth-session",
+      "steps": "Sign in on browser prod → install preview APK/IPA → sign in same account → confirm identity/hotel context matches",
+      "status": "BLOCKED"
+    },
+    {
+      "id": "bookings-list",
+      "steps": "Open /bookings on browser and phone; confirmed Workspace bookings (e.g. Kypseli clay) appear on both — Stripe LIVE OFF, no new paid invent",
+      "status": "BLOCKED"
+    },
+    {
+      "id": "notice-prefs",
+      "steps": "Toggle Settings notification categories on phone → reload browser Settings → prefs persist via same storage/account path",
+      "status": "BLOCKED"
+    },
+    {
+      "id": "octopus-track",
+      "steps": "Premium track status: completed without fulfillmentEvidence must stay in_progress on both surfaces (honesty)",
+      "status": "BLOCKED"
+    },
+    {
+      "id": "bottle-mix",
+      "steps": "Bottle Mix UI reachable on both; empty second-sleep inventory honest (no invented supply)",
+      "status": "BLOCKED"
+    }
+  ],
+  "stripeLive": "OFF"
 }
