@@ -13,8 +13,8 @@ export const OCTOPUS_CONCIERGE_PRODUCT_LAW = {
   guestVoice: {
     handling: (firstName: string) => `${firstName} is handling it`,
     found: "Restaurant found",
-    confirmed: "Reservation confirmed",
-    done: "Done",
+    confirmed: "Confirmed with proof",
+    done: "Completed with proof",
   },
   feeds: [
     "My Journey",
