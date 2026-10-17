@@ -82,6 +82,28 @@ export async function bookExperienceViaCommerce(
 
   if (!origin) {
     if (workspaceBook.ok) {
+      if (workspaceBook.data.paid) {
+        publishGuestLiveEvent({
+          type: "commerce.booking.confirmed",
+          title: `Booked · ${input.experienceTitle}`,
+          entityId: input.experienceId,
+          detail: `${input.slotLabel} · Workspace Stripe TEST captured`,
+          sourceRef: `workspace:${workspaceBook.data.bookingId}`,
+        });
+        return {
+          ok: true,
+          data: {
+            order: {
+              id: workspaceBook.data.bookingId,
+              status: "paid",
+              source: "workspace_stripe_test",
+            },
+            raw: workspaceBook.data,
+            workspaceBookingId: workspaceBook.data.bookingId,
+          },
+          source: "orchestra_os",
+        };
+      }
       if (freeNoPay) {
         publishGuestLiveEvent({
           type: "commerce.booking.confirmed",

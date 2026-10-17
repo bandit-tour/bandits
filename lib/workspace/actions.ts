@@ -214,7 +214,7 @@ export async function bookExperienceViaWorkspace(input: {
   sessionId?: string;
   guests: number;
   guestEmail?: string | null;
-}): Promise<GuestActionResult<{ bookingId: string }>> {
+}): Promise<GuestActionResult<{ bookingId: string; paid?: boolean }>> {
   const result = await postGuestReflection(
     {
       action: "book_experience",
@@ -235,14 +235,19 @@ export async function bookExperienceViaWorkspace(input: {
     eventMeta?.bookingId ||
     (result.data as { bookingId?: string }).bookingId;
   if (!bookingId) return { ok: false, detail: "Workspace returned no booking id" };
+  const reflection = (result.data as {
+    reflection?: { bookings?: Array<{ id: string; status?: string; payment?: { status?: string } }> };
+  }).reflection;
+  const row = reflection?.bookings?.find((b) => b.id === bookingId);
+  const paid = row?.status === "paid" || row?.payment?.status === "captured";
   publishGuestLiveEvent({
     type: "experience.booked",
     title: input.title,
     entityId: input.experienceId,
-    detail: `Workspace booking ${bookingId}`,
+    detail: `Workspace booking ${bookingId}${paid ? " · paid" : " · requested"}`,
     sourceRef: `workspace:${bookingId}`,
   });
-  return { ok: true, data: { bookingId } };
+  return { ok: true, data: { bookingId, paid } };
 }
 
 export async function claimHotelOffer(input: {
