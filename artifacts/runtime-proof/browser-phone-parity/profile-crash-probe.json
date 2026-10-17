@@ -1,13 +1,19 @@
 {
-  "at": "2026-10-17T13:25:00.000Z",
+  "at": "2026-10-17T13:37:00.000Z",
   "url": "https://bandits-two.vercel.app/profile",
-  "pageError": "PROFILE_STAY is not defined",
-  "bodyLength": 0,
-  "screenshot": "browser-profile.png",
-  "fixWorkingTree": {
+  "priorPageError": "PROFILE_STAY is not defined",
+  "postFix": {
+    "commit": "605cb4c",
+    "deployId": "dpl_Hm7aQ1vVKD8PYFwp37vQe8e5esjh",
+    "pageError": null,
+    "browserStatus": "PASS",
+    "bodyStartsWith": "Profile · Guest · bandiTour",
+    "bundleMarker": "Travel score (sample) + module-bound PROFILE_STAY"
+  },
+  "fix": {
     "file": "app/(tabs)/profile.tsx",
     "change": "Import PROFILE_STAY; gate sample travel score/badges behind showSampleJournal",
-    "committed": false
+    "committed": true
   },
-  "impactOnTipBuilds": "Android 68553a9d and iOS 8f6209b3 @ 71b0451 still crash on /profile until rebuild after commit"
+  "devicePass": "BLOCKED — adb devices empty; physical install of vc19/bn43 still required"
 }

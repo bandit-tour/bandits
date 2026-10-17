@@ -1,33 +1,49 @@
 ﻿{
-    "branch":  "repair/guest-app-regression",
-    "gitTip":  "71b0451",
-    "appVersion":  "1.0.2",
-    "livePaymentsFlag":  false,
-    "at":  "2026-10-17T16:22:47.5122216+03:00",
-    "browserUrl":  "https://bandits-two.vercel.app",
-    "stripeMode":  "test_ready",
-    "builds":  {
-                   "android":  {
-                                   "id":  "68553a9d-4f88-4ef8-8dab-4dc16aefe760",
-                                   "apk":  "https://expo.dev/artifacts/eas/xlmhjCQwvLAhOsYc37uC9BhmayTkYv3BFaKxOMoKgzA.apk",
-                                   "commit":  "71b0451",
-                                   "profile":  "preview",
-                                   "versionCode":  16,
-                                   "page":  "https://expo.dev/accounts/banditeam121275/projects/bandits/builds/68553a9d-4f88-4ef8-8dab-4dc16aefe760",
-                                   "status":  "FINISHED"
-                               },
-                   "ios":  {
-                               "buildNumber":  40,
-                               "id":  "8f6209b3-4f3b-4890-8528-94644a3c7f76",
-                               "testFlight":  "NOT_FROM_PREVIEW_PROFILE",
-                               "provisionedDevice":  "iPhone UDID 00008110-0019248C0A9A401E",
-                               "profile":  "preview",
-                               "ipa":  "https://expo.dev/artifacts/eas/rPiZydpDZxKuszzQfRHPzeqjf7KUYRPmN8e3bsMH2EE.ipa",
-                               "page":  "https://expo.dev/accounts/banditeam121275/projects/bandits/builds/8f6209b3-4f3b-4890-8528-94644a3c7f76",
-                               "commit":  "71b0451",
-                               "distribution":  "internal_ad_hoc",
-                               "status":  "FINISHED"
-                           }
-               },
-    "note":  "Uncommitted local WIP (notifications prefs, octopus entitlement, commerceBook, settings) NOT included in these builds — tip commit only."
+  "branch": "repair/guest-app-regression",
+  "gitTip": "c9b6bf7",
+  "profileFixCommit": "605cb4c",
+  "appVersion": "1.0.2",
+  "livePaymentsFlag": false,
+  "stripeMode": "test_ready",
+  "at": "2026-10-17T16:45:00+03:00",
+  "browserUrl": "https://bandits-two.vercel.app",
+  "vercelDeployId": "dpl_Hm7aQ1vVKD8PYFwp37vQe8e5esjh",
+  "builds": {
+    "android": {
+      "id": "33c3a52e-da11-4871-95b2-d59bdfb4795b",
+      "apk": "https://expo.dev/artifacts/eas/Q73wklYQQsl5FkGRb7F3AA3xEsl68I-6jR3WAVILJrE.apk",
+      "commit": "c9b6bf7",
+      "profile": "preview",
+      "versionCode": 19,
+      "page": "https://expo.dev/accounts/banditeam121275/projects/bandits/builds/33c3a52e-da11-4871-95b2-d59bdfb4795b",
+      "status": "FINISHED"
+    },
+    "ios": {
+      "buildNumber": 43,
+      "id": "2c023dd7-0931-4fbb-a1f8-cd46fffb0e6a",
+      "testFlight": "NOT_FROM_PREVIEW_PROFILE",
+      "provisionedDevice": "iPhone UDID 00008110-0019248C0A9A401E",
+      "profile": "preview",
+      "ipa": "https://expo.dev/artifacts/eas/PnvW_DVKzYohWfAf01r4PYB4quTfILMf91-PtOk_tVM.ipa",
+      "page": "https://expo.dev/accounts/banditeam121275/projects/bandits/builds/2c023dd7-0931-4fbb-a1f8-cd46fffb0e6a",
+      "commit": "c9b6bf7",
+      "distribution": "internal_ad_hoc",
+      "status": "FINISHED"
+    },
+    "android_profile_fix_kick": {
+      "id": "00df642a-3dd8-4f36-a7e1-e80ccbf3cd16",
+      "apk": "https://expo.dev/artifacts/eas/CKk6srdq-h46HVuG_aYmKh5mfp4qbgtLcbf0Lw3kr6A.apk",
+      "commit": "605cb4c",
+      "versionCode": 18,
+      "note": "This agent kick at profile-fix SHA; tip pair above preferred for CEO install"
+    },
+    "ios_profile_fix_kick": {
+      "id": "55346f31-a408-450a-a919-0a3ccb014da4",
+      "ipa": "https://expo.dev/artifacts/eas/jXCzuhNYh9toWhg5gQ3wRynQNI7UlrENhap-R2CjhLQ.ipa",
+      "commit": "c9b6bf7",
+      "buildNumber": 42,
+      "note": "This agent kick; tip bn43 preferred"
+    }
+  },
+  "note": "Profile P0 fixed in 605cb4c; tip c9b6bf7 includes fix + concierge voice. Stripe LIVE OFF (workspace test_ready). Physical device PASS still BLOCKED (adb empty)."
 }

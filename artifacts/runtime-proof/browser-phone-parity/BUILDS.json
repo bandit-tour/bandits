@@ -6,7 +6,7 @@
   "stripeLive": "OFF",
   "browser": {
     "productionUrl": "https://bandits-two.vercel.app",
-    "deploymentId": "dpl_9nD15uX3P2gqNgM8pYnWrSQ8jhc3",
+    "deploymentId": "dpl_Hm7aQ1vVKD8PYFwp37vQe8e5esjh",
     "webMatrix": "26/27 PASS · Local Insider PARTIAL (Workspace/Stripe TEST)",
     "evidence": "artifacts/runtime-proof/guest-app-completion/2026-10-17T13-15-33/"
   },
