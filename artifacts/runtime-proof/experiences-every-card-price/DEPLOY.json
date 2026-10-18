@@ -1,0 +1,12 @@
+{
+  "alias": "https://bandits-two.vercel.app",
+  "deploymentId": "dpl_83Gi3dmxetTW1sVDNCjnStCYopQX",
+  "deploymentUrl": "https://bandits-d8139y8fb-bandiexchas-projects.vercel.app",
+  "guestHeadSha": "81afd12fba34b9937a51eeffec6af99b48e0460e",
+  "experiencesPricingCommit": "c8193f1",
+  "smartTravelerBaseCommit": "b88b878",
+  "priorProductionDeploy": "dpl_CGHGaUHnepaMYhRrdGXWMo5K5Nbn",
+  "proofPass": true,
+  "proofCapturedAt": "2026-10-18T05:28:12.106Z",
+  "stripeLiveCharges": false
+}

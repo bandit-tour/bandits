@@ -72,6 +72,24 @@ async function auditFilter(page, filter) {
     return [...map.entries()].map(([expId, text]) => ({ expId, text }));
   });
 
+  const cardKinds = await page.evaluate(() => {
+    const live = new Set(
+      [...document.querySelectorAll('[data-testid^="exp-live-card-"], [testID^="exp-live-card-"]')].map((el) => {
+        const tid = el.getAttribute('data-testid') || el.getAttribute('testID') || '';
+        return tid.replace(/^exp-live-card-/, '');
+      }),
+    );
+    const preview = new Set(
+      [...document.querySelectorAll('[data-testid^="exp-preview-card-"], [testID^="exp-preview-card-"]')].map(
+        (el) => {
+          const tid = el.getAttribute('data-testid') || el.getAttribute('testID') || '';
+          return tid.replace(/^exp-preview-card-/, '');
+        },
+      ),
+    );
+    return { live: [...live], preview: [...preview] };
+  });
+
   const examples = await page.evaluate(() => {
     return [...document.querySelectorAll('[data-testid^="exp-price-example-"], [testID^="exp-price-example-"]')].map(
       (el) => (el.textContent || '').trim(),
@@ -86,17 +104,28 @@ async function auditFilter(page, filter) {
   const priceOnRequest = prices.filter((p) => /price on request/i.test(p.text));
   const inspirationOnly = prices.filter((p) => /inspiration/i.test(p.text));
 
+  const liveIds = new Set(cardKinds.live);
+  const previewIds = new Set(cardKinds.preview);
+  const realPriceCards = withEuro.filter((p) => liveIds.has(p.expId) && !previewIds.has(p.expId));
+  const previewPriceCards = withEuro.filter((p) => previewIds.has(p.expId));
+
   return {
     filter,
     cardCount,
+    liveCardCount: cardKinds.live.length,
+    previewCardCount: cardKinds.preview.length,
     uniquePriceCount: prices.length,
     cardsWithoutPrice,
     withEuroCount: withEuro.length,
+    cardsWithoutEuro: cardCount - withEuro.length,
+    realPriceCardCount: realPriceCards.length,
+    previewPriceCardCount: previewPriceCards.length,
     missingEuro,
     priceOnRequest,
     inspirationOnly,
     exampleLabelCount: examples.filter((t) => t.includes('Example price')).length,
-    samplePrices: withEuro.slice(0, 5).map((p) => p.text),
+    distinctPriceStrings: [...new Set(withEuro.map((p) => p.text))].length,
+    samplePrices: withEuro.slice(0, 8).map((p) => p.text),
   };
 }
 
@@ -158,10 +187,22 @@ async function run() {
 
   const pass = allFiltersPass && totalCards > 0;
 
+  const allRow = report.filters.All || report.filters.AllDesktop;
+  const cardsWithoutPriceTotal = filterRows.reduce((n, r) => n + (r.cardsWithoutPrice?.length || 0), 0);
+  const inspirationTotal = filterRows.reduce((n, r) => n + (r.inspirationOnly?.length || 0), 0);
+
   report.summary = {
     totalCardsSeen: totalCards,
+    cardsWithEuro: allRow?.withEuroCount ?? 0,
+    cardsWithoutEuro: allRow?.cardsWithoutEuro ?? 0,
+    cardsWithoutPriceNode: cardsWithoutPriceTotal,
+    inspirationNotBookableText: inspirationTotal,
+    liveCardsAllFilter: allRow?.liveCardCount ?? 0,
+    previewCardsAllFilter: allRow?.previewCardCount ?? 0,
+    distinctPriceStringsAll: allRow?.distinctPriceStrings ?? 0,
     pass,
     EXAMPLE_LABEL,
+    stripeLiveCharges: false,
   };
 
   await fs.writeFile(path.join(out, 'REPORT.json'), JSON.stringify(report, null, 2));
@@ -171,12 +212,22 @@ async function run() {
 **Base:** ${base}
 **Checked:** ${report.checkedAt}
 
-## Summary
-- Max cards in one filter view: ${totalCards}
+## Summary (All filter — full scroll)
+- Unique experience cards: **${allRow?.cardCount ?? 0}**
+- With euro price: **${allRow?.withEuroCount ?? 0}**
+- Without euro price: **${allRow?.cardsWithoutEuro ?? 0}** (must be 0)
+- Live (authorized) cards: **${allRow?.liveCardCount ?? 0}**
+- Preview / example cards: **${allRow?.previewCardCount ?? 0}**
+- Distinct price strings: **${allRow?.distinctPriceStrings ?? 0}** (previews must not all be identical)
 - Example label: \`${EXAMPLE_LABEL}\`
+- Stripe LIVE: **OFF** (no live charges in this track)
 
-## Per filter
-${filterRows.map((r) => `- **${r.filter}**: cards=${r.cardCount} priced=${r.withEuroCount}/${r.priceNodeCount} examples=${r.exampleLabelCount}`).join('\n')}
+## Per filter (each scrolled to bottom)
+${filterRows.map((r) => `- **${r.filter}**: cards=${r.cardCount} euro=${r.withEuroCount} without=${r.cardsWithoutEuro} live=${r.liveCardCount} preview=${r.previewCardCount} exampleLabels=${r.exampleLabelCount}`).join('\n')}
+
+## Detail samples
+- Preview detail: \`${report.screenshots.detailPreview ?? 'n/a'}\`
+- Real Workspace detail: \`${report.screenshots.detailReal ?? report.detailRealSkipped ?? 'n/a'}\` (example label on real: ${report.detailRealIsExample ? 'yes' : 'no'})
 
 ## Screenshots
 ${Object.entries(report.screenshots)
@@ -185,7 +236,17 @@ ${Object.entries(report.screenshots)
 `;
   await fs.writeFile(path.join(out, 'RESULT.md'), resultMd);
 
-  console.log(JSON.stringify({ pass, summary: report.summary }, null, 2));
+  const deployMeta = {
+    alias: 'https://bandits-two.vercel.app',
+    guestHeadSha: process.env.GUEST_HEAD_SHA || null,
+    deploymentId: process.env.VERCEL_DEPLOYMENT_ID || null,
+    proofBase: base,
+    proofPass: pass,
+    capturedAt: report.checkedAt,
+  };
+  await fs.writeFile(path.join(out, 'DEPLOY.json'), JSON.stringify(deployMeta, null, 2));
+
+  console.log(JSON.stringify({ pass, summary: report.summary, deployMeta }, null, 2));
   await browser.close();
   process.exit(pass ? 0 : 1);
 }
