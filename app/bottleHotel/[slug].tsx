@@ -1,12 +1,14 @@
 /**
- * Travel in a Bottle — full hotel detail (first sleep).
- * Must NEVER route into `/hotel/*` QR messaging / flip-card entry.
+ * Travel in a Bottle — first-sleep hotel detail.
+ * Partner white-label OR Google Places lodging (discovery).
+ * Never routes to `/hotel/*` QR messaging.
  */
 import { Image as ExpoImage } from "expo-image";
 import { Stack, useLocalSearchParams, useRouter, type Href } from "expo-router";
 import React, { useEffect, useMemo, useState } from "react";
 import {
   Image,
+  Linking,
   Modal,
   Platform,
   type ImageSourcePropType,
@@ -21,17 +23,18 @@ import {
 import { humanDate } from "@/components/BottleDateRangeField";
 import { useAppBackScreenOptions } from "@/hooks/useAppBackScreenOptions";
 import {
+  fetchAthensHotelDetail,
+  parseBottleHotelParam,
+  type AthensDiscoveryHotel,
+} from "@/lib/guest-workspace/athensHotelPlaces";
+import {
   formatHotelBottleRate,
   loadHotelBottleListing,
   type HotelBottleListing,
 } from "@/lib/guest-workspace/hotelBottleListing";
-import { getHotelWhiteLabel, isKnownHotelSlug, normalizeHotelSlug } from "@/lib/hotelWhiteLabel";
+import { getHotelWhiteLabel, isKnownHotelSlug } from "@/lib/hotelWhiteLabel";
 
 type Frame = { key: string; remote?: string; local?: ImageSourcePropType };
-
-function isInventedWelcome(text: string): boolean {
-  return /message in a bottle|calm, personal|soft welcome before you/i.test(text);
-}
 
 function FrameImage({ frame, style }: { frame: Frame; style: object }) {
   if (frame.remote) {
@@ -43,55 +46,6 @@ function FrameImage({ frame, style }: { frame: Frame; style: object }) {
   return <View style={[style, styles.missingPhoto]} />;
 }
 
-function GalleryViewer({
-  frames,
-  index,
-  title,
-  onClose,
-  onIndex,
-}: {
-  frames: Frame[];
-  index: number;
-  title: string;
-  onClose: () => void;
-  onIndex: (n: number) => void;
-}) {
-  const frame = frames[index];
-  const prev = () => onIndex((index - 1 + frames.length) % frames.length);
-  const next = () => onIndex((index + 1) % frames.length);
-
-  useEffect(() => {
-    if (Platform.OS !== "web" || typeof window === "undefined") return;
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") onClose();
-      if (e.key === "ArrowRight") next();
-      if (e.key === "ArrowLeft") prev();
-    };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  });
-
-  if (!frame) return null;
-
-  return (
-    <Modal visible animationType="fade" onRequestClose={onClose} testID="bottle-hotel-lightbox">
-      <View style={styles.lightbox}>
-        <View style={styles.lightboxBar}>
-          <Pressable onPress={onClose} accessibilityRole="button" testID="bottle-hotel-lightbox-close">
-            <Text style={styles.lightboxBack}>← Back</Text>
-          </Pressable>
-          <Text style={styles.lightboxTitle} numberOfLines={1}>
-            {title} · {index + 1} / {frames.length}
-          </Text>
-        </View>
-        <Pressable style={styles.lightboxStage} onPress={next} accessibilityRole="button">
-          <FrameImage frame={frame} style={styles.lightboxImage} />
-        </Pressable>
-      </View>
-    </Modal>
-  );
-}
-
 function Fact({ label, value }: { label: string; value: string }) {
   return (
     <View style={styles.fact}>
@@ -99,14 +53,6 @@ function Fact({ label, value }: { label: string; value: string }) {
       <Text style={styles.factValue}>{value}</Text>
     </View>
   );
-}
-
-function publishLabel(listing: HotelBottleListing): string {
-  if (listing.workspacePublishStatus === "not_published") return "Not published on Workspace";
-  if (listing.workspacePublishStatus === "unreachable") return "Workspace unreachable";
-  if (listing.tenantStatus) return `Workspace · ${listing.tenantStatus}`;
-  if (listing.workspacePublishStatus === "published") return "Published on Workspace";
-  return "Publication status unknown";
 }
 
 export default function BottleHotelDetailScreen() {
@@ -118,93 +64,106 @@ export default function BottleHotelDetailScreen() {
     checkOut?: string;
     travelers?: string;
   }>();
-  const slug = normalizeHotelSlug(typeof params.slug === "string" ? params.slug : "") || "play-theatrou";
+  const rawSlug = typeof params.slug === "string" ? params.slug : "";
+  const parsed = parseBottleHotelParam(rawSlug);
   const checkIn = typeof params.checkIn === "string" ? params.checkIn : "";
   const checkOut = typeof params.checkOut === "string" ? params.checkOut : "";
   const travelers = Math.max(1, Number(params.travelers) || 2);
-  const wl = isKnownHotelSlug(slug) ? getHotelWhiteLabel(slug) : null;
-  const seedName = wl?.title || wl?.displayName || "Athens boutique hotel";
 
   const [listing, setListing] = useState<HotelBottleListing | null>(null);
-  const [loadState, setLoadState] = useState<"loading" | "ready">("loading");
+  const [placeHotel, setPlaceHotel] = useState<AthensDiscoveryHotel | null>(null);
+  const [reviews, setReviews] = useState<Array<{ rating?: number; text?: string; author?: string }>>([]);
+  const [attribution, setAttribution] = useState("Powered by Google");
+  const [loadState, setLoadState] = useState<"loading" | "ready" | "error">("loading");
   const [viewer, setViewer] = useState<{ frames: Frame[]; index: number; title: string } | null>(null);
 
   useEffect(() => {
     let alive = true;
     setLoadState("loading");
-    void loadHotelBottleListing(slug).then((row) => {
-      if (!alive) return;
-      setListing(row);
-      setLoadState("ready");
-    });
+    if (parsed.kind === "place") {
+      void fetchAthensHotelDetail(parsed.id).then((res) => {
+        if (!alive) return;
+        setPlaceHotel(res.hotel);
+        setReviews(res.reviews || []);
+        setAttribution(res.attribution || "Powered by Google");
+        setListing(null);
+        setLoadState(res.hotel ? "ready" : "error");
+      });
+    } else {
+      void loadHotelBottleListing(parsed.id).then((row) => {
+        if (!alive) return;
+        setListing(row);
+        setPlaceHotel(null);
+        setLoadState("ready");
+      });
+    }
     return () => {
       alive = false;
     };
-  }, [slug]);
+  }, [parsed.kind, parsed.id]);
 
+  const partnerName =
+    listing?.whiteLabel?.title ||
+    listing?.displayName ||
+    (isKnownHotelSlug(parsed.id) ? getHotelWhiteLabel(parsed.id)?.title : null) ||
+    "Athens hotel";
+  const name = placeHotel?.name || partnerName;
   const screenOptions = useAppBackScreenOptions({
-    title: listing?.whiteLabel?.title || listing?.displayName || seedName,
+    title: name,
     fallback: "/travelBottle" as Href,
     showBack: true,
   });
 
   const frames: Frame[] = useMemo(() => {
+    if (placeHotel) {
+      return placeHotel.photoUrls.slice(0, 12).map((uri) => ({ key: uri, remote: uri }));
+    }
     if (!listing) return [];
     const out: Frame[] = [];
     for (const uri of listing.remoteGalleryUrls) out.push({ key: uri, remote: uri });
     listing.localGallery.forEach((src, i) => out.push({ key: `local-${i}`, local: src }));
     return out.slice(0, 12);
-  }, [listing]);
+  }, [listing, placeHotel]);
 
   const wide = width >= 900;
-  const name = listing?.whiteLabel?.title || listing?.displayName || seedName;
-  const area = listing?.location || "Athens";
-  const notPublished = listing?.workspacePublishStatus === "not_published";
-  const unreachable = listing?.workspacePublishStatus === "unreachable";
-  const raw = String(listing?.description || "").trim();
-  const inspiration = (listing?.whiteLabel?.homeInspirationLines || []).find(
-    (line) => String(line || "").trim().length > 24,
-  );
+  const area = placeHotel?.address || listing?.location || "Athens";
+  const datesLabel =
+    checkIn && checkOut ? `${humanDate(checkIn)} → ${humanDate(checkOut)}` : "Add dates in Bottle plan";
   const summary =
     loadState === "loading"
       ? `Loading ${name}…`
-      : notPublished
-        ? `${name} is an Athens boutique you can plan around. Photos, rooms, and rates appear here as the hotel confirms them.`
-        : unreachable
-          ? `We couldn’t load the latest details for ${name}. Try again in a moment — your Bottle plan is still saved.`
-          : raw.length > 40 && !isInventedWelcome(raw) && !/^welcome to\b/i.test(raw)
-            ? raw
-            : inspiration ||
-              `${name} is your first sleep in ${area}. Travel in a Bottle pairs this hotel with a second stay outside the city.`;
+      : placeHotel?.editorialSummary ||
+        listing?.description ||
+        `${name} is your first sleep in Athens. Mix pairs this hotel with a verified second sleep outside the city.`;
   const rateLabel = listing ? formatHotelBottleRate(listing.rates) : null;
-  const datesLabel =
-    checkIn && checkOut ? `${humanDate(checkIn)} → ${humanDate(checkOut)}` : "Dates from your Bottle plan";
-  const publishText =
-    loadState !== "ready" || !listing
-      ? "Loading hotel details…"
-      : listing.workspacePublishStatus === "published"
-        ? "Partner hotel"
-        : listing.workspacePublishStatus === "not_published"
-          ? "Discoverable Athens boutique"
-          : publishLabel(listing);
+  const bookUrl = placeHotel?.websiteUri || placeHotel?.googleMapsUri || null;
 
   return (
     <ScrollView style={styles.screen} contentContainerStyle={styles.content} testID="bottle-hotel-detail">
       <Stack.Screen options={screenOptions} />
       {viewer ? (
-        <GalleryViewer
-          frames={viewer.frames}
-          index={viewer.index}
-          title={viewer.title}
-          onClose={() => setViewer(null)}
-          onIndex={(n) => setViewer({ ...viewer, index: n })}
-        />
+        <Modal visible animationType="fade" onRequestClose={() => setViewer(null)}>
+          <View style={styles.lightbox}>
+            <Pressable onPress={() => setViewer(null)} style={styles.lightboxBar}>
+              <Text style={styles.lightboxBack}>← Back</Text>
+            </Pressable>
+            <Pressable
+              style={styles.lightboxStage}
+              onPress={() =>
+                setViewer({
+                  ...viewer,
+                  index: (viewer.index + 1) % viewer.frames.length,
+                })
+              }
+            >
+              <FrameImage frame={viewer.frames[viewer.index]} style={styles.lightboxImage} />
+            </Pressable>
+          </View>
+        </Modal>
       ) : null}
 
-      <View style={[styles.page, wide && styles.pageWide]} testID={`bottle-hotel-detail-${slug}`}>
-        <Text style={styles.kicker} testID="bottle-hotel-product-kicker">
-          Travel in a Bottle · First hotel
-        </Text>
+      <View style={[styles.page, wide && styles.pageWide]} testID={`bottle-hotel-detail-${parsed.id}`}>
+        <Text style={styles.kicker}>Travel in a Bottle · First hotel</Text>
         <Text style={styles.title} testID="bottle-hotel-detail-name">
           {name}
         </Text>
@@ -212,7 +171,11 @@ export default function BottleHotelDetailScreen() {
           {area} · {datesLabel} · {travelers} traveler{travelers === 1 ? "" : "s"}
         </Text>
         <Text style={styles.publish} testID="bottle-hotel-detail-publish">
-          {publishText}
+          {placeHotel
+            ? "Athens lodging · discovery listing"
+            : listing?.workspacePublishStatus === "published"
+              ? "Partner hotel"
+              : "Athens boutique partner"}
         </Text>
 
         {frames.length > 0 ? (
@@ -233,14 +196,10 @@ export default function BottleHotelDetailScreen() {
             ))}
           </ScrollView>
         ) : (
-          <View style={styles.galleryEmpty} testID="bottle-hotel-detail-gallery-empty">
+          <View style={styles.galleryEmpty}>
             <Text style={styles.galleryEmptyTitle}>{name}</Text>
             <Text style={styles.galleryEmptyBody}>
-              {notPublished
-                ? "The gallery opens when this hotel publishes approved property photos."
-                : unreachable
-                  ? "Gallery will appear when the connection recovers."
-                  : "No property photos published yet."}
+              Photos appear when available from the hotel or Google listing.
             </Text>
           </View>
         )}
@@ -253,23 +212,24 @@ export default function BottleHotelDetailScreen() {
         </View>
 
         <View style={styles.facts}>
-          <Fact label="Location" value={listing?.address || area} />
+          <Fact label="Address" value={placeHotel?.address || listing?.address || area} />
+          {placeHotel?.rating != null ? (
+            <Fact
+              label="Guest rating"
+              value={`★ ${placeHotel.rating.toFixed(1)}${
+                placeHotel.userRatingCount ? ` · ${placeHotel.userRatingCount} reviews` : ""
+              }`}
+            />
+          ) : null}
           <Fact
             label="Rates"
             value={
               rateLabel
                 ? `From ${rateLabel} / night`
-                : "Nightly rates appear when the hotel authorizes guest pricing."
+                : "Live room rates appear via the hotel’s official booking link when available."
             }
           />
-          <Fact
-            label="Rooms"
-            value={
-              listing?.roomTypes.length
-                ? `${listing.roomTypes.length} room type${listing.roomTypes.length === 1 ? "" : "s"}`
-                : "Room types appear when the hotel publishes them."
-            }
-          />
+          {placeHotel?.phone ? <Fact label="Phone" value={placeHotel.phone} /> : null}
         </View>
 
         {listing?.services?.length ? (
@@ -283,83 +243,84 @@ export default function BottleHotelDetailScreen() {
               ))}
             </View>
           </View>
-        ) : (
-          <View style={styles.block}>
-            <Text style={styles.blockTitle}>Amenities</Text>
-            <Text style={styles.gapNote}>Amenities appear when the hotel publishes services.</Text>
-          </View>
-        )}
+        ) : null}
 
-        <View style={styles.block} testID="bottle-hotel-detail-rooms">
-          <Text style={styles.blockTitle}>Rooms</Text>
-          {listing?.roomTypes.length ? (
-            listing.roomTypes.map((room) => (
+        {listing?.roomTypes?.length ? (
+          <View style={styles.block} testID="bottle-hotel-detail-rooms">
+            <Text style={styles.blockTitle}>Rooms</Text>
+            {listing.roomTypes.map((room) => (
               <View key={room.id} style={styles.roomCard}>
                 <Text style={styles.roomName}>{room.name}</Text>
-                {room.occupancy ? (
-                  <Text style={styles.roomMeta}>Sleeps {room.occupancy}</Text>
-                ) : null}
+                {room.occupancy ? <Text style={styles.roomMeta}>Sleeps {room.occupancy}</Text> : null}
                 {room.description ? <Text style={styles.body}>{room.description}</Text> : null}
               </View>
-            ))
-          ) : (
-            <Text style={styles.gapNote} testID="bottle-hotel-rooms-missing">
-              Room categories and photos appear when the hotel publishes them. We never invent inventory.
+            ))}
+          </View>
+        ) : placeHotel ? (
+          <View style={styles.block}>
+            <Text style={styles.blockTitle}>Rooms & availability</Text>
+            <Text style={styles.gapNote}>
+              Room types and live availability come from the hotel’s booking channel — Google discovery does
+              not invent inventory.
             </Text>
-          )}
-        </View>
+          </View>
+        ) : null}
 
-        <View style={styles.block} testID="bottle-hotel-detail-policies">
-          <Text style={styles.blockTitle}>Policies</Text>
-          {listing?.policies.length ? (
-            listing.policies.map((p) => (
+        {listing?.policies?.length ? (
+          <View style={styles.block}>
+            <Text style={styles.blockTitle}>Policies</Text>
+            {listing.policies.map((p) => (
               <Text key={p} style={styles.policyLine}>
                 {p}
               </Text>
-            ))
-          ) : (
-            <Text style={styles.gapNote}>
-              Check-in, cancellation, and house rules appear when the hotel publishes them.
-            </Text>
-          )}
-        </View>
+            ))}
+          </View>
+        ) : null}
 
-        {listing?.benefits?.length ? (
-          <View style={styles.block} testID="bottle-hotel-detail-benefits">
-            <Text style={styles.blockTitle}>Guest benefits</Text>
-            {listing.benefits.map((b) => (
-              <View key={b.id || b.title} style={styles.benefit}>
-                <Text style={styles.roomName}>{b.title}</Text>
-                {b.body ? <Text style={styles.body}>{b.body}</Text> : null}
+        {reviews.length ? (
+          <View style={styles.block} testID="bottle-hotel-reviews">
+            <Text style={styles.blockTitle}>Recent reviews</Text>
+            {reviews.map((r, i) => (
+              <View key={`${r.author}-${i}`} style={styles.roomCard}>
+                <Text style={styles.roomName}>
+                  {r.author || "Guest"}
+                  {r.rating != null ? ` · ★ ${r.rating}` : ""}
+                </Text>
+                <Text style={styles.body}>{r.text}</Text>
               </View>
             ))}
           </View>
         ) : null}
 
+        <Text style={styles.attribution}>{attribution}</Text>
+
         <View style={styles.ctaStack}>
+          {bookUrl ? (
+            <Pressable
+              style={styles.cta}
+              onPress={() => void Linking.openURL(bookUrl)}
+              accessibilityRole="link"
+              testID="bottle-hotel-book-handoff"
+            >
+              <Text style={styles.ctaText}>
+                {placeHotel?.websiteUri ? "Book on hotel site" : "Open in Google Maps"}
+              </Text>
+            </Pressable>
+          ) : null}
           <Pressable
-            style={styles.cta}
+            style={bookUrl ? styles.ctaGhost : styles.cta}
             onPress={() => router.push("/travelBottle" as Href)}
             accessibilityRole="button"
             testID="bottle-hotel-mix-cta"
           >
-            <Text style={styles.ctaText}>Mix with a second sleep</Text>
+            <Text style={bookUrl ? styles.ctaGhostText : styles.ctaText}>Mix with a second sleep</Text>
           </Pressable>
           <Pressable
             style={styles.ctaGhost}
             onPress={() => router.push("/travelBottle" as Href)}
-            accessibilityRole="button"
             testID="bottle-hotel-back-to-plan"
           >
             <Text style={styles.ctaGhostText}>Back to Bottle plan</Text>
-          </Pressable>
-          <Pressable
-            style={styles.ctaGhost}
-            onPress={() => router.push("/hotelier" as Href)}
-            accessibilityRole="button"
-            testID="bottle-hotel-open-services"
-          >
-            <Text style={styles.ctaGhostText}>In-stay hotel services</Text>
           </Pressable>
         </View>
       </View>
@@ -435,7 +396,7 @@ const styles = StyleSheet.create({
   roomName: { fontSize: 16, fontWeight: "700", color: "#1A1510", marginBottom: 4 },
   roomMeta: { fontSize: 13, color: "#6B5E4E", marginBottom: 4 },
   policyLine: { fontSize: 14, lineHeight: 21, color: "#2C261E", marginBottom: 6 },
-  benefit: { marginBottom: 10 },
+  attribution: { marginTop: 16, fontSize: 11, color: "#8A7A66" },
   ctaStack: { marginTop: 28, gap: 10 },
   cta: {
     backgroundColor: "#1A1510",
@@ -458,12 +419,8 @@ const styles = StyleSheet.create({
     paddingTop: Platform.OS === "web" ? 16 : 48,
     paddingHorizontal: 16,
     paddingBottom: 12,
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 12,
   },
   lightboxBack: { color: "#F7F5F1", fontSize: 16, fontWeight: "700" },
-  lightboxTitle: { color: "#D4CBBE", fontSize: 14, flex: 1 },
   lightboxStage: { flex: 1, justifyContent: "center", padding: 12 },
   lightboxImage: { width: "100%", height: "100%", borderRadius: 8 },
 });

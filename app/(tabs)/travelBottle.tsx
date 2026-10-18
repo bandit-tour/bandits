@@ -33,12 +33,13 @@ import {
   type WorkspaceBottleStay,
 } from "@/lib/guest-workspace/liveBottle";
 import {
-  fetchAthensBottleDirectory,
-  filterAthensBottleDirectory,
-  type AthensBottleHotelCard,
-} from "@/lib/guest-workspace/athensBottleDirectory";
+  bottleHotelHref,
+  searchAthensHotels,
+  type AthensDiscoveryHotel,
+} from "@/lib/guest-workspace/athensHotelPlaces";
 import { loadHotelBottleListing, type HotelBottleListing } from "@/lib/guest-workspace/hotelBottleListing";
 import { getHotelWhiteLabel, isKnownHotelSlug, normalizeHotelSlug } from "@/lib/hotelWhiteLabel";
+import { workspaceGet } from "@/lib/workspace/client";
 import { useGuestLifecycle } from "@/lib/guest-lifecycle/useGuestLifecycle";
 import { saveDreamDestination } from "@/lib/dream-destinations/store";
 import { recordLifecycleNotice } from "@/lib/lifecycle/notices";
@@ -431,9 +432,12 @@ export function BottleProductScreen() {
   const [notifyOk, setNotifyOk] = useState(false);
   const [saveMsg, setSaveMsg] = useState<string | null>(null);
   const [activeFilter, setActiveFilter] = useState<string | null>(null);
-  const [selectedHotelSlug, setSelectedHotelSlug] = useState("play-theatrou");
+  const [selectedHotel, setSelectedHotel] = useState<AthensDiscoveryHotel | null>(null);
   const [hotelSearch, setHotelSearch] = useState("");
-  const [hotelDirectory, setHotelDirectory] = useState<AthensBottleHotelCard[]>([]);
+  const [hotelDirectory, setHotelDirectory] = useState<AthensDiscoveryHotel[]>([]);
+  const [hotelNextPage, setHotelNextPage] = useState<string | null>(null);
+  const [hotelLoading, setHotelLoading] = useState(false);
+  const [hotelAttr, setHotelAttr] = useState("Powered by Google");
   const [hotelListings, setHotelListings] = useState<Record<string, HotelBottleListing>>({});
   const [externalStays, setExternalStays] = useState<WorkspaceBottleStay[]>([]);
   const [demoStayCount, setDemoStayCount] = useState(0);
@@ -456,17 +460,18 @@ export function BottleProductScreen() {
   }, [checkIn, checkOut]);
 
   const hotelNights = totalNights && totalNights >= 2 ? totalNights - 1 : 1;
-  const plannedHotelSlug = normalizeHotelSlug(connectedHotel?.slug || selectedHotelSlug);
-  const selectedListing = hotelListings[plannedHotelSlug] ?? null;
-  const hotelName =
-    connectedHotel?.name || selectedListing?.displayName || selectedListing?.whiteLabel?.title || "";
-  const datesReady = Boolean(checkIn && checkOut && totalNights && totalNights >= 2);
-  const canMix = destination.trim().length >= 2 && datesReady && travelers >= 1 && !mixing;
-
-  const searchableHotels = useMemo(
-    () => filterAthensBottleDirectory(hotelDirectory, hotelSearch),
-    [hotelDirectory, hotelSearch],
+  const plannedHotelSlug = normalizeHotelSlug(
+    connectedHotel?.slug || selectedHotel?.slug || (selectedHotel?.partner ? selectedHotel.placeId.replace(/^partner:/, "") : "") || "",
   );
+  const selectedListing = plannedHotelSlug ? hotelListings[plannedHotelSlug] ?? null : null;
+  const hotelName =
+    connectedHotel?.name ||
+    selectedHotel?.name ||
+    selectedListing?.displayName ||
+    selectedListing?.whiteLabel?.title ||
+    "";
+  const datesReady = Boolean(checkIn && checkOut && totalNights && totalNights >= 2);
+  const canMix = destination.trim().length >= 2 && datesReady && travelers >= 1 && !mixing && Boolean(hotelName);
 
   const applyQuickDates = useCallback((hotelNightsPlan: number) => {
     const start = new Date();
@@ -483,22 +488,57 @@ export function BottleProductScreen() {
     setFormError(null);
   }, []);
 
+  const loadHotels = useCallback(
+    async (opts?: { append?: boolean; pageToken?: string | null; query?: string }) => {
+      setHotelLoading(true);
+      const result = await searchAthensHotels({
+        query: opts?.query ?? hotelSearch,
+        pageToken: opts?.pageToken,
+      });
+      setHotelAttr(result.attribution);
+      setHotelNextPage(result.nextPageToken);
+      setHotelDirectory((prev) => (opts?.append ? [...prev, ...result.hotels] : result.hotels));
+      if (!opts?.append && result.hotels[0] && !selectedHotel) {
+        setSelectedHotel(result.hotels[0]);
+      }
+      const partnerSlugs = result.hotels
+        .filter((h) => h.partner && h.slug)
+        .map((h) => h.slug!)
+        .slice(0, 8);
+      if (partnerSlugs.length) {
+        const pairs = await Promise.all(
+          partnerSlugs.map(async (slug) => [slug, await loadHotelBottleListing(slug)] as const),
+        );
+        setHotelListings((prev) => ({ ...prev, ...Object.fromEntries(pairs) }));
+      }
+      setHotelLoading(false);
+    },
+    [hotelSearch, selectedHotel],
+  );
+
   React.useEffect(() => {
     if (connectedHotel?.slug) {
-      setSelectedHotelSlug(normalizeHotelSlug(connectedHotel.slug));
+      setSelectedHotel({
+        placeId: `partner:${normalizeHotelSlug(connectedHotel.slug)}`,
+        slug: normalizeHotelSlug(connectedHotel.slug),
+        name: connectedHotel.name,
+        address: connectedHotel.city || "Athens",
+        photoUrls: [],
+        rating: null,
+        userRatingCount: null,
+        googleMapsUri: null,
+        websiteUri: null,
+        partner: true,
+        source: "stay",
+      });
     }
-  }, [connectedHotel?.slug]);
+  }, [connectedHotel?.slug, connectedHotel?.name, connectedHotel?.city]);
 
   React.useEffect(() => {
     let cancelled = false;
     void (async () => {
-      const dir = await fetchAthensBottleDirectory("Athens");
       if (cancelled) return;
-      setHotelDirectory(dir.hotels);
-      const pairs = await Promise.all(
-        dir.hotels.map(async (h) => [h.slug, await loadHotelBottleListing(h.slug)] as const),
-      );
-      if (!cancelled) setHotelListings(Object.fromEntries(pairs));
+      await loadHotels({ query: "hotels in Athens" });
     })();
     void fetchLiveBottleStays().then((rows) => {
       if (!cancelled) setExternalStays(rows);
@@ -509,6 +549,8 @@ export function BottleProductScreen() {
     return () => {
       cancelled = true;
     };
+    // initial directory only
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const mixSleepingExperiences = useCallback(async () => {
@@ -543,19 +585,98 @@ export function BottleProductScreen() {
     setShowVideo(true);
     setCatalogError(null);
     try {
-      const result = await searchMixedSleeps({
+      const qs = new URLSearchParams({
         destination: place,
         checkIn,
         checkOut,
-        travelers,
-        hotelName: hotelName || null,
+        travelers: String(travelers),
+        hotelName: hotelName || "Athens hotel",
+        hotelPlaceId: selectedHotel?.placeId || plannedHotelSlug || "hotel",
+        fixtures: "test",
       });
+      const mixApi = await workspaceGet<{
+        ok?: boolean;
+        matches?: Array<{
+          id: string;
+          pitch?: string;
+          matchScore?: number;
+          bookable?: boolean;
+          hotel?: { name?: string; nights?: number };
+          second?: {
+            id?: string;
+            name?: string;
+            location?: string;
+            type?: string;
+            nights?: number;
+            priceCentsPerNight?: number;
+            travelMinutes?: number;
+            testFixture?: boolean;
+            label?: string;
+          };
+        }>;
+        liveCount?: number;
+        error?: string;
+      }>(`/api/public/bottle/mix?${qs.toString()}`);
+
       if (gen !== mixGenRef.current) return;
-      setCatalogMatches(result.matches);
-      setCatalogMode(result.mode);
-      setCatalogError(result.error ? String(result.error) : null);
-      setSearched(true);
-      setActiveFilter(null);
+
+      if (mixApi.ok && (mixApi.data.matches?.length || 0) > 0) {
+        const mapped = (mixApi.data.matches || []).map((m) => ({
+          id: m.id,
+          inventorySource: m.second?.testFixture ? ("sample" as const) : ("provider_record" as const),
+          hotel: {
+            name: m.hotel?.name || hotelName || "Hotel",
+            nights: m.hotel?.nights || hotelNights,
+            city: place,
+            emoji: "🏨",
+            imageUrl: "",
+          },
+          second: {
+            name: m.second?.name || "Second sleep",
+            nights: m.second?.nights || 1,
+            location: m.second?.location || place,
+            type: m.second?.type || "Stay",
+            emoji: "🌲",
+            host: m.second?.testFixture ? "Preview host" : "Verified host",
+            availability: m.second?.label || "Ask host",
+            attributes: [],
+            imageUrl: "",
+            gallery: [] as string[],
+          },
+          filterTags: ["Nature"],
+          priceLabel:
+            m.second?.priceCentsPerNight && m.second.priceCentsPerNight > 0
+              ? `From €${Math.round(m.second.priceCentsPerNight / 100)}`
+              : "Price on request",
+          travelTime: `${m.second?.travelMinutes || 45} min`,
+          distance: m.second?.location || "",
+          departure: "After hotel nights",
+          story: m.pitch || "",
+          cta: m.bookable ? "View journey" : "Preview only",
+          availabilityCta: m.second?.testFixture ? "Not bookable" : "Check dates",
+          journeyNights: (m.hotel?.nights || hotelNights) + (m.second?.nights || 1),
+        }));
+        setCatalogMatches(mapped);
+        setCatalogMode(mixApi.data.liveCount && mixApi.data.liveCount > 0 ? "live" : "sample");
+        setCatalogError(null);
+        setSearched(true);
+        setActiveFilter(null);
+        setInspiration(Boolean(!mixApi.data.liveCount));
+      } else {
+        const result = await searchMixedSleeps({
+          destination: place,
+          checkIn,
+          checkOut,
+          travelers,
+          hotelName: hotelName || null,
+        });
+        if (gen !== mixGenRef.current) return;
+        setCatalogMatches(result.matches);
+        setCatalogMode(result.mode);
+        setCatalogError(result.error ? String(result.error) : null);
+        setSearched(true);
+        setActiveFilter(null);
+      }
     } catch (e) {
       if (gen !== mixGenRef.current) return;
       setCatalogMatches([]);
@@ -568,7 +689,7 @@ export function BottleProductScreen() {
         setMixing(false);
       }
     }
-  }, [checkIn, checkOut, destination, hotelName, totalNights, travelers]);
+  }, [checkIn, checkOut, destination, hotelName, hotelNights, plannedHotelSlug, selectedHotel?.placeId, totalNights, travelers]);
 
   const showInspiration = useCallback(async () => {
     setInspiration(true);
@@ -756,32 +877,45 @@ export function BottleProductScreen() {
         <View style={styles.planPanel} testID="bottle-athens-hotels">
           <Text style={styles.planKicker}>First sleep · Athens hotels</Text>
           <Text style={styles.planLead}>
-            Browse real partner hotels. Tap a card to open its profile — photos, rooms, amenities, and what is
-            confirmed today.
+            Search Athens lodging — boutique and larger hotels. Tap a card to open its profile. Hotelier OS is
+            not required.
           </Text>
-          <TextInput
-            testID="bottle-hotel-search"
-            value={hotelSearch}
-            onChangeText={setHotelSearch}
-            placeholder="Search hotels (name or area)"
-            placeholderTextColor="#8A8178"
-            style={styles.askInput}
-            accessibilityLabel="Search Athens hotels"
-          />
+          <View style={styles.hotelSearchRow}>
+            <TextInput
+              testID="bottle-hotel-search"
+              value={hotelSearch}
+              onChangeText={setHotelSearch}
+              placeholder="Search hotels (name or neighborhood)"
+              placeholderTextColor="#8A8178"
+              style={[styles.askInput, { flex: 1, marginTop: 0 }]}
+              accessibilityLabel="Search Athens hotels"
+              onSubmitEditing={() => void loadHotels({ query: hotelSearch || "hotels in Athens" })}
+            />
+            <Pressable
+              style={styles.hotelSearchBtn}
+              onPress={() => void loadHotels({ query: hotelSearch || "hotels in Athens" })}
+              testID="bottle-hotel-search-go"
+            >
+              <Text style={styles.hotelSearchBtnText}>{hotelLoading ? "…" : "Search"}</Text>
+            </Pressable>
+          </View>
           <View
             style={[styles.hotelDirGrid, mode === "desktop" && styles.hotelDirGridDesktop]}
             testID="bottle-hotel-directory"
           >
-            {searchableHotels.map((h) => {
-              const listing = hotelListings[h.slug];
-              const selected = plannedHotelSlug === h.slug;
-              const wl = isKnownHotelSlug(h.slug) ? getHotelWhiteLabel(h.slug) : null;
-              const remoteCover = h.remotePhotos[0] || listing?.remoteGalleryUrls?.[0];
+            {hotelDirectory.map((h) => {
+              const partnerSlug = h.slug || (h.partner ? h.placeId.replace(/^partner:/, "") : "");
+              const listing = partnerSlug ? hotelListings[partnerSlug] : undefined;
+              const selected =
+                selectedHotel?.placeId === h.placeId ||
+                (Boolean(partnerSlug) && plannedHotelSlug === partnerSlug);
+              const wl = partnerSlug && isKnownHotelSlug(partnerSlug) ? getHotelWhiteLabel(partnerSlug) : null;
+              const remoteCover = h.photoUrls[0] || listing?.remoteGalleryUrls?.[0];
               const localCover = listing?.localGallery?.[0] || wl?.introHeroSource || null;
-              const area = listing?.location || h.neighborhood || h.city;
+              const area = h.address || listing?.location || "Athens";
               const openProfile = () => {
-                setSelectedHotelSlug(h.slug);
-                if (!destination.trim()) setDestination(h.city || "Athens");
+                setSelectedHotel(h);
+                setDestination("Athens");
                 const qs = [
                   checkIn ? `checkIn=${encodeURIComponent(checkIn)}` : "",
                   checkOut ? `checkOut=${encodeURIComponent(checkOut)}` : "",
@@ -789,23 +923,22 @@ export function BottleProductScreen() {
                 ]
                   .filter(Boolean)
                   .join("&");
-                router.push((`/bottleHotel/${h.slug}?${qs}`) as Href);
+                const href = bottleHotelHref(h);
+                router.push((`${href}?${qs}`) as Href);
               };
               return (
                 <Pressable
-                  key={h.slug}
-                  testID={`bottle-hotel-select-${h.slug}`}
+                  key={h.placeId}
+                  testID={`bottle-hotel-select-${partnerSlug || h.placeId.slice(0, 12)}`}
                   style={[styles.hotelDirCard, selected && styles.hotelDirCardOn]}
                   onPress={() => {
-                    setSelectedHotelSlug(h.slug);
-                    if (!destination.trim() || destination === "Athens") {
-                      setDestination(h.city || "Athens");
-                    }
+                    setSelectedHotel(h);
+                    setDestination("Athens");
                   }}
                   onLongPress={openProfile}
                   accessibilityRole="button"
                   accessibilityState={{ selected }}
-                  accessibilityLabel={`${h.name}. ${area}. Double tap to select, open profile from View.`}
+                  accessibilityLabel={`${h.name}. ${area}.`}
                 >
                   {remoteCover ? (
                     <ExpoImage source={{ uri: remoteCover }} style={styles.hotelDirImage} contentFit="cover" />
@@ -820,18 +953,17 @@ export function BottleProductScreen() {
                     <Text style={styles.hotelDirName} numberOfLines={2}>
                       {listing?.displayName || listing?.whiteLabel?.title || h.name}
                     </Text>
-                    <Text style={styles.hotelDirMeta} numberOfLines={1}>
+                    <Text style={styles.hotelDirMeta} numberOfLines={2}>
                       {area}
                     </Text>
-                    <Text style={styles.hotelDirStatus} testID={`bottle-hotel-status-${h.slug}`} numberOfLines={1}>
-                      {listing?.workspacePublishStatus === "published" ? "Partner hotel" : "Discoverable"}
+                    <Text style={styles.hotelDirStatus} numberOfLines={1}>
+                      {h.partner
+                        ? "Partner hotel"
+                        : h.rating != null
+                          ? `★ ${h.rating.toFixed(1)} · Athens lodging`
+                          : "Athens lodging"}
                     </Text>
-                    <Pressable
-                      onPress={openProfile}
-                      style={styles.hotelDirOpen}
-                      accessibilityRole="button"
-                      testID={`bottle-hotel-open-${h.slug}`}
-                    >
+                    <Pressable onPress={openProfile} style={styles.hotelDirOpen} accessibilityRole="button">
                       <Text style={styles.hotelDirOpenText}>Open profile</Text>
                     </Pressable>
                   </View>
@@ -839,27 +971,36 @@ export function BottleProductScreen() {
               );
             })}
           </View>
-          {searchableHotels.length === 0 ? (
+          {hotelNextPage ? (
+            <Pressable
+              style={[styles.hotelCta, { marginTop: 12 }]}
+              onPress={() => void loadHotels({ append: true, pageToken: hotelNextPage, query: hotelSearch || "hotels in Athens" })}
+              testID="bottle-hotel-load-more"
+            >
+              <Text style={styles.hotelCtaText}>Show more hotels</Text>
+            </Pressable>
+          ) : null}
+          <Text style={styles.hotelDirStatus} testID="bottle-hotel-attribution">
+            {hotelAttr}
+            {hotelLoading ? " · Searching…" : hotelDirectory.length ? ` · ${hotelDirectory.length} shown` : ""}
+          </Text>
+          {!hotelLoading && hotelDirectory.length === 0 ? (
             <Text style={styles.empty} testID="bottle-hotel-search-empty">
-              No hotels match “{hotelSearch.trim()}”. Clear search to browse the Athens directory.
+              No hotels found yet. Try another search — we never invent properties.
             </Text>
           ) : null}
         </View>
 
         <HotelStayPresentation
           listing={selectedListing}
-          fallbackName={
-            hotelDirectory.find((h) => h.slug === plannedHotelSlug)?.name ||
-            BOTTLE_PLAN_HOTELS.find((h) => h.id === plannedHotelSlug)?.name ||
-            "Athens boutique hotel"
-          }
-          city={selectedListing?.location || "Athens"}
+          fallbackName={selectedHotel?.name || hotelName || "Athens hotel"}
+          city={selectedListing?.location || selectedHotel?.address || "Athens"}
           nightsLabel={nightLabel(hotelNights)}
           datesLabel={
             checkIn && checkOut ? `${humanDate(checkIn)} → ${humanDate(checkOut)}` : "Add dates above"
           }
           onViewHotel={() => {
-            // Bottle first-sleep detail — never `/hotel/*` QR messaging / flip-card entry.
+            if (!selectedHotel && !plannedHotelSlug) return;
             const qs = [
               checkIn ? `checkIn=${encodeURIComponent(checkIn)}` : "",
               checkOut ? `checkOut=${encodeURIComponent(checkOut)}` : "",
@@ -867,7 +1008,10 @@ export function BottleProductScreen() {
             ]
               .filter(Boolean)
               .join("&");
-            router.push((`/bottleHotel/${plannedHotelSlug}?${qs}`) as Href);
+            const href = selectedHotel
+              ? bottleHotelHref(selectedHotel)
+              : `/bottleHotel/${plannedHotelSlug}`;
+            router.push((`${href}?${qs}`) as Href);
           }}
           onHotelServices={() => router.push("/hotelier" as Href)}
           onContactHotel={() => router.push("/hotelier/concierge" as Href)}
@@ -1116,6 +1260,14 @@ const styles = StyleSheet.create({
   },
   planChipText: { fontSize: 12, fontWeight: "600", color: "#5A534A" },
   planChipTextOn: { color: "#FFFFFF", fontWeight: "800" },
+  hotelSearchRow: { flexDirection: "row", alignItems: "center", gap: 8, marginTop: 10 },
+  hotelSearchBtn: {
+    backgroundColor: "#1A1510",
+    borderRadius: 12,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+  },
+  hotelSearchBtnText: { color: "#FFFCF7", fontWeight: "800", fontSize: 13 },
   hotelDirGrid: { flexDirection: "row", flexWrap: "wrap", gap: 12, marginTop: 12 },
   hotelDirGridDesktop: { gap: 14 },
   hotelDirCard: {
