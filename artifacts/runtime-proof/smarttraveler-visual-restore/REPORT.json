@@ -1,0 +1,25 @@
+{
+  "base": "https://bandits-two.vercel.app",
+  "at": "2026-10-18T05:25:17.387Z",
+  "checks": {
+    "copyTagline": true,
+    "noHotelOnlyCopy": true,
+    "editorialCatalog": true,
+    "categoryNotEmpty": true,
+    "editorialLabeled": true,
+    "editorialDetailNoClaim": true,
+    "foliaPartnerPath": true,
+    "desktopGrid": true,
+    "noEmptyAll": true
+  },
+  "counts": {
+    "mobileAll": 23,
+    "mobileCards": 23,
+    "mobileJewellery": 2,
+    "mobileFashion": 4,
+    "desktopAll": 23,
+    "desktopCards": 23
+  },
+  "pass": true,
+  "failed": []
+}
