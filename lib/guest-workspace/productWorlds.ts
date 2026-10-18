@@ -171,6 +171,8 @@ export type SmartTravelerPartner = {
     hotelBenefit?: boolean;
     expiringToday?: boolean;
     saved?: boolean;
+    /** Workspace-issued merchant redemption code (stable on listing). */
+    uniqueCode?: string;
   }[];
   coupons: {
     id: string;

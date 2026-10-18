@@ -29,6 +29,10 @@ import { useScreenFocused } from '@/lib/useScreenFocused';
 import { useGuestLiveSurface } from '@/lib/orchestra/useGuestLiveSurface';
 import { buildEventListImagePlan, getEventDbImageCandidatesOrdered } from '@/lib/eventListImagePlan';
 import { resolveApprovedListHeroUrisByEventId } from '@/lib/recommendationImages';
+import {
+  fetchOctopusVerifiedByBanditId,
+  sortBanditIdsVerifiedFirst,
+} from '@/lib/guest-app/premium-visibility';
 
 
 type BanditRow = Database['public']['Tables']['bandit']['Row'];
@@ -161,7 +165,13 @@ export function BanditsScreen({ tabActive }: BanditsScreenProps = {}) {
           bandit: b,
           categories: catByBandit.get(b.id) ?? [],
         }));
-        return withCats;
+        const verifiedById = await fetchOctopusVerifiedByBanditId(withCats.map((r) => r.bandit.id));
+        const orderedBandits = sortBanditIdsVerifiedFirst(
+          withCats.map((r) => r.bandit),
+          verifiedById,
+        );
+        const byId = new Map(withCats.map((r) => [r.bandit.id, r]));
+        return orderedBandits.map((b) => byId.get(b.id)!);
       },
       (data) => {
         setRows(data);

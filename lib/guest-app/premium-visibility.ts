@@ -93,3 +93,36 @@ export async function fetchBanditPremiumVisibility(
   }
   return value;
 }
+
+const BATCH_CHUNK = 6;
+
+/** Resolve Octopus Verified flags for many Local banDits (Workspace truth). */
+export async function fetchOctopusVerifiedByBanditId(
+  banditIds: string[],
+): Promise<Record<string, boolean>> {
+  const ids = [...new Set(banditIds.map((id) => String(id || "").trim()).filter(Boolean))];
+  const out: Record<string, boolean> = {};
+  for (let i = 0; i < ids.length; i += BATCH_CHUNK) {
+    const chunk = ids.slice(i, i + BATCH_CHUNK);
+    await Promise.all(
+      chunk.map(async (id) => {
+        const v = await fetchBanditPremiumVisibility(id);
+        out[id] = v.octopusVerified === true;
+      }),
+    );
+  }
+  return out;
+}
+
+export function sortBanditIdsVerifiedFirst<T extends { id: string }>(
+  items: T[],
+  verifiedById: Record<string, boolean>,
+): T[] {
+  const verified: T[] = [];
+  const rest: T[] = [];
+  for (const item of items) {
+    if (verifiedById[item.id]) verified.push(item);
+    else rest.push(item);
+  }
+  return [...verified, ...rest];
+}

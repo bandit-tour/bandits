@@ -45,6 +45,7 @@ export type GuestReflectionClaim = {
   offerId?: string;
   businessId?: string;
   createdAt?: string;
+  uniqueCode?: string;
 };
 
 export async function postGuestReflection(

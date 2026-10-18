@@ -24,6 +24,8 @@ import { can } from "@/lib/guest-lifecycle/access";
 import { color, radius } from "@/lib/guestDesign";
 import { ImageRatio, imageFocusStyle } from "@/lib/imageRatios";
 import { redeemSmartTravelerBenefit, saveGuestObject } from "@/lib/workspace/actions";
+import SmartTravelerListingCouponRow from "@/components/SmartTravelerListingCoupon";
+import { resolveSmartTravelerListingCoupon } from "@/lib/guest-workspace/smartTravelerListingCode";
 
 /**
  * Local Find detail — magazine recommendation for a SmartTraveler place.
@@ -105,6 +107,10 @@ export default function LocalFindDetailScreen() {
     `${place.businessName} ${place.location} Athens`,
   );
   const redeemOfferId = smartTravelerRedeemObjectId(place);
+  const listingCoupon = resolveSmartTravelerListingCoupon({
+    ...place,
+    isEditorial: isDemo,
+  });
 
   return (
     <ScrollView style={styles.screen} contentContainerStyle={styles.content}>
@@ -181,6 +187,8 @@ export default function LocalFindDetailScreen() {
           <Text style={styles.privilegeDetail}>Map search for this place. Not a GPS reading.</Text>
         </Pressable>
 
+        <SmartTravelerListingCouponRow coupon={listingCoupon} testID="local-find-listing-coupon" />
+
         {isDemo ? (
           <View style={styles.privilegeCard} testID="local-find-editorial">
             <Text style={styles.privilegeEyebrow}>Editorial discovery</Text>
@@ -240,7 +248,8 @@ export default function LocalFindDetailScreen() {
                       setActionError(r.detail);
                       return;
                     }
-                    const code = r.data?.claim?.id || null;
+                    const claim = r.data?.claim as { id?: string; uniqueCode?: string } | undefined;
+                    const code = claim?.uniqueCode || claim?.id || null;
                     setClaimCode(code);
                     setClaimStatus(r.data?.claim?.status || "pending");
                     setUnlocked(true);

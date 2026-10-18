@@ -20,7 +20,10 @@ import { getBanditsWithTags } from '@/app/services/bandits';
 import LocalBanditOctopusIcon from '@/components/LocalBanditOctopusIcon';
 import { Database } from '@/lib/database.types';
 import { color, firstNameOf, shortIntro, space } from '@/lib/guestDesign';
-import { fetchBanditPremiumVisibility } from '@/lib/guest-app/premium-visibility';
+import {
+  fetchOctopusVerifiedByBanditId,
+  sortBanditIdsVerifiedFirst,
+} from '@/lib/guest-app/premium-visibility';
 import { readCacheStale, seedAppDataCache } from '@/lib/appDataCache';
 
 const LOCAL_FALLBACK = require('@/assets/images/play_athens_bg.png');
@@ -87,29 +90,27 @@ export default function ExploreBanditLane({ onMeet, onSeeAll, excludeBanditId }:
         }
         const list = (await getBanditsWithTags().catch(() => [])) as Bandit[];
         if (cancelled) return;
-        const slice = applySlice(list);
+        const ordered = sortBanditIdsVerifiedFirst(list, {});
+        const slice = applySlice(ordered);
         setBandits(slice);
         seedAppDataCache(LANE_CACHE_KEY, list);
         setLoading(false);
         const cachedBadges = readCacheStale<Record<string, boolean>>(OCTOPUS_CACHE_KEY);
         if (cachedBadges && Object.keys(cachedBadges).length > 0) {
           setOctopusById(cachedBadges);
-          return;
         }
-        /** One badge refresh for the lead card only — never storm 8 Workspace calls on tab open. */
-        const lead = slice[0];
-        if (!lead) return;
         setTimeout(() => {
-          void fetchBanditPremiumVisibility(String(lead.id)).then((v) => {
+          void fetchOctopusVerifiedByBanditId(slice.map((b) => String(b.id))).then((map) => {
             if (cancelled) return;
-            const map = { [lead.id]: v?.octopusVerified === true };
             setOctopusById((prev) => {
               const next = { ...prev, ...map };
               seedAppDataCache(OCTOPUS_CACHE_KEY, next);
               return next;
             });
+            const reordered = sortBanditIdsVerifiedFirst(list, { ...(cachedBadges || {}), ...map });
+            setBandits(applySlice(reordered));
           });
-        }, 1200);
+        }, 800);
       } finally {
         if (!cancelled) setLoading(false);
       }

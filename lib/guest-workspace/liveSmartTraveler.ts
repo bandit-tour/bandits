@@ -45,6 +45,7 @@ export type WorkspaceSmartTravelerOffer = {
   benefitType?: string;
   status?: string;
   hotelBenefit?: boolean;
+  uniqueCode?: string;
 };
 
 export type WorkspaceSmartTravelerRow = {
@@ -64,7 +65,7 @@ export type WorkspaceSmartTravelerRow = {
   hours?: string;
   neighborhood?: string;
   city?: string;
-  offers?: WorkspaceSmartTravelerOffer[];
+  offers?: Array<WorkspaceSmartTravelerOffer & { uniqueCode?: string }>;
   coupons?: Array<{ id: string; title: string; detail: string; status?: string }>;
   source?: string;
   email?: string;
@@ -188,6 +189,7 @@ export function mapWorkspaceSmartTraveler(row: WorkspaceSmartTravelerRow): Smart
     detail: o.detail || o.title,
     benefitType: o.benefitType || "Hotel Guest Special",
     hotelBenefit: o.hotelBenefit ?? true,
+    uniqueCode: o.uniqueCode,
   }));
 
   return {
