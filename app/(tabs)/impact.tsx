@@ -24,11 +24,21 @@ import {
   type ImpactEvent,
 } from "@/lib/impact/ledger";
 import { IMPACT_VIEW } from "@/lib/guest-workspace/productWorlds";
+import {
+  cancelVolunteerRegistration,
+  fetchMyVolunteerRegistrations,
+  fetchVolunteerOpportunities,
+  formatVolunteerWhen,
+  joinVolunteerOpportunity,
+  syncVolunteerDropsToLedger,
+  type GuestVolunteerOpportunity,
+  type GuestVolunteerRegistration,
+} from "@/lib/guest-workspace/liveVolunteering";
 
 /** Impact — bandiTour brand chrome; water blue only inside the drop meter. */
 export function ImpactScreen() {
   const { width } = useWindowDimensions();
-  const { activeIdentity } = useAppState();
+  const { activeIdentity, getCurrentUser } = useAppState();
   const userId = activeIdentity?.userId || "guest";
   const screenOptions = useAppBackScreenOptions({
     title: "Impact / Passport",
@@ -39,13 +49,74 @@ export function ImpactScreen() {
   const [events, setEvents] = useState<ImpactEvent[]>([]);
   const [causeNote, setCauseNote] = useState<string | null>(null);
   const [shareNote, setShareNote] = useState<string | null>(null);
+  const [guestEmail, setGuestEmail] = useState<string>("guest@banditour.demo");
+  const [opportunities, setOpportunities] = useState<GuestVolunteerOpportunity[]>([]);
+  const [registrations, setRegistrations] = useState<GuestVolunteerRegistration[]>([]);
+  const [volNote, setVolNote] = useState<string | null>(null);
+  const [joiningId, setJoiningId] = useState<string | null>(null);
   const oceanMax = Math.min(width - 32, 960);
   const drops = dropsForCity(events);
   const fillRatio = Math.min(1, drops / IMPACT_DROP_MILESTONE);
 
+  const refreshLedger = async () => {
+    setEvents(await listImpactEvents(userId));
+  };
+
+  const refreshVolunteering = async (email: string) => {
+    const [ops, mine] = await Promise.all([
+      fetchVolunteerOpportunities("Athens", email),
+      fetchMyVolunteerRegistrations(email),
+    ]);
+    if (ops.ok) setOpportunities(ops.opportunities);
+    if (mine.ok) setRegistrations(mine.registrations);
+    const sync = await syncVolunteerDropsToLedger({ userId, guestEmail: email });
+    if (sync.synced > 0) {
+      setVolNote(`+${sync.synced * IMPACT_DROP_RULES.verified_volunteer_completion} Drops from verified volunteering.`);
+      await refreshLedger();
+    } else {
+      await refreshLedger();
+    }
+  };
+
   useEffect(() => {
-    void listImpactEvents(userId).then(setEvents);
-  }, [userId]);
+    let cancelled = false;
+    void (async () => {
+      const user = await getCurrentUser();
+      const email = (user?.email || "guest@banditour.demo").trim().toLowerCase();
+      if (cancelled) return;
+      setGuestEmail(email);
+      await refreshVolunteering(email);
+    })();
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- load once per identity
+  }, [userId, getCurrentUser]);
+
+  const onJoin = async (opportunityId: string) => {
+    setJoiningId(opportunityId);
+    setVolNote(null);
+    const before = dropsForCity(await listImpactEvents(userId));
+    const result = await joinVolunteerOpportunity(opportunityId, guestEmail);
+    await refreshVolunteering(guestEmail);
+    const after = dropsForCity(await listImpactEvents(userId));
+    setJoiningId(null);
+    if (!result.ok) {
+      setVolNote(result.detail || "Could not join.");
+      return;
+    }
+    setVolNote(
+      after === before
+        ? "You're registered. Drops are added only after the organization confirms you were there."
+        : "You're registered.",
+    );
+  };
+
+  const onCancel = async (registrationId: string) => {
+    const result = await cancelVolunteerRegistration(registrationId, guestEmail);
+    await refreshVolunteering(guestEmail);
+    setVolNote(result.ok ? "Registration cancelled." : result.detail || "Could not cancel.");
+  };
 
   const onShare = async () => {
     if (!events.length) {
@@ -119,6 +190,65 @@ export function ImpactScreen() {
           ))}
         </View>
       )}
+
+      <Text style={styles.sectionTitle}>Volunteer in Athens</Text>
+      <Text style={styles.sectionLead} testID="impact-volunteer-flow">
+        Explore → Choose a date → Join → Volunteer → Earn Drops. Joining registers your interest.
+        +{IMPACT_DROP_RULES.verified_volunteer_completion} Drops arrive only after an approved organization confirms
+        you were there. Free for travelers. Drops are not redeemable.
+      </Text>
+      <View testID="impact-volunteer-explore">
+        {opportunities.length === 0 ? (
+          <Text style={styles.sectionLead} testID="impact-volunteer-empty">
+            No verified volunteer dates in Athens yet. Approved local organizations publish real times here.
+          </Text>
+        ) : (
+          opportunities.map((slot) => {
+            const mine = registrations.find(
+              (r) => r.opportunityId === slot.id && r.status !== "cancelled" && r.status !== "rejected",
+            );
+            return (
+              <View key={slot.id} style={styles.volunteerRow} testID={`impact-volunteer-slot-${slot.id}`}>
+                <View style={styles.volunteerCopy}>
+                  <Text style={styles.volunteerTitle}>{slot.title}</Text>
+                  <Text style={styles.volunteerWhen}>
+                    {formatVolunteerWhen(slot.startsAt, slot.endsAt)} · {slot.city}
+                  </Text>
+                  <Text style={styles.volunteerWhen}>
+                    {slot.organizationName}
+                    {slot.demo ? " · TEST" : ""} · {slot.seatsLeft} seats · {slot.requirements}
+                  </Text>
+                  <Text style={styles.volunteerWhen}>
+                    Earns {slot.dropsOnCompletion} Drops after verified attendance
+                  </Text>
+                </View>
+                {mine?.status === "attended" ? (
+                  <Text style={styles.volunteerDrops} testID={`impact-volunteer-status-${slot.id}`}>
+                    Verified
+                  </Text>
+                ) : mine ? (
+                  <Pressable onPress={() => void onCancel(mine.id)} testID={`impact-volunteer-cancel-${slot.id}`}>
+                    <Text style={styles.volunteerDrops}>{mine.status === "approved" ? "Approved" : "Joined"}</Text>
+                  </Pressable>
+                ) : (
+                  <Pressable
+                    disabled={!slot.joinable || joiningId === slot.id}
+                    onPress={() => void onJoin(slot.id)}
+                    testID={`impact-volunteer-join-${slot.id}`}
+                  >
+                    <Text style={styles.volunteerDrops}>{slot.joinable ? "Join" : "Full"}</Text>
+                  </Pressable>
+                )}
+              </View>
+            );
+          })
+        )}
+      </View>
+      {volNote ? (
+        <Text style={styles.sectionLead} testID="impact-volunteer-note">
+          {volNote}
+        </Text>
+      ) : null}
 
       <Text style={styles.sectionTitle}>Make a difference</Text>
       <Text style={styles.sectionLead}>
