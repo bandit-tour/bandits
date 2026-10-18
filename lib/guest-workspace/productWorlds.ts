@@ -41,6 +41,8 @@ export type GuestExperience = {
    * Live host inventory must leave this unset/false.
    */
   previewOnly?: boolean;
+  /** Display-only example EUR — never sent to Commerce / Stripe. */
+  priceIllustrative?: boolean;
 };
 
 /** Guest App editorial DNA ids (`exp_*`) — inspiration only, not live inventory. */
@@ -52,11 +54,24 @@ export function isEditorialExperienceId(id: string | null | undefined): boolean 
   return true;
 }
 
+/** Shown under illustrative card/detail prices — never implies bookability. */
+export const EXAMPLE_PRICE_PREVIEW_LABEL = "Example price · Preview";
+
 /** Mark a seed listing as preview (no Reserve/Pay, not counted as live). */
 export function asEditorialPreview(exp: GuestExperience): GuestExperience {
+  const basis =
+    exp.priceBasis ?? defaultIllustrativePriceBasis(exp.category);
+  const cents =
+    exp.priceCents > 0
+      ? exp.priceCents
+      : illustrativeExperiencePriceCents(exp.id, exp.category).cents;
   return {
     ...exp,
     previewOnly: true,
+    priceIllustrative: true,
+    priceCents: cents,
+    priceBasis: basis,
+    currency: exp.currency || "EUR",
     availableToday: false,
     seatsLeft: 0,
     bookingMode: "request",
@@ -765,8 +780,8 @@ function stPrivilege(
  * DEMO / editorial SmartTraveler samples only.
  * Production source of truth is the Workspace public SmartTraveler API
  * (`/api/public/smarttraveler`, with `/api/discover` partners as deploy fallback).
- * Never mix these seed rows into live inventory when Workspace returns partners.
- * Kept as a clearly labeled fallback when the live fetch fails.
+ * Always merged in the Guest catalog UI (`mergeSmartTravelerCatalog`) alongside live partners.
+ * Editorial rows are labeled and never substitute for server-verified redemption.
  *
  * Editorial notes: independent Athens places locals pass to each other —
  * no chains, no tourist traps, no discount-marketplace framing.
@@ -2449,6 +2464,94 @@ export const IMPACT_VIEW = {
 };
 
 export type ExperiencePriceBasis = "per_person" | "per_group" | "per_experience";
+
+type IllustrativePriceBand = {
+  minCents: number;
+  maxCents: number;
+  basis: ExperiencePriceBasis;
+};
+
+const ILLUSTRATIVE_PRICE_BANDS: Record<string, IllustrativePriceBand> = {
+  Workshops: { minCents: 4500, maxCents: 12500, basis: "per_person" },
+  Nightlife: { minCents: 2200, maxCents: 6800, basis: "per_person" },
+  Art: { minCents: 3500, maxCents: 9500, basis: "per_experience" },
+  Fashion: { minCents: 4800, maxCents: 14000, basis: "per_experience" },
+  Queer: { minCents: 3900, maxCents: 11000, basis: "per_experience" },
+  Food: { minCents: 5500, maxCents: 16000, basis: "per_person" },
+  Music: { minCents: 2800, maxCents: 8500, basis: "per_person" },
+};
+
+function stableExperienceHash(id: string): number {
+  let h = 2166136261;
+  for (let i = 0; i < id.length; i++) {
+    h ^= id.charCodeAt(i);
+    h = Math.imul(h, 16777619);
+  }
+  return h >>> 0;
+}
+
+function defaultIllustrativePriceBasis(category: string): ExperiencePriceBasis {
+  return ILLUSTRATIVE_PRICE_BANDS[category]?.basis ?? "per_experience";
+}
+
+/** Deterministic EUR example — varied by category, stable per listing id. */
+export function illustrativeExperiencePriceCents(
+  id: string,
+  category: string,
+): { cents: number; basis: ExperiencePriceBasis } {
+  const band = ILLUSTRATIVE_PRICE_BANDS[category] ?? {
+    minCents: 4200,
+    maxCents: 9800,
+    basis: "per_experience" as ExperiencePriceBasis,
+  };
+  const step = 500;
+  const span = Math.max(step, band.maxCents - band.minCents);
+  const steps = Math.floor(span / step);
+  const pick = stableExperienceHash(`${id}:${category}`) % (steps + 1);
+  return { cents: band.minCents + pick * step, basis: band.basis };
+}
+
+export type ExperienceDisplayPrice = {
+  cents: number;
+  basis: ExperiencePriceBasis;
+  currency: string;
+  illustrative: boolean;
+};
+
+/** Card/detail display — real Workspace cents win; else deterministic example EUR. */
+export function resolveExperienceDisplayPrice(exp: GuestExperience): ExperienceDisplayPrice {
+  const currency = String(exp.currency || "EUR").toUpperCase() || "EUR";
+  const basis =
+    exp.priceBasis ?? defaultIllustrativePriceBasis(exp.category);
+  const authorizedLive =
+    exp.previewOnly !== true &&
+    Number.isFinite(exp.priceCents) &&
+    exp.priceCents > 0 &&
+    exp.priceIllustrative !== true;
+  if (authorizedLive) {
+    return {
+      cents: Math.round(exp.priceCents),
+      basis: exp.priceBasis ?? basis,
+      currency,
+      illustrative: false,
+    };
+  }
+  if (exp.previewOnly === true && exp.priceCents > 0) {
+    return {
+      cents: Math.round(exp.priceCents),
+      basis,
+      currency,
+      illustrative: true,
+    };
+  }
+  const ill = illustrativeExperiencePriceCents(exp.id, exp.category);
+  return { cents: ill.cents, basis: ill.basis, currency, illustrative: true };
+}
+
+export function formatExperienceDisplayPrice(exp: GuestExperience): string {
+  const d = resolveExperienceDisplayPrice(exp);
+  return formatExperiencePrice(d.cents, d.basis, d.currency);
+}
 
 export function coerceExperiencePriceBasis(
   raw?: string | null,

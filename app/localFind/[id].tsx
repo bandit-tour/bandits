@@ -113,7 +113,7 @@ export default function LocalFindDetailScreen() {
       {isDemo ? (
         <View style={styles.demoBanner}>
           <Text style={styles.demoBannerText}>
-            Editorial sample — not live partner inventory
+            Editorial discovery — not a participating merchant offer
           </Text>
         </View>
       ) : null}
@@ -183,10 +183,10 @@ export default function LocalFindDetailScreen() {
 
         {isDemo ? (
           <View style={styles.privilegeCard} testID="local-find-editorial">
-            <Text style={styles.privilegeEyebrow}>Editorial Local Find</Text>
+            <Text style={styles.privilegeEyebrow}>Editorial discovery</Text>
             <Text style={styles.privilegeDetail}>
-              Featured for discovery. This is not an approved Hotel Guest Special, and there is no
-              redemption code.
+              Handpicked for curious travelers. No discount code or partnership claim — explore and
+              support the business directly.
             </Text>
           </View>
         ) : place.guestPrivilege ? (

@@ -15,11 +15,14 @@ import {
 import {
   partnerMatchesSmartTravelerFilter,
   SMART_TRAVELER_FILTER_CHIPS,
-  SMART_TRAVELER_PARTNERS,
   type SmartTravelerFilterChip,
   type SmartTravelerPartner,
 } from "@/lib/guest-workspace/productWorlds";
-import { fetchLiveSmartTravelers } from "@/lib/guest-workspace/liveSmartTraveler";
+import {
+  fetchLiveSmartTravelers,
+  mergeSmartTravelerCatalog,
+  type SmartTravelerCatalogEntry,
+} from "@/lib/guest-workspace/liveSmartTraveler";
 import { useGuestLifecycle } from "@/lib/guest-lifecycle/useGuestLifecycle";
 import { can } from "@/lib/guest-lifecycle/access";
 import { color, radius } from "@/lib/guestDesign";
@@ -51,9 +54,8 @@ function resolveSmartTravelerCity(opts: {
 }
 
 /**
- * SmartTraveler — redeemable boutique merchant network for hotel guests.
- * Live partner_record offers claim server-issued codes; editorial Local Finds stay
- * separately labeled and never substitute for redeemable inventory.
+ * SmartTraveler — discovery marketplace plus participating merchant offers.
+ * Editorial catalog always renders; live partners merge in with Partner badges and redemption.
  */
 type SmartTravelerScreenProps = {
   tabActive?: boolean;
@@ -68,8 +70,8 @@ export function SmartTravelerScreen({ tabActive = true }: SmartTravelerScreenPro
   const [savedIds, setSavedIds] = useState<Set<string>>(() => new Set());
 
   const [live, setLive] = useState<SmartTravelerPartner[]>([]);
-  const [liveOk, setLiveOk] = useState(false);
-  /** Editorial catalog paints immediately; live inventory upgrades silently. */
+  const [liveLoaded, setLiveLoaded] = useState(false);
+  /** Editorial catalog paints immediately; live inventory merges in when ready. */
   const [loading, setLoading] = useState(false);
 
   const city = resolveSmartTravelerCity({
@@ -84,13 +86,8 @@ export function SmartTravelerScreen({ tabActive = true }: SmartTravelerScreenPro
     let cancelled = false;
     void fetchLiveSmartTravelers({ city }).then((result) => {
       if (cancelled) return;
-      if (result.ok) {
-        setLive(result.partners);
-        setLiveOk(true);
-      } else {
-        setLive([]);
-        setLiveOk(false);
-      }
+      setLive(result.ok ? result.partners : []);
+      setLiveLoaded(true);
       setLoading(false);
     });
     return () => {
@@ -101,17 +98,16 @@ export function SmartTravelerScreen({ tabActive = true }: SmartTravelerScreenPro
   const cols = offerMarketplaceColumns(width);
   const cardW = cardWidthForColumns(width, cols, GRID_PAD, GRID_GAP);
 
-  /** Live partners when Workspace published any. Otherwise the editorial catalog — never a blank page. */
-  const editorialMode = !liveOk || live.length === 0;
-  const inventory = useMemo(() => {
-    if (!editorialMode) return live;
-    return SMART_TRAVELER_PARTNERS;
-  }, [editorialMode, live]);
+  const catalog = useMemo(() => mergeSmartTravelerCatalog(live), [live]);
+  const partnerCount = live.length;
 
   const finds = useMemo(() => {
-    if (filter === "All") return inventory;
-    return inventory.filter((p) => partnerMatchesSmartTravelerFilter(p, filter));
-  }, [filter, inventory]);
+    const base =
+      filter === "All"
+        ? catalog
+        : catalog.filter((p) => partnerMatchesSmartTravelerFilter(p, filter));
+    return base;
+  }, [filter, catalog]);
 
   const open = (id: string) => router.push(`/localFind/${id}` as Href);
 
@@ -128,19 +124,16 @@ export function SmartTravelerScreen({ tabActive = true }: SmartTravelerScreenPro
     <ScrollView style={styles.screen} contentContainerStyle={styles.content}>
       <View style={styles.header}>
         <Text style={styles.title}>SmartTraveler</Text>
-        <Text style={styles.subtitle}>
-          {editorialMode
-            ? "Exclusive local discounts for guests of partner hotels — when merchants publish."
-            : "Exclusive local discounts for guests of partner hotels."}
-        </Text>
+        <Text style={styles.tagline}>Discover the local. Enjoy the unexpected.</Text>
         <Text style={styles.subtitleSecondary}>
-          {editorialMode
-            ? "No redeemable partner offers are published near you yet. Editorial Local Finds below are discovery-only — not claimable codes. Merchants join via Workspace → SmartTraveler business."
-            : "Discover handpicked places, claim your offer, and show the verified code at the business."}
+          Independent boutiques, creative spaces, hidden gems and neighborhood favorites —
+          handpicked for curious travelers. Explore the city and unlock exclusive offers from
+          participating local businesses.
         </Text>
-        {editorialMode ? (
+        {liveLoaded && partnerCount === 0 ? (
           <Text style={styles.subtitleSecondary} testID="st-merchant-join-hint">
-            Businesses: banditour-workspace.vercel.app/join → SmartTraveler business.
+            No participating offers published near you yet — editorial picks below are discovery
+            only. Businesses join via banditour-workspace.vercel.app/join → SmartTraveler.
           </Text>
         ) : null}
       </View>
@@ -170,11 +163,16 @@ export function SmartTravelerScreen({ tabActive = true }: SmartTravelerScreenPro
       </ScrollView>
 
       <View style={styles.sectionRow}>
-        <Text style={styles.section}>{editorialMode ? "Editorial Local Finds" : "Local Finds"}</Text>
+        <Text style={styles.section}>Local Finds</Text>
         <Text style={styles.sectionCount} testID="st-find-count">
           {loading ? "…" : finds.length}
         </Text>
       </View>
+      {partnerCount > 0 ? (
+        <Text style={styles.sectionHint} testID="st-partner-count">
+          {partnerCount} participating offer{partnerCount === 1 ? "" : "s"} · editorial picks labeled
+        </Text>
+      ) : null}
 
       {loading ? (
         <View style={styles.loadingBox}>
@@ -197,7 +195,7 @@ export function SmartTravelerScreen({ tabActive = true }: SmartTravelerScreenPro
               saved={savedIds.has(place.id)}
               onOpen={() => open(place.id)}
               onToggleSave={() => toggleSave(place.id)}
-              editorial={editorialMode}
+              editorial={place.isEditorial}
             />
           ))}
         </View>
@@ -214,7 +212,7 @@ function LocalFindCard({
   onToggleSave,
   editorial,
 }: {
-  place: SmartTravelerPartner;
+  place: SmartTravelerCatalogEntry;
   width: number;
   saved: boolean;
   onOpen: () => void;
@@ -284,11 +282,11 @@ function LocalFindCard({
         </Text>
         {editorial ? (
           <Text style={styles.privilege} numberOfLines={2}>
-            Editorial find · not redeemable
+            Editorial · discovery only
           </Text>
         ) : place.guestPrivilege ? (
           <Text style={styles.privilege} numberOfLines={2}>
-            Hotel Guest Special: {place.guestPrivilege.label}
+            Participating offer: {place.guestPrivilege.label}
           </Text>
         ) : null}
       </View>
@@ -320,9 +318,9 @@ const styles = StyleSheet.create({
     color: color.ink,
     letterSpacing: -0.3,
   },
-  subtitle: {
+  tagline: {
     fontSize: 16,
-    fontWeight: "600",
+    fontWeight: "700",
     color: color.inkSoft,
     marginTop: 6,
     lineHeight: 22,
@@ -373,6 +371,15 @@ const styles = StyleSheet.create({
   },
   section: { fontSize: 16, fontWeight: "800", color: color.ink },
   sectionCount: { fontSize: 12, fontWeight: "700", color: color.muted },
+  sectionHint: {
+    paddingHorizontal: GRID_PAD,
+    marginTop: -6,
+    marginBottom: 10,
+    fontSize: 12,
+    fontWeight: "600",
+    color: color.muted,
+    lineHeight: 17,
+  },
   grid: {
     flexDirection: "row",
     flexWrap: "wrap",

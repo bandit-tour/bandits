@@ -1,15 +1,42 @@
 /**
  * Production SmartTraveler — Workspace partner inventory.
- * SMART_TRAVELER_PARTNERS in productWorlds.ts is editorial DEMO only and must not mix as SoT.
+ * Editorial seed in productWorlds merges in the Guest UI; Workspace API is SoT for live partners.
  */
 import { workspaceGet, workspaceOrigin } from "@/lib/workspace/client";
 import {
   experienceCover,
   isValidExperienceImageUrl,
+  SMART_TRAVELER_PARTNERS,
   type SmartTravelerFilterChip,
   type SmartTravelerGuestPrivilege,
   type SmartTravelerPartner,
 } from "@/lib/guest-workspace/productWorlds";
+
+export type SmartTravelerCatalogEntry = SmartTravelerPartner & {
+  /** Editorial seed — discovery only, no server redemption. */
+  isEditorial: boolean;
+};
+
+const EDITORIAL_IDS = new Set(SMART_TRAVELER_PARTNERS.map((p) => p.id));
+
+export function isEditorialSmartTravelerId(id: string): boolean {
+  return EDITORIAL_IDS.has(id);
+}
+
+/** Live partner rows first; editorial fills every category — never partner-only empty grids. */
+export function mergeSmartTravelerCatalog(
+  live: SmartTravelerPartner[],
+): SmartTravelerCatalogEntry[] {
+  const liveIds = new Set(live.map((p) => p.id));
+  const partners: SmartTravelerCatalogEntry[] = live.map((p) => ({
+    ...p,
+    isEditorial: false,
+  }));
+  const editorial: SmartTravelerCatalogEntry[] = SMART_TRAVELER_PARTNERS.filter(
+    (p) => !liveIds.has(p.id),
+  ).map((p) => ({ ...p, isEditorial: true }));
+  return [...partners, ...editorial];
+}
 
 export type WorkspaceSmartTravelerOffer = {
   id: string;
