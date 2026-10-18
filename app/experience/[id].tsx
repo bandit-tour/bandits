@@ -28,11 +28,13 @@ import {
 } from "@/lib/guest-workspace/experienceDetail";
 import { fetchLiveExperienceDetail } from "@/lib/guest-workspace/liveExperiences";
 import {
+  EXAMPLE_PRICE_PREVIEW_LABEL,
   experienceBookingTotalCents,
-  formatEuro,
+  formatExperienceDisplayPrice,
   formatExperiencePrice,
   formatMoney,
   isEditorialExperienceId,
+  resolveExperienceDisplayPrice,
 } from "@/lib/guest-workspace/productWorlds";
 import { supabase } from "@/lib/supabase";
 import { ImageRatio, imageFocusStyle } from "@/lib/imageRatios";
@@ -134,8 +136,9 @@ export default function ExperienceDetailScreen() {
   const shareExperience = useCallback(async () => {
     if (!exp) return;
     try {
+      const sharePrice = formatExperienceDisplayPrice(exp);
       await Share.share({
-        message: `${exp.title} · ${exp.area} · ${formatEuro(exp.priceCents)} · bandiTour`,
+        message: `${exp.title} · ${exp.area} · ${sharePrice} · bandiTour`,
         title: exp.title,
       });
     } catch {
@@ -144,14 +147,14 @@ export default function ExperienceDetailScreen() {
   }, [exp]);
 
   const openBooking = useCallback((step: BookingStep = "dates") => {
-    if (isPreview) return;
+    if (isPreview || !exp || resolveExperienceDisplayPrice(exp).illustrative) return;
     setBookError(null);
     setBookStep(step);
     setBookOpen(true);
-  }, [isPreview]);
+  }, [exp, isPreview]);
 
   const scrollToDates = useCallback(() => {
-    if (isPreview) return;
+    if (isPreview || (exp && resolveExperienceDisplayPrice(exp).illustrative)) return;
     if (selectedSlot) {
       openBooking("review");
       return;
@@ -160,7 +163,7 @@ export default function ExperienceDetailScreen() {
       scrollRef.current?.scrollTo({ y: Math.max(0, availY - 80), animated: true });
     }
     openBooking("dates");
-  }, [availY, isPreview, openBooking, selectedSlot]);
+  }, [availY, exp, isPreview, openBooking, selectedSlot]);
 
   const openHost = useCallback(() => {
     const hostId = exp?.hostProfile?.id;
@@ -177,24 +180,30 @@ export default function ExperienceDetailScreen() {
 
   const confirmPay = useCallback(async () => {
     if (!exp || !selectedSlot) return;
-    if (isPreview) {
+    if (isPreview || resolveExperienceDisplayPrice(exp).illustrative) {
       setBookStep("review");
       setBookError("This is a preview experience — reservations are not open yet.");
+      return;
+    }
+    if (!Number.isFinite(exp.priceCents) || exp.priceCents <= 0) {
+      setBookStep("review");
+      setBookError("Host has not published an authorized price yet — checkout is unavailable.");
       return;
     }
     setBookError(null);
     setBookStep("paying");
 
     await ensureAnonymousSession();
-    invalidateAuthUserCache();
-    const user = await getCachedAuthUser();
-    const guestEmail = (user as { email?: string } | null)?.email;
+    const { data: authData } = await supabase.auth.getUser();
+    const authUser = authData?.user ?? null;
+    const guestEmail = authUser?.email ?? null;
     if (!guestEmail) {
       setBookStep("review");
       setBookError("Sign in required for Commerce checkout — payment was not charged.");
       return;
     }
-    const customerId = user?.id ?? (exp.commerceWorkspaceId === "local-experiences" ? "guest_bridge" : null);
+    const customerId =
+      authUser?.id ?? (exp.commerceWorkspaceId === "local-experiences" ? "guest_bridge" : null);
     if (!customerId) {
       setBookStep("review");
       setBookError(
@@ -272,9 +281,13 @@ export default function ExperienceDetailScreen() {
   }
 
   const visibleReviews = showAllReviews ? exp.reviews : exp.reviews.slice(0, 2);
-  const unitCents = selectedSlot?.priceCents ?? exp.priceCents;
-  const priceBasis = exp.priceBasis;
-  const priceCurrency = exp.currency || "EUR";
+  const displayPrice = resolveExperienceDisplayPrice(exp);
+  const bookingBlocked = isPreview || displayPrice.illustrative;
+  const unitCents = bookingBlocked
+    ? displayPrice.cents
+    : selectedSlot?.priceCents ?? exp.priceCents;
+  const priceBasis = bookingBlocked ? displayPrice.basis : exp.priceBasis ?? displayPrice.basis;
+  const priceCurrency = displayPrice.currency;
   const stickyPriceLabel = formatExperiencePrice(unitCents, priceBasis, priceCurrency);
 
   return (
@@ -619,19 +632,25 @@ export default function ExperienceDetailScreen() {
       {/* 12 · Sticky booking bar — live only; editorial previews cannot reserve/pay */}
       <View style={[styles.bookBar, { paddingBottom: Math.max(12, insets.bottom) }]}>
         <View style={styles.bookBarLeft}>
-          {isPreview ? (
+          {bookingBlocked ? (
             <>
-              <Text style={styles.bookPrice}>Preview</Text>
-              <Text style={styles.bookCancel}>Inspiration only · not open to book</Text>
+              <Text style={styles.bookPrice} testID="exp-detail-price">
+                {stickyPriceLabel}
+              </Text>
+              <Text style={styles.bookCancel} testID="exp-detail-price-example">
+                {EXAMPLE_PRICE_PREVIEW_LABEL} · not open to book
+              </Text>
             </>
           ) : (
             <>
-              <Text style={styles.bookPrice}>{stickyPriceLabel}</Text>
+              <Text style={styles.bookPrice} testID="exp-detail-price">
+                {stickyPriceLabel}
+              </Text>
               <Text style={styles.bookCancel}>{exp.cancellationPolicyShort}</Text>
             </>
           )}
         </View>
-        {isPreview ? (
+        {bookingBlocked ? (
           <Pressable
             style={[styles.bookCta, styles.bookCtaPreview]}
             onPress={goBack}
@@ -679,7 +698,7 @@ export default function ExperienceDetailScreen() {
       </Modal>
 
       {/* Booking sheet — never for editorial previews */}
-      {!isPreview ? (
+      {!bookingBlocked ? (
         <BookingSheet
           visible={bookOpen}
           onClose={() => {

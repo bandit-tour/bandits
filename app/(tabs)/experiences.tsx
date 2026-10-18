@@ -13,10 +13,12 @@ import {
 import { RatioImage } from "@/components/RatioImage";
 import {
   asEditorialPreview,
+  EXAMPLE_PRICE_PREVIEW_LABEL,
   experiencesWithValidCover,
-  formatExperiencePrice,
+  formatExperienceDisplayPrice,
   GUEST_EXPERIENCES,
   isValidExperienceImageUrl,
+  resolveExperienceDisplayPrice,
   type GuestExperience,
 } from "@/lib/guest-workspace/productWorlds";
 import { cardWidthForColumns } from "@/lib/imageRatios";
@@ -296,6 +298,8 @@ function ExperienceMarketplaceCard({
 }) {
   const [coverFailed, setCoverFailed] = useState(false);
   const preview = exp.previewOnly === true;
+  const displayPrice = resolveExperienceDisplayPrice(exp);
+  const priceLine = formatExperienceDisplayPrice(exp);
 
   if (!isValidExperienceImageUrl(exp.imageUrl) || coverFailed) return null;
 
@@ -307,11 +311,9 @@ function ExperienceMarketplaceCard({
       onPress={onPress}
       accessibilityRole="button"
       accessibilityLabel={
-        preview
-          ? `${exp.title}, inspiration, not bookable`
-          : exp.priceCents > 0
-            ? `${exp.title}, ${formatExperiencePrice(exp.priceCents, exp.priceBasis, exp.currency)}`
-            : `${exp.title}, price on request`
+        preview || displayPrice.illustrative
+          ? `${exp.title}, ${priceLine}, ${EXAMPLE_PRICE_PREVIEW_LABEL}, not bookable`
+          : `${exp.title}, ${priceLine}`
       }
       testID={preview ? `exp-preview-card-${exp.id}` : `exp-live-card-${exp.id}`}
     >
@@ -373,24 +375,22 @@ function ExperienceMarketplaceCard({
           </View>
         ) : null}
         <View style={styles.footer}>
-          {preview ? (
+          {displayPrice.illustrative ? (
             <>
-              <Text style={styles.priceMuted} testID={`exp-price-${exp.id}`}>
-                Inspiration · not bookable
-              </Text>
-              <Text style={styles.ctaPreview}>Explore</Text>
-            </>
-          ) : exp.priceCents > 0 ? (
-            <>
-              <Text style={styles.price} testID={`exp-price-${exp.id}`}>
-                {formatExperiencePrice(exp.priceCents, exp.priceBasis, exp.currency)}
-              </Text>
-              <Text style={styles.cta}>Book</Text>
+              <View style={styles.priceCol}>
+                <Text style={styles.price} testID={`exp-price-${exp.id}`}>
+                  {priceLine}
+                </Text>
+                <Text style={styles.priceExample} testID={`exp-price-example-${exp.id}`}>
+                  {EXAMPLE_PRICE_PREVIEW_LABEL}
+                </Text>
+              </View>
+              <Text style={styles.ctaPreview}>{preview ? "Explore" : "Preview"}</Text>
             </>
           ) : (
             <>
-              <Text style={styles.priceMuted} testID={`exp-price-${exp.id}`}>
-                Price on request
+              <Text style={styles.price} testID={`exp-price-${exp.id}`}>
+                {priceLine}
               </Text>
               <Text style={styles.cta}>Book</Text>
             </>
@@ -525,10 +525,12 @@ const styles = StyleSheet.create({
   footer: {
     flexDirection: "row",
     justifyContent: "space-between",
-    alignItems: "center",
+    alignItems: "flex-end",
     marginTop: 8,
   },
+  priceCol: { flex: 1, paddingRight: 8 },
   price: { fontSize: 15, fontWeight: "800", color: "#FFFFFF" },
+  priceExample: { fontSize: 10, fontWeight: "700", color: "#B0B0B0", marginTop: 3 },
   priceMuted: { fontSize: 14, fontWeight: "700", color: "#9A9A9A" },
   cta: { fontSize: 13, fontWeight: "800", color: color.brand },
   ctaPreview: { fontSize: 13, fontWeight: "800", color: "#C0C0C0" },
