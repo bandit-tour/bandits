@@ -164,11 +164,11 @@ export default function BottleHotelDetailScreen() {
   const raw = String(listing?.description || "").trim();
   const summary =
     loadState === "loading"
-      ? `Loading ${name} from Workspace…`
+      ? `Loading ${name}…`
       : notPublished
-        ? `${name} is discoverable for Athens Bottle planning. Authorized partner branding may appear below; rates and room inventory wait until Workspace goes LIVE — Guest will not invent them.`
+        ? `${name} is an Athens boutique you can plan around. Photos, rooms, and rates appear here as the hotel confirms them.`
         : unreachable
-          ? `Could not reach Workspace for ${name}. This is a connection issue, not a missing listing.`
+          ? `We couldn’t load the latest details for ${name}. Try again in a moment — your Bottle plan is still saved.`
           : raw.length > 40 &&
               !isInventedWelcome(raw) &&
               !/^welcome to\b/i.test(raw) &&
@@ -180,11 +180,11 @@ export default function BottleHotelDetailScreen() {
     checkIn && checkOut ? `${humanDate(checkIn)} → ${humanDate(checkOut)}` : "Dates from your Bottle plan";
   const publishText =
     loadState !== "ready" || !listing
-      ? "Checking Workspace…"
+      ? "Loading hotel details…"
       : listing.workspacePublishStatus === "published"
-        ? publishLabel(listing)
+        ? "Partner hotel"
         : listing.workspacePublishStatus === "not_published"
-          ? "Discoverable · not LIVE on Workspace yet"
+          ? "Discoverable Athens boutique"
           : publishLabel(listing);
 
   return (
@@ -236,10 +236,10 @@ export default function BottleHotelDetailScreen() {
             <Text style={styles.galleryEmptyTitle}>{name}</Text>
             <Text style={styles.galleryEmptyBody}>
               {notPublished
-                ? "Discoverable profile — no approved property gallery frames yet. Guest will not invent photos."
+                ? "The gallery opens when this hotel publishes approved property photos."
                 : unreachable
-                  ? "Workspace unreachable — gallery will load when the connection recovers."
-                  : "No property photos published yet. Stock and third-party images are not shown."}
+                  ? "Gallery will appear when the connection recovers."
+                  : "No property photos published yet."}
             </Text>
           </View>
         )}
@@ -252,21 +252,21 @@ export default function BottleHotelDetailScreen() {
         </View>
 
         <View style={styles.facts}>
-          <Fact label="Address" value={listing?.address || "Address publishes with the hotel Workspace config."} />
+          <Fact label="Location" value={listing?.address || area} />
           <Fact
             label="Rates"
             value={
               rateLabel
                 ? `From ${rateLabel} / night`
-                : listing?.rates.note || "Rates appear when authorized."
+                : "Nightly rates appear when the hotel authorizes guest pricing."
             }
           />
           <Fact
             label="Rooms"
             value={
               listing?.roomTypes.length
-                ? `${listing.roomTypes.length} room type${listing.roomTypes.length === 1 ? "" : "s"} published`
-                : "Room inventory not published yet."
+                ? `${listing.roomTypes.length} room type${listing.roomTypes.length === 1 ? "" : "s"}`
+                : "Room types appear when the hotel publishes them."
             }
           />
         </View>
@@ -303,7 +303,7 @@ export default function BottleHotelDetailScreen() {
             ))
           ) : (
             <Text style={styles.gapNote} testID="bottle-hotel-rooms-missing">
-              Room types are not in the public Workspace config yet. Guest will not invent inventory.
+              Room categories and photos appear when the hotel publishes them. We never invent inventory.
             </Text>
           )}
         </View>
@@ -340,9 +340,17 @@ export default function BottleHotelDetailScreen() {
             style={styles.cta}
             onPress={() => router.push("/travelBottle" as Href)}
             accessibilityRole="button"
+            testID="bottle-hotel-mix-cta"
+          >
+            <Text style={styles.ctaText}>Mix with a second sleep</Text>
+          </Pressable>
+          <Pressable
+            style={styles.ctaGhost}
+            onPress={() => router.push("/travelBottle" as Href)}
+            accessibilityRole="button"
             testID="bottle-hotel-back-to-plan"
           >
-            <Text style={styles.ctaText}>Back to Bottle plan</Text>
+            <Text style={styles.ctaGhostText}>Back to Bottle plan</Text>
           </Pressable>
           <Pressable
             style={styles.ctaGhost}
@@ -350,7 +358,7 @@ export default function BottleHotelDetailScreen() {
             accessibilityRole="button"
             testID="bottle-hotel-open-services"
           >
-            <Text style={styles.ctaGhostText}>Hotel services (in-stay)</Text>
+            <Text style={styles.ctaGhostText}>In-stay hotel services</Text>
           </Pressable>
         </View>
       </View>

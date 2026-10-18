@@ -219,14 +219,14 @@ function parseRates(json: Record<string, unknown>, roomTypes: HotelBottleRoomTyp
     fromCentsPerNight: authorized ? fromCents : undefined,
     note: authorized
       ? undefined
-      : "Nightly rates appear only when this hotel authorizes guest pricing in Workspace.",
+      : "Nightly rates appear when the hotel authorizes guest pricing.",
   };
 }
 
 function emptyRates(): HotelBottleRates {
   return {
     authorized: false,
-    note: "Nightly rates appear only when this hotel authorizes guest pricing in Workspace.",
+    note: "Nightly rates appear when the hotel authorizes guest pricing.",
   };
 }
 

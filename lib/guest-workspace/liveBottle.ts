@@ -120,11 +120,18 @@ function stayMatchesRequest(
   destination: string,
   travelers: number,
 ): boolean {
-  const q = destination.trim().toLowerCase();
-  const blob = `${row.location || ""} ${row.title || ""} ${row.natureType || ""}`.toLowerCase();
-  if (!q || !blob.includes(q)) return false;
   if (row.maxGuests && travelers > row.maxGuests) return false;
-  return true;
+  const q = destination.trim().toLowerCase();
+  if (!q) return true;
+  const blob = `${row.location || ""} ${row.title || ""} ${row.natureType || ""}`.toLowerCase();
+  if (blob.includes(q)) return true;
+  // Athens hotel Mix: verified Attica / nearby nature stays are in range.
+  if (/athens|attica/.test(q)) {
+    return /athens|attica|parnitha|mesogeia|peloponnese|sounio|aegina|hyd|coast|marathon|lavrio/.test(
+      blob,
+    );
+  }
+  return false;
 }
 
 /**
