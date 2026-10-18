@@ -14,6 +14,7 @@ export {
 export {
   resolveOctopusConciergeEntitlement,
   startOctopusConciergeCheckout,
+  confirmOctopusCheckoutSession,
   assertConciergeOpsAllowed,
   submitConciergeRequestToWorkspace,
   fetchConciergeTrack,

@@ -1,7 +1,8 @@
 import { Stack, useLocalSearchParams, type Href } from "expo-router";
-import React, { useCallback, useEffect, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
+  Platform,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -28,6 +29,7 @@ import {
   isSubstantiveConciergeNote,
   mergeTrackIntoTasks,
   resolveConciergeOperatorType,
+  confirmOctopusCheckoutSession,
   resolveOctopusConciergeEntitlement,
   startOctopusConciergeCheckout,
   submitConciergeRequestToWorkspace,
@@ -36,7 +38,6 @@ import {
   type OctopusEntitlement,
 } from "@/lib/octopus-concierge";
 import { routeParamString } from "@/lib/routeParams";
-import { syncWorkspacePremiumEntitlement } from "@/lib/workspace/actions";
 import { CHECKOUT_UI_WALL_MS } from "@/lib/workspace/client";
 import {
   fetchBanditPremiumVisibility,
@@ -121,10 +122,12 @@ export default function PremiumConciergeScreen() {
     id?: string | string[];
     paid?: string | string[];
     order?: string | string[];
+    stripe_checkout?: string | string[];
+    session_id?: string | string[];
   }>();
   const id = routeParamString(params.id);
-  const paidFlag = routeParamString(params.paid);
-  const orderFromUrl = routeParamString(params.order);
+  const stripeCheckoutFlag = routeParamString(params.stripe_checkout);
+  const stripeSessionFromUrl = routeParamString(params.session_id);
   const { width } = useWindowDimensions();
   const contentWidth = Math.min(width, 560);
   const isDesktop = width >= 720;
@@ -155,6 +158,7 @@ export default function PremiumConciergeScreen() {
   const [tasks, setTasks] = useState<ConciergeTask[]>([]);
   const [activeAction, setActiveAction] = useState<string | null>(null);
   const [sentMsg, setSentMsg] = useState<string | null>(null);
+  const submittingRef = useRef(false);
 
   const first = useMemo(
     () => banditName.trim().split(/\s+/)[0] || "your banDit",
@@ -282,20 +286,30 @@ export default function PremiumConciergeScreen() {
     void refreshEntitlement();
   }, [refreshEntitlement]);
 
-  /** Return from Commerce success URL (?paid=1&order=…) â†’ claim entitlement â†’ open ops. */
+  /** Return from checkout.stripe.com success URL — confirm session, then open Concierge OS. */
   useEffect(() => {
-    if (!id || paidFlag !== "1" || !orderFromUrl || claimingPaid || !guestEmail) return;
+    if (
+      !id ||
+      stripeCheckoutFlag !== "success" ||
+      !stripeSessionFromUrl ||
+      claimingPaid ||
+      !guestEmail
+    ) {
+      return;
+    }
     let cancelled = false;
     (async () => {
       setClaimingPaid(true);
       setCheckoutMsg("Payment confirmed — unlocking Concierge…");
       try {
-        await syncWorkspacePremiumEntitlement({
+        const confirmed = await confirmOctopusCheckoutSession({
+          sessionId: stripeSessionFromUrl,
           banditId: id,
-          orderId: orderFromUrl,
           guestEmail,
-          guestId,
         });
+        if (!cancelled && !confirmed.ok) {
+          setCheckoutMsg(confirmed.detail);
+        }
         if (!cancelled) await refreshEntitlement();
       } finally {
         if (!cancelled) setClaimingPaid(false);
@@ -304,7 +318,7 @@ export default function PremiumConciergeScreen() {
     return () => {
       cancelled = true;
     };
-  }, [claimingPaid, guestEmail, guestId, id, orderFromUrl, paidFlag, refreshEntitlement]);
+  }, [claimingPaid, guestEmail, id, refreshEntitlement, stripeCheckoutFlag, stripeSessionFromUrl]);
 
   const onUnlock = async () => {
     if (!id || checkoutBusy) return;
@@ -320,9 +334,8 @@ export default function PremiumConciergeScreen() {
       setBanditAuthorized(false);
       return;
     }
-    const isTestDemo = visibility.authorizationClass === "TEST_DEMO";
     setCheckoutBusy(true);
-    setCheckoutMsg(isTestDemo ? "Confirming TEST payment…" : "Confirming payment…");
+    setCheckoutMsg("Opening Stripe Checkout…");
     let settled = false;
     const wall = setTimeout(() => {
       if (settled) return;
@@ -344,62 +357,29 @@ export default function PremiumConciergeScreen() {
         setCheckoutMsg(result.detail);
         return;
       }
-      // Commerce OS captured payment — create entitlement association and open Concierge OS.
-      // Stay Pass uses server PaymentIntent / treasury confirm — not hosted checkout.stripe.com.
-      if (result.paymentConfirmed && result.orderId) {
-        const hosted =
-          "checkoutUrl" in result &&
-          typeof result.checkoutUrl === "string" &&
-          /checkout\.stripe\.com/i.test(result.checkoutUrl);
-        setCheckoutMsg(
-          hosted
-            ? "Payment confirmed — unlocking Concierge…"
-            : isTestDemo
-              ? "TEST payment confirmed (server TEST confirm — not hosted Stripe Checkout) — unlocking Concierge…"
-              : "Payment confirmed (server capture — not hosted Stripe Checkout) — unlocking Concierge…",
-        );
-        await syncWorkspacePremiumEntitlement({
-          banditId: id,
-          orderId: result.orderId,
-          guestEmail,
-          guestId,
-        });
+      if (result.paymentConfirmed) {
+        setCheckoutMsg("Stay Pass already active — refreshing access…");
         if (settled) return;
         await refreshEntitlement();
         return;
       }
-      // Redirect checkout (external) — still never fake unlock locally.
-      if ("checkoutUrl" in result && result.checkoutUrl) {
-        const isHostedStripe = /checkout\.stripe\.com/i.test(result.checkoutUrl);
+      const checkoutUrl =
+        "checkoutUrl" in result && typeof result.checkoutUrl === "string" ? result.checkoutUrl : "";
+      if (!checkoutUrl || !/checkout\.stripe\.com/i.test(checkoutUrl)) {
         setCheckoutMsg(
-          isHostedStripe
-            ? "Opening Stripe Checkout…"
-            : "Completing TEST payment return…",
+          checkoutUrl
+            ? "Checkout did not return Stripe — try again or contact support."
+            : "Checkout did not return a payment URL — try Unlock again.",
         );
-        if (typeof window !== "undefined" && result.checkoutUrl.includes("paid=1")) {
-          // Same-origin success URL from Workspace demo/treasury capture — claim without leaving.
-          const url = new URL(result.checkoutUrl, window.location.origin);
-          const orderId = url.searchParams.get("order") || result.sessionId || "";
-          if (orderId) {
-            setCheckoutMsg(
-              "TEST payment confirmed (server TEST confirm — not hosted Stripe Checkout) — unlocking Concierge…",
-            );
-            await syncWorkspacePremiumEntitlement({
-              banditId: id,
-              orderId,
-              guestEmail,
-              guestId,
-            });
-            if (settled) return;
-            await refreshEntitlement();
-            return;
-          }
-        }
-        const { Linking } = await import("react-native");
-        await Linking.openURL(result.checkoutUrl);
-        if (settled) return;
-        await refreshEntitlement();
+        return;
       }
+      setCheckoutMsg("Redirecting to Stripe Checkout…");
+      if (Platform.OS === "web" && typeof window !== "undefined") {
+        window.location.assign(checkoutUrl);
+        return;
+      }
+      const { Linking } = await import("react-native");
+      await Linking.openURL(checkoutUrl);
     } catch (e) {
       if (settled) return;
       setCheckoutMsg(
@@ -446,6 +426,7 @@ export default function PremiumConciergeScreen() {
   }, [entitled, guestEmail, id, refreshTrack]);
 
   const submitAsk = (serviceLabel = "Special requests") => {
+    if (submittingRef.current) return;
     if (!entitlement || !assertConciergeOpsAllowed(entitlement)) return;
     if (!guestEmail) {
       setSentMsg("Sign in required to send a concierge request.");
@@ -479,6 +460,8 @@ export default function PremiumConciergeScreen() {
       banditDisplayName: banditName,
     });
     if (!task) return;
+    const clientRequestId = `crq_${task.id}`;
+    submittingRef.current = true;
     setTasks((prev) => [task, ...prev]);
     setAskText("");
     const handling =
@@ -492,7 +475,9 @@ export default function PremiumConciergeScreen() {
       note: t,
       guestEmail,
       guestId: entitlement.guestId,
+      clientRequestId,
     }).then((r) => {
+      submittingRef.current = false;
       if (!r.ok) {
         // Roll back optimistic local task — do not pretend fulfillment started.
         setTasks((prev) => prev.filter((x) => x.id !== task.id));
@@ -511,15 +496,19 @@ export default function PremiumConciergeScreen() {
         prev.map((x) => (x.id === task.id ? { ...x, id: r.requestId, status: "assigned_to_bandit" } : x)),
       );
       if (typeof r.requestsRemaining === "number") {
+        const remaining = r.requestsRemaining;
         setEntitlement((prev) =>
-          prev ? { ...prev, requestsRemaining: r.requestsRemaining ?? prev.requestsRemaining } : prev,
+          prev ? { ...prev, requestsRemaining: remaining } : prev,
         );
-        setSentMsg(`${handling} · #${r.requestId} · ${r.requestsRemaining} left`);
+        setSentMsg(`${handling} · #${r.requestId} · ${remaining} left`);
       } else {
         setSentMsg(`${handling} · #${r.requestId}`);
-        void refreshEntitlement();
       }
+      // Always re-read Commerce so the count matches durable remaining after confirmation.
+      void refreshEntitlement();
       void refreshTrack();
+    }).catch(() => {
+      submittingRef.current = false;
     });
     setTimeout(() => setSentMsg(null), 4500);
   };
@@ -671,8 +660,8 @@ export default function PremiumConciergeScreen() {
 
           <Text style={styles.secureHint}>
             {visibility?.authorizationClass === "TEST_DEMO"
-              ? "QA TEST_DEMO only — server TEST confirm / treasury · not hosted Stripe Checkout · LIVE off · not a PRODUCTION seller"
-              : "Server payment confirm (not hosted Stripe Checkout by default) · third-party costs billed separately · terms in details"}
+              ? "QA TEST_DEMO · Stripe TEST Checkout · LIVE off · not a PRODUCTION seller"
+              : "Secure Stripe Checkout (TEST) · unlocks after payment · third-party costs billed separately"}
           </Text>
 
           {checkoutMsg ? (

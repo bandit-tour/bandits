@@ -309,6 +309,46 @@ export async function startOctopusConciergeCheckout(input: {
   };
 }
 
+/** After Stripe hosted Checkout success URL — confirm session and grant Stay Pass. */
+export async function confirmOctopusCheckoutSession(input: {
+  sessionId: string;
+  banditId: string;
+  guestEmail?: string | null;
+}): Promise<
+  | { ok: true; orderId?: string }
+  | { ok: false; detail: string }
+> {
+  const sessionId = String(input.sessionId || "").trim();
+  const banditId = String(input.banditId || "").trim();
+  const guestEmail = requireGuestEmail(input.guestEmail);
+  if (!sessionId || !banditId) {
+    return { ok: false, detail: "Missing checkout session." };
+  }
+  if (!guestEmail) {
+    return { ok: false, detail: "Sign in to confirm payment." };
+  }
+  const result = await commercePost<{ ok?: boolean; error?: string; order_id?: string }>(
+    "/api/commerce/checkout/confirm",
+    {
+      session_id: sessionId,
+      sessionId,
+      bandit_id: banditId,
+      banditId,
+    },
+    guestEmail,
+  );
+  if (!result.ok) {
+    return { ok: false, detail: result.detail || "Could not confirm Stripe payment." };
+  }
+  if (result.data.ok === false) {
+    return {
+      ok: false,
+      detail: result.data.error || "Could not confirm Stripe payment.",
+    };
+  }
+  return { ok: true, orderId: result.data.order_id };
+}
+
 export function assertConciergeOpsAllowed(entitlement: OctopusEntitlement): boolean {
   return entitlement.entitled === true && entitlement.state === "active";
 }
@@ -478,6 +518,8 @@ export async function submitConciergeRequestToWorkspace(input: {
   note: string;
   guestEmail?: string | null;
   guestId?: string | null;
+  /** Stable per tap — Workspace replays without a second Stay Pass debit. */
+  clientRequestId?: string | null;
 }): Promise<
   | { ok: true; requestId: string; requestsRemaining?: number | null }
   | { ok: false; detail: string; code?: string }
@@ -511,6 +553,9 @@ export async function submitConciergeRequestToWorkspace(input: {
       code: "validation",
     };
   }
+  const clientRequestId =
+    String(input.clientRequestId || "").trim() ||
+    `crq_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 10)}`;
   const result = await workspacePost<{
     ok?: boolean;
     request?: { id: string };
@@ -525,6 +570,8 @@ export async function submitConciergeRequestToWorkspace(input: {
       note,
       guestId: input.guestId || guestEmail,
       user_id: guestEmail,
+      clientRequestId,
+      idempotencyKey: clientRequestId,
     },
     guestEmail,
   );
