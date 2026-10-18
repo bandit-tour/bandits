@@ -162,6 +162,9 @@ export default function BottleHotelDetailScreen() {
   const notPublished = listing?.workspacePublishStatus === "not_published";
   const unreachable = listing?.workspacePublishStatus === "unreachable";
   const raw = String(listing?.description || "").trim();
+  const inspiration = (listing?.whiteLabel?.homeInspirationLines || []).find(
+    (line) => String(line || "").trim().length > 24,
+  );
   const summary =
     loadState === "loading"
       ? `Loading ${name}…`
@@ -169,12 +172,10 @@ export default function BottleHotelDetailScreen() {
         ? `${name} is an Athens boutique you can plan around. Photos, rooms, and rates appear here as the hotel confirms them.`
         : unreachable
           ? `We couldn’t load the latest details for ${name}. Try again in a moment — your Bottle plan is still saved.`
-          : raw.length > 40 &&
-              !isInventedWelcome(raw) &&
-              !/^welcome to\b/i.test(raw) &&
-              !/night layer already knows|opening move is waiting/i.test(raw)
+          : raw.length > 40 && !isInventedWelcome(raw) && !/^welcome to\b/i.test(raw)
             ? raw
-            : `${name} is your first sleep in ${area}. Travel in a Bottle pairs this hotel with a second stay outside the city.`;
+            : inspiration ||
+              `${name} is your first sleep in ${area}. Travel in a Bottle pairs this hotel with a second stay outside the city.`;
   const rateLabel = listing ? formatHotelBottleRate(listing.rates) : null;
   const datesLabel =
     checkIn && checkOut ? `${humanDate(checkIn)} → ${humanDate(checkOut)}` : "Dates from your Bottle plan";
