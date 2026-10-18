@@ -1,0 +1,155 @@
+{
+  "at": "2026-10-18T11:44:54.245Z",
+  "guest": "https://bandits-two.vercel.app",
+  "workspace": "https://banditour-workspace.vercel.app",
+  "sampleSeed": 20261018,
+  "banditSample": [
+    {
+      "id": "8fd16163-bbde-479a-b4c9-698eb40f8084",
+      "name": "Vassilis",
+      "octopusVerified": false,
+      "showPremiumInsights": false,
+      "authorizationClass": "NONE",
+      "blockers": [
+        "No commercial Bandit mapping for this guest-facing id.",
+        "Octopus Verified™ not live in Prisma BanditEarnedStatus.",
+        "No commercial onboarding record.",
+        "Premium Insights business profile not configured."
+      ]
+    },
+    {
+      "id": "b924d2e8-f1aa-44db-b7ab-d3fa07acb022",
+      "name": "Mario",
+      "octopusVerified": false,
+      "showPremiumInsights": false,
+      "authorizationClass": "NONE",
+      "blockers": [
+        "No commercial Bandit mapping for this guest-facing id.",
+        "Octopus Verified™ not live in Prisma BanditEarnedStatus.",
+        "No commercial onboarding record.",
+        "Premium Insights business profile not configured."
+      ]
+    },
+    {
+      "id": "d76cb120-018d-4a2e-8b5f-0578a71fd8f9",
+      "name": "Neo",
+      "octopusVerified": true,
+      "showPremiumInsights": true,
+      "authorizationClass": "PRODUCTION",
+      "blockers": []
+    },
+    {
+      "id": "8f51bfca-7fb4-407b-ad2d-d7a3a201295e",
+      "name": "Alexandros",
+      "octopusVerified": false,
+      "showPremiumInsights": false,
+      "authorizationClass": "NONE",
+      "blockers": [
+        "No commercial Bandit mapping for this guest-facing id.",
+        "Octopus Verified™ not live in Prisma BanditEarnedStatus.",
+        "No commercial onboarding record.",
+        "Premium Insights business profile not configured."
+      ]
+    },
+    {
+      "id": "cc22a80a-4d44-4ca5-8020-fdc8a6e8c473",
+      "name": "Stacey",
+      "octopusVerified": false,
+      "showPremiumInsights": false,
+      "authorizationClass": "NONE",
+      "blockers": [
+        "No commercial Bandit mapping for this guest-facing id.",
+        "Octopus Verified™ not live in Prisma BanditEarnedStatus.",
+        "No commercial onboarding record.",
+        "Premium Insights business profile not configured."
+      ]
+    },
+    {
+      "id": "13dd4b4c-4a4e-4353-ab31-ff783b931965",
+      "name": "Steve",
+      "octopusVerified": false,
+      "showPremiumInsights": false,
+      "authorizationClass": "NONE",
+      "blockers": [
+        "No commercial Bandit mapping for this guest-facing id.",
+        "Octopus Verified™ not live in Prisma BanditEarnedStatus.",
+        "No commercial onboarding record.",
+        "Premium Insights business profile not configured."
+      ]
+    },
+    {
+      "id": "d7f053c0-a4c5-4f70-a82c-037d82005808",
+      "name": "Kostas",
+      "octopusVerified": false,
+      "showPremiumInsights": false,
+      "authorizationClass": "NONE",
+      "blockers": [
+        "Octopus Verified™ not live in Prisma BanditEarnedStatus.",
+        "Premium performance / eligibility gate failed.",
+        "No commercial onboarding record.",
+        "Premium Insights business profile not configured."
+      ]
+    },
+    {
+      "id": "cc705328-dd9e-4c2e-8764-b2e1077f9385",
+      "name": "Nina",
+      "octopusVerified": false,
+      "showPremiumInsights": false,
+      "authorizationClass": "NONE",
+      "blockers": [
+        "Octopus Verified™ not live in Prisma BanditEarnedStatus.",
+        "Premium performance / eligibility gate failed.",
+        "No commercial onboarding record.",
+        "Premium Insights business profile not configured."
+      ]
+    },
+    {
+      "id": "2c5fbe9a-8d4b-4de0-a21c-518211431a91",
+      "name": "Jerry",
+      "octopusVerified": false,
+      "showPremiumInsights": false,
+      "authorizationClass": "NONE",
+      "blockers": [
+        "Octopus Verified™ not live in Prisma BanditEarnedStatus.",
+        "Premium performance / eligibility gate failed.",
+        "No commercial onboarding record.",
+        "Premium Insights business profile not configured."
+      ]
+    },
+    {
+      "id": "2f5f4057-4f09-463f-8c08-d66d13caea1a",
+      "name": "Nickolis",
+      "octopusVerified": false,
+      "showPremiumInsights": false,
+      "authorizationClass": "NONE",
+      "blockers": [
+        "No commercial Bandit mapping for this guest-facing id.",
+        "Octopus Verified™ not live in Prisma BanditEarnedStatus.",
+        "No commercial onboarding record.",
+        "Premium Insights business profile not configured."
+      ]
+    }
+  ],
+  "verifiedCountInSample": 1,
+  "smartTraveler": {
+    "partnerId": "st_st_merchant_mvcqvifx_banditour_live",
+    "partnerOfferCodeFromApi": "ST-M2M5OX",
+    "editorialId": "st_studio_nera",
+    "editorialExpect": "NON-REDEEMABLE PREVIEW"
+  },
+  "checks": {
+    "neoOctopusBadge": true,
+    "neoStayPassEntry": true,
+    "stayPassBlockedWhenNotVerified": true,
+    "stListingCopyCode": true,
+    "stPreviewLabel": true,
+    "editorialPreviewOnly": true,
+    "partnerListingCoupon": true,
+    "desktopCopyCode": true,
+    "tenBanditSample": true,
+    "visibilityFromWorkspace": true,
+    "exactlyProductionVerified": true
+  },
+  "pass": true,
+  "failed": []
+}

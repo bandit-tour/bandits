@@ -60,14 +60,31 @@ async function shot(page, name) {
 
 async function run() {
   const url = String(process.env.EXPO_PUBLIC_SUPABASE_URL || "").trim();
-  const service = String(process.env.SUPABASE_SERVICE_ROLE_KEY || "").trim();
-  if (!url || !service) throw new Error("Missing Supabase env for bandit inventory");
+  const key =
+    String(process.env.SUPABASE_SERVICE_ROLE_KEY || "").trim() ||
+    String(process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY || "").trim();
+  if (!url || !key) throw new Error("Missing Supabase URL/key for bandit inventory");
 
-  const admin = createClient(url, service, { auth: { persistSession: false, autoRefreshToken: false } });
-  const { data: bandits, error } = await admin.from("bandit").select("id,name").order("created_at", { ascending: false });
-  if (error) throw error;
+  const admin = createClient(url, key, { auth: { persistSession: false, autoRefreshToken: false } });
+  let bandits = [];
+  const { data, error } = await admin.from("bandit").select("id,name").order("created_at", { ascending: false });
+  if (error) console.warn("[proof] supabase bandit list:", error.message);
+  else bandits = data || [];
 
-  const sample = pickTenBandits(bandits || []);
+  if (bandits.length < 10) {
+    const invPath = path.join(
+      root,
+      "artifacts/runtime-proof/rc-2026-10-16/octopus-verified/inventory.json",
+    );
+    try {
+      const inv = JSON.parse(await fs.readFile(invPath, "utf8"));
+      bandits = (inv.all || []).map((b) => ({ id: b.id, name: b.name }));
+    } catch (e) {
+      console.warn("[proof] inventory fallback unavailable:", e.message);
+    }
+  }
+
+  const sample = pickTenBandits(bandits);
   const banditMatrix = [];
   for (const b of sample) {
     const vis = await api(`/api/bandit/premium?view=visibility&banditId=${b.id}`);
@@ -110,7 +127,7 @@ async function run() {
     /Stay Pass|Octopus Concierge|€19/i.test(neoPremium) &&
     !/not commercially authorized/i.test(neoPremium);
 
-  const notVerified = banditMatrix.find((b) => !b.octopusVerified && b.id !== NEO) || banditMatrix[1];
+  const notVerified = banditMatrix.find((b) => !b.octopusVerified && b.id !== NEO);
   if (notVerified?.id) {
     await mobile.goto(`${GUEST}/premium/${notVerified.id}`, { waitUntil: "networkidle", timeout: 120000 });
     await mobile.waitForTimeout(2000);
@@ -119,7 +136,7 @@ async function run() {
     checks.stayPassBlockedWhenNotVerified =
       /not commercially authorized|not Octopus Verified|City Guide and Ask Me/i.test(unauth);
   } else {
-    checks.stayPassBlockedWhenNotVerified = true;
+    checks.stayPassBlockedWhenNotVerified = false;
   }
 
   await mobile.goto(`${GUEST}/smarttraveler`, { waitUntil: "networkidle", timeout: 120000 });

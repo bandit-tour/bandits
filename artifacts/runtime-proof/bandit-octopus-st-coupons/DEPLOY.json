@@ -1,0 +1,19 @@
+{
+  "at": "2026-10-18T11:44:54.245Z",
+  "guest": {
+    "url": "https://bandits-two.vercel.app",
+    "gitSha": "57f9e89f381ae16eb6291462a3811b7270acf016",
+    "vercelProject": "bandits-two"
+  },
+  "workspace": {
+    "url": "https://banditour-workspace.vercel.app",
+    "gitSha": "3225ed7e946916716b3532ec39362e5ab4315540",
+    "vercelProject": "banditour-workspace"
+  },
+  "deployIds": {
+    "guest": "dpl_8fUqqUMtbSgL9qWh34bzXcVmgxSC",
+    "workspace": "dpl_DRagZM5Hiz9M5wWguHUyyDbZe9NK",
+    "guestSha": "57f9e89",
+    "workspaceSha": "3225ed7"
+  }
+}
