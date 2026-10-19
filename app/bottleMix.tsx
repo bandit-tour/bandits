@@ -127,6 +127,7 @@ export default function BottleMixScreen() {
   const [note, setNote] = useState<string | null>(null);
   const [guestName, setGuestName] = useState("");
   const [email, setEmail] = useState("");
+  const [testShown, setTestShown] = useState(false);
   const [history, setHistory] = useState<BottleBookingRecord[]>([]);
   const selRef = useRef<BottlePlanSelection | null>(sel);
   selRef.current = sel;
@@ -269,6 +270,16 @@ export default function BottleMixScreen() {
   const emailOk = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim().toLowerCase());
   const nameOk = guestName.trim().length >= 2;
   const canPay = Boolean(authorized && quote && selectedStay && emailOk && nameOk && !busy);
+  const canShowTest = Boolean(pick?.kind === "test" && nameOk && emailOk && sel?.checkIn && sel.checkOut);
+
+  useEffect(() => {
+    setTestShown(false);
+  }, [pick?.kind, pick?.id]);
+
+  const showTestConfirmation = () => {
+    if (!canShowTest) return;
+    setTestShown(true);
+  };
 
   const onBook = async () => {
     if (!canPay || !sel || !selectedStay || pick?.kind !== "verified") return;
@@ -525,7 +536,19 @@ export default function BottleMixScreen() {
               {checkoutBlock}
             </Text>
           )}
-          {authorized ? (
+          {pick.kind === "test" ? (
+            <View testID="bottle-mix-test-summary">
+              <Text style={styles.summaryLine}>{hotelName}</Text>
+              <Text style={styles.cardMeta}>Outdoor stay: TEST FIXTURE</Text>
+              <Text style={styles.cardMeta}>
+                {sel.checkIn && sel.checkOut
+                  ? `${humanDate(sel.checkIn)} → ${humanDate(sel.checkOut)} · ${sel.hotelNights} hotel + ${sel.outdoorNights} outdoor · ${sel.travelers} guests`
+                  : "Dates are required for this TEST summary."}
+              </Text>
+              <Text style={styles.cardMeta}>No price. This is not supplier inventory.</Text>
+            </View>
+          ) : null}
+          {authorized || pick.kind === "test" ? (
             <>
               <TextInput
                 value={guestName}
@@ -539,22 +562,50 @@ export default function BottleMixScreen() {
                 onChangeText={setEmail}
                 autoCapitalize="none"
                 keyboardType="email-address"
-                placeholder="Email for this booking"
+                placeholder={pick.kind === "test" ? "Email for this TEST screen" : "Email for this booking"}
                 style={styles.input}
                 testID="bottle-mix-email"
               />
             </>
           ) : null}
-          <Pressable
-            style={[styles.book, !canPay && styles.bookOff]}
-            disabled={!canPay}
-            onPress={() => void onBook()}
-            testID="bottle-mix-checkout"
-            accessibilityRole="button"
-            accessibilityState={{ disabled: !canPay }}
-          >
-            <Text style={styles.bookText}>{busy ? "Booking…" : "Book mix"}</Text>
-          </Pressable>
+          {pick.kind === "test" ? (
+            <Pressable
+              style={[styles.book, !canShowTest && styles.bookOff]}
+              disabled={!canShowTest}
+              onPress={showTestConfirmation}
+              testID="bottle-mix-test-continue"
+              accessibilityRole="button"
+              accessibilityState={{ disabled: !canShowTest }}
+            >
+              <Text style={styles.bookText}>Show TEST confirmation</Text>
+            </Pressable>
+          ) : (
+            <Pressable
+              style={[styles.book, !canPay && styles.bookOff]}
+              disabled={!canPay}
+              onPress={() => void onBook()}
+              testID="bottle-mix-checkout"
+              accessibilityRole="button"
+              accessibilityState={{ disabled: !canPay }}
+            >
+              <Text style={styles.bookText}>{busy ? "Booking…" : "Book mix"}</Text>
+            </Pressable>
+          )}
+          {pick.kind === "test" && testShown ? (
+            <View style={styles.testConfirm} testID="bottle-mix-test-confirmation">
+              <Text style={styles.summaryLine}>TEST FIXTURE</Text>
+              <Text style={styles.cardMeta}>This is not a real booking.</Text>
+              <Text style={styles.cardMeta}>
+                No card was charged. No supplier reservation was created. Nothing was saved.
+              </Text>
+              <Text style={styles.summaryLine}>{hotelName}</Text>
+              <Text style={styles.cardMeta}>Outdoor stay: TEST FIXTURE</Text>
+              <Text style={styles.cardMeta}>
+                {humanDate(sel.checkIn)} → {humanDate(sel.checkOut)} · {sel.hotelNights} hotel + {sel.outdoorNights} outdoor · {sel.travelers} guests
+              </Text>
+              <Text style={styles.cardMeta}>Guest {guestName.trim()}</Text>
+            </View>
+          ) : null}
         </View>
       ) : null}
 
@@ -635,6 +686,14 @@ const styles = StyleSheet.create({
     marginBottom: 12,
   },
   testCard: { padding: 14, backgroundColor: "#EDE7DC" },
+  testConfirm: {
+    marginTop: 12,
+    padding: 14,
+    borderRadius: 14,
+    backgroundColor: "#EDE7DC",
+    borderWidth: 1,
+    borderColor: "#1A1510",
+  },
   photo: { width: "100%", height: 220, backgroundColor: "#E8E2D8" },
   cardOn: { borderColor: "#1A1510", borderWidth: 2 },
   cardTitle: { fontSize: 17, fontWeight: "700", color: "#1A1510", paddingHorizontal: 14, paddingTop: 14 },
