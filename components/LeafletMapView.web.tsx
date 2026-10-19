@@ -364,6 +364,28 @@ export default function LeafletMapView({
 
   const lastFlownIdRef = useRef<string | null>(null);
   const skipInitialFlyRef = useRef(Boolean(initialCamera));
+  const didFrameRef = useRef(false);
+
+  useEffect(() => {
+    if (!embedded || !mapInstance || didFrameRef.current) return;
+    if (initialCamera) {
+      didFrameRef.current = true;
+      return;
+    }
+    const coords = events
+      .map((event) => eventMapCoordinates(event))
+      .filter((point): point is { lat: number; lng: number } => point != null);
+    const attica = coords.filter(
+      (point) => point.lat >= 37.65 && point.lat <= 38.25 && point.lng >= 23.45 && point.lng <= 24.05,
+    );
+    const frame = attica.length >= 2 ? attica : coords;
+    if (frame.length === 0) return;
+    didFrameRef.current = true;
+    mapInstance.fitBounds(
+      frame.map((point) => [point.lat, point.lng]),
+      { padding: [36, 36], maxZoom: 14 },
+    );
+  }, [embedded, events, initialCamera, mapInstance]);
 
   useEffect(() => {
     if (!embedded || !mapInstance || !selectedEventId) return;

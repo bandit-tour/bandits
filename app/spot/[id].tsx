@@ -37,6 +37,7 @@ import { VenuePhotoFallback } from '@/components/VenuePhotoFallback';
 import { usePremiumRefreshControl } from '@/lib/mobilePullToRefresh';
 import { useAppBackNavigation, useAppBackScreenOptions } from '@/hooks/useAppBackScreenOptions';
 import { consumeExploreOpenedSpot, exploreOpenedSpot } from '@/lib/exploreViewMemory';
+import { consumeGuideReturn } from '@/lib/guideViewMemory';
 import { repairDisplayText } from '@/lib/repairTextEncoding';
 import { routeParamString } from '@/lib/routeParams';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -75,6 +76,11 @@ export default function SpotDetailScreen() {
   const isDesktopWeb = Platform.OS === 'web' && width >= 1024;
   const heroHeight = Math.max(240, Math.min(isDesktopWeb ? 420 : 320, Math.round(width * 0.62)));
   const onBackToExplore = useCallback(() => {
+    const guideReturn = consumeGuideReturn();
+    if (guideReturn) {
+      router.replace(guideReturn as never);
+      return;
+    }
     if (Platform.OS === 'web') {
       const fromExplore = consumeExploreOpenedSpot();
       if (fromExplore) {
@@ -106,6 +112,11 @@ export default function SpotDetailScreen() {
     if (exploreOpenedSpot()) return undefined;
     window.history.pushState({ spotDirect: true }, '', window.location.href);
     const onPop = () => {
+      const guideReturn = consumeGuideReturn();
+      if (guideReturn) {
+        router.replace(guideReturn as never);
+        return;
+      }
       router.replace('/explore' as never);
     };
     window.addEventListener('popstate', onPop);

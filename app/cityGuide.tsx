@@ -25,7 +25,7 @@ import {
 } from '@/lib/placePhoto';
 import { markHeroUriFailed } from '@/lib/venueHeroRecovery';
 import { buildTastefulCategoryIllustration } from '@/lib/recommendationImages';
-import { readGuideView, writeGuideView, type GuideCamera } from '@/lib/guideViewMemory';
+import { readGuideView, writeGuideView, markGuideReturn, type GuideCamera } from '@/lib/guideViewMemory';
 import { ATHENS_CENTER } from '@/lib/mapCoordinates';
 import { ensureAnonymousSession } from '@/lib/pilotSession';
 import { repairDisplayText } from '@/lib/repairTextEncoding';
@@ -79,12 +79,10 @@ function RecommendationHeroImage({
   useEffect(() => {
     setRetryAttempt(0);
   }, [sourceUri]);
-  const effectiveUri =
-    retryAttempt > 0
-      ? `${sourceUri}${sourceUri.includes('?') ? '&' : '?'}__retry=${retryAttempt}`
-      : sourceUri;
+  const effectiveUri = sourceUri;
   return (
     <ExpoImage
+      key={`${eventId}-${retryAttempt}`}
       source={{ uri: effectiveUri }}
       cachePolicy="memory-disk"
       style={styles.recommendationImage}
@@ -397,7 +395,7 @@ export default function CityGuideScreen() {
     if (!genreParam && mem.genre) setSelectedGenre(mem.genre);
     if (mem.selectedEventId) setSelectedEventId(mem.selectedEventId);
     if (mem.cardIndex) setActiveRecommendationIndex(mem.cardIndex);
-    if (mem.camera) setCamera(mem.camera);
+    if (mem.camera && mem.camera.zoom >= 11) setCamera(mem.camera);
   }, [effectiveBanditId, genreParam]);
 
   const eventCategories = useMemo(() => {
@@ -486,6 +484,7 @@ export default function CityGuideScreen() {
       setSelectedEventId(event.id);
       if (bandit?.id) {
         writeGuideView('city', bandit.id, { selectedEventId: event.id, cardIndex: index, genre: selectedGenre });
+        markGuideReturn(`/cityGuide?banditId=${encodeURIComponent(bandit.id)}`);
       }
       const hero = fromGallery ? encodeURIComponent(fromGallery) : '';
       const qs = [

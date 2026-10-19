@@ -21,7 +21,7 @@ import {
 import { Image as ExpoImage } from 'expo-image';
 import LeafletMapView from '@/components/LeafletMapView';
 import { ATHENS_CENTER } from '@/lib/mapCoordinates';
-import { readGuideView, writeGuideView, type GuideCamera } from '@/lib/guideViewMemory';
+import { readGuideView, writeGuideView, markGuideReturn, type GuideCamera } from '@/lib/guideViewMemory';
 import { ensureAnonymousSession } from '@/lib/pilotSession';
 import { buildTastefulCategoryIllustration } from '@/lib/recommendationImages';
 import { getSpotsByBanditId } from '@/services/spots';
@@ -163,7 +163,7 @@ export default function VibeRouteScreen() {
   useEffect(() => {
     if (!banditId) return;
     const mem = readGuideView('vibe', banditId);
-    if (mem?.camera) setCamera(mem.camera);
+    if (mem?.camera && mem.camera.zoom >= 11) setCamera(mem.camera);
   }, [banditId]);
 
   useEffect(() => {
@@ -224,6 +224,7 @@ export default function VibeRouteScreen() {
   const openStop = useCallback(
     (stop: VibeStop) => {
       if (stop.kind === 'event' && stop.eventId) {
+        if (banditId) markGuideReturn(`/vibe/${encodeURIComponent(banditId)}`);
         router.push(`/spot/${stop.eventId}?banditId=${encodeURIComponent(banditId!)}` as any);
         return;
       }

@@ -67,3 +67,27 @@ export function writeGuideView(kind: GuideKind, banditId: string, partial: Parti
   memory.set(key, next);
   writeStorage(key, next);
 }
+
+const RETURN_KEY = 'bandit.guide.return';
+
+/** Remember which guide opened a place, so Back returns there. */
+export function markGuideReturn(href: string) {
+  const next = String(href || '').trim();
+  if (!next || typeof sessionStorage === 'undefined') return;
+  try {
+    sessionStorage.setItem(RETURN_KEY, next);
+  } catch {
+    /* private mode */
+  }
+}
+
+export function consumeGuideReturn(): string | null {
+  if (typeof sessionStorage === 'undefined') return null;
+  try {
+    const href = sessionStorage.getItem(RETURN_KEY);
+    sessionStorage.removeItem(RETURN_KEY);
+    return href && href.startsWith('/') ? href : null;
+  } catch {
+    return null;
+  }
+}
