@@ -6,10 +6,17 @@ export const BOTTLE_VIDEO = require('@/assets/images/local-friend-bottle.mov');
 export const BOTTLE_POSTER = require('@/assets/images/brand/banditour-bottle-sky.png');
 
 /**
- * Web submit / full-screen bottle throw (`BottleSubmitVideo.web` on Local Friend + bandiTeam report).
- * Bytes: PLAY hotel branding intro — preserve; do not repoint intro or submit flows to Mix loop.
+ * PLAY hotel branding (`public/videos/play-intro.mp4`). Not used by the opening intro,
+ * and not used by banDiTEAM / Local Friend submit playback.
  */
 export const BOTTLE_VIDEO_WEB_URI = '/videos/play-intro.mp4' as const;
+
+/**
+ * Web playback of the opening-intro master (`assets/images/local-friend-bottle.mov`).
+ * Container-only stream copy: same H.264 frames, same AAC, same 568×320, no re-encode.
+ * banDiTEAM report + Local Friend submit (`BottleSubmitVideo.web`) only.
+ */
+export const BOTTLE_INTRO_WEB_URI = '/videos/local-friend-bottle.mp4' as const;
 
 /**
  * Web Mix loading only (`TravelBottleMixLoading.web`) — H.264 re-wrap of `local-friend-bottle.mov`

@@ -1,15 +1,16 @@
-import { BOTTLE_VIDEO_WEB_URI } from '@/lib/openingIntroAssets';
+import { BOTTLE_INTRO_WEB_URI } from '@/lib/openingIntroAssets';
 import React, { useCallback, useEffect, useRef } from 'react';
 import { Modal, Pressable, StyleSheet, Text, View } from 'react-native';
 
 /**
- * Web variant of bottle throw animation.
- * Uses the approved MP4 (same ocean bottle clip as native .mov source family).
+ * Web variant of the opening-intro bottle clip.
+ * Same master as native `assets/images/local-friend-bottle.mov` (stream-copied MP4).
+ * Plays once, contain, original aspect. Does not use the PLAY / octopus intro.
  * Falls back to timed advance if the video cannot play — never invents a new asset.
  */
 
 const WEB_ADVANCE_MS = 9_000;
-const BOTTLE_MP4 = BOTTLE_VIDEO_WEB_URI;
+const BOTTLE_MP4 = BOTTLE_INTRO_WEB_URI;
 
 type BottleSubmitVideoProps = {
   visible: boolean;

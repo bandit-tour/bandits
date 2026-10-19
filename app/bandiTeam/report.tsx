@@ -7,7 +7,6 @@ import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
   FlatList,
-  Image,
   KeyboardAvoidingView,
   Modal,
   Platform,
@@ -23,6 +22,7 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { BottleSubmitVideo } from '@/components/BottleSubmitVideo';
+import { ReportPhotoViewer } from '@/components/ReportPhotoViewer';
 import AppEscapeNav from '@/components/AppEscapeNav';
 import { useAppBackScreenOptions } from '@/hooks/useAppBackScreenOptions';
 import { getUniqueCities } from '@/app/services/bandits';
@@ -481,17 +481,22 @@ export default function BandiTeamReportScreen() {
             />
 
             <Text style={styles.label}>Attach photo (optional)</Text>
-            <Pressable style={styles.attachRow} onPress={() => void pickImage()} accessibilityRole="button">
-              {imageUri ? (
-                <Image source={{ uri: imageUri }} style={styles.thumb} />
-              ) : (
+            {imageUri ? (
+              <ReportPhotoViewer uri={imageUri} testID="banditeam-attach-photo" />
+            ) : (
+              <Pressable style={styles.attachRow} onPress={() => void pickImage()} accessibilityRole="button">
                 <Text style={styles.attachText}>Choose image</Text>
-              )}
-            </Pressable>
+              </Pressable>
+            )}
             {!!imageUri && (
-              <TouchableOpacity onPress={() => setImageUri(null)}>
-                <Text style={styles.removePhoto}>Remove image</Text>
-              </TouchableOpacity>
+              <View style={styles.photoActions}>
+                <TouchableOpacity onPress={() => void pickImage()} accessibilityRole="button">
+                  <Text style={styles.attachText}>Change image</Text>
+                </TouchableOpacity>
+                <TouchableOpacity onPress={() => setImageUri(null)} accessibilityRole="button">
+                  <Text style={styles.removePhoto}>Remove image</Text>
+                </TouchableOpacity>
+              </View>
             )}
 
             <Text style={styles.label}>Title</Text>
@@ -666,10 +671,11 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     overflow: 'hidden',
   },
-  thumb: {
-    width: '100%',
-    height: 160,
-    resizeMode: 'cover',
+  photoActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 16,
+    marginTop: 8,
   },
   attachText: {
     fontSize: 14,

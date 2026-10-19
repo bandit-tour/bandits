@@ -4,7 +4,6 @@ import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
-  Image,
   Platform,
   Pressable,
   ScrollView,
@@ -14,6 +13,7 @@ import {
   View,
 } from 'react-native';
 
+import { ReportPhotoViewer } from '@/components/ReportPhotoViewer';
 import { usePremiumRefreshControl } from '@/lib/mobilePullToRefresh';
 import { useScamAlertsFeedRefresh } from '@/lib/scamAlertsRefresh';
 import { useAppBackScreenOptions } from '@/hooks/useAppBackScreenOptions';
@@ -293,11 +293,7 @@ export default function ScamAlertDetailScreen() {
                 <Text style={styles.bodyMuted}>No additional description.</Text>
               )}
               {!!renderSafeText(row.image_url, '').trim() && (
-                <Image
-                  source={{ uri: renderSafeText(row.image_url, '').trim() }}
-                  style={styles.heroImg}
-                  resizeMode="cover"
-                />
+                <ReportPhotoViewer uri={renderSafeText(row.image_url, '').trim()} testID="banditeam-report-photo" />
               )}
               <View style={styles.catRow}>
                 <Ionicons name="pricetag-outline" size={16} color="#555" />
@@ -452,7 +448,6 @@ const styles = StyleSheet.create({
   section: { paddingHorizontal: 20, paddingTop: 22 },
   body: { fontSize: 16, color: '#222', lineHeight: 24, fontWeight: '500' },
   bodyMuted: { fontSize: 15, color: '#888', fontStyle: 'italic' },
-  heroImg: { width: '100%', height: 220, borderRadius: 16, marginTop: 16, backgroundColor: '#EEE' },
   catRow: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 14 },
   category: { fontSize: 14, fontWeight: '700', color: '#444' },
   relatedRow: {
