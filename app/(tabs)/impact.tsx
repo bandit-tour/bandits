@@ -16,6 +16,8 @@ import {
 } from "react-native";
 import { useAppState } from "@/contexts/AppStateContext";
 import { useAppBackScreenOptions } from "@/hooks/useAppBackScreenOptions";
+import { IllustratedCover, themeForCopy } from "@/components/impact/IllustratedCover";
+import { PassportBook } from "@/components/impact/PassportBook";
 import { color, radius } from "@/lib/guestDesign";
 import {
   IMPACT_DROP_MILESTONE,
@@ -70,10 +72,9 @@ export function ImpactScreen() {
   const [joiningId, setJoiningId] = useState<string | null>(null);
   const [rulesOpen, setRulesOpen] = useState(false);
   const oceanMax = Math.min(width - 32, 960);
-  const coverAspect = width >= 800 ? 2.15 : 1.5;
+  const coverAspect = width >= 800 ? 1.85 : 1.62;
   const drops = dropsForCity(events);
   const fillRatio = Math.min(1, drops / IMPACT_DROP_MILESTONE);
-  const cities = [...new Set(events.map((item) => item.city).filter(Boolean))];
 
   const refreshLedger = async () => {
     setEvents(await listImpactEvents(userId));
@@ -111,6 +112,11 @@ export function ImpactScreen() {
   }, [userId, getCurrentUser]);
 
   const onJoin = async (opportunityId: string) => {
+    const slot = opportunities.find((item) => item.id === opportunityId);
+    if (!slot || slot.demo || !slot.joinable) {
+      setVolNote("This session is not open for registration.");
+      return;
+    }
     setJoiningId(opportunityId);
     setVolNote(null);
     const before = dropsForCity(await listImpactEvents(userId));
@@ -215,7 +221,7 @@ export function ImpactScreen() {
 
           <Text style={styles.sectionTitle}>Volunteer in Athens</Text>
           <Text style={styles.sectionLead} testID="impact-volunteer-flow">
-            Free. Pick a date and join.
+            Free. Join only when a verified partner session is open.
           </Text>
           <View testID="impact-volunteer-explore" style={styles.stack}>
             {opportunities.length === 0 ? (
@@ -240,7 +246,7 @@ export function ImpactScreen() {
                         <Ionicons name="calendar-outline" size={15} color={color.inkSoft} />
                         <Text style={styles.metaText}>{formatVolunteerWhen(slot.startsAt, slot.endsAt)}</Text>
                       </View>
-                      <Text style={styles.oppQuiet}>
+                      <Text style={styles.oppMetaStrong}>
                         {slot.organizationName}
                         {slot.demo ? " · TEST" : ""} · {slot.seatsLeft} seats
                       </Text>
@@ -248,8 +254,7 @@ export function ImpactScreen() {
                         <Text style={styles.nonbookable} testID={`impact-volunteer-test-${slot.id}`}>
                           TEST · not bookable
                         </Text>
-                      ) : null}
-                      {mine?.status === "attended" ? (
+                      ) : mine?.status === "attended" ? (
                         <Text style={styles.verifiedMark} testID={`impact-volunteer-status-${slot.id}`}>
                           Verified
                         </Text>
@@ -265,22 +270,21 @@ export function ImpactScreen() {
                             {mine.status === "approved" ? "Approved" : "Joined"}
                           </Text>
                         </Pressable>
-                      ) : (
+                      ) : slot.joinable ? (
                         <Pressable
-                          disabled={!slot.joinable || joiningId === slot.id}
+                          disabled={joiningId === slot.id}
                           onPress={() => void onJoin(slot.id)}
                           testID={`impact-volunteer-join-${slot.id}`}
                           accessibilityRole="button"
                           accessibilityLabel={`Join ${slot.title}`}
-                          style={[
-                            styles.joinBtn,
-                            (!slot.joinable || joiningId === slot.id) && styles.joinBtnDisabled,
-                          ]}
+                          style={[styles.joinBtn, joiningId === slot.id && styles.joinBtnDisabled]}
                         >
-                          <Text style={styles.joinBtnText}>
-                            {joiningId === slot.id ? "Joining…" : slot.joinable ? "Join" : "Full"}
-                          </Text>
+                          <Text style={styles.joinBtnText}>{joiningId === slot.id ? "Joining…" : "Join"}</Text>
                         </Pressable>
+                      ) : (
+                        <Text style={styles.nonbookable} testID={`impact-volunteer-closed-${slot.id}`}>
+                          Registration closed
+                        </Text>
                       )}
                     </View>
                   </View>
@@ -335,7 +339,12 @@ export function ImpactScreen() {
                 }
                 testID={`impact-cause-${c.id}`}
               >
-                <TypeCover kicker={c.family} title={c.imageLabel} aspect={width >= 800 ? 2.4 : 1.85} />
+                <View style={[styles.cover, { aspectRatio: coverAspect }]} testID={`impact-editorial-cover-${c.id}`}>
+                  <IllustratedCover
+                    theme={themeForCopy(`${c.family} ${c.name} ${c.imageLabel}`)}
+                    seed={c.id}
+                  />
+                </View>
                 <View style={styles.nonbookBadge}>
                   <Text style={styles.nonbookBadgeText}>Not bookable</Text>
                 </View>
@@ -350,7 +359,9 @@ export function ImpactScreen() {
             ))}
             {IMPACT_VIEW.volunteer.map((v) => (
               <View key={v.id} style={styles.oppCard} testID={`impact-editorial-${v.id}`}>
-                <TypeCover kicker="Inspiration" title={v.title} aspect={width >= 800 ? 2.4 : 1.85} />
+                <View style={[styles.cover, { aspectRatio: coverAspect }]} testID={`impact-editorial-cover-${v.id}`}>
+                  <IllustratedCover theme={themeForCopy(v.title)} seed={v.id} />
+                </View>
                 <View style={styles.nonbookBadge}>
                   <Text style={styles.nonbookBadgeText}>Not bookable</Text>
                 </View>
@@ -367,42 +378,7 @@ export function ImpactScreen() {
             </Text>
           ) : null}
 
-          <View style={styles.passport} testID="impact-passport">
-            <View style={styles.passportRibbon} />
-            <Text style={styles.passportKicker}>Impact Passport</Text>
-            <Text style={styles.passportHeadline}>
-              {events.length ? `${drops} verified Drops` : "No stamps yet"}
-            </Text>
-            <View style={styles.passportPage}>
-              {events.length === 0 ? (
-                <View style={styles.stamp}>
-                  <Text style={styles.stampMark}>—</Text>
-                </View>
-              ) : (
-                events.map((item) => (
-                  <View key={item.id} style={styles.stampRow}>
-                    <Text style={styles.stampCity}>{item.city}</Text>
-                    <Text style={styles.stampTitle}>{item.title}</Text>
-                    <Text style={styles.stampDate}>{item.at.slice(0, 10)}</Text>
-                  </View>
-                ))
-              )}
-              <Text style={styles.passportPlaces}>
-                {events.length
-                  ? cities.join(" · ")
-                  : "Your Passport stays blank until a verified action is yours."}
-              </Text>
-            </View>
-            <Pressable
-              style={({ pressed }) => [styles.shareAction, pressed && styles.pressed]}
-              onPress={() => void onShare()}
-              testID="impact-share"
-              accessibilityRole="button"
-            >
-              <Text style={styles.shareActionText}>{events.length ? "Share Passport" : "Nothing to share"}</Text>
-            </Pressable>
-            <Text style={styles.passportPrivacy}>Verified Drops and cities only.</Text>
-          </View>
+          <PassportBook userId={userId} events={events} drops={drops} onShare={() => void onShare()} />
           {shareNote ? (
             <Text style={styles.note} testID="impact-share-note">
               {shareNote}
@@ -424,7 +400,7 @@ function OpportunityCover({
   const [failed, setFailed] = useState(false);
   const photo = failed ? null : publishedPhoto(slot);
   return (
-    <View style={[styles.cover, { aspectRatio: aspect }]}>
+    <View style={[styles.cover, { aspectRatio: aspect }]} testID={`impact-volunteer-cover-${slot.id}`}>
       {photo ? (
         <ExpoImage
           source={{ uri: photo }}
@@ -434,35 +410,16 @@ function OpportunityCover({
           accessibilityLabel={`${slot.title} photo`}
         />
       ) : (
-        <LinearGradient
-          colors={slot.demo ? ["#2C2C2C", "#141414"] : ["#F3EEE6", "#E6DDD2"]}
-          style={StyleSheet.absoluteFill}
+        <IllustratedCover
+          theme={themeForCopy(`${slot.title} ${slot.destination} ${slot.organizationName}`)}
+          seed={slot.id}
         />
       )}
-      {photo ? null : (
-        <View style={styles.coverCopy}>
-          <Text style={[styles.coverKicker, slot.demo && styles.coverKickerOnDark]}>
-            {slot.demo ? "TEST" : slot.city || "Session"}
-          </Text>
-          <Text style={[styles.coverHeadline, slot.demo && styles.coverHeadlineOnDark]} numberOfLines={3}>
-            {slot.demo ? "No partner photo" : slot.title}
-          </Text>
+      {slot.demo ? (
+        <View style={styles.nonbookBadge}>
+          <Text style={styles.nonbookBadgeText}>TEST</Text>
         </View>
-      )}
-    </View>
-  );
-}
-
-function TypeCover({ kicker, title, aspect }: { kicker: string; title: string; aspect: number }) {
-  return (
-    <View style={[styles.cover, { aspectRatio: aspect }]}>
-      <LinearGradient colors={["#F6F1EA", "#E8E0D6"]} style={StyleSheet.absoluteFill} />
-      <View style={styles.coverCopy}>
-        <Text style={styles.coverKicker}>{kicker}</Text>
-        <Text style={styles.coverHeadline} numberOfLines={3}>
-          {title}
-        </Text>
-      </View>
+      ) : null}
     </View>
   );
 }
@@ -677,20 +634,20 @@ const styles = StyleSheet.create({
   },
   sectionTitle: {
     fontFamily: "Georgia",
-    fontSize: 26,
-    lineHeight: 32,
+    fontSize: 24,
+    lineHeight: 30,
     fontWeight: "700",
     color: color.ink,
-    marginTop: 22,
-    marginBottom: 4,
+    marginTop: 16,
+    marginBottom: 2,
   },
   sectionLead: {
     fontSize: 15,
     lineHeight: 21,
     color: color.inkSoft,
-    marginBottom: 12,
+    marginBottom: 8,
   },
-  stack: { gap: 14 },
+  stack: { gap: 10 },
   note: {
     fontSize: 14,
     lineHeight: 20,
@@ -707,48 +664,25 @@ const styles = StyleSheet.create({
   },
   cover: {
     width: "100%",
-    minHeight: 200,
-    backgroundColor: color.imageFallback,
+    backgroundColor: "#F3E6D4",
     position: "relative",
+    overflow: "hidden",
   },
   coverImage: {
     ...StyleSheet.absoluteFillObject,
   },
-  coverCopy: {
-    ...StyleSheet.absoluteFillObject,
-    paddingHorizontal: 18,
-    paddingBottom: 16,
-    justifyContent: "flex-end",
-  },
-  coverKicker: {
-    fontSize: 12,
-    fontWeight: "800",
-    letterSpacing: 1.1,
-    textTransform: "uppercase",
-    color: color.brand,
-    marginBottom: 6,
-  },
-  coverKickerOnDark: { color: "#F0B4B4" },
-  coverHeadline: {
-    fontFamily: "Georgia",
-    fontSize: 28,
-    lineHeight: 34,
-    fontWeight: "700",
-    color: color.ink,
-  },
-  coverHeadlineOnDark: { color: "#FFFFFF" },
-  oppBody: { paddingHorizontal: 16, paddingTop: 14, paddingBottom: 16, gap: 6 },
+  oppBody: { paddingHorizontal: 12, paddingTop: 10, paddingBottom: 12, gap: 4 },
   oppTitle: {
-    fontSize: 20,
-    lineHeight: 26,
+    fontSize: 18,
+    lineHeight: 24,
     fontWeight: "800",
     color: color.ink,
-    letterSpacing: -0.3,
+    letterSpacing: -0.2,
   },
   metaRow: { flexDirection: "row", alignItems: "center", gap: 6 },
   metaText: { flex: 1, fontSize: 15, lineHeight: 20, color: color.inkSoft, fontWeight: "600" },
-  oppQuiet: { fontSize: 13, lineHeight: 18, color: color.muted },
-  oppMetaStrong: { fontSize: 14, lineHeight: 18, fontWeight: "700", color: color.inkSoft },
+  oppQuiet: { fontSize: 14, lineHeight: 20, color: color.inkSoft },
+  oppMetaStrong: { fontSize: 15, lineHeight: 20, fontWeight: "700", color: color.inkSoft },
   nonbookable: {
     alignSelf: "flex-start",
     marginTop: 2,
@@ -839,87 +773,6 @@ const styles = StyleSheet.create({
     fontSize: 15,
     fontWeight: "800",
     color: color.ink,
-  },
-  passport: {
-    marginTop: 26,
-    backgroundColor: color.charcoal,
-    borderRadius: 26,
-    padding: 18,
-    paddingTop: 16,
-    overflow: "hidden",
-  },
-  passportRibbon: {
-    position: "absolute",
-    top: 0,
-    left: 0,
-    right: 0,
-    height: 6,
-    backgroundColor: color.brand,
-  },
-  passportKicker: {
-    marginTop: 8,
-    fontSize: 12,
-    fontWeight: "800",
-    letterSpacing: 1.6,
-    textTransform: "uppercase",
-    color: "rgba(255,255,255,0.72)",
-  },
-  passportHeadline: {
-    fontFamily: "Georgia",
-    fontSize: 28,
-    lineHeight: 34,
-    fontWeight: "700",
-    color: "#FFFFFF",
-    marginTop: 4,
-    marginBottom: 12,
-  },
-  passportPage: {
-    backgroundColor: "#F7F1E8",
-    borderRadius: 18,
-    padding: 14,
-    gap: 10,
-  },
-  stamp: {
-    width: 84,
-    height: 84,
-    borderRadius: 42,
-    borderWidth: 1.5,
-    borderStyle: "dashed",
-    borderColor: "#B7A898",
-    alignItems: "center",
-    justifyContent: "center",
-    alignSelf: "center",
-  },
-  stampMark: { fontSize: 28, color: "#8C7B6B", fontFamily: "Georgia" },
-  stampRow: {
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: "#E4D9CC",
-    paddingBottom: 8,
-  },
-  stampCity: {
-    fontSize: 11,
-    fontWeight: "800",
-    letterSpacing: 1,
-    textTransform: "uppercase",
-    color: color.brand,
-  },
-  stampTitle: { fontSize: 16, fontWeight: "800", color: color.ink, marginTop: 2 },
-  stampDate: { fontSize: 12, color: color.muted, marginTop: 2 },
-  passportPlaces: { fontSize: 13, lineHeight: 18, color: color.inkSoft },
-  shareAction: {
-    marginTop: 14,
-    minHeight: 48,
-    borderRadius: 14,
-    backgroundColor: "#FFFFFF",
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  shareActionText: { color: color.ink, fontWeight: "800", fontSize: 15 },
-  passportPrivacy: {
-    marginTop: 10,
-    fontSize: 12,
-    lineHeight: 16,
-    color: "rgba(255,255,255,0.62)",
   },
   pressed: { opacity: 0.9, transform: [{ scale: 0.985 }] },
   oceanWrap: {
