@@ -147,9 +147,8 @@ async function getEventsForBanditId(banditId: string, filters: EventFilters): Pr
 }
 
 export async function getEvents(filters: EventFilters = {}): Promise<Event[]> {
-  let query;
-  let data;
-  let error;
+  let data: Event[] | null = null;
+  let error: { message: string } | null = null;
 
   /** RLS on `event` requires a traveler session — never query as logged-out anon. */
   await ensureAnonymousSession().catch(() => undefined);
@@ -173,32 +172,41 @@ export async function getEvents(filters: EventFilters = {}): Promise<Event[]> {
 
     return events;
   } else {
-    // Regular event query without bandit filter
-    query = supabase.from('event').select('*');
-
-    // Text search in name and description
-    if (filters.searchQuery) {
-      query = query.or(`name.ilike.%${filters.searchQuery}%,description.ilike.%${filters.searchQuery}%`);
+    // Page past PostgREST's default cap so Explore can show the whole catalog.
+    const pageSize = 1000;
+    const all: Event[] = [];
+    for (let from = 0; from < 5000; from += pageSize) {
+      let page = supabase.from('event').select('*');
+      if (filters.searchQuery) {
+        page = page.or(`name.ilike.%${filters.searchQuery}%,description.ilike.%${filters.searchQuery}%`);
+      }
+      if (filters.genre) {
+        page = page.eq(
+          'genre',
+          filters.genre as 'Food' | 'Culture' | 'Nightlife' | 'Shopping' | 'Coffee',
+        );
+      }
+      if (filters.city) page = page.eq('city', filters.city);
+      if (filters.neighborhood) page = page.eq('neighborhood', filters.neighborhood);
+      const result = await page.range(from, from + pageSize - 1);
+      if (result.error) {
+        if (all.length > 0) break;
+        data = [];
+        error = result.error;
+        break;
+      }
+      const batch = (result.data || []) as Event[];
+      all.push(...batch);
+      if (batch.length < pageSize) {
+        data = all;
+        error = null;
+        break;
+      }
     }
-
-    // Genre filter
-    if (filters.genre) {
-      query = query.eq('genre', filters.genre);
+    if (!error && !data) {
+      data = all;
+      error = null;
     }
-
-    // City filter
-    if (filters.city) {
-      query = query.eq('city', filters.city);
-    }
-
-    // Neighborhood filter
-    if (filters.neighborhood) {
-      query = query.eq('neighborhood', filters.neighborhood);
-    }
-
-    const result = await query;
-    data = result.data;
-    error = result.error;
   }
   
   if (error) {

@@ -5,6 +5,7 @@ import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useSta
 import { Platform, Pressable, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 
 import { getEventBanditRecommendations, getBanditEventPersonalTip } from '@/app/services/events';
+import { VenuePhotoFallback } from '@/components/VenuePhotoFallback';
 import type { EventListImageScope } from '@/lib/eventListImagePlan';
 import { getEventVenueGalleryOrdered, pickVenueGalleryHeroUri } from '@/lib/eventVenueGallery';
 import {
@@ -431,7 +432,7 @@ function EventCardImpl({
   );
 
   useEffect(() => {
-    if (strictRecommendationImagePolicy) return;
+    if (!omitWhenNoHero || strictRecommendationImagePolicy) return;
     if (resolvedImageUri) {
       setHeroExhausted(false);
       return;
@@ -443,6 +444,7 @@ function EventCardImpl({
       onHeroUnavailable?.(event.id);
     }
   }, [
+    omitWhenNoHero,
     resolvedImageUri,
     googleFetchFinished,
     strictRecommendationImagePolicy,
@@ -574,14 +576,8 @@ function EventCardImpl({
             <View style={styles.heroPendingApproval}>
               <Text style={styles.heroPendingApprovalText}>Hero pending approval</Text>
             </View>
-          ) : !googleFetchFinished ? (
-            <View style={styles.heroPendingApproval}>
-              <Text style={styles.heroPendingApprovalText}>Loading photo…</Text>
-            </View>
           ) : (
-            <View style={styles.heroPendingApproval}>
-              <Text style={styles.heroPendingApprovalText}>Photo unavailable</Text>
-            </View>
+            <VenuePhotoFallback name={String(event.name || '')} genre={event.genre} />
           )}
           <View style={styles.ratingContainer} pointerEvents="none">
             <Text style={styles.ratingText}>{(event.rating || 0).toFixed(1)}</Text>
@@ -658,14 +654,8 @@ function EventCardImpl({
             <View style={styles.heroPendingApproval}>
               <Text style={styles.heroPendingApprovalText}>Hero pending approval</Text>
             </View>
-          ) : !googleFetchFinished ? (
-            <View style={styles.heroPendingApproval}>
-              <Text style={styles.heroPendingApprovalText}>Loading photo…</Text>
-            </View>
           ) : (
-            <View style={styles.heroPendingApproval}>
-              <Text style={styles.heroPendingApprovalText}>Photo unavailable</Text>
-            </View>
+            <VenuePhotoFallback name={String(event.name || '')} genre={event.genre} />
           )}
           <View style={styles.ratingContainer} pointerEvents="none">
             <Text style={styles.ratingText}>{(event.rating || 0).toFixed(1)}</Text>

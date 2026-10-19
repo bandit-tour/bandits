@@ -24,8 +24,12 @@ import {
 
 type Event = Database['public']['Tables']['event']['Row'];
 
+type MapCamera = { lat: number; lng: number; zoom: number };
+
 type Props = {
   events: Event[];
+  initialViewport?: MapCamera | null;
+  onViewportChange?: (camera: MapCamera) => void;
   banditId?: string;
   onOpenSpot?: (eventId: string, heroUri?: string | null) => void;
   onBanditPress?: (banditId: string) => void;
@@ -107,6 +111,8 @@ function buildClusters(
 /** Web Explore map: desktop split list|map, mobile full-screen discovery. */
 export default function ExploreMapPanelWeb({
   events,
+  initialViewport = null,
+  onViewportChange,
   banditId,
   onOpenSpot,
   onBanditPress,
@@ -245,6 +251,7 @@ export default function ExploreMapPanelWeb({
       };
       setViewportBounds(bounds);
       const center: MapViewportCenter = { lat: c.lat, lng: c.lng, zoom };
+      onViewportChange?.({ lat: c.lat, lng: c.lng, zoom });
       if (suppressMoveRef.current) return;
       if (!searchedCenterRef.current) {
         searchedCenterRef.current = center;
@@ -261,10 +268,28 @@ export default function ExploreMapPanelWeb({
       mapInstance.off('moveend', onMoveEnd);
       mapInstance.off('zoomend', onMoveEnd);
     };
-  }, [mapInstance]);
+  }, [mapInstance, onViewportChange]);
+
+  const markerSig = useMemo(() => markersData.map((m) => m.id).join('|'), [markersData]);
+  const savedCameraRef = useRef(initialViewport);
+  const fittedSigRef = useRef<string | null>(null);
 
   useEffect(() => {
     if (!mapInstance || markersData.length === 0) return;
+    const saved = savedCameraRef.current;
+    if (saved) {
+      savedCameraRef.current = null;
+      fittedSigRef.current = markerSig;
+      suppressMoveRef.current = true;
+      mapInstance.setView([saved.lat, saved.lng], saved.zoom, { animate: false });
+      setTimeout(() => {
+        suppressMoveRef.current = false;
+        mapInstance.invalidateSize();
+      }, 200);
+      return;
+    }
+    if (fittedSigRef.current === markerSig) return;
+    fittedSigRef.current = markerSig;
     const latlngs = markersData.map((m) => [m.lat, m.lng] as [number, number]);
     suppressMoveRef.current = true;
     try {
@@ -276,7 +301,7 @@ export default function ExploreMapPanelWeb({
       suppressMoveRef.current = false;
       mapInstance.invalidateSize();
     }, 200);
-  }, [mapInstance, markersData]);
+  }, [mapInstance, markerSig, markersData]);
 
   const openSelected = useCallback(
     (eventId: string) => {
@@ -378,8 +403,11 @@ export default function ExploreMapPanelWeb({
         crossOrigin=""
       />
       <MapContainer
-        center={[ATHENS_CENTER.latitude, ATHENS_CENTER.longitude]}
-        zoom={13}
+        center={[
+          initialViewport?.lat ?? ATHENS_CENTER.latitude,
+          initialViewport?.lng ?? ATHENS_CENTER.longitude,
+        ]}
+        zoom={initialViewport?.zoom ?? 13}
         style={{ height: '100%', width: '100%', minHeight: desktopSplit ? 560 : 520 }}
         whenCreated={setMapInstance}
         zoomControl

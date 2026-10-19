@@ -24,7 +24,13 @@ import { usePremiumRefreshControl } from '@/lib/mobilePullToRefresh';
 import { navigateToBanditProfile, runSafeNavigation } from '@/lib/appNavigation';
 import { invalidateAppDataCache } from '@/lib/appDataCache';
 import { buildEventListImagePlan, type EventListImageScope } from '@/lib/eventListImagePlan';
-import { eventHasVenueMediaSource, getSpotDetailHeroUri } from '@/lib/eventVenueGallery';
+import { getSpotDetailHeroUri } from '@/lib/eventVenueGallery';
+import {
+  markExploreOpenedSpot,
+  readExploreView,
+  writeExploreView,
+  type ExploreMapCamera,
+} from '@/lib/exploreViewMemory';
 import {
   fetchGooglePlacePhotoUrls,
   fetchTrustedPlaceIdPhotoUrls,
@@ -77,7 +83,6 @@ type ExploreRowProps = {
   listImageScope?: EventListImageScope;
   resolvedRecommendationImageUri?: string | null;
   recommendationHeroResolverReady?: boolean;
-  onHeroUnavailable?: (eventId: string) => void;
   onHeroUriFailed?: (eventId: string, uri: string) => void;
 };
 
@@ -93,7 +98,6 @@ const ExploreEventRow = React.memo(function ExploreEventRow({
   listImageScope,
   resolvedRecommendationImageUri,
   recommendationHeroResolverReady,
-  onHeroUnavailable,
   onHeroUriFailed,
 }: ExploreRowProps) {
   const resolved = resolvedRecommendationImageUri ?? null;
@@ -110,8 +114,6 @@ const ExploreEventRow = React.memo(function ExploreEventRow({
         fillHorizontalCell
         showRecommendations
         skipGooglePhotoFetch={skipGoogle}
-        omitWhenNoHero
-        onHeroUnavailable={onHeroUnavailable}
         onHeroUriFailed={onHeroUriFailed}
         splitTouchTargets={Platform.OS !== 'web'}
         preloadedRecommendingBandits={recommendingBandits ?? []}
@@ -143,7 +145,6 @@ const ExploreEventRow = React.memo(function ExploreEventRow({
     prev.listImageScope === next.listImageScope &&
     prev.resolvedRecommendationImageUri === next.resolvedRecommendationImageUri &&
     prev.recommendationHeroResolverReady === next.recommendationHeroResolverReady &&
-    prev.onHeroUnavailable === next.onHeroUnavailable &&
     prev.onHeroUriFailed === next.onHeroUriFailed &&
     banditsEqual
   );
@@ -186,14 +187,20 @@ export function ExploreScreen({ tabActive }: ExploreScreenProps = {}) {
     () => (readCacheStale<Event[]>(exploreCacheKey) ?? []).length === 0,
   );
   const [error, setError] = useState<string | null>(null);
-  const [categoryChip, setCategoryChip] = useState<ExploreCategoryChip>(() =>
-    exploreChipFromGenreParam(selectedGenre),
-  );
+  const savedExploreView = useRef(readExploreView());
+  const listRef = useRef<FlatList<Event>>(null);
+  const scrollYRef = useRef(savedExploreView.current?.scrollY ?? 0);
+  const didRestoreScrollRef = useRef(false);
+  const [categoryChip, setCategoryChip] = useState<ExploreCategoryChip>(() => {
+    if (selectedGenre) return exploreChipFromGenreParam(selectedGenre);
+    return savedExploreView.current?.chip ?? 'All';
+  });
   const rawView = params.view;
   const openMapParam = Array.isArray(rawView) ? rawView[0] : rawView;
-  const [viewMode, setViewMode] = useState<'list' | 'map'>(() =>
-    openMapParam === 'map' ? 'map' : 'list',
-  );
+  const [viewMode, setViewMode] = useState<'list' | 'map'>(() => {
+    if (openMapParam === 'map') return 'map';
+    return savedExploreView.current?.viewMode === 'map' ? 'map' : 'list';
+  });
   /** Defer WebView until user opens Map — mounting under list panes has crashed iOS. */
   const [mapMounted, setMapMounted] = useState(false);
   const [banditsByEventId, setBanditsByEventId] = useState<Map<string, EventBanditRecommendation[]>>(
@@ -201,8 +208,6 @@ export function ExploreScreen({ tabActive }: ExploreScreenProps = {}) {
   );
   /** FlatList extraData only — bumps when bandit bulk loads (not on hero URI writes). */
   const [banditsEpoch, setBanditsEpoch] = useState(0);
-  /** Cards that exhausted gallery + Places recovery — omit from feed (never "Photo unavailable"). */
-  const [hiddenHeroEventIds, setHiddenHeroEventIds] = useState<Set<string>>(() => new Set());
   /** Live Place Details heroes for rows whose stored image_url/gallery are expired Places resources. */
   const [liveHeroByEventId, setLiveHeroByEventId] = useState<Record<string, string>>({});
   /** Broken URIs must never be re-selected or re-fetched indefinitely. */
@@ -211,12 +216,11 @@ export function ExploreScreen({ tabActive }: ExploreScreenProps = {}) {
   const [liveRecoveryDoneIds, setLiveRecoveryDoneIds] = useState<Record<string, true>>({});
 
   useEffect(() => {
+    if (!selectedGenre) return;
     setCategoryChip(exploreChipFromGenreParam(selectedGenre));
   }, [selectedGenre]);
 
   useEffect(() => {
-    // New city / genre list → allow previously hidden rows to retry.
-    setHiddenHeroEventIds(new Set());
     setLiveHeroByEventId({});
     setLiveRecoveryDoneIds({});
   }, [exploreCacheKey]);
@@ -418,13 +422,8 @@ export function ExploreScreen({ tabActive }: ExploreScreenProps = {}) {
     () => filterEventsByExploreCategory(events, categoryChip),
     [events, categoryChip],
   );
-  const listEvents = useMemo(() => {
-    const visible = filteredEvents.filter((e) => !hiddenHeroEventIds.has(e.id));
-    const withMedia = visible.filter((e) => eventHasVenueMediaSource(e));
-    /** Prefer media-ready rows; never leave the feed empty while Places recovery runs. */
-    if (withMedia.length > 0) return withMedia;
-    return visible.slice(0, 12);
-  }, [filteredEvents, hiddenHeroEventIds]);
+  /** Same set the map marks, including places whose photo is still a neutral frame. */
+  const listEvents = filteredEvents;
 
   const filteredEventIdsKey = useMemo(
     () => filteredEvents.map((e) => e.id).join('|'),
@@ -587,17 +586,6 @@ export function ExploreScreen({ tabActive }: ExploreScreenProps = {}) {
     [router],
   );
 
-  const handleHeroUnavailable = useCallback((eventId: string) => {
-    const id = String(eventId || '').trim();
-    if (!id) return;
-    setHiddenHeroEventIds((prev) => {
-      if (prev.has(id)) return prev;
-      const next = new Set(prev);
-      next.add(id);
-      return next;
-    });
-  }, []);
-
   const handleHeroUriFailed = useCallback((eventId: string, uri: string) => {
     const id = String(eventId || '').trim();
     const n = normalizeEventImageUri(uri) ?? uri;
@@ -638,11 +626,17 @@ export function ExploreScreen({ tabActive }: ExploreScreenProps = {}) {
       const url = hero
         ? `${base}${base.includes('?') ? '&' : '?'}heroUri=${encodeURIComponent(hero)}`
         : base;
+      writeExploreView({
+        chip: categoryChip,
+        viewMode,
+        scrollY: scrollYRef.current,
+      });
+      markExploreOpenedSpot();
       runSafeNavigation('explore-spot', () => {
         router.push(url as any);
       });
     },
-    [banditId, router],
+    [banditId, categoryChip, router, viewMode],
   );
 
   const banditsByEventIdRef = useRef(banditsByEventId);
@@ -668,7 +662,6 @@ export function ExploreScreen({ tabActive }: ExploreScreenProps = {}) {
         listImageScope={exploreListImagePlanRef.current.get(item.id)}
         resolvedRecommendationImageUri={resolvedHeroRef.current[item.id] ?? null}
         recommendationHeroResolverReady={recoHeroReadyRef.current}
-        onHeroUnavailable={handleHeroUnavailable}
         onHeroUriFailed={handleHeroUriFailed}
       />
     ),
@@ -679,7 +672,6 @@ export function ExploreScreen({ tabActive }: ExploreScreenProps = {}) {
       toggleLike,
       handleNavigateToSpot,
       handleBanditPress,
-      handleHeroUnavailable,
       handleHeroUriFailed,
     ],
   );
@@ -687,16 +679,48 @@ export function ExploreScreen({ tabActive }: ExploreScreenProps = {}) {
   const handleCategorySelect = useCallback((chip: ExploreCategoryChip) => {
     if (chip === categoryChip) return;
     setCategoryChip(chip);
-  }, [categoryChip]);
+    scrollYRef.current = 0;
+    writeExploreView({ chip, scrollY: 0, viewMode });
+    listRef.current?.scrollToOffset({ offset: 0, animated: false });
+  }, [categoryChip, viewMode]);
 
   const toggleViewMode = useCallback(() => {
     setViewMode((m) => {
       const next = m === 'list' ? 'map' : 'list';
       if (next === 'map') setMapMounted(true);
+      writeExploreView({ viewMode: next, chip: categoryChip, scrollY: scrollYRef.current });
       perfMark(`explore_toggle_view:${next}`, 'navigation');
       return next;
     });
+  }, [categoryChip]);
+
+  useEffect(() => {
+    if (didRestoreScrollRef.current) return;
+    if (viewMode !== 'list' || listEvents.length === 0) return;
+    const y = savedExploreView.current?.scrollY ?? 0;
+    didRestoreScrollRef.current = true;
+    if (y <= 0) return;
+    const t = setTimeout(() => {
+      listRef.current?.scrollToOffset({ offset: y, animated: false });
+    }, 60);
+    return () => clearTimeout(t);
+  }, [listEvents.length, viewMode]);
+
+  const onExploreScroll = useCallback((e: { nativeEvent: { contentOffset: { y: number } } }) => {
+    scrollYRef.current = e.nativeEvent.contentOffset.y;
   }, []);
+
+  const persistExploreScroll = useCallback(() => {
+    writeExploreView({
+      chip: categoryChip,
+      viewMode,
+      scrollY: scrollYRef.current,
+    });
+  }, [categoryChip, viewMode]);
+
+  const onMapCamera = useCallback((camera: ExploreMapCamera) => {
+    writeExploreView({ map: camera, chip: categoryChip, viewMode: 'map', scrollY: scrollYRef.current });
+  }, [categoryChip]);
 
   if (error && events.length === 0 && !backgroundLoading) {
     return (
@@ -768,6 +792,7 @@ export function ExploreScreen({ tabActive }: ExploreScreenProps = {}) {
           pointerEvents={viewMode === 'list' ? 'auto' : 'none'}
         >
           <FlatList
+            ref={listRef}
             style={styles.listFlex}
             data={listEvents}
             key={columns > 1 ? 'explore-list-multi' : 'explore-list-single'}
@@ -775,6 +800,10 @@ export function ExploreScreen({ tabActive }: ExploreScreenProps = {}) {
             keyExtractor={keyExtractor}
             numColumns={columns}
             refreshControl={exploreRefreshControl}
+            onScroll={onExploreScroll}
+            scrollEventThrottle={32}
+            onScrollEndDrag={persistExploreScroll}
+            onMomentumScrollEnd={persistExploreScroll}
             columnWrapperStyle={columns > 1 ? styles.row : undefined}
             contentContainerStyle={[styles.gridContent, { paddingBottom: listBottomPad }]}
             ListHeaderComponent={
@@ -798,9 +827,9 @@ export function ExploreScreen({ tabActive }: ExploreScreenProps = {}) {
                 </Text>
               )
             }
-            initialNumToRender={Platform.OS === 'web' ? 8 : Platform.OS === 'android' ? 3 : 5}
-            maxToRenderPerBatch={Platform.OS === 'android' ? 2 : 4}
-            windowSize={Platform.OS === 'android' ? 3 : 5}
+            initialNumToRender={Platform.OS === 'web' ? 12 : Platform.OS === 'android' ? 3 : 5}
+            maxToRenderPerBatch={Platform.OS === 'android' ? 2 : 6}
+            windowSize={Platform.OS === 'android' ? 3 : 7}
             updateCellsBatchingPeriod={Platform.OS === 'android' ? 100 : 50}
             removeClippedSubviews={Platform.OS === 'android'}
             renderItem={renderEventRow}
@@ -818,6 +847,8 @@ export function ExploreScreen({ tabActive }: ExploreScreenProps = {}) {
           >
             <ExploreMapPanel
               events={filteredEvents}
+              initialViewport={savedExploreView.current?.map ?? null}
+              onViewportChange={onMapCamera}
               banditId={banditId}
               onOpenSpot={handleNavigateToSpot}
               onBanditPress={handleBanditPress}

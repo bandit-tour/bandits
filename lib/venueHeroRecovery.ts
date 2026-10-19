@@ -9,6 +9,7 @@ import {
   isDurableVenuePhotoUri,
   isEphemeralPlacesMediaUrl,
   isGooglePlacesDerivedPhotoUrl,
+  isRenderableStoredPlaceMediaUrl,
   normalizeEventImageUri,
 } from '@/lib/placePhoto';
 
@@ -74,12 +75,16 @@ export function selectViewportVenueHeroUri(args: {
     return n;
   };
 
-  return (
-    pick(args.liveUri, false) ||
-    pick(args.approvedUri, true) ||
-    pick(args.storedUri, true) ||
-    null
-  );
+  const stored = normalizeEventImageUri(args.storedUri ?? '');
+  const storedPick =
+    stored &&
+    !failed[stored] &&
+    /^https?:\/\//i.test(stored) &&
+    (isRenderableStoredPlaceMediaUrl(stored) || !isStaleOrEphemeralVenueHero(stored))
+      ? stored
+      : null;
+
+  return pick(args.liveUri, false) || pick(args.approvedUri, true) || storedPick || null;
 }
 
 /** Mark URI failed so subsequent resolution cannot retry the same broken image. */

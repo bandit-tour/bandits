@@ -1,6 +1,6 @@
 import { useRouter } from 'expo-router';
 import React, { useCallback, useEffect, useState } from 'react';
-import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { formatRelativeTime } from '@/lib/formatRelativeTime';
 import { useScamAlertsFeedRefresh } from '@/lib/scamAlertsRefresh';
@@ -46,7 +46,7 @@ export function VenueScamWarningsSection({ city, areaLabel }: Props) {
 
   useScamAlertsFeedRefresh(load);
 
-  if (!c) return null;
+  if (!c || loading || rows.length === 0) return null;
 
   const openFeed = () => router.push({ pathname: '/scam-alerts', params: { city: c } } as never);
 
@@ -56,12 +56,7 @@ export function VenueScamWarningsSection({ city, areaLabel }: Props) {
       <Text style={styles.sub}>
         bandiTEAM community reports{areaLabel ? ` · ${areaLabel}` : ''} · {c}
       </Text>
-      {loading ? (
-        <ActivityIndicator style={{ marginVertical: 10 }} />
-      ) : rows.length === 0 ? (
-        <Text style={styles.none}>No scam alerts in this city yet. Tap below to see other destinations or report.</Text>
-      ) : (
-        <View>
+      <View>
           {rows.map((r) => (
             <Pressable key={r.id} onPress={openFeed} style={styles.row}>
               <Text style={styles.rowTitle} numberOfLines={2}>
@@ -73,7 +68,6 @@ export function VenueScamWarningsSection({ city, areaLabel }: Props) {
             </Pressable>
           ))}
         </View>
-      )}
       <Pressable onPress={openFeed} style={styles.linkBtn}>
         <Text style={styles.linkBtnText}>Scam reports nearby — open feed</Text>
       </Pressable>
@@ -93,7 +87,6 @@ const styles = StyleSheet.create({
   },
   title: { fontSize: 16, fontWeight: '800', color: '#1a1a1a', marginBottom: 4 },
   sub: { fontSize: 12, color: '#5c4a00', lineHeight: 17, marginBottom: 8 },
-  none: { fontSize: 13, color: '#666', lineHeight: 18 },
   row: {
     marginBottom: 8,
     paddingVertical: 8,

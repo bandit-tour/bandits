@@ -31,8 +31,12 @@ import { perfMark, perfStart } from '@/lib/perfTiming';
 
 type Event = Database['public']['Tables']['event']['Row'];
 
+type MapCamera = { lat: number; lng: number; zoom: number };
+
 type Props = {
   events: Event[];
+  initialViewport?: MapCamera | null;
+  onViewportChange?: (camera: MapCamera) => void;
   banditId?: string;
   onOpenSpot: (eventId: string, heroUri?: string | null) => void;
   onBanditPress?: (banditId: string) => void;
@@ -50,6 +54,8 @@ const VIEWABILITY_CONFIG = { itemVisiblePercentThreshold: 55, minimumViewTime: 8
 
 export default function ExploreMapPanel({
   events,
+  initialViewport = null,
+  onViewportChange,
   banditId,
   onOpenSpot,
   onBanditPress,
@@ -111,13 +117,13 @@ export default function ExploreMapPanel({
   const bootHtml = useMemo(
     () =>
       buildLeafletBootHtml({
-        initialLat: ATHENS_CENTER.latitude,
-        initialLng: ATHENS_CENTER.longitude,
-        initialZoom: 13,
+        initialLat: initialViewport?.lat ?? ATHENS_CENTER.latitude,
+        initialLng: initialViewport?.lng ?? ATHENS_CENTER.longitude,
+        initialZoom: initialViewport?.zoom ?? 13,
         athensLat: ATHENS_CENTER.latitude,
         athensLng: ATHENS_CENTER.longitude,
       }),
-    [],
+    [initialViewport?.lat, initialViewport?.lng, initialViewport?.zoom],
   );
 
   useEffect(() => {
@@ -245,6 +251,11 @@ export default function ExploreMapPanel({
         if (data.type === 'boundsChanged' && data.bounds && data.center) {
           setViewportBounds(data.bounds);
           latestCenterRef.current = data.center;
+          onViewportChange?.({
+            lat: data.center.lat,
+            lng: data.center.lng,
+            zoom: data.center.zoom,
+          });
           if (!searchedCenterRef.current) {
             searchedCenterRef.current = data.center;
             return;
@@ -257,7 +268,7 @@ export default function ExploreMapPanel({
         /* ignore */
       }
     },
-    [applySelection, markersPayload, mappableEvents, markersData.length],
+    [applySelection, markersPayload, mappableEvents, markersData.length, onViewportChange],
   );
 
   useEffect(() => {

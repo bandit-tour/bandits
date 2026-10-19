@@ -10,6 +10,7 @@ import {
   isDurableVenuePhotoUri,
   isEphemeralPlacesMediaUrl,
   isLikelyLogoOrBadPlaceImage,
+  isRenderableStoredPlaceMediaUrl,
   normalizeEventImageUri,
 } from '@/lib/placePhoto';
 
@@ -38,8 +39,9 @@ function isAcceptableVenuePhotoUri(uri: string): boolean {
   if (isLikelyLogoOrBadPlaceImage(uri)) return false;
   if (isBlockedStockHostUri(uri)) return false;
   if (isBannedPhotoUri(uri)) return false;
-  // Never treat expired/incomplete Places photo resource URLs as stored heroes —
-  // City Guide / Explore must live-refresh those from google_place_id instead.
+  // Stored Places `/media` frames already belong to this row. Show them.
+  // Bare photo-resource names (no `/media`) still cannot be used as <img src>.
+  if (isRenderableStoredPlaceMediaUrl(uri)) return true;
   if (!isDirectlyLoadableVenuePhotoUri(uri)) return false;
   return true;
 }

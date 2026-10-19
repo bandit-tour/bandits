@@ -209,6 +209,20 @@ function normalizeForAddressMatch(s: string): string {
     .trim();
 }
 
+/**
+ * Complete Places photo URLs already stored on a venue row.
+ * Incomplete resource names (`…/photos/{ref}` without `/media`) are not renderable.
+ * These are the business's own stored frames — not a substitute image.
+ */
+export function isRenderableStoredPlaceMediaUrl(uri: string | null | undefined): boolean {
+  const t = String(uri ?? '').trim().toLowerCase();
+  if (!t.includes('/media') && !t.includes('/maps/api/place/photo')) return false;
+  const placesHost =
+    t.includes('places.googleapis.com/') || t.includes('maps.googleapis.com/maps/api/place/photo');
+  if (!placesHost) return false;
+  return /[?&](key|photoreference)=/.test(t);
+}
+
 /** Google-hosted venue photo URLs only (Places legacy photo, Places New media, common Google CDNs). */
 export function isGooglePlacesDerivedPhotoUrl(uri: string | null | undefined): boolean {
   const t = String(uri ?? '').trim().toLowerCase();
@@ -226,11 +240,11 @@ export function isGooglePlacesDerivedPhotoUrl(uri: string | null | undefined): b
  * - incomplete resource URLs (`…/photos/{ref}` without `/media`) → 404 as <img src>
  * - full `/media?key=` URLs whose photo resource names expire → 400 until Place Details refresh
  *
- * Treat both as ephemeral so gallery mappers skip them and call sites live-refresh via
- * `google_place_id` (same photography source as the original MVP Places pipeline).
+ * Bare resource names stay non-renderable. Complete `/media` URLs already stored
+ * on the venue row are shown as that business's photo; live refresh still runs
+ * if the frame fails to load.
  *
- * IMPORTANT: `/media?key=` URLs are NEVER permanent approved photographs — do not
- * persist them as durable heroes or skip live recovery because an HTTP probe once 200'd.
+ * `/media?key=` URLs are not durable heroes — do not skip recovery after a failure.
  */
 export function isEphemeralPlacesMediaUrl(uri: string | null | undefined): boolean {
   const t = String(uri ?? '').trim().toLowerCase();

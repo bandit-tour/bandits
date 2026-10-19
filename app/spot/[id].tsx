@@ -1,4 +1,4 @@
-import { Stack, useLocalSearchParams } from 'expo-router';
+import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
 import { Image as ExpoImage } from 'expo-image';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
@@ -33,10 +33,13 @@ import { supabase } from '@/lib/supabase';
 import ReviewCard from '@/components/ReviewCard';
 import { VenueScamWarningsSection } from '@/components/VenueScamWarningsSection';
 import { trackEvent } from '@/lib/analytics';
+import { VenuePhotoFallback } from '@/components/VenuePhotoFallback';
 import { usePremiumRefreshControl } from '@/lib/mobilePullToRefresh';
-import { useAppBackScreenOptions } from '@/hooks/useAppBackScreenOptions';
+import { useAppBackNavigation, useAppBackScreenOptions } from '@/hooks/useAppBackScreenOptions';
+import { consumeExploreOpenedSpot, exploreOpenedSpot } from '@/lib/exploreViewMemory';
 import { repairDisplayText } from '@/lib/repairTextEncoding';
 import { routeParamString } from '@/lib/routeParams';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 // For City Guide / Explore, the ID passed into /spot/[id] comes from the event card,
 // so this screen loads from the event table.
@@ -64,22 +67,50 @@ export default function SpotDetailScreen() {
   const screenOptions = useAppBackScreenOptions({
     title: '',
     fallback: '/explore',
+    headerShown: false,
   });
+  const insets = useSafeAreaInsets();
+  const router = useRouter();
+  const goExplore = useAppBackNavigation('/explore');
   const isDesktopWeb = Platform.OS === 'web' && width >= 1024;
+  const heroHeight = Math.max(240, Math.min(isDesktopWeb ? 420 : 320, Math.round(width * 0.62)));
+  const onBackToExplore = useCallback(() => {
+    if (Platform.OS === 'web') {
+      const fromExplore = consumeExploreOpenedSpot();
+      if (fromExplore) {
+        goExplore();
+        return;
+      }
+      router.replace('/explore' as never);
+      return;
+    }
+    goExplore();
+  }, [goExplore, router]);
   const [spot, setSpot] = useState<Spot | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [reviews, setReviews] = useState<SpotReview[]>([]);
   const [visibleGallery, setVisibleGallery] = useState<string[]>([]);
   const [galleryIndex, setGalleryIndex] = useState(0);
-  const [galleryLoading, setGalleryLoading] = useState(false);
+  const [, setGalleryLoading] = useState(false);
   const [liked, setLiked] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [bandit, setBandit] = useState<Bandit | null>(null);
   const [personalTip, setPersonalTip] = useState<string | null>(null);
   const galleryScrollRef = useRef<ScrollView>(null);
   const placesRecoveryStarted = useRef(false);
-  const heroWidth = Math.min(isDesktopWeb ? 980 : width - 32, width - 32);
+  const heroWidth = isDesktopWeb ? Math.min(980, width) : width;
+
+  useEffect(() => {
+    if (Platform.OS !== 'web' || typeof window === 'undefined') return undefined;
+    if (exploreOpenedSpot()) return undefined;
+    window.history.pushState({ spotDirect: true }, '', window.location.href);
+    const onPop = () => {
+      router.replace('/explore' as never);
+    };
+    window.addEventListener('popstate', onPop);
+    return () => window.removeEventListener('popstate', onPop);
+  }, [router]);
 
   const mergeGallery = useCallback((uris: string[], seed?: string | null) => {
     const out: string[] = [];
@@ -325,6 +356,16 @@ export default function SpotDetailScreen() {
         contentContainerStyle={[styles.content, isDesktopWeb && styles.contentDesktop]}
         refreshControl={spotDetailRefresh}
       >
+        <View style={styles.heroStage}>
+          <Pressable
+            onPress={onBackToExplore}
+            style={[styles.profileBack, { top: Math.max(insets.top, 12) }]}
+            hitSlop={12}
+            accessibilityRole="button"
+            accessibilityLabel="Back to Explore"
+          >
+            <Text style={styles.profileBackIcon}>←</Text>
+          </Pressable>
         <View style={styles.galleryWrap}>
           <ScrollView
             ref={galleryScrollRef}
@@ -343,7 +384,7 @@ export default function SpotDetailScreen() {
                 <ExpoImage
                   key={`${uri}-${index}`}
                   source={{ uri }}
-                  style={[styles.image, { width: heroWidth }]}
+                  style={[styles.image, { width: heroWidth, height: heroHeight }]}
                   contentFit="cover"
                   transition={120}
                   cachePolicy="memory-disk"
@@ -376,15 +417,12 @@ export default function SpotDetailScreen() {
                   }
                 />
               ))
-            ) : galleryLoading ? (
-              <View style={[styles.imageLoadingOverlay, { width: heroWidth }]}>
-                <ActivityIndicator size="small" />
-                <Text style={{ marginTop: 8, color: '#666', fontWeight: '600' }}>Loading photo…</Text>
-              </View>
             ) : (
-              <View style={[styles.imageLoadingOverlay, { width: heroWidth, alignItems: 'center', justifyContent: 'center' }]}>
-                <Text style={{ color: '#666', fontWeight: '600' }}>Photo unavailable</Text>
-              </View>
+              <VenuePhotoFallback
+                name={String(spot.name || '')}
+                genre={spot.genre}
+                style={{ width: heroWidth, height: heroHeight, aspectRatio: undefined, maxHeight: heroHeight }}
+              />
             )}
           </ScrollView>
           {visibleGallery.length > 1 ? (
@@ -414,7 +452,9 @@ export default function SpotDetailScreen() {
             </View>
           ) : null}
         </View>
+        </View>
 
+        <View style={styles.body}>
         <View style={styles.titleRow}>
           <Text style={styles.name}>{repairDisplayText(spot.name || '')}</Text>
           <View style={styles.titleActions}>
@@ -443,7 +483,6 @@ export default function SpotDetailScreen() {
               if (mapsUrl) void Linking.openURL(mapsUrl);
             }}
           >
-            <Text style={styles.addressLabel}>Address</Text>
             <Text style={styles.addressValue}>{repairDisplayText(spot.address || '')}</Text>
           </TouchableOpacity>
         )}
@@ -526,6 +565,7 @@ export default function SpotDetailScreen() {
             </ScrollView>
           </View>
         )}
+        </View>
       </ScrollView>
     </>
   );
@@ -533,20 +573,37 @@ export default function SpotDetailScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#FFFFFF' },
-  content: { padding: 16, paddingBottom: 40 },
+  content: { paddingBottom: 28 },
   contentDesktop: {
     maxWidth: 980,
     width: '100%',
     alignSelf: 'center',
-    paddingHorizontal: 24,
   },
+  heroStage: { position: 'relative', width: '100%' },
+  profileBack: {
+    position: 'absolute',
+    left: 12,
+    zIndex: 4,
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    backgroundColor: '#FFFFFF',
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: '#000',
+    shadowOpacity: 0.18,
+    shadowRadius: 8,
+    shadowOffset: { width: 0, height: 2 },
+    elevation: 4,
+  },
+  profileBackIcon: { fontSize: 28, fontWeight: '700', color: '#111111', lineHeight: 32 },
+  body: { paddingHorizontal: 16, paddingTop: 12 },
   center: { flex: 1, justifyContent: 'center', alignItems: 'center' },
   errorText: { fontSize: 16, color: '#FF3B30' },
   galleryWrap: { marginBottom: 8 },
   image: {
-    height: 200,
-    borderRadius: 12,
-    marginRight: 10,
+    height: 280,
+    marginRight: 0,
     backgroundColor: '#F0F0F0',
   },
   imageLoadingOverlay: {
