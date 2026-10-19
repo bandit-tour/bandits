@@ -117,6 +117,18 @@ const BOOK_ACTIONS = [
  * BEFORE entitlement ACTIVE â†’ white/red/coral sales + €29 Commerce checkout only.
  * AFTER payment confirms ACTIVE â†’ Concierge OS (Ask + quick actions + requests).
  */
+function formatStayPassExpiry(iso: string | null | undefined): string | null {
+  if (!iso) return null;
+  const when = new Date(iso);
+  if (Number.isNaN(when.getTime())) return null;
+  return new Intl.DateTimeFormat("en-GB", {
+    day: "numeric",
+    month: "short",
+    year: "numeric",
+    timeZone: "Europe/Athens",
+  }).format(when);
+}
+
 export default function PremiumConciergeScreen() {
   const params = useLocalSearchParams<{
     id?: string | string[];
@@ -159,6 +171,7 @@ export default function PremiumConciergeScreen() {
   const [activeAction, setActiveAction] = useState<string | null>(null);
   const [sentMsg, setSentMsg] = useState<string | null>(null);
   const submittingRef = useRef(false);
+  const claimAttemptRef = useRef<string | null>(null);
 
   const first = useMemo(
     () => banditName.trim().split(/\s+/)[0] || "your banDit",
@@ -286,39 +299,39 @@ export default function PremiumConciergeScreen() {
     void refreshEntitlement();
   }, [refreshEntitlement]);
 
-  /** Return from checkout.stripe.com success URL — confirm session, then open Concierge OS. */
+  /** Return from checkout.stripe.com success URL — confirm session, then open Concierge OS.
+   * claimingPaid must not be a dependency: setClaimingPaid(true) would re-run this effect,
+   * cancel the in-flight confirm, and leave the screen on "Confirming payment…".
+   */
   useEffect(() => {
-    if (
-      !id ||
-      stripeCheckoutFlag !== "success" ||
-      !stripeSessionFromUrl ||
-      claimingPaid ||
-      !guestEmail
-    ) {
+    if (!id || stripeCheckoutFlag !== "success" || !stripeSessionFromUrl || !guestEmail) {
       return;
     }
-    let cancelled = false;
-    (async () => {
-      setClaimingPaid(true);
-      setCheckoutMsg("Payment confirmed — unlocking Concierge…");
+    const attemptKey = `${id}:${stripeSessionFromUrl}`;
+    if (claimAttemptRef.current === attemptKey) return;
+    claimAttemptRef.current = attemptKey;
+    let active = true;
+    setClaimingPaid(true);
+    setCheckoutMsg("Payment confirmed — unlocking Concierge…");
+    void (async () => {
       try {
         const confirmed = await confirmOctopusCheckoutSession({
           sessionId: stripeSessionFromUrl,
           banditId: id,
           guestEmail,
         });
-        if (!cancelled && !confirmed.ok) {
-          setCheckoutMsg(confirmed.detail);
-        }
-        if (!cancelled) await refreshEntitlement();
+        if (!active) return;
+        if (!confirmed.ok) setCheckoutMsg(confirmed.detail);
+        await refreshEntitlement();
       } finally {
-        if (!cancelled) setClaimingPaid(false);
+        if (active) setClaimingPaid(false);
       }
     })();
     return () => {
-      cancelled = true;
+      active = false;
+      if (claimAttemptRef.current === attemptKey) claimAttemptRef.current = null;
     };
-  }, [claimingPaid, guestEmail, id, refreshEntitlement, stripeCheckoutFlag, stripeSessionFromUrl]);
+  }, [guestEmail, id, refreshEntitlement, stripeCheckoutFlag, stripeSessionFromUrl]);
 
   const onUnlock = async () => {
     if (!id || checkoutBusy) return;
@@ -681,6 +694,7 @@ export default function PremiumConciergeScreen() {
   // â”€â”€â”€ CONCIERGE OS (entitled only) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   const remaining =
     typeof entitlement?.requestsRemaining === "number" ? entitlement.requestsRemaining : null;
+  const stayPassExpiry = formatStayPassExpiry(entitlement?.expiresAt);
   return (
     <View style={styles.opsScreen}>
       <Stack.Screen options={opsHeader} />
@@ -705,6 +719,9 @@ export default function PremiumConciergeScreen() {
             ? `${first}'s Athens is unlocked — ${remaining} request${remaining === 1 ? "" : "s"} left this stay.`
             : `${first}'s Athens is unlocked — ask anything, or pick what ${first} can handle.`}
         </Text>
+        {stayPassExpiry ? (
+          <Text style={styles.opsDisclosure}>{`Stay Pass expires ${stayPassExpiry}.`}</Text>
+        ) : null}
         <Text style={styles.opsDisclosure}>
           Stay Pass (€19) covers coordination. Third-party costs (tables, tickets, rides, delivery) need your explicit
           approval before money moves — never from chat text alone.
