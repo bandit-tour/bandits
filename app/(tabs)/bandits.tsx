@@ -30,8 +30,8 @@ import { useGuestLiveSurface } from '@/lib/orchestra/useGuestLiveSurface';
 import { buildEventListImagePlan, getEventDbImageCandidatesOrdered } from '@/lib/eventListImagePlan';
 import { resolveApprovedListHeroUrisByEventId } from '@/lib/recommendationImages';
 import {
-  fetchOctopusVerifiedByBanditId,
-  sortBanditIdsVerifiedFirst,
+  fetchOctopusPresentationByBanditId,
+  sortBanditsByOctopusPresentation,
 } from '@/lib/guest-app/premium-visibility';
 
 
@@ -165,10 +165,12 @@ export function BanditsScreen({ tabActive }: BanditsScreenProps = {}) {
           bandit: b,
           categories: catByBandit.get(b.id) ?? [],
         }));
-        const verifiedById = await fetchOctopusVerifiedByBanditId(withCats.map((r) => r.bandit.id));
-        const orderedBandits = sortBanditIdsVerifiedFirst(
+        const presentationById = await fetchOctopusPresentationByBanditId(
+          withCats.map((r) => r.bandit.id),
+        );
+        const orderedBandits = sortBanditsByOctopusPresentation(
           withCats.map((r) => r.bandit),
-          verifiedById,
+          presentationById,
         );
         const byId = new Map(withCats.map((r) => [r.bandit.id, r]));
         return orderedBandits.map((b) => byId.get(b.id)!);

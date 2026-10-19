@@ -112,6 +112,7 @@ function BanditHeaderImpl({
     name,
     age,
     occupation,
+    city,
     image_url,
     face_image_url,
     rating,
@@ -134,6 +135,8 @@ function BanditHeaderImpl({
 
   const displayFirstName = firstNameOf(name);
   const identityLine = String(occupation || '').trim() || 'Local banDit';
+  const cityName = String(city || '').trim();
+  const locationLine = cityName ? `${cityName} · Local banDit` : 'Local banDit';
   const followers = displayFollowerCount(String(id));
   const ratingLabel =
     typeof rating === 'number' && rating > 0 ? rating.toFixed(1) : '—';
@@ -178,6 +181,8 @@ function BanditHeaderImpl({
 
   const showPremiumInsights = premiumVis?.showPremiumInsights === true;
   const showOctopusBadge = premiumVis?.octopusVerified === true;
+  const showVerificationPending =
+    premiumVis?.verificationPending === true && showOctopusBadge !== true;
   const octopusIsTestDemo = premiumVis?.authorizationClass === "TEST_DEMO";
   const octopusBadgeLabel = octopusIsTestDemo ? "Octopus Verified™ (TEST)" : "Octopus Verified™";
 
@@ -261,6 +266,10 @@ function BanditHeaderImpl({
               <View style={styles.listVerifiedRow}>
                 <LocalBanditOctopusIcon style={styles.verifiedIconSm} />
                 <Text style={styles.listVerifiedText}>{octopusBadgeLabel}</Text>
+              </View>
+            ) : showVerificationPending ? (
+              <View style={styles.listVerifiedRow} testID="octopus-verification-pending-badge">
+                <Text style={styles.listVerifiedText}>Verification Pending</Text>
               </View>
             ) : null}
             <Text style={styles.listNameOnPhoto} numberOfLines={1}>
@@ -350,14 +359,24 @@ function BanditHeaderImpl({
           <LocalBanditOctopusIcon style={styles.verifiedIconSm} />
           <Text style={styles.octopusVerifiedText}>{octopusBadgeLabel}</Text>
         </Pressable>
+      ) : showVerificationPending ? (
+        <Pressable
+          style={styles.octopusPendingRow}
+          onPress={openPremiumInsights}
+          accessibilityRole="button"
+          accessibilityLabel={`Verification Pending — Octopus Concierge for ${displayFirstName}`}
+          testID="octopus-verification-pending-row"
+        >
+          <Text style={styles.octopusPendingText}>Verification Pending</Text>
+        </Pressable>
       ) : null}
 
       <Text style={styles.profileIdentity} numberOfLines={2}>
         {identityLine}
       </Text>
 
-      <Text style={styles.profileLocation} numberOfLines={1}>
-        Athens · Local banDit
+      <Text style={styles.profileLocation} numberOfLines={1} testID="bandit-profile-city">
+        {locationLine}
       </Text>
 
       {/* Live status / inspiration — visible on identity, not buried in More */}
@@ -427,7 +446,7 @@ function BanditHeaderImpl({
           </Pressable>
 
           {/* Your Local Insider — eligible only; guest-facing name (not “Premium Insights”). */}
-          {showPremiumInsights ? (
+          {showPremiumInsights || showVerificationPending ? (
             <Pressable
               style={({ pressed, hovered }: any) => [
                 styles.conciergeBtn,
@@ -437,24 +456,34 @@ function BanditHeaderImpl({
               onPress={openPremiumInsights}
               accessibilityRole="button"
               accessibilityLabel={
-                octopusIsTestDemo
-                  ? `Your Local Insider TEST · ${displayFirstName}`
-                  : `Your Local Insider · ${displayFirstName}`
+                showVerificationPending
+                  ? `Verification Pending · Octopus Concierge · ${displayFirstName}`
+                  : octopusIsTestDemo
+                    ? `Your Local Insider TEST · ${displayFirstName}`
+                    : `Your Local Insider · ${displayFirstName}`
               }
-              testID="bandit-premium-insights-cta"
+              testID={showVerificationPending ? "bandit-octopus-pending-cta" : "bandit-premium-insights-cta"}
             >
               <LocalBanditOctopusIcon style={styles.conciergeIcon} />
               <View style={styles.conciergeCopy}>
                 <Text style={styles.conciergeEyebrow}>
-                  {octopusIsTestDemo ? "YOUR LOCAL INSIDER · TEST" : "YOUR LOCAL INSIDER"}
+                  {showVerificationPending
+                    ? "VERIFICATION PENDING"
+                    : octopusIsTestDemo
+                      ? "YOUR LOCAL INSIDER · TEST"
+                      : "YOUR LOCAL INSIDER"}
                 </Text>
                 <Text style={styles.conciergePrimary} numberOfLines={1}>
-                  {`Unlock ${displayFirstName}'s Athens`}
+                  {showVerificationPending
+                    ? `${displayFirstName}'s Octopus Concierge`
+                    : `Unlock ${displayFirstName}'s Athens`}
                 </Text>
                 <Text style={styles.conciergeSecondary} numberOfLines={1}>
-                  {octopusIsTestDemo
-                    ? `QA TEST_DEMO · not PRODUCTION · ${displayFirstName}`
-                    : `Octopus Concierge · ${displayFirstName} handles it`}
+                  {showVerificationPending
+                    ? `€19 · 5 requests · 7 days · checkout closed`
+                    : octopusIsTestDemo
+                      ? `QA TEST_DEMO · not PRODUCTION · ${displayFirstName}`
+                      : `Octopus Concierge · ${displayFirstName} handles it`}
                 </Text>
               </View>
             </Pressable>
@@ -1150,6 +1179,26 @@ const styles = StyleSheet.create({
   },
   octopusVerifiedText: {
     color: color.octopusText,
+    fontSize: 11,
+    fontWeight: '800',
+    letterSpacing: 0.3,
+    fontFamily: 'Caros',
+  },
+  octopusPendingRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    alignSelf: 'flex-start',
+    marginTop: 4,
+    marginBottom: 2,
+    paddingVertical: 4,
+    paddingHorizontal: 8,
+    borderRadius: radius.pill,
+    backgroundColor: '#FFF5F5',
+    borderWidth: 1,
+    borderColor: 'rgba(224,49,49,0.35)',
+  },
+  octopusPendingText: {
+    color: color.brand,
     fontSize: 11,
     fontWeight: '800',
     letterSpacing: 0.3,

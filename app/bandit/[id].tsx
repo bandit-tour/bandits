@@ -56,6 +56,7 @@ import {
   type BanditPremiumVisibility,
 } from '@/lib/guest-app/premium-visibility';
 import { OCTOPUS_CONCIERGE_OFFER } from '@/lib/octopus-concierge/principle';
+import OctopusConciergeExperience from '@/components/OctopusConciergeExperience';
 
 type Bandit = Database['public']['Tables']['bandit']['Row'];
 
@@ -581,6 +582,15 @@ export default function BanditScreen() {
                   testID="bandit-journey-local-insider"
                 />
               </View>
+            ) : premiumVis?.verificationPending && premiumVis.octopusVerified !== true ? (
+              <OctopusConciergeExperience
+                embedded
+                banditId={String(bandit.id)}
+                banditName={String(bandit.name || 'Local banDit')}
+                portraitUri={String(bandit.image_url || bandit.face_image_url || '')}
+                checkoutEnabled={false}
+                verificationPending
+              />
             ) : null}
 
             <Text style={styles.whyFollowLabel}>
