@@ -1,10 +1,12 @@
-import React from "react";
+import React, { useEffect, useState } from "react";
 import { Pressable, ScrollView, StyleSheet, Text, TextInput, View, useWindowDimensions } from "react-native";
 import { Image as ExpoImage } from "expo-image";
 
+import { getBanditById } from "@/app/services/bandits";
 import LocalBanditOctopusIcon from "@/components/LocalBanditOctopusIcon";
 import { color, radius } from "@/lib/guestDesign";
 import { OCTOPUS_CONCIERGE_OFFER } from "@/lib/octopus-concierge/principle";
+import { ensureAnonymousSession } from "@/lib/pilotSession";
 
 type Props = {
   banditId: string;
@@ -32,18 +34,57 @@ export default function OctopusConciergeExperience({
 }: Props) {
   const { width } = useWindowDimensions();
   const contentWidth = Math.min(width, 560);
-  const first = banditName.trim().split(/\s+/)[0] || "your banDit";
-  const pending = verificationPending === true && checkoutEnabled !== true;
+  const [resolvedName, setResolvedName] = useState(banditName);
+  const [resolvedPortrait, setResolvedPortrait] = useState(portraitUri || null);
+
+  useEffect(() => {
+    setResolvedName(banditName);
+  }, [banditName]);
+
+  useEffect(() => {
+    const passed = banditName.trim();
+    const needsName = !passed || passed === "Local banDit";
+    const needsPhoto = !portraitUri;
+    if (!needsName && !needsPhoto) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        await ensureAnonymousSession().catch(() => undefined);
+        const bandit = await getBanditById(banditId);
+        if (cancelled || !bandit) return;
+        const name = String(bandit.name || "").trim();
+        if (needsName && name) setResolvedName(name);
+        if (needsPhoto) {
+          for (const u of [bandit.image_url, bandit.face_image_url]) {
+            const t = String(u || "").trim();
+            if (t.startsWith("http://") || t.startsWith("https://")) {
+              setResolvedPortrait(t);
+              break;
+            }
+          }
+        }
+      } catch {
+        /* keep the name the profile already passed */
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [banditId, banditName, portraitUri]);
+
+  const displayName = resolvedName.trim() || "Local banDit";
+  const first = displayName.split(/\s+/)[0] || "your banDit";
   const portrait =
-    portraitUri && (portraitUri.startsWith("http://") || portraitUri.startsWith("https://"))
-      ? portraitUri
+    resolvedPortrait && (resolvedPortrait.startsWith("http://") || resolvedPortrait.startsWith("https://"))
+      ? resolvedPortrait
       : null;
+  const pending = verificationPending === true && checkoutEnabled !== true;
 
   const body = (
     <View
       style={[styles.content, { width: contentWidth }, embedded && styles.embedded]}
       testID="octopus-concierge-section"
-      accessibilityLabel={`Octopus Concierge for ${banditName}`}
+      accessibilityLabel={`Octopus Concierge for ${displayName}`}
     >
       <View style={styles.brandRow}>
         <LocalBanditOctopusIcon style={styles.brandIcon} />
@@ -55,12 +96,12 @@ export default function OctopusConciergeExperience({
           source={{ uri: portrait }}
           style={styles.portrait}
           contentFit="cover"
-          accessibilityLabel={`${banditName} photo`}
+          accessibilityLabel={`${displayName} photo`}
         />
       ) : null}
 
       <Text style={styles.providerName} testID={`octopus-provider-${banditId}`}>
-        {banditName}
+        {displayName}
       </Text>
       <Text style={styles.salesTitle}>Your Local Insider</Text>
       <Text style={styles.salesLead}>Your city. Your insider.</Text>
@@ -77,14 +118,12 @@ export default function OctopusConciergeExperience({
         </View>
       ) : null}
 
-      {checkoutEnabled ? (
-        <View style={styles.priceBlock}>
-          <Text style={styles.price} testID="local-insider-price">
-            {OCTOPUS_CONCIERGE_OFFER.priceLabel}
-          </Text>
-          <Text style={styles.pricePeriod}>{OCTOPUS_CONCIERGE_OFFER.periodLabel}</Text>
-        </View>
-      ) : null}
+      <View style={styles.priceBlock}>
+        <Text style={styles.price} testID="local-insider-price">
+          {OCTOPUS_CONCIERGE_OFFER.priceLabel}
+        </Text>
+        <Text style={styles.pricePeriod}>{OCTOPUS_CONCIERGE_OFFER.periodLabel}</Text>
+      </View>
 
       <View style={styles.outcomeList}>
         <Text style={styles.outcomeLine}>{`- Up to ${OCTOPUS_CONCIERGE_OFFER.allowance} requests with ${first} within ${OCTOPUS_CONCIERGE_OFFER.durationDays} days`}</Text>
@@ -97,7 +136,7 @@ export default function OctopusConciergeExperience({
           <Text style={styles.gatedLabel}>Checkout closed</Text>
           <Text style={styles.gatedCopy}>
             {pending
-              ? `${first} is Verification Pending. Stay Pass payment is unavailable until verification is approved.`
+              ? `${OCTOPUS_CONCIERGE_OFFER.priceLabel} checkout is closed while ${first} is Verification Pending.`
               : "Purchases open only for an Octopus Verified Local banDit."}
           </Text>
         </View>
