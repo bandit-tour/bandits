@@ -16,6 +16,7 @@ import { Image as ExpoImage } from "expo-image";
 
 import { getBanditById } from "@/app/services/bandits";
 import LocalBanditOctopusIcon from "@/components/LocalBanditOctopusIcon";
+import OctopusConciergeExperience from "@/components/OctopusConciergeExperience";
 import { useAppState } from "@/contexts/AppStateContext";
 import { useAppBackScreenOptions } from "@/hooks/useAppBackScreenOptions";
 import { color, radius } from "@/lib/guestDesign";
@@ -575,6 +576,21 @@ export default function PremiumConciergeScreen() {
             {claimingPaid ? "Confirming payment…" : "Checking Premium Insights access…"}
           </Text>
         </View>
+      </View>
+    );
+  }
+
+  if (visibility?.verificationPending === true && visibility.octopusVerified !== true) {
+    return (
+      <View style={styles.salesScreen}>
+        <Stack.Screen options={salesHeader} />
+        <OctopusConciergeExperience
+          banditId={id}
+          banditName={banditName}
+          portraitUri={banditPortrait}
+          checkoutEnabled={false}
+          verificationPending
+        />
       </View>
     );
   }

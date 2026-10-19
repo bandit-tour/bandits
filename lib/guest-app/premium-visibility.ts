@@ -17,6 +17,9 @@ export type BanditPremiumVisibility = {
   blockers?: string[];
   /** PRODUCTION | TEST_DEMO | NONE — from Workspace visibility API. */
   authorizationClass?: "PRODUCTION" | "TEST_DEMO" | "NONE";
+  /** Concierge preview enrolled. Not Octopus Verified. Checkout stays closed. */
+  verificationPending?: boolean;
+  conciergePreview?: boolean;
 };
 
 const cache = new Map<string, { at: number; value: BanditPremiumVisibility }>();
@@ -33,6 +36,7 @@ function fallbackUnauthorized(banditId: string): BanditPremiumVisibility {
     cityGuide: true,
     blockers: ["Workspace visibility unavailable — paid CTA hidden"],
     authorizationClass: "NONE",
+    verificationPending: false,
   };
 }
 
@@ -86,9 +90,13 @@ export async function fetchBanditPremiumVisibility(
     cityGuide: true,
     blockers: result.data.blockers,
     authorizationClass,
+    verificationPending: result.data.verificationPending === true && result.data.octopusVerified !== true,
+    conciergePreview:
+      (result.data.conciergePreview === true || result.data.verificationPending === true) &&
+      result.data.octopusVerified !== true,
   };
-  // Only cache sellable bandits — do not pin showPremiumInsights:false from transient proxy errors.
-  if (value.showPremiumInsights) {
+  // Cache a real sellable or pending answer. Do not pin a transient unpaid miss.
+  if (value.showPremiumInsights || value.verificationPending) {
     cache.set(id, { at: Date.now(), value });
   }
   return value;
@@ -112,6 +120,60 @@ export async function fetchOctopusVerifiedByBanditId(
     );
   }
   return out;
+}
+
+export type OctopusPresentationFlags = {
+  verified: boolean;
+  pending: boolean;
+};
+
+/** Verified and Verification Pending flags for the Local banDit directory. */
+export async function fetchOctopusPresentationByBanditId(
+  banditIds: string[],
+): Promise<Record<string, OctopusPresentationFlags>> {
+  const ids = [...new Set(banditIds.map((id) => String(id || "").trim()).filter(Boolean))];
+  const out: Record<string, OctopusPresentationFlags> = {};
+  for (let i = 0; i < ids.length; i += BATCH_CHUNK) {
+    const chunk = ids.slice(i, i + BATCH_CHUNK);
+    await Promise.all(
+      chunk.map(async (id) => {
+        const v = await fetchBanditPremiumVisibility(id);
+        out[id] = {
+          verified: v.octopusVerified === true,
+          pending: v.verificationPending === true && v.octopusVerified !== true,
+        };
+      }),
+    );
+  }
+  return out;
+}
+
+/** Verified first, then Verification Pending, then everyone else. Order inside each group stays put. */
+export function sortBanditsByOctopusPresentation<T extends { id: string }>(
+  items: T[],
+  flags: Record<string, OctopusPresentationFlags>,
+): T[] {
+  const rank = (id: string) => {
+    const row = flags[id];
+    if (row?.verified) return 0;
+    if (row?.pending) return 1;
+    return 2;
+  };
+  return items
+    .map((item, index) => ({ item, index }))
+    .sort((a, b) => rank(a.item.id) - rank(b.item.id) || a.index - b.index)
+    .map((row) => row.item);
+}
+
+/** Guest ids enrolled as Octopus Concierge previews (Verification Pending, not Verified). */
+export async function fetchOctopusConciergePreviewIds(): Promise<string[]> {
+  const result = await workspaceGet<{
+    previews?: Array<{ banditId?: string; verificationPending?: boolean; octopusVerified?: boolean }>;
+  }>("/api/bandit/premium?view=concierge-previews");
+  if (!result.ok || !Array.isArray(result.data.previews)) return [];
+  return result.data.previews
+    .filter((p) => p.verificationPending === true && p.octopusVerified !== true && p.banditId)
+    .map((p) => String(p.banditId));
 }
 
 export function sortBanditIdsVerifiedFirst<T extends { id: string }>(
