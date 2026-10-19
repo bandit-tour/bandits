@@ -172,6 +172,9 @@ export default function PremiumConciergeScreen() {
   const [sentMsg, setSentMsg] = useState<string | null>(null);
   const submittingRef = useRef(false);
   const claimAttemptRef = useRef<string | null>(null);
+  const entitlementGen = useRef(0);
+  const confirmedActive = useRef(false);
+  const refreshEntitlementRef = useRef<() => Promise<void>>(async () => {});
 
   const first = useMemo(
     () => banditName.trim().split(/\s+/)[0] || "your banDit",
@@ -249,7 +252,8 @@ export default function PremiumConciergeScreen() {
       }
       return;
     }
-    setEntitlementLoading(true);
+    const gen = ++entitlementGen.current;
+    if (!confirmedActive.current) setEntitlementLoading(true);
     try {
       const next = await resolveOctopusConciergeEntitlement({
         guestId,
@@ -257,11 +261,21 @@ export default function PremiumConciergeScreen() {
         guestEmail,
         stayId: "current_stay",
       });
+      if (gen !== entitlementGen.current) return;
+      if (
+        confirmedActive.current &&
+        next.state !== "active" &&
+        next.state !== "exhausted" &&
+        next.state !== "expired"
+      ) {
+        return;
+      }
       setEntitlement(next);
     } finally {
-      setEntitlementLoading(false);
+      if (gen === entitlementGen.current) setEntitlementLoading(false);
     }
   }, [guestEmail, guestId, id, identityReady]);
+  refreshEntitlementRef.current = refreshEntitlement;
 
   useEffect(() => {
     if (!id) {
@@ -302,6 +316,7 @@ export default function PremiumConciergeScreen() {
   /** Return from checkout.stripe.com success URL — confirm session, then open Concierge OS.
    * claimingPaid must not be a dependency: setClaimingPaid(true) would re-run this effect,
    * cancel the in-flight confirm, and leave the screen on "Confirming payment…".
+   * The confirm response is the paid result. A slower unpaid entitlements read must not cover it.
    */
   useEffect(() => {
     if (!id || stripeCheckoutFlag !== "success" || !stripeSessionFromUrl || !guestEmail) {
@@ -310,9 +325,8 @@ export default function PremiumConciergeScreen() {
     const attemptKey = `${id}:${stripeSessionFromUrl}`;
     if (claimAttemptRef.current === attemptKey) return;
     claimAttemptRef.current = attemptKey;
-    let active = true;
     setClaimingPaid(true);
-    setCheckoutMsg("Payment confirmed — unlocking Concierge…");
+    setCheckoutMsg(null);
     void (async () => {
       try {
         const confirmed = await confirmOctopusCheckoutSession({
@@ -320,18 +334,22 @@ export default function PremiumConciergeScreen() {
           banditId: id,
           guestEmail,
         });
-        if (!active) return;
-        if (!confirmed.ok) setCheckoutMsg(confirmed.detail);
-        await refreshEntitlement();
+        if (!confirmed.ok) {
+          setCheckoutMsg(confirmed.detail);
+          return;
+        }
+        if (confirmed.entitlement) {
+          confirmedActive.current = true;
+          entitlementGen.current += 1;
+          setEntitlement(confirmed.entitlement);
+          setEntitlementLoading(false);
+        }
+        await refreshEntitlementRef.current();
       } finally {
-        if (active) setClaimingPaid(false);
+        setClaimingPaid(false);
       }
     })();
-    return () => {
-      active = false;
-      if (claimAttemptRef.current === attemptKey) claimAttemptRef.current = null;
-    };
-  }, [guestEmail, id, refreshEntitlement, stripeCheckoutFlag, stripeSessionFromUrl]);
+  }, [guestEmail, id, stripeCheckoutFlag, stripeSessionFromUrl]);
 
   const onUnlock = async () => {
     if (!id || checkoutBusy) return;

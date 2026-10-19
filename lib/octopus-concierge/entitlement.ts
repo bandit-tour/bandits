@@ -315,7 +315,7 @@ export async function confirmOctopusCheckoutSession(input: {
   banditId: string;
   guestEmail?: string | null;
 }): Promise<
-  | { ok: true; orderId?: string }
+  | { ok: true; orderId?: string; entitlement: OctopusEntitlement | null }
   | { ok: false; detail: string }
 > {
   const sessionId = String(input.sessionId || "").trim();
@@ -327,7 +327,19 @@ export async function confirmOctopusCheckoutSession(input: {
   if (!guestEmail) {
     return { ok: false, detail: "Sign in to confirm payment." };
   }
-  const result = await commercePost<{ ok?: boolean; error?: string; order_id?: string }>(
+  const result = await commercePost<{
+    ok?: boolean;
+    error?: string;
+    order_id?: string;
+    entitlement?: { active?: boolean; requests_remaining?: number | null };
+    stay_pass?: {
+      active?: boolean;
+      expiresAt?: string | null;
+      orderId?: string | null;
+      requestsRemaining?: number | null;
+      requestsIncluded?: number | null;
+    } | null;
+  }>(
     "/api/commerce/checkout/confirm",
     {
       session_id: sessionId,
@@ -346,7 +358,28 @@ export async function confirmOctopusCheckoutSession(input: {
       detail: result.data.error || "Could not confirm Stripe payment.",
     };
   }
-  return { ok: true, orderId: result.data.order_id };
+  const pass = result.data.stay_pass;
+  const active = pass?.active === true || result.data.entitlement?.active === true;
+  const remaining = pass?.requestsRemaining ?? result.data.entitlement?.requests_remaining ?? null;
+  const entitlement: OctopusEntitlement | null = active
+    ? {
+        state: "active",
+        entitled: true,
+        productSku: OCTOPUS_CONCIERGE_OFFER.sku,
+        banditId,
+        guestId: guestEmail,
+        source: "commerce",
+        detail:
+          remaining != null
+            ? `Commerce ACTIVE · ${remaining} requests left`
+            : "Commerce ACTIVE",
+        expiresAt: pass?.expiresAt ?? null,
+        orderId: pass?.orderId ?? result.data.order_id ?? null,
+        requestsRemaining: remaining,
+        requestsIncluded: pass?.requestsIncluded ?? null,
+      }
+    : null;
+  return { ok: true, orderId: result.data.order_id, entitlement };
 }
 
 export function assertConciergeOpsAllowed(entitlement: OctopusEntitlement): boolean {
