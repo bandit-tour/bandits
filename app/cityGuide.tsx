@@ -339,30 +339,34 @@ export default function CityGuideScreen() {
       for (let i = 0; i < needLive.length; i += 4) {
         if (cancelled) return;
         const batch = needLive.slice(i, i + 4);
-        for (const event of batch) {
-          if (cancelled) return;
-          doneUpdates[event.id] = true;
-          try {
-            const placeId = (event as { google_place_id?: string | null }).google_place_id ?? null;
-            let urls = placeId ? await fetchTrustedPlaceIdPhotoUrls(placeId, 4) : [];
-            if (urls.length === 0) {
-              urls = await fetchGooglePlacePhotoUrls({
-                placeId,
-                name: String(event.name ?? ''),
-                address: String(event.address ?? ''),
-                city: String(event.city ?? ''),
-                neighborhood: String(event.neighborhood ?? ''),
-                limit: 4,
-              });
+        const refreshed = await Promise.all(
+          batch.map(async (event) => {
+            doneUpdates[event.id] = true;
+            try {
+              const placeId = (event as { google_place_id?: string | null }).google_place_id ?? null;
+              let urls = placeId ? await fetchTrustedPlaceIdPhotoUrls(placeId, 4) : [];
+              if (urls.length === 0) {
+                urls = await fetchGooglePlacePhotoUrls({
+                  placeId,
+                  name: String(event.name ?? ''),
+                  address: String(event.address ?? ''),
+                  city: String(event.city ?? ''),
+                  neighborhood: String(event.neighborhood ?? ''),
+                  limit: 4,
+                });
+              }
+              const cleaned = urls
+                .map((u) => normalizeEventImageUri(u) ?? u)
+                .filter((u) => /^https?:\/\//i.test(u) && !failedHeroUris[u]);
+              return cleaned[0] ? ([event.id, cleaned[0]] as const) : null;
+            } catch {
+              return null;
             }
-            const cleaned = urls
-              .map((u) => normalizeEventImageUri(u) ?? u)
-              .filter((u) => /^https?:\/\//i.test(u) && !failedHeroUris[u]);
-            if (cleaned.length === 0) continue;
-            heroUpdates[event.id] = cleaned[0];
-          } catch {
-            /* keep the card on the illustration once recovery is marked done */
-          }
+          }),
+        );
+        if (cancelled) return;
+        for (const row of refreshed) {
+          if (row) heroUpdates[row[0]] = row[1];
         }
         if (!cancelled) {
           if (Object.keys(heroUpdates).length > 0) {

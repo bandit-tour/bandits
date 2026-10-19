@@ -362,25 +362,8 @@ export default function LeafletMapView({
     return rows.map((row) => [row.coords.lat, row.coords.lng] as [number, number]);
   }, [events, markerLabels, showRouteLine]);
 
-  const didFitRef = useRef(false);
   const lastFlownIdRef = useRef<string | null>(null);
   const skipInitialFlyRef = useRef(Boolean(initialCamera));
-  useEffect(() => {
-    if (!embedded || !mapInstance || didFitRef.current) return;
-    if (initialCamera) {
-      didFitRef.current = true;
-      return;
-    }
-    const pts = events
-      .map((event) => eventMapCoordinates(event))
-      .filter((coords): coords is { lat: number; lng: number } => coords != null);
-    if (pts.length === 0) return;
-    didFitRef.current = true;
-    mapInstance.fitBounds(
-      pts.map((p) => [p.lat, p.lng]),
-      { padding: [28, 28], maxZoom: 15 },
-    );
-  }, [embedded, events, initialCamera, mapInstance]);
 
   useEffect(() => {
     if (!embedded || !mapInstance || !selectedEventId) return;
