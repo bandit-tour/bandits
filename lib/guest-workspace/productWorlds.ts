@@ -2392,9 +2392,12 @@ export function isSampleBottleMatch(match: Pick<BottleMatch, "id" | "inventorySo
 }
 
 export function withLiveHotelName(match: BottleMatch, hotelName: string): BottleMatch {
+  const name = hotelName.trim();
+  if (!name) return match;
   return {
     ...match,
-    hotel: { ...match.hotel, name: hotelName },
+    hotel: { ...match.hotel, name },
+    story: (match.story || "").replace(/PLAY Theatrou/gi, name),
   };
 }
 

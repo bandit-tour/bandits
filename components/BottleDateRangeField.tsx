@@ -24,10 +24,11 @@ function parseIso(value: string): Date | null {
   return Number.isNaN(d.getTime()) ? null : d;
 }
 
+/** English dates for the English Bottle UI, even when the browser locale is Hebrew. */
 export function humanDate(value: string): string {
   const d = parseIso(value);
   if (!d) return "";
-  return d.toLocaleDateString(undefined, { day: "numeric", month: "short", year: "numeric" });
+  return d.toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" });
 }
 
 function todayIso(): string {
@@ -43,7 +44,7 @@ function addDays(iso: string, days: number): string {
 }
 
 function monthLabel(year: number, month: number): string {
-  return new Date(year, month, 1).toLocaleDateString(undefined, { month: "long", year: "numeric" });
+  return new Date(year, month, 1).toLocaleDateString("en-GB", { month: "long", year: "numeric" });
 }
 
 function nightsBetween(start: string, end: string): number | null {

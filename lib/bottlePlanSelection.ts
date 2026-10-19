@@ -27,18 +27,38 @@ function storage(): Storage | null {
   return null;
 }
 
+function nameIsPlay(name: string | undefined): boolean {
+  return /play theatrou|play athens/i.test(name || "");
+}
+
+function slugIsPlay(sel: Pick<BottlePlanSelection, "hotelSlug" | "placeId">): boolean {
+  return /play-theatrou|play-athens/i.test(sel.hotelSlug || "") || sel.placeId === "partner:play-theatrou";
+}
+
+/** Drop a PLAY slug that was attached to a different selected hotel. */
+export function sanitizeBottlePlanSelection(sel: BottlePlanSelection): BottlePlanSelection {
+  if (!sel.hotelName || nameIsPlay(sel.hotelName) || !slugIsPlay(sel)) return sel;
+  const placeId = sel.placeId === "partner:play-theatrou" ? undefined : sel.placeId;
+  return {
+    ...sel,
+    placeId,
+    hotelSlug: undefined,
+    partner: false,
+  };
+}
+
 export function readBottlePlanSelection(): BottlePlanSelection | null {
   const raw = storage()?.getItem(KEY);
   if (!raw) return null;
   try {
-    return JSON.parse(raw) as BottlePlanSelection;
+    return sanitizeBottlePlanSelection(JSON.parse(raw) as BottlePlanSelection);
   } catch {
     return null;
   }
 }
 
 export function writeBottlePlanSelection(sel: BottlePlanSelection): void {
-  storage()?.setItem(KEY, JSON.stringify(sel));
+  storage()?.setItem(KEY, JSON.stringify(sanitizeBottlePlanSelection(sel)));
 }
 
 export function selectionFromHotel(
@@ -151,13 +171,20 @@ export function bottlePlanSearchKey(sel: BottlePlanSelection): string {
   ].join("\u001f");
 }
 
-export function hotelProfileQuery(sel: Pick<BottlePlanSelection, "checkIn" | "checkOut" | "travelers" | "hotelNights" | "outdoorNights">): string {
+export function hotelProfileQuery(
+  sel: Pick<BottlePlanSelection, "checkIn" | "checkOut" | "travelers" | "hotelNights" | "outdoorNights"> & {
+    hotelName?: string;
+    destination?: string;
+  },
+): string {
   const qs = new URLSearchParams();
+  if (sel.destination) qs.set("destination", sel.destination);
   if (sel.checkIn) qs.set("checkIn", sel.checkIn);
   if (sel.checkOut) qs.set("checkOut", sel.checkOut);
   qs.set("travelers", String(sel.travelers));
   qs.set("hotelNights", String(sel.hotelNights));
   qs.set("outdoorNights", String(sel.outdoorNights));
+  if (sel.hotelName) qs.set("hotelName", sel.hotelName);
   return qs.toString();
 }
 

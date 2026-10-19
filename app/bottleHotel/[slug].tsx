@@ -48,6 +48,36 @@ function FrameImage({ frame, style }: { frame: Frame; style: object }) {
   return <View style={[style, styles.missingPhoto]} />;
 }
 
+function HotelMap({
+  lat,
+  lng,
+  label,
+}: {
+  lat?: number | null;
+  lng?: number | null;
+  label: string;
+}) {
+  const hasPin = typeof lat === "number" && typeof lng === "number";
+  if (!hasPin) return null;
+  if (Platform.OS === "web") {
+    return (
+      <View style={styles.mapFrame} testID="bottle-hotel-map">
+        {React.createElement("iframe", {
+          title: `${label} map`,
+          src: `https://maps.google.com/maps?q=${lat},${lng}&z=15&output=embed`,
+          style: { border: 0, width: "100%", height: "100%" },
+        })}
+      </View>
+    );
+  }
+  const url = `https://www.google.com/maps/search/?api=1&query=${lat},${lng}`;
+  return (
+    <Pressable onPress={() => void Linking.openURL(url)} testID="bottle-hotel-map" accessibilityRole="link">
+      <Text style={styles.mapLink}>Map</Text>
+    </Pressable>
+  );
+}
+
 function Fact({ label, value }: { label: string; value: string }) {
   return (
     <View style={styles.fact}>
@@ -67,6 +97,8 @@ export default function BottleHotelDetailScreen() {
     travelers?: string;
     hotelNights?: string;
     outdoorNights?: string;
+    hotelName?: string;
+    destination?: string;
   }>();
   const rawSlug = typeof params.slug === "string" ? params.slug : "";
   const parsed = parseBottleHotelParam(rawSlug);
@@ -99,7 +131,7 @@ export default function BottleHotelDetailScreen() {
         setLoadState(res.hotel ? "ready" : "error");
       });
     } else {
-      void loadHotelBottleListing(parsed.id).then((row) => {
+      void loadHotelBottleListing(parsed.id, { allowPlayFallback: false }).then((row) => {
         if (!alive) return;
         setListing(row);
         setPlaceHotel(null);
@@ -142,12 +174,14 @@ export default function BottleHotelDetailScreen() {
     };
   }, [parsed.kind, parsed.id, checkIn, checkOut, travelers]);
 
-  const partnerName =
-    listing?.whiteLabel?.title ||
+  const urlHotelName = typeof params.hotelName === "string" ? params.hotelName.trim() : "";
+  const partnerTitle = (
     listing?.displayName ||
-    (isKnownHotelSlug(parsed.id) ? getHotelWhiteLabel(parsed.id)?.title : null) ||
-    "Athens hotel";
-  const name = placeHotel?.name || partnerName;
+    listing?.whiteLabel?.title ||
+    (parsed.kind === "partner" && isKnownHotelSlug(parsed.id) ? getHotelWhiteLabel(parsed.id)?.title : "") ||
+    ""
+  ).trim();
+  const name = placeHotel?.name || (parsed.kind === "partner" ? partnerTitle : "") || urlHotelName || "Hotel";
   const screenOptions = useAppBackScreenOptions({
     title: name,
     fallback: "/travelBottle" as Href,
@@ -169,12 +203,10 @@ export default function BottleHotelDetailScreen() {
   const area = placeHotel?.address || listing?.location || "Athens";
   const datesLabel =
     checkIn && checkOut ? `${humanDate(checkIn)} → ${humanDate(checkOut)}` : "Add dates in Bottle plan";
+  const rawSummary =
+    loadState === "loading" ? "" : placeHotel?.editorialSummary || listing?.description || "";
   const summary =
-    loadState === "loading"
-      ? `Loading ${name}…`
-      : placeHotel?.editorialSummary ||
-        listing?.description ||
-        `${name} is your first sleep in Athens. Mix pairs this hotel with a verified second sleep outside the city.`;
+    /play theatrou/i.test(rawSummary) && !/play/i.test(name) ? "" : rawSummary.trim();
   const rateLabel = listing ? formatHotelBottleRate(listing.rates) : null;
   const mapUrl = placeHotel?.googleMapsUri || null;
   const totalNights = useMemo(() => {
@@ -213,8 +245,54 @@ export default function BottleHotelDetailScreen() {
           : 1;
   const shownName =
     placeHotel?.name ||
-    (parsed.kind === "partner" ? partnerName : "") ||
+    (parsed.kind === "partner" ? partnerTitle : "") ||
+    urlHotelName ||
     (savedMatches && savedPlan?.hotelName ? savedPlan.hotelName : "");
+  const pricedRooms = (avail?.rooms || []).filter((room) => room.name && room.totalCents != null && room.totalCents > 0);
+  const supplierRooms =
+    pricedRooms.length === 0 && listing?.rates.authorized
+      ? listing.roomTypes.filter((room) => (room.priceCentsPerNight || 0) > 0)
+      : [];
+  const availabilityLabel = placeHotel
+    ? "Not bookable yet"
+    : !checkIn || !checkOut
+      ? "Add dates to see availability"
+      : pricedRooms.length > 0 && avail?.bookable
+        ? "Available for these dates"
+        : avail
+          ? "Not bookable yet"
+          : "Checking availability";
+  const canMix = Boolean(shownName && checkIn && checkOut);
+  useEffect(() => {
+    if (!shownName || !checkIn || !checkOut) return;
+    writeBottlePlanSelection({
+      destination:
+        (typeof params.destination === "string" && params.destination.trim()) ||
+        savedPlan?.destination ||
+        "Athens",
+      checkIn,
+      checkOut,
+      travelers,
+      hotelNights,
+      outdoorNights,
+      placeId,
+      hotelSlug,
+      hotelName: shownName,
+      partner: parsed.kind === "partner",
+    });
+  }, [
+    checkIn,
+    checkOut,
+    hotelNights,
+    hotelSlug,
+    outdoorNights,
+    params.destination,
+    parsed.kind,
+    placeId,
+    savedPlan?.destination,
+    shownName,
+    travelers,
+  ]);
   const openMix = () => {
     if (!shownName || !checkIn || !checkOut) return;
     const sel = {
@@ -236,26 +314,145 @@ export default function BottleHotelDetailScreen() {
   return (
     <ScrollView style={styles.screen} contentContainerStyle={styles.content} testID="bottle-hotel-detail">
       <Stack.Screen options={screenOptions} />
-      <View style={[styles.page, wide && styles.pageWide]}>
+      {viewer ? (
+        <Modal visible animationType="fade" onRequestClose={() => setViewer(null)}>
+          <View style={styles.lightbox}>
+            <Pressable onPress={() => setViewer(null)} style={styles.lightboxBar}>
+              <Text style={styles.lightboxBack}>← Back</Text>
+            </Pressable>
+            <Pressable
+              style={styles.lightboxStage}
+              onPress={() =>
+                setViewer({
+                  ...viewer,
+                  index: (viewer.index + 1) % viewer.frames.length,
+                })
+              }
+            >
+              <FrameImage frame={viewer.frames[viewer.index]} style={styles.lightboxImage} />
+            </Pressable>
+          </View>
+        </Modal>
+      ) : null}
+      <View style={[styles.page, wide && styles.pageWide]} testID={`bottle-hotel-detail-${parsed.id}`}>
         {frames[0] ? (
-          <FrameImage frame={frames[0]} style={styles.hero} />
+          <Pressable onPress={() => setViewer({ frames, index: 0, title: shownName })} accessibilityRole="button">
+            <FrameImage frame={frames[0]} style={[styles.hero, wide && styles.heroWide]} />
+          </Pressable>
         ) : (
-          <View style={styles.hero} />
+          <View style={[styles.hero, wide && styles.heroWide]} />
         )}
+        {frames.length > 1 ? (
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={styles.galleryRow}
+            testID="bottle-hotel-detail-gallery"
+          >
+            {frames.map((frame, index) => (
+              <Pressable
+                key={frame.key}
+                onPress={() => setViewer({ frames, index, title: shownName })}
+                accessibilityRole="button"
+              >
+                <FrameImage frame={frame} style={styles.galleryImage} />
+              </Pressable>
+            ))}
+          </ScrollView>
+        ) : null}
         <Text style={styles.title} testID="bottle-hotel-detail-name">
-          {shownName}
+          {shownName || name}
         </Text>
+        {placeHotel?.rating != null ? (
+          <Text style={styles.meta} testID="bottle-hotel-rating">
+            ★ {placeHotel.rating.toFixed(1)}
+            {placeHotel.userRatingCount ? ` · ${placeHotel.userRatingCount} reviews` : ""}
+          </Text>
+        ) : null}
         <Text style={styles.meta} testID="bottle-hotel-plan">
           {datesLabel} · {hotelNights} hotel + {outdoorNights} outdoor
         </Text>
+        <Text style={styles.publish} testID="bottle-hotel-availability">
+          {availabilityLabel}
+        </Text>
         <Pressable
-          style={styles.cta}
+          style={[styles.cta, !canMix && styles.ctaOff]}
           onPress={openMix}
+          disabled={!canMix}
           accessibilityRole="button"
+          accessibilityState={{ disabled: !canMix }}
           testID="bottle-hotel-mix-cta"
         >
           <Text style={styles.ctaText}>MIX MY STAY</Text>
         </Pressable>
+        {summary ? (
+          <View style={styles.block}>
+            <Text style={styles.body} testID="bottle-hotel-detail-summary">
+              {summary}
+            </Text>
+          </View>
+        ) : null}
+        <View style={styles.facts}>
+          <Fact label="Address" value={placeHotel?.address || listing?.address || area} />
+          {rateLabel ? <Fact label="Rate" value={`From ${rateLabel} / night`} /> : null}
+        </View>
+        {listing?.services?.length ? (
+          <View style={styles.block} testID="bottle-hotel-detail-amenities">
+            <Text style={styles.blockTitle}>Amenities</Text>
+            <View style={styles.chips}>
+              {listing.services.map((service) => (
+                <View key={service} style={styles.chip}>
+                  <Text style={styles.chipText}>{service}</Text>
+                </View>
+              ))}
+            </View>
+          </View>
+        ) : null}
+        <View style={styles.block}>
+          <Text style={styles.blockTitle}>Location</Text>
+          <HotelMap lat={placeHotel?.lat} lng={placeHotel?.lng} label={shownName || name} />
+          {mapUrl && (placeHotel?.lat == null || placeHotel?.lng == null) ? (
+            <Pressable onPress={() => void Linking.openURL(mapUrl)} testID="bottle-hotel-map" accessibilityRole="link">
+              <Text style={styles.mapLink}>Open map</Text>
+            </Pressable>
+          ) : null}
+        </View>
+        {pricedRooms.length ? (
+          <View style={styles.block} testID="bottle-hotel-detail-rooms">
+            <Text style={styles.blockTitle}>Rooms</Text>
+            {pricedRooms.map((room) => (
+              <View key={room.id} style={styles.roomCard}>
+                <Text style={styles.roomName}>{room.name}</Text>
+                <Text style={styles.roomMeta}>{`€${Math.round((room.totalCents || 0) / 100)} for these dates`}</Text>
+              </View>
+            ))}
+          </View>
+        ) : supplierRooms.length ? (
+          <View style={styles.block} testID="bottle-hotel-detail-rooms">
+            <Text style={styles.blockTitle}>Rooms</Text>
+            {supplierRooms.map((room) => (
+              <View key={room.id} style={styles.roomCard}>
+                <Text style={styles.roomName}>{room.name}</Text>
+                <Text style={styles.roomMeta}>{`€${Math.round((room.priceCentsPerNight || 0) / 100)} / night`}</Text>
+              </View>
+            ))}
+          </View>
+        ) : null}
+        {reviews.length ? (
+          <View style={styles.block} testID="bottle-hotel-reviews">
+            <Text style={styles.blockTitle}>Reviews</Text>
+            {reviews.slice(0, 3).map((review, index) => (
+              <View key={`${review.author || "guest"}-${index}`} style={styles.roomCard}>
+                <Text style={styles.roomName}>
+                  {review.author || "Guest"}
+                  {review.rating != null ? ` · ★ ${review.rating}` : ""}
+                </Text>
+                {review.text ? <Text style={styles.body}>{review.text}</Text> : null}
+              </View>
+            ))}
+          </View>
+        ) : null}
+        <Text style={styles.attribution}>{attribution}</Text>
       </View>
     </ScrollView>
   );
@@ -268,11 +465,21 @@ const styles = StyleSheet.create({
   pageWide: { paddingHorizontal: 24 },
   hero: {
     width: "100%",
-    height: 280,
+    height: 320,
     borderRadius: 16,
     backgroundColor: "#E8E2D8",
-    marginBottom: 16,
+    marginBottom: 12,
   },
+  heroWide: { height: 460 },
+  mapFrame: {
+    width: "100%",
+    height: 220,
+    borderRadius: 14,
+    overflow: "hidden",
+    backgroundColor: "#E8E2D8",
+  },
+  mapLink: { fontSize: 15, fontWeight: "700", color: "#1A1510", paddingVertical: 8 },
+  ctaOff: { opacity: 0.45 },
   kicker: {
     fontSize: 11,
     fontWeight: "800",

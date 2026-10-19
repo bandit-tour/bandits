@@ -33,8 +33,7 @@ import {
   withPlannedHotelNights,
   type BottleMatch,
 } from "@/lib/guest-workspace/productWorlds";
-import { liveHotelDisplayName } from "@/lib/stay/liveHotelIdentity";
-import { getHotelEntry } from "@/lib/pilotSession";
+import { readBottlePlanSelection } from "@/lib/bottlePlanSelection";
 
 function nightLabel(n: number) {
   return `${n} night${n === 1 ? "" : "s"}`;
@@ -190,15 +189,25 @@ export default function JourneyDetailScreen() {
   const plannedHotelNights = Math.max(1, Number(hotelNightsParam) || 0) || null;
 
   React.useEffect(() => {
-    void getHotelEntry().then((entry) => {
-      const slug = connectedStay === "0" ? "" : hotelSlug || entry?.slug || "";
-      if (!slug) {
-        setHotelName("");
+    const saved = readBottlePlanSelection();
+    const savedName = saved?.hotelName || "";
+    const slugParam = typeof hotelSlug === "string" ? hotelSlug.trim() : "";
+    const slug = connectedStay === "0" ? saved?.hotelSlug || "" : slugParam || saved?.hotelSlug || "";
+    const slugConflicts =
+      Boolean(savedName) && /play/i.test(slug) && !/play/i.test(savedName);
+    setHotelName(savedName);
+    if (!slug || slugConflicts) {
+      setHotelListing(null);
+      return;
+    }
+    void loadHotelBottleListing(slug, { allowPlayFallback: false }).then((row) => {
+      const title = row?.displayName || row?.whiteLabel?.title || "";
+      if (savedName && /play/i.test(title) && !/play/i.test(savedName)) {
         setHotelListing(null);
         return;
       }
-      setHotelName(liveHotelDisplayName({ entry, slug, stayName: entry?.slug === slug ? entry.displayName : null }));
-      void loadHotelBottleListing(slug).then(setHotelListing);
+      setHotelListing(row);
+      if (!savedName && title) setHotelName(title);
     });
   }, [connectedStay, hotelSlug]);
 
@@ -272,7 +281,7 @@ export default function JourneyDetailScreen() {
     (u, i, arr) => u && /^https?:\/\//i.test(u) && arr.indexOf(u) === i,
   );
   const secondFrames: Frame[] = secondUrls.map((uri) => ({ key: uri, remote: uri }));
-  const hotelTitle = hotelListing?.whiteLabel?.title || match.hotel.name;
+  const hotelTitle = hotelName || hotelListing?.displayName || match.hotel.name;
   const hotelArea = hotelListing?.location || match.hotel.city || "Athens";
   const rawHotelCopy = String(hotelListing?.description || "").trim();
   const hotelSummary =

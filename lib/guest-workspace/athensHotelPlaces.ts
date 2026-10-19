@@ -134,6 +134,17 @@ function partnerCards(): AthensDiscoveryHotel[] {
   }));
 }
 
+/** Generic Athens browse keeps partner hotels. A named search must not pin PLAY above that hotel. */
+function partnersMatchingQuery(query: string, partners: AthensDiscoveryHotel[]): AthensDiscoveryHotel[] {
+  const q = query.trim().toLowerCase();
+  const generic = !q || /^hotels?\s+in\s+athens$/.test(q);
+  if (generic) return partners;
+  return partners.filter((h) => {
+    const name = h.name.trim().toLowerCase();
+    return name.includes(q) || q.includes(name);
+  });
+}
+
 export async function searchAthensHotels(input: {
   query?: string;
   pageToken?: string | null;
@@ -161,8 +172,11 @@ export async function searchAthensHotels(input: {
     }>(`/api/public/hotels/search?${qs.toString()}`);
     if (result.ok && (result.data.hotels?.length || result.data.partners?.length)) {
       const places = result.data.hotels || [];
-      const partners = (result.data.partners || []).map((p) => ({ ...p, partner: true }));
-      // Partners first page only (no pageToken) so they appear once at top.
+      const partners = partnersMatchingQuery(
+        q,
+        (result.data.partners || []).map((p) => ({ ...p, partner: true })),
+      );
+      // Matching partners on the first page only, so a named search is not topped by another hotel.
       const merged = input.pageToken ? places : [...partners, ...places];
       return {
         hotels: merged,
@@ -177,7 +191,9 @@ export async function searchAthensHotels(input: {
 
   const local = await guestPlacesSearch(q, input.pageToken);
   if (local.hotels.length) {
-    const merged = input.pageToken ? local.hotels : [...partnerCards(), ...local.hotels];
+    const merged = input.pageToken
+      ? local.hotels
+      : [...partnersMatchingQuery(q, partnerCards()), ...local.hotels];
     return {
       hotels: merged,
       nextPageToken: local.nextPageToken,
@@ -188,7 +204,7 @@ export async function searchAthensHotels(input: {
   }
 
   return {
-    hotels: partnerCards(),
+    hotels: partnersMatchingQuery(q, partnerCards()),
     nextPageToken: null,
     attribution: "Powered by Google",
     source: "partners_only",

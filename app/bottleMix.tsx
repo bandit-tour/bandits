@@ -8,6 +8,7 @@ import { Image, Pressable, ScrollView, StyleSheet, Text, View } from "react-nati
 
 import { humanDate } from "@/components/BottleDateRangeField";
 import { useAppBackScreenOptions } from "@/hooks/useAppBackScreenOptions";
+import { BOTTLE_MATCHES } from "@/lib/guest-workspace/productWorlds";
 import {
   bottlePlanFromSearchParams,
   bottlePlanParamKey,
@@ -22,6 +23,15 @@ import { supabase } from "@/lib/supabase";
 import { workspaceGet } from "@/lib/workspace/client";
 
 type Phase = "loading" | "empty" | "results" | "error";
+
+/** Editorial outdoor frames already in the Bottle catalog. Not hosts, prices, or availability. */
+const OUTDOOR_INSPIRATION = BOTTLE_MATCHES.map((match) => ({
+  id: match.id,
+  title: match.second.name,
+  location: match.second.location,
+  type: match.second.type || "Outdoor stay",
+  imageUrl: match.second.imageUrl,
+})).filter((row) => /^https?:\/\//i.test(row.imageUrl));
 
 function readParam(raw: Record<string, string | string[] | undefined>, key: string): string {
   const value = raw[key];
@@ -57,6 +67,8 @@ export default function BottleMixScreen() {
   const [authorized, setAuthorized] = useState(false);
   const [busy, setBusy] = useState(false);
   const [note, setNote] = useState<string | null>(null);
+  const [previewId, setPreviewId] = useState<string | null>(null);
+  const preview = OUTDOOR_INSPIRATION.find((row) => row.id === previewId) || null;
   const selRef = useRef<BottlePlanSelection | null>(sel);
   selRef.current = sel;
   const requestSerial = useRef(0);
@@ -183,28 +195,68 @@ export default function BottleMixScreen() {
           {humanDate(sel.checkIn)} → {humanDate(sel.checkOut)} · {sel.hotelNights} hotel + {sel.outdoorNights} outdoor
         </Text>
 
+        <View style={styles.summary} testID="bottle-mix-summary">
+          <Text style={styles.summaryLine}>
+            {sel.hotelNights} nights at {hotelName}
+            {phase === "results" && stays[0]
+              ? ` · ${stays[0].title}`
+              : preview
+                ? ` · ${preview.title}`
+                : ` · ${sel.outdoorNights} outdoor`}
+          </Text>
+          {phase === "results" ? (
+            <Text style={styles.verified}>Verified stay</Text>
+          ) : (
+            <Text style={styles.status} testID="bottle-mix-status">
+              {status}
+            </Text>
+          )}
+        </View>
+
         {phase === "results"
           ? stays.map((stay) => (
               <View key={stay.id} style={styles.card} testID={`bottle-mix-outdoor-${stay.id}`}>
                 {stay.coverPhoto ? <Image source={{ uri: stay.coverPhoto }} style={styles.photo} /> : null}
                 <Text style={styles.cardTitle}>{stay.title}</Text>
                 {stay.location ? <Text style={styles.cardMeta}>{stay.location}</Text> : null}
+                {stay.priceCentsPerNight > 0 ? (
+                  <Text style={styles.cardMeta}>{`€${Math.round(stay.priceCentsPerNight / 100)} / night`}</Text>
+                ) : null}
               </View>
             ))
           : (
-            <Text style={styles.status} testID="bottle-mix-status">
-              {status}
-            </Text>
+            <View testID="bottle-mix-inspiration">
+              {OUTDOOR_INSPIRATION.map((row) => {
+                const selected = row.id === previewId;
+                return (
+                  <Pressable
+                    key={row.id}
+                    style={[styles.card, selected && styles.cardOn]}
+                    onPress={() => setPreviewId(row.id)}
+                    testID={`bottle-outdoor-inspiration-${row.id}`}
+                    accessibilityRole="button"
+                    accessibilityState={{ selected }}
+                  >
+                    <Image source={{ uri: row.imageUrl }} style={styles.photo} />
+                    <Text style={styles.cardTitle}>{row.title}</Text>
+                    <Text style={styles.cardMeta}>
+                      {row.type} · {row.location}
+                    </Text>
+                    <Text style={styles.inspiration}>Inspiration · not bookable</Text>
+                  </Pressable>
+                );
+              })}
+            </View>
           )}
 
-        {phase === "empty" || phase === "error" ? (
+        {phase === "error" ? (
           <Pressable
             style={styles.retry}
             onPress={() => setAttempt((n) => n + 1)}
             testID="bottle-mix-retry"
             accessibilityRole="button"
           >
-            <Text style={styles.retryText}>Retry Mix</Text>
+            <Text style={styles.retryText}>Try again</Text>
           </Pressable>
         ) : null}
 
@@ -231,7 +283,18 @@ const styles = StyleSheet.create({
   center: { flex: 1, justifyContent: "center", alignItems: "center", padding: 24 },
   hotel: { fontSize: 28, fontWeight: "800", color: "#1A1510", marginBottom: 8 },
   meta: { fontSize: 15, color: "#5C5348", marginBottom: 18 },
-  status: { fontSize: 17, lineHeight: 24, color: "#3A3228" },
+  status: { fontSize: 16, lineHeight: 22, color: "#3A3228" },
+  summary: { marginBottom: 16 },
+  summaryLine: { fontSize: 16, lineHeight: 22, color: "#1A1510", fontWeight: "700", marginBottom: 6 },
+  verified: { fontSize: 13, fontWeight: "700", color: "#1A1510" },
+  inspiration: {
+    fontSize: 12,
+    fontWeight: "700",
+    letterSpacing: 0.3,
+    color: "#6B5E4E",
+    paddingHorizontal: 14,
+    paddingBottom: 14,
+  },
   card: {
     borderRadius: 16,
     overflow: "hidden",
@@ -240,7 +303,8 @@ const styles = StyleSheet.create({
     borderColor: "#E6DFD3",
     marginBottom: 12,
   },
-  photo: { width: "100%", height: 180 },
+  photo: { width: "100%", height: 220 },
+  cardOn: { borderColor: "#1A1510", borderWidth: 2 },
   cardTitle: { fontSize: 17, fontWeight: "700", color: "#1A1510", padding: 14 },
   cardMeta: { fontSize: 13, color: "#6B5E4E", paddingHorizontal: 14, paddingBottom: 14 },
   retry: {

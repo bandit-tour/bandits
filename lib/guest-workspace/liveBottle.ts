@@ -6,7 +6,6 @@
 import { workspaceGet, workspacePost } from "@/lib/workspace/client";
 import {
   BOTTLE_MATCHES,
-  DEFAULT_BOTTLE_HOTEL,
   type BottleMatch,
 } from "@/lib/guest-workspace/productWorlds";
 
@@ -93,11 +92,12 @@ export function mapWorkspaceBottleStay(row: WorkspaceBottleStay, hotelName?: str
 }
 
 function sampleMatches(hotelName?: string): BottleMatch[] {
-  const name = hotelName || DEFAULT_BOTTLE_HOTEL.name;
+  const name = hotelName?.trim() || "Your hotel";
   return BOTTLE_MATCHES.map((m) => ({
     ...m,
     inventorySource: "sample" as const,
     hotel: { ...m.hotel, name },
+    story: (m.story || "").replace(/PLAY Theatrou/gi, name),
   }));
 }
 

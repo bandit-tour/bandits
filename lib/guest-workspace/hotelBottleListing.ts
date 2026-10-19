@@ -230,13 +230,58 @@ function emptyRates(): HotelBottleRates {
   };
 }
 
+function blankBottleListing(slug: string): HotelBottleListing {
+  const shell = getHotelWhiteLabel("play-theatrou");
+  return {
+    slug,
+    displayName: "",
+    location: "Athens",
+    description: "",
+    address: null,
+    remoteGalleryUrls: [],
+    localGallery: [],
+    services: [],
+    benefits: [],
+    roomTypes: [],
+    policies: [],
+    rates: emptyRates(),
+    tenantStatus: null,
+    roomInventoryMissing: true,
+    workspacePublishStatus: "not_published",
+    whiteLabel: shell
+      ? {
+          ...shell,
+          slug: "play-theatrou",
+          displayName: "",
+          title: "",
+          welcomeBodyPrimary: "",
+          welcomeBodySecondary: "",
+          homeHeroHeadline: "",
+          homeInspirationLines: [],
+        }
+      : (undefined as unknown as HotelWhiteLabelConfig),
+  };
+}
+
 /**
  * Load hotel listing context for Bottle planning from existing contracts only.
  * Workspace 404 / not-LIVE → honest `not_published` (not a broken Guest surface).
+ * Bottle passes `allowPlayFallback: false` so an empty or unknown slug never becomes PLAY.
  */
-export async function loadHotelBottleListing(slug: string | null | undefined): Promise<HotelBottleListing> {
-  const norm = normalizeHotelSlug(slug) || "play-theatrou";
-  const resolved = await resolveHotelWhiteLabel(norm, { allowPlayFallback: true });
+export async function loadHotelBottleListing(
+  slug: string | null | undefined,
+  opts?: { allowPlayFallback?: boolean },
+): Promise<HotelBottleListing> {
+  const allowPlayFallback = opts?.allowPlayFallback !== false ? true : false;
+  let norm = normalizeHotelSlug(slug);
+  if (!norm) {
+    if (!allowPlayFallback) return blankBottleListing("");
+    norm = "play-theatrou";
+  }
+  const resolved = await resolveHotelWhiteLabel(norm, { allowPlayFallback });
+  if (!allowPlayFallback && resolved.source === "play_fallback") {
+    return blankBottleListing(norm);
+  }
   const wl = resolved.config;
   const remote = resolved.remote || (await fetchRemoteHotelConfig(norm));
 
@@ -362,12 +407,12 @@ export async function loadHotelBottleListing(slug: string | null | undefined): P
   };
 }
 
-/** Format authorized nightly rate for Bottle UI. */
+/** Format authorized nightly rate for Bottle UI. English UI — do not follow a Hebrew browser locale. */
 export function formatHotelBottleRate(rates: HotelBottleRates): string | null {
   if (!rates.authorized || typeof rates.fromCentsPerNight !== "number") return null;
   const currency = rates.currency || "EUR";
   try {
-    return new Intl.NumberFormat(undefined, {
+    return new Intl.NumberFormat("en-GB", {
       style: "currency",
       currency,
       maximumFractionDigits: 0,
