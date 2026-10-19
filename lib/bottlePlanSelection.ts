@@ -3,6 +3,11 @@
  */
 import type { AthensDiscoveryHotel } from "@/lib/guest-workspace/athensHotelPlaces";
 
+export type BottleOutdoorPick = {
+  kind: "verified" | "inspiration" | "test";
+  id: string;
+};
+
 export type BottlePlanSelection = {
   destination: string;
   checkIn: string;
@@ -14,6 +19,8 @@ export type BottlePlanSelection = {
   hotelSlug?: string;
   hotelName?: string;
   partner?: boolean;
+  /** Outdoor card the guest selected. Inspiration and TEST picks are not inventory. */
+  outdoorPick?: BottleOutdoorPick;
 };
 
 const KEY = "banditour.bottle.plan.v1";
@@ -85,7 +92,16 @@ const SEARCH_KEYS = [
   "placeId",
   "hotelSlug",
   "hotelName",
+  "outdoorKind",
+  "outdoorId",
 ] as const;
+
+function outdoorPickFrom(kind: string, id: string): BottleOutdoorPick | undefined {
+  if ((kind === "verified" || kind === "inspiration" || kind === "test") && id) {
+    return { kind, id };
+  }
+  return undefined;
+}
 
 function paramValue(raw: Record<string, string | string[] | undefined>, key: string): string {
   const value = raw[key];
@@ -117,17 +133,17 @@ export function bottlePlanFromSearchParams(
   let savedName = "";
   let savedPlace = "";
   let savedSlug = "";
+  const saved = readBottlePlanSelection();
+  const savedNamesAnotherHotel = Boolean(
+    saved &&
+      ((urlName && saved.hotelName && saved.hotelName !== urlName) ||
+        (urlPlace && saved.placeId && saved.placeId !== urlPlace) ||
+        (urlSlug && saved.hotelSlug && saved.hotelSlug !== urlSlug)),
+  );
 
-  if (!checkIn || !checkOut) {
-    const saved = readBottlePlanSelection();
-    if (!saved?.checkIn || !saved.checkOut) return null;
-    const savedNamesAnotherHotel =
-      (urlName && saved.hotelName && saved.hotelName !== urlName) ||
-      (urlPlace && saved.placeId && saved.placeId !== urlPlace) ||
-      (urlSlug && saved.hotelSlug && saved.hotelSlug !== urlSlug);
-    if (savedNamesAnotherHotel) return null;
-    checkIn = saved.checkIn;
-    checkOut = saved.checkOut;
+  if ((!checkIn || !checkOut) && saved && !savedNamesAnotherHotel) {
+    checkIn = checkIn || saved.checkIn;
+    checkOut = checkOut || saved.checkOut;
     destination = destination || saved.destination;
     travelers = travelers || String(saved.travelers);
     hotelNights = hotelNights || String(saved.hotelNights);
@@ -142,19 +158,24 @@ export function bottlePlanFromSearchParams(
   const hotelName = urlName || savedName;
   const placeId = urlPlace || savedPlace;
   const hotelSlug = urlSlug || savedSlug;
+  if (!hotelName && !placeId && !hotelSlug) return null;
+  const outdoorPick =
+    outdoorPickFrom(paramValue(raw, "outdoorKind"), paramValue(raw, "outdoorId")) ||
+    (saved && !savedNamesAnotherHotel ? saved.outdoorPick : undefined);
 
-  return {
+  return sanitizeBottlePlanSelection({
     destination: destination || "Athens",
     checkIn,
     checkOut,
     travelers: Math.max(1, Number(travelers) || 2),
-    hotelNights: Math.max(1, Number(hotelNights) || 2),
+    hotelNights: Math.max(1, Number(hotelNights) || 1),
     outdoorNights: Math.max(1, Number(outdoorNights) || 1),
     placeId: placeId || undefined,
     hotelSlug: hotelSlug || undefined,
     hotelName: hotelName || undefined,
     partner: hotelSlug.length > 0,
-  };
+    outdoorPick,
+  });
 }
 
 export function bottlePlanSearchKey(sel: BottlePlanSelection): string {
@@ -200,5 +221,9 @@ export function mixSearchParams(sel: BottlePlanSelection): Record<string, string
   if (sel.placeId) qs.placeId = sel.placeId;
   if (sel.hotelName) qs.hotelName = sel.hotelName;
   if (sel.hotelSlug) qs.hotelSlug = sel.hotelSlug;
+  if (sel.outdoorPick) {
+    qs.outdoorKind = sel.outdoorPick.kind;
+    qs.outdoorId = sel.outdoorPick.id;
+  }
   return qs;
 }

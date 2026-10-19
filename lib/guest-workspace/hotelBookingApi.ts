@@ -15,12 +15,14 @@ export async function fetchHotelBookingAvailability(
   checkIn: string,
   checkOut: string,
   travelers: number,
+  roomId?: string,
 ) {
   const qs = new URLSearchParams({
     checkIn,
     checkOut,
     travelers: String(travelers),
   });
+  if (roomId) qs.set("roomId", roomId);
   return workspaceGet<{
     ok?: boolean;
     bookable?: boolean;

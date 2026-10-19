@@ -3,9 +3,10 @@
  * Partner white-label OR Google Places lodging (discovery).
  * Never routes to `/hotel/*` QR messaging.
  */
+import { useFocusEffect } from "@react-navigation/native";
 import { Image as ExpoImage } from "expo-image";
 import { Stack, useLocalSearchParams, useRouter, type Href } from "expo-router";
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
 import {
   Image,
   Linking,
@@ -32,7 +33,7 @@ import {
   loadHotelBottleListing,
   type HotelBottleListing,
 } from "@/lib/guest-workspace/hotelBottleListing";
-import { mixSearchParams, readBottlePlanSelection, writeBottlePlanSelection } from "@/lib/bottlePlanSelection";
+import { mixSearchParams, readBottlePlanSelection, writeBottlePlanSelection, type BottlePlanSelection } from "@/lib/bottlePlanSelection";
 import { PLAY_THEATROU_ORIGIN } from "@/lib/guest-workspace/shopGeo";
 import { getHotelWhiteLabel, isKnownHotelSlug } from "@/lib/hotelWhiteLabel";
 import { workspaceGet } from "@/lib/workspace/client";
@@ -108,9 +109,30 @@ export default function BottleHotelDetailScreen() {
   }>();
   const rawSlug = typeof params.slug === "string" ? params.slug : "";
   const parsed = parseBottleHotelParam(rawSlug);
-  const checkIn = typeof params.checkIn === "string" ? params.checkIn : "";
-  const checkOut = typeof params.checkOut === "string" ? params.checkOut : "";
-  const travelers = Math.max(1, Number(params.travelers) || 2);
+  const urlCheckIn = typeof params.checkIn === "string" ? params.checkIn : "";
+  const urlCheckOut = typeof params.checkOut === "string" ? params.checkOut : "";
+  const urlHotelName = typeof params.hotelName === "string" ? params.hotelName.trim() : "";
+  const placeId = parsed.kind === "place" ? parsed.id : undefined;
+  const hotelSlug = parsed.kind === "partner" ? parsed.id : undefined;
+  const [storedPlan, setStoredPlan] = useState<BottlePlanSelection | null>(() => readBottlePlanSelection());
+  useFocusEffect(
+    useCallback(() => {
+      setStoredPlan(readBottlePlanSelection());
+    }, []),
+  );
+  const savedPlan = storedPlan;
+  const savedMatchesHotel = Boolean(
+    savedPlan &&
+      ((placeId && savedPlan.placeId === placeId) ||
+        (hotelSlug && savedPlan.hotelSlug === hotelSlug) ||
+        (urlHotelName && savedPlan.hotelName === urlHotelName)),
+  );
+  const checkIn = urlCheckIn || (savedMatchesHotel ? savedPlan?.checkIn || "" : "");
+  const checkOut = urlCheckOut || (savedMatchesHotel ? savedPlan?.checkOut || "" : "");
+  const travelers = Math.max(
+    1,
+    Number(params.travelers) || (savedMatchesHotel ? savedPlan?.travelers : 0) || 2,
+  );
 
   const [listing, setListing] = useState<HotelBottleListing | null>(null);
   const [placeHotel, setPlaceHotel] = useState<AthensDiscoveryHotel | null>(null);
@@ -180,7 +202,6 @@ export default function BottleHotelDetailScreen() {
     };
   }, [parsed.kind, parsed.id, checkIn, checkOut, travelers]);
 
-  const urlHotelName = typeof params.hotelName === "string" ? params.hotelName.trim() : "";
   const partnerTitle = (
     listing?.displayName ||
     listing?.whiteLabel?.title ||
@@ -208,7 +229,9 @@ export default function BottleHotelDetailScreen() {
   const wide = width >= 900;
   const area = placeHotel?.address || listing?.location || "Athens";
   const datesLabel =
-    checkIn && checkOut ? `${humanDate(checkIn)} → ${humanDate(checkOut)}` : "Add dates in Bottle plan";
+    checkIn && checkOut
+      ? `${humanDate(checkIn)} → ${humanDate(checkOut)}`
+      : "Dates not set — outdoor discovery stays open";
   const rawSummary =
     loadState === "loading" ? "" : placeHotel?.editorialSummary || listing?.description || "";
   const summary =
@@ -222,9 +245,6 @@ export default function BottleHotelDetailScreen() {
     if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) return 0;
     return Math.max(0, Math.round((end.getTime() - start.getTime()) / 86400000));
   }, [checkIn, checkOut]);
-  const placeId = parsed.kind === "place" ? parsed.id : undefined;
-  const hotelSlug = parsed.kind === "partner" ? parsed.id : undefined;
-  const savedPlan = readBottlePlanSelection();
   const savedMatches = Boolean(
     savedPlan &&
       ((placeId && savedPlan.placeId === placeId) ||
@@ -234,18 +254,18 @@ export default function BottleHotelDetailScreen() {
   const urlHotelNights = Number(params.hotelNights);
   const urlOutdoorNights = Number(params.outdoorNights);
   const hotelNights =
-    urlHotelNights > 0
-      ? urlHotelNights
-      : savedMatches && savedPlan && savedPlan.hotelNights > 0
-        ? savedPlan.hotelNights
+    savedMatches && savedPlan && savedPlan.hotelNights > 0
+      ? savedPlan.hotelNights
+      : urlHotelNights > 0
+        ? urlHotelNights
         : totalNights >= 2
           ? Math.min(2, totalNights - 1)
           : 1;
   const outdoorNights =
-    urlOutdoorNights > 0
-      ? urlOutdoorNights
-      : savedMatches && savedPlan && savedPlan.outdoorNights > 0
-        ? savedPlan.outdoorNights
+    savedMatches && savedPlan && savedPlan.outdoorNights > 0
+      ? savedPlan.outdoorNights
+      : urlOutdoorNights > 0
+        ? urlOutdoorNights
         : totalNights >= 2
           ? Math.max(1, totalNights - hotelNights)
           : 1;
@@ -268,24 +288,26 @@ export default function BottleHotelDetailScreen() {
         : avail
           ? "Not bookable yet"
           : "Checking availability";
-  const canMix = Boolean(shownName && checkIn && checkOut);
+  const canMix = Boolean(shownName);
+  const planBase = {
+    destination:
+      (typeof params.destination === "string" && params.destination.trim()) ||
+      savedPlan?.destination ||
+      "Athens",
+    checkIn,
+    checkOut,
+    travelers,
+    hotelNights,
+    outdoorNights,
+    placeId,
+    hotelSlug,
+    hotelName: shownName,
+    partner: parsed.kind === "partner",
+    outdoorPick: savedMatchesHotel ? savedPlan?.outdoorPick : undefined,
+  };
   useEffect(() => {
     if (!shownName || !checkIn || !checkOut) return;
-    writeBottlePlanSelection({
-      destination:
-        (typeof params.destination === "string" && params.destination.trim()) ||
-        savedPlan?.destination ||
-        "Athens",
-      checkIn,
-      checkOut,
-      travelers,
-      hotelNights,
-      outdoorNights,
-      placeId,
-      hotelSlug,
-      hotelName: shownName,
-      partner: parsed.kind === "partner",
-    });
+    writeBottlePlanSelection(planBase);
   }, [
     checkIn,
     checkOut,
@@ -295,27 +317,33 @@ export default function BottleHotelDetailScreen() {
     params.destination,
     parsed.kind,
     placeId,
-    savedPlan?.destination,
+    planBase.destination,
+    planBase.hotelName,
+    savedMatchesHotel,
+    savedPlan?.outdoorPick?.id,
+    savedPlan?.outdoorPick?.kind,
     shownName,
     travelers,
   ]);
   const openMix = () => {
-    if (!shownName || !checkIn || !checkOut) return;
-    const sel = {
-      destination: savedPlan?.destination || "Athens",
-      checkIn,
-      checkOut,
-      travelers,
-      hotelNights,
-      outdoorNights,
-      placeId,
-      hotelSlug,
-      hotelName: shownName,
-      partner: parsed.kind === "partner",
-    };
-    writeBottlePlanSelection(sel);
-    const qs = new URLSearchParams({ ...mixSearchParams(sel), autorun: "1" });
+    if (!shownName) return;
+    writeBottlePlanSelection(planBase);
+    const qs = new URLSearchParams({ ...mixSearchParams(planBase), autorun: "1" });
     router.push(`/bottleMix?${qs.toString()}` as Href);
+  };
+  const openHotelOnly = () => {
+    if (!shownName) return;
+    writeBottlePlanSelection(planBase);
+    const qs = new URLSearchParams({
+      hotelName: shownName,
+      travelers: String(travelers),
+      destination: planBase.destination,
+    });
+    if (hotelSlug) qs.set("slug", hotelSlug);
+    if (placeId) qs.set("placeId", placeId);
+    if (checkIn) qs.set("checkIn", checkIn);
+    if (checkOut) qs.set("checkOut", checkOut);
+    router.push(`/bottleBookHotel?${qs.toString()}` as Href);
   };
   return (
     <ScrollView style={styles.screen} contentContainerStyle={styles.content} testID="bottle-hotel-detail">
@@ -379,7 +407,9 @@ export default function BottleHotelDetailScreen() {
           {placeHotel?.address || listing?.address || (parsed.id === "play-theatrou" ? "Psyrri, Athens" : area)}
         </Text>
         <Text style={styles.meta} testID="bottle-hotel-plan">
-          {datesLabel} · {hotelNights} hotel + {outdoorNights} outdoor
+          {checkIn && checkOut
+            ? `${datesLabel} · ${hotelNights} hotel + ${outdoorNights} outdoor`
+            : datesLabel}
         </Text>
         <Text style={styles.publish} testID="bottle-hotel-availability">
           {availabilityLabel}
@@ -393,6 +423,16 @@ export default function BottleHotelDetailScreen() {
           testID="bottle-hotel-mix-cta"
         >
           <Text style={styles.ctaText}>MIX MY STAY</Text>
+        </Pressable>
+        <Pressable
+          style={[styles.ctaGhost, !shownName && styles.ctaOff]}
+          onPress={openHotelOnly}
+          disabled={!shownName}
+          accessibilityRole="button"
+          accessibilityState={{ disabled: !shownName }}
+          testID="bottle-hotel-book-cta"
+        >
+          <Text style={styles.ctaGhostText}>Book Hotel Only</Text>
         </Pressable>
         {summary ? (
           <View style={styles.block}>
