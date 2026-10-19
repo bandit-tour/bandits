@@ -32,7 +32,9 @@ import {
   loadHotelBottleListing,
   type HotelBottleListing,
 } from "@/lib/guest-workspace/hotelBottleListing";
+import { mixSearchParams, writeBottlePlanSelection } from "@/lib/bottlePlanSelection";
 import { getHotelWhiteLabel, isKnownHotelSlug } from "@/lib/hotelWhiteLabel";
+import { workspaceGet } from "@/lib/workspace/client";
 
 type Frame = { key: string; remote?: string; local?: ImageSourcePropType };
 
@@ -76,7 +78,11 @@ export default function BottleHotelDetailScreen() {
   const [attribution, setAttribution] = useState("Powered by Google");
   const [loadState, setLoadState] = useState<"loading" | "ready" | "error">("loading");
   const [viewer, setViewer] = useState<{ frames: Frame[]; index: number; title: string } | null>(null);
-
+  const [avail, setAvail] = useState<{
+    bookable?: boolean;
+    rooms?: Array<{ id: string; name: string; totalCents: number | null }>;
+    reason?: string;
+  } | null>(null);
   useEffect(() => {
     let alive = true;
     setLoadState("loading");
@@ -87,6 +93,7 @@ export default function BottleHotelDetailScreen() {
         setReviews(res.reviews || []);
         setAttribution(res.attribution || "Powered by Google");
         setListing(null);
+        setAvail(null);
         setLoadState(res.hotel ? "ready" : "error");
       });
     } else {
@@ -101,6 +108,37 @@ export default function BottleHotelDetailScreen() {
       alive = false;
     };
   }, [parsed.kind, parsed.id]);
+
+  useEffect(() => {
+    let alive = true;
+    if (parsed.kind === "place" || !checkIn || !checkOut) {
+      setAvail(null);
+      return () => {
+        alive = false;
+      };
+    }
+    void workspaceGet<{
+      bookable?: boolean;
+      reason?: string;
+      availability?: { rooms?: Array<{ id: string; name: string; totalCents: number | null }> };
+    }>(
+      `/api/public/hotels/${encodeURIComponent(parsed.id)}/booking?checkIn=${encodeURIComponent(checkIn)}&checkOut=${encodeURIComponent(checkOut)}&travelers=${travelers}`,
+    ).then((res) => {
+      if (!alive) return;
+      if (!res.ok) {
+        setAvail({ bookable: false, reason: res.detail || "availability_unavailable", rooms: [] });
+        return;
+      }
+      setAvail({
+        bookable: Boolean(res.data.bookable),
+        reason: res.data.reason,
+        rooms: res.data.availability?.rooms || [],
+      });
+    });
+    return () => {
+      alive = false;
+    };
+  }, [parsed.kind, parsed.id, checkIn, checkOut, travelers]);
 
   const partnerName =
     listing?.whiteLabel?.title ||
@@ -136,7 +174,54 @@ export default function BottleHotelDetailScreen() {
         listing?.description ||
         `${name} is your first sleep in Athens. Mix pairs this hotel with a verified second sleep outside the city.`;
   const rateLabel = listing ? formatHotelBottleRate(listing.rates) : null;
-  const bookUrl = placeHotel?.websiteUri || placeHotel?.googleMapsUri || null;
+  const mapUrl = placeHotel?.googleMapsUri || null;
+  const totalNights = useMemo(() => {
+    if (!checkIn || !checkOut) return 0;
+    const start = new Date(`${checkIn}T00:00:00`);
+    const end = new Date(`${checkOut}T00:00:00`);
+    if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) return 0;
+    return Math.max(0, Math.round((end.getTime() - start.getTime()) / 86400000));
+  }, [checkIn, checkOut]);
+  const openMix = () => {
+    if (!checkIn || !checkOut || totalNights < 2) {
+      router.push("/travelBottle" as Href);
+      return;
+    }
+    const hotelNights = Math.min(2, totalNights - 1);
+    const sel = {
+      destination: "Athens",
+      checkIn,
+      checkOut,
+      travelers,
+      hotelNights,
+      outdoorNights: totalNights - hotelNights,
+      placeId: parsed.kind === "place" ? parsed.id : undefined,
+      hotelSlug: parsed.kind === "partner" ? parsed.id : undefined,
+      hotelName: name,
+      partner: parsed.kind === "partner",
+    };
+    writeBottlePlanSelection(sel);
+    const qs = new URLSearchParams({ ...mixSearchParams(sel), autorun: "1" });
+    router.push(`/bottleMix?${qs.toString()}` as Href);
+  };
+  const backToPlan = () => {
+    if (name && checkIn && checkOut) {
+      const hotelNights = totalNights >= 2 ? Math.min(2, totalNights - 1) : 1;
+      writeBottlePlanSelection({
+        destination: "Athens",
+        checkIn,
+        checkOut,
+        travelers,
+        hotelNights,
+        outdoorNights: totalNights >= 2 ? totalNights - hotelNights : 1,
+        placeId: parsed.kind === "place" ? parsed.id : undefined,
+        hotelSlug: parsed.kind === "partner" ? parsed.id : undefined,
+        hotelName: name,
+        partner: parsed.kind === "partner",
+      });
+    }
+    router.push("/travelBottle" as Href);
+  };
 
   return (
     <ScrollView style={styles.screen} contentContainerStyle={styles.content} testID="bottle-hotel-detail">
@@ -226,7 +311,7 @@ export default function BottleHotelDetailScreen() {
             value={
               rateLabel
                 ? `From ${rateLabel} / night`
-                : "Live room rates appear via the hotel’s official booking link when available."
+                : "No contracted room rate for these dates. This hotel is not bookable here until inventory is authorized."
             }
           />
           {placeHotel?.phone ? <Fact label="Phone" value={placeHotel.phone} /> : null}
@@ -295,29 +380,59 @@ export default function BottleHotelDetailScreen() {
         <Text style={styles.attribution}>{attribution}</Text>
 
         <View style={styles.ctaStack}>
-          {bookUrl ? (
+          {avail?.bookable && avail.rooms?.some((r) => r.totalCents != null) ? (
             <Pressable
               style={styles.cta}
-              onPress={() => void Linking.openURL(bookUrl)}
-              accessibilityRole="link"
-              testID="bottle-hotel-book-handoff"
+              testID="bottle-hotel-book-banditour"
+              onPress={() => {
+                const room = avail.rooms!.find((r) => r.totalCents != null);
+                if (!room || !checkIn || !checkOut) return;
+                const qs = new URLSearchParams({
+                  slug: parsed.id,
+                  checkIn,
+                  checkOut,
+                  travelers: String(travelers),
+                  roomId: room.id,
+                });
+                router.push(`/bottleBookHotel?${qs.toString()}` as Href);
+              }}
             >
               <Text style={styles.ctaText}>
-                {placeHotel?.websiteUri ? "Book on hotel site" : "Open in Google Maps"}
+                {`Book through banDiTour · €${Math.round((avail.rooms.find((r) => r.totalCents != null)?.totalCents || 0) / 100)} · no fee`}
               </Text>
+            </Pressable>
+          ) : placeHotel ? (
+            <Text style={styles.gapNote} testID="bottle-hotel-nonbookable">
+              Discoverable on Places — not bookable in banDiTour until this hotel is contracted with live
+              inventory.
+            </Text>
+          ) : avail && !avail.bookable ? (
+            <Text style={styles.gapNote} testID="bottle-hotel-no-inventory">
+              Partner hotel — rooms for these dates are not available to book yet
+              {avail.reason ? ` (${avail.reason})` : ""}.
+            </Text>
+          ) : null}
+          {mapUrl && !avail?.bookable ? (
+            <Pressable
+              style={styles.ctaGhost}
+              onPress={() => void Linking.openURL(mapUrl)}
+              accessibilityRole="link"
+              testID="bottle-hotel-map-link"
+            >
+              <Text style={styles.ctaGhostText}>Open in Google Maps</Text>
             </Pressable>
           ) : null}
           <Pressable
-            style={bookUrl ? styles.ctaGhost : styles.cta}
-            onPress={() => router.push("/travelBottle" as Href)}
+            style={styles.ctaGhost}
+            onPress={openMix}
             accessibilityRole="button"
             testID="bottle-hotel-mix-cta"
           >
-            <Text style={bookUrl ? styles.ctaGhostText : styles.ctaText}>Mix with a second sleep</Text>
+            <Text style={styles.ctaGhostText}>Mix with a second sleep</Text>
           </Pressable>
           <Pressable
             style={styles.ctaGhost}
-            onPress={() => router.push("/travelBottle" as Href)}
+            onPress={backToPlan}
             testID="bottle-hotel-back-to-plan"
           >
             <Text style={styles.ctaGhostText}>Back to Bottle plan</Text>
@@ -413,6 +528,14 @@ const styles = StyleSheet.create({
     borderColor: "#D4CBBE",
   },
   ctaGhostText: { color: "#3A3228", fontSize: 15, fontWeight: "600" },
+  unavailableCard: {
+    padding: 14,
+    borderRadius: 14,
+    backgroundColor: "#EDE7DC",
+    borderWidth: 1,
+    borderColor: "#D4CBBE",
+  },
+  unavailableTitle: { fontSize: 15, fontWeight: "700", color: "#1A1510", marginBottom: 6 },
   missingPhoto: { backgroundColor: "#E8E2D8" },
   lightbox: { flex: 1, backgroundColor: "#0E0C0A" },
   lightboxBar: {

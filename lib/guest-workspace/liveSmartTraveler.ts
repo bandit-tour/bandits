@@ -11,6 +11,7 @@ import {
   type SmartTravelerGuestPrivilege,
   type SmartTravelerPartner,
 } from "@/lib/guest-workspace/productWorlds";
+import { sanitizeSmartTravelerVisibleText } from "@/lib/guest-workspace/smartTravelerDisplay";
 
 export type SmartTravelerCatalogEntry = SmartTravelerPartner & {
   /** Editorial seed — discovery only, no server redemption. */
@@ -139,10 +140,13 @@ function mapGuestPrivilege(
 ): SmartTravelerGuestPrivilege | undefined {
   const offer = offers?.[0];
   if (!offer?.id) return undefined;
+  const label = sanitizeSmartTravelerVisibleText(offer.title);
+  const detail = sanitizeSmartTravelerVisibleText(offer.detail || offer.title);
+  if (!label) return undefined;
   return {
     id: offer.id,
-    label: offer.title,
-    detail: offer.detail || offer.title,
+    label,
+    detail: detail || label,
     kind: mapPrivilegeKind(offer.benefitType),
   };
 }
@@ -180,13 +184,18 @@ export function mapWorkspaceSmartTraveler(row: WorkspaceSmartTravelerRow): Smart
           .join(" ")
       : "Local find");
   const neighborhood = neighborhoodFromLocation(row.location, row.neighborhood, row.city);
-  const story = row.ownerStory || row.story || row.description || row.businessName;
-  const whyVisit = row.whyVisit || row.unique || row.description || story;
+  const businessName = sanitizeSmartTravelerVisibleText(row.businessName);
+  const story = sanitizeSmartTravelerVisibleText(
+    row.ownerStory || row.story || row.description || businessName,
+  );
+  const whyVisit = sanitizeSmartTravelerVisibleText(
+    row.whyVisit || row.unique || row.description || story,
+  );
   const guestPrivilege = mapGuestPrivilege(row.offers);
   const offers = (row.offers || []).map((o) => ({
     id: o.id,
-    title: o.title,
-    detail: o.detail || o.title,
+    title: sanitizeSmartTravelerVisibleText(o.title),
+    detail: sanitizeSmartTravelerVisibleText(o.detail || o.title),
     benefitType: o.benefitType || "Hotel Guest Special",
     hotelBenefit: o.hotelBenefit ?? true,
     uniqueCode: o.uniqueCode,
@@ -194,17 +203,21 @@ export function mapWorkspaceSmartTraveler(row: WorkspaceSmartTravelerRow): Smart
 
   return {
     id: row.id,
-    businessName: row.businessName,
+    businessName,
     typeLabel,
     neighborhood,
     location: row.location || neighborhood,
     hours: row.hours || "Ask when you arrive",
-    banditLine: row.unique || whyVisit,
+    banditLine: sanitizeSmartTravelerVisibleText(row.unique) || whyVisit,
     curator: "Local recommendation",
     story,
     whyVisit,
-    lookFor: row.atmosphere || row.signatureProduct || "Ask the person behind the counter what they love this week.",
-    signatureProduct: row.signatureProduct || "",
+    lookFor: sanitizeSmartTravelerVisibleText(
+      row.atmosphere ||
+        row.signatureProduct ||
+        "Ask the person behind the counter what they love this week.",
+    ),
+    signatureProduct: sanitizeSmartTravelerVisibleText(row.signatureProduct) || "",
     imageUrl,
     gallery,
     filterTags: mapFilterTags(row.partnerType, typeLabel),
@@ -212,8 +225,8 @@ export function mapWorkspaceSmartTraveler(row: WorkspaceSmartTravelerRow): Smart
     offers,
     coupons: (row.coupons || []).map((c) => ({
       id: c.id,
-      title: c.title,
-      detail: c.detail || c.title,
+      title: sanitizeSmartTravelerVisibleText(c.title),
+      detail: sanitizeSmartTravelerVisibleText(c.detail || c.title),
     })),
   };
 }

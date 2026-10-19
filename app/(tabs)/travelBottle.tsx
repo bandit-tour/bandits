@@ -38,6 +38,13 @@ import {
   type AthensDiscoveryHotel,
 } from "@/lib/guest-workspace/athensHotelPlaces";
 import { loadHotelBottleListing, type HotelBottleListing } from "@/lib/guest-workspace/hotelBottleListing";
+import {
+  mixSearchParams,
+  readBottlePlanSelection,
+  selectionFromHotel,
+  writeBottlePlanSelection,
+  type BottlePlanSelection,
+} from "@/lib/bottlePlanSelection";
 import { getHotelWhiteLabel, isKnownHotelSlug, normalizeHotelSlug } from "@/lib/hotelWhiteLabel";
 import { workspaceGet } from "@/lib/workspace/client";
 import { useGuestLifecycle } from "@/lib/guest-lifecycle/useGuestLifecycle";
@@ -254,8 +261,7 @@ function HotelStayPresentation({
   nightsLabel,
   datesLabel,
   onViewHotel,
-  onHotelServices,
-  onContactHotel,
+  onBuildMix,
 }: {
   listing: HotelBottleListing | null;
   fallbackName: string;
@@ -263,8 +269,7 @@ function HotelStayPresentation({
   nightsLabel: string;
   datesLabel: string;
   onViewHotel: () => void;
-  onHotelServices: () => void;
-  onContactHotel: () => void;
+  onBuildMix: () => void;
 }) {
   const name = listing?.whiteLabel?.title || listing?.displayName || fallbackName;
   const area = listing?.location || city;
@@ -374,28 +379,38 @@ function HotelStayPresentation({
         ) : null}
         <View style={styles.hotelCtas}>
           <Pressable style={styles.hotelCta} onPress={onViewHotel} accessibilityRole="button" testID="bottle-view-hotel">
-            <Text style={styles.hotelCtaText}>Open hotel profile</Text>
+            <Text style={styles.hotelCtaText}>Full hotel profile</Text>
           </Pressable>
           <Pressable
             style={styles.hotelCtaGhost}
-            onPress={onHotelServices}
+            onPress={onBuildMix}
             accessibilityRole="button"
-            testID="bottle-hotel-services"
+            testID="bottle-build-mix-from-plan"
           >
-            <Text style={styles.hotelCtaGhostText}>In-stay services</Text>
-          </Pressable>
-          <Pressable
-            style={styles.hotelCtaGhost}
-            onPress={onContactHotel}
-            accessibilityRole="button"
-            testID="bottle-contact-hotel"
-          >
-            <Text style={styles.hotelCtaGhostText}>Contact</Text>
+            <Text style={styles.hotelCtaGhostText}>Build My Mix</Text>
           </Pressable>
         </View>
       </View>
     </View>
   );
+}
+
+function hotelFromSavedPlan(saved: BottlePlanSelection | null): AthensDiscoveryHotel | null {
+  if (!saved?.hotelName) return null;
+  const slug = saved.hotelSlug ? normalizeHotelSlug(saved.hotelSlug) : undefined;
+  return {
+    placeId: saved.placeId || (slug ? `partner:${slug}` : "saved"),
+    slug,
+    name: saved.hotelName,
+    address: saved.destination || "Athens",
+    photoUrls: [],
+    rating: null,
+    userRatingCount: null,
+    googleMapsUri: null,
+    websiteUri: null,
+    partner: Boolean(saved.partner || slug),
+    source: "saved",
+  };
 }
 
 /** Travel in a Bottle — trip planning: hotel + second stay = one curated journey. */
@@ -416,10 +431,11 @@ export function BottleProductScreen() {
     activeStay,
   } = useGuestLifecycle();
 
-  const [destination, setDestination] = useState("Athens");
-  const [checkIn, setCheckIn] = useState("");
-  const [checkOut, setCheckOut] = useState("");
-  const [travelers, setTravelers] = useState(2);
+  const [savedPlan] = useState(() => readBottlePlanSelection());
+  const [destination, setDestination] = useState(savedPlan?.destination || "Athens");
+  const [checkIn, setCheckIn] = useState(savedPlan?.checkIn || "");
+  const [checkOut, setCheckOut] = useState(savedPlan?.checkOut || "");
+  const [travelers, setTravelers] = useState(savedPlan?.travelers && savedPlan.travelers > 0 ? savedPlan.travelers : 2);
   const [formError, setFormError] = useState<string | null>(null);
   const [searched, setSearched] = useState(false);
   const [showVideo, setShowVideo] = useState(false);
@@ -428,11 +444,13 @@ export function BottleProductScreen() {
   const [catalogMode, setCatalogMode] = useState<BottleCatalogMode | null>(null);
   const [catalogError, setCatalogError] = useState<string | null>(null);
   const [mixing, setMixing] = useState(false);
+  /** Guest journey mode — Book Hotel (A) vs Mix Your Stay (B). No commission jargon. */
+  const [journeyMode, setJourneyMode] = useState<"hotel" | "mix">("mix");
   const [inspiration, setInspiration] = useState(false);
   const [notifyOk, setNotifyOk] = useState(false);
   const [saveMsg, setSaveMsg] = useState<string | null>(null);
   const [activeFilter, setActiveFilter] = useState<string | null>(null);
-  const [selectedHotel, setSelectedHotel] = useState<AthensDiscoveryHotel | null>(null);
+  const [selectedHotel, setSelectedHotel] = useState<AthensDiscoveryHotel | null>(() => hotelFromSavedPlan(savedPlan));
   const [hotelSearch, setHotelSearch] = useState("");
   const [hotelDirectory, setHotelDirectory] = useState<AthensDiscoveryHotel[]>([]);
   const [hotelNextPage, setHotelNextPage] = useState<string | null>(null);
@@ -459,16 +477,21 @@ export function BottleProductScreen() {
     return nights >= 1 ? nights : null;
   }, [checkIn, checkOut]);
 
-  const hotelNights = totalNights && totalNights >= 2 ? totalNights - 1 : 1;
+  const [hotelNightsPlan, setHotelNightsPlan] = useState(savedPlan?.hotelNights && savedPlan.hotelNights > 0 ? savedPlan.hotelNights : 2);
+  const hotelNights =
+    totalNights && totalNights >= 2
+      ? Math.min(Math.max(1, hotelNightsPlan), totalNights - 1)
+      : 1;
+  const outdoorNights = totalNights && totalNights >= 2 ? totalNights - hotelNights : 0;
   const plannedHotelSlug = normalizeHotelSlug(
     connectedHotel?.slug || selectedHotel?.slug || (selectedHotel?.partner ? selectedHotel.placeId.replace(/^partner:/, "") : "") || "",
   );
   const selectedListing = plannedHotelSlug ? hotelListings[plannedHotelSlug] ?? null : null;
   const hotelName =
-    connectedHotel?.name ||
     selectedHotel?.name ||
     selectedListing?.displayName ||
     selectedListing?.whiteLabel?.title ||
+    connectedHotel?.name ||
     "";
   const datesReady = Boolean(checkIn && checkOut && totalNights && totalNights >= 2);
   const canMix = destination.trim().length >= 2 && datesReady && travelers >= 1 && !mixing && Boolean(hotelName);
@@ -498,9 +521,6 @@ export function BottleProductScreen() {
       setHotelAttr(result.attribution);
       setHotelNextPage(result.nextPageToken);
       setHotelDirectory((prev) => (opts?.append ? [...prev, ...result.hotels] : result.hotels));
-      if (!opts?.append && result.hotels[0] && !selectedHotel) {
-        setSelectedHotel(result.hotels[0]);
-      }
       const partnerSlugs = result.hotels
         .filter((h) => h.partner && h.slug)
         .map((h) => h.slug!)
@@ -513,12 +533,15 @@ export function BottleProductScreen() {
       }
       setHotelLoading(false);
     },
-    [hotelSearch, selectedHotel],
+    [hotelSearch],
   );
 
   React.useEffect(() => {
-    if (connectedHotel?.slug) {
-      setSelectedHotel({
+    if (savedPlan?.hotelName) return;
+    if (!connectedHotel?.slug) return;
+    setSelectedHotel((current) => {
+      if (current && current.source !== "stay") return current;
+      return {
         placeId: `partner:${normalizeHotelSlug(connectedHotel.slug)}`,
         slug: normalizeHotelSlug(connectedHotel.slug),
         name: connectedHotel.name,
@@ -530,9 +553,25 @@ export function BottleProductScreen() {
         websiteUri: null,
         partner: true,
         source: "stay",
-      });
-    }
-  }, [connectedHotel?.slug, connectedHotel?.name, connectedHotel?.city]);
+      };
+    });
+  }, [connectedHotel?.slug, connectedHotel?.name, connectedHotel?.city, savedPlan?.hotelName]);
+
+  React.useEffect(() => {
+    if (!selectedHotel?.name || !checkIn || !checkOut) return;
+    writeBottlePlanSelection({
+      destination: destination.trim() || "Athens",
+      checkIn,
+      checkOut,
+      travelers,
+      hotelNights,
+      outdoorNights: Math.max(1, outdoorNights || 1),
+      placeId: selectedHotel.placeId,
+      hotelSlug: selectedHotel.slug,
+      hotelName: selectedHotel.name,
+      partner: Boolean(selectedHotel.partner),
+    });
+  }, [checkIn, checkOut, destination, hotelNights, outdoorNights, selectedHotel, travelers]);
 
   React.useEffect(() => {
     let cancelled = false;
@@ -785,14 +824,35 @@ export function BottleProductScreen() {
       <ScrollView style={styles.screen} contentContainerStyle={styles.content}>
         <View style={styles.intro} testID="bottle-entry">
           <Text style={styles.kicker}>Travel in a Bottle</Text>
-          <Text style={styles.title}>Two sleeps. One extraordinary trip.</Text>
+          <Text style={styles.title}>A little hotel. A little wild.</Text>
           <Text style={styles.lead}>
-            Pick an Athens hotel, choose dates, then Mix — we match a verified second sleep around your stay.
+            Book a hotel, or mix hotel nights with an outdoor stay — one journey, final price before you pay. No
+            booking fee.
           </Text>
+          <View style={styles.modeRow} testID="bottle-journey-mode">
+            <Pressable
+              testID="bottle-mode-hotel"
+              style={[styles.modeChip, journeyMode === "hotel" && styles.modeChipOn]}
+              onPress={() => setJourneyMode("hotel")}
+              accessibilityRole="button"
+              accessibilityState={{ selected: journeyMode === "hotel" }}
+            >
+              <Text style={[styles.modeChipText, journeyMode === "hotel" && styles.modeChipTextOn]}>Book a hotel</Text>
+            </Pressable>
+            <Pressable
+              testID="bottle-mode-mix"
+              style={[styles.modeChip, journeyMode === "mix" && styles.modeChipOn]}
+              onPress={() => setJourneyMode("mix")}
+              accessibilityRole="button"
+              accessibilityState={{ selected: journeyMode === "mix" }}
+            >
+              <Text style={[styles.modeChipText, journeyMode === "mix" && styles.modeChipTextOn]}>Mix your stay</Text>
+            </Pressable>
+          </View>
         </View>
 
         <View style={[styles.askPanel, mode !== "mobile" && styles.askPanelRow]} testID="bottle-questions">
-          <View style={styles.askField}>
+          <View style={[styles.askField, mode !== "mobile" && styles.askFieldRow]}>
             <Text style={styles.planLabel}>Where?</Text>
             <View style={styles.planChips}>
               {BOTTLE_PLAN_CITIES.map((city) => (
@@ -815,7 +875,7 @@ export function BottleProductScreen() {
               style={styles.askInput}
             />
           </View>
-          <View style={styles.askField}>
+          <View style={[styles.askField, mode !== "mobile" && styles.askFieldRow]}>
             <Text style={styles.planLabel}>When?</Text>
             <View style={styles.planChips}>
               {BOTTLE_PLAN_DATES.filter((d) => d.id !== "custom").map((d) => (
@@ -839,7 +899,7 @@ export function BottleProductScreen() {
               }}
             />
           </View>
-          <View style={styles.askField}>
+          <View style={[styles.askField, mode !== "mobile" && styles.askFieldRow]}>
             <Text style={styles.planLabel}>Travelers</Text>
             <View style={styles.travelerRow}>
               <Pressable
@@ -872,6 +932,34 @@ export function BottleProductScreen() {
             First sleep: {connectedHotel.name}
             {connectedHotel.city ? ` · ${connectedHotel.city}` : ""}
           </Text>
+        ) : null}
+
+        {datesReady && totalNights && totalNights >= 2 ? (
+          <View style={styles.planPanel} testID="bottle-night-split">
+            <Text style={styles.planKicker}>Split nights</Text>
+            <Text style={styles.planLead}>
+              {hotelNights} hotel · {outdoorNights} outdoor
+            </Text>
+            <View style={styles.travelerRow}>
+              <Pressable
+                style={styles.travelerBtn}
+                onPress={() => setHotelNightsPlan((n) => Math.max(1, n - 1))}
+                testID="bottle-hotel-nights-dec"
+              >
+                <Text style={styles.travelerBtnText}>−</Text>
+              </Pressable>
+              <Text style={styles.travelerCount}>{hotelNights}</Text>
+              <Pressable
+                style={styles.travelerBtn}
+                onPress={() =>
+                  setHotelNightsPlan((n) => Math.min((totalNights || 3) - 1, n + 1))
+                }
+                testID="bottle-hotel-nights-inc"
+              >
+                <Text style={styles.travelerBtnText}>+</Text>
+              </Pressable>
+            </View>
+          </View>
         ) : null}
 
         <View style={styles.planPanel} testID="bottle-athens-hotels">
@@ -1013,8 +1101,32 @@ export function BottleProductScreen() {
               : `/bottleHotel/${plannedHotelSlug}`;
             router.push((`${href}?${qs}`) as Href);
           }}
-          onHotelServices={() => router.push("/hotelier" as Href)}
-          onContactHotel={() => router.push("/hotelier/concierge" as Href)}
+          onBuildMix={() => {
+            if (!selectedHotel && !plannedHotelSlug) return;
+            const base = selectedHotel
+              ? selectionFromHotel(selectedHotel, {
+                  destination,
+                  checkIn,
+                  checkOut,
+                  travelers,
+                  hotelNights,
+                  outdoorNights: outdoorNights || 1,
+                })
+              : {
+                  destination,
+                  checkIn,
+                  checkOut,
+                  travelers,
+                  hotelNights,
+                  outdoorNights: outdoorNights || 1,
+                  hotelSlug: plannedHotelSlug,
+                  hotelName: hotelName || "Athens hotel",
+                  partner: true,
+                };
+            writeBottlePlanSelection(base);
+            const qs = new URLSearchParams({ ...mixSearchParams(base), autorun: "1" });
+            router.push(`/bottleMix?${qs.toString()}` as Href);
+          }}
         />
 
         <View style={styles.planPanel} testID="bottle-external-stays">
@@ -1034,46 +1146,70 @@ export function BottleProductScreen() {
                   Host tools are ready — bookable inventory waits on published listings.
                 </Text>
               ) : null}
-              <Pressable
-                style={styles.hotelCta}
-                onPress={() =>
-                  void Linking.openURL("https://banditour-workspace.vercel.app/join").catch(() => undefined)
-                }
-                accessibilityRole="link"
-                testID="bottle-host-onboarding"
-              >
-                <Text style={styles.hotelCtaText}>List a second sleep</Text>
-              </Pressable>
             </View>
           ) : (
             externalStays.map((stay) => <ExternalStayRow key={stay.id} stay={stay} />)
           )}
         </View>
 
-        <Text style={styles.section} testID="bottle-second-stay-intro">
-          Mix your journey
-        </Text>
-        <Text style={styles.lead}>
-          One tap pairs your hotel nights with a verified second sleep — photos, dates, and prices when
-          available.
-        </Text>
+        {journeyMode === "hotel" ? (
+          <View style={styles.planPanel} testID="bottle-hotel-only-cta">
+            <Text style={styles.planKicker}>Book a hotel</Text>
+            <Text style={styles.planLead}>
+              Open a partner hotel profile, choose a room when inventory is contracted, and pay through
+              banDiTour. Discovery listings stay non-bookable until inventory is authorized. No booking fee.
+            </Text>
+            <Pressable
+              style={[styles.mixCta, !selectedHotel && !plannedHotelSlug && styles.mixCtaDisabled]}
+              disabled={!selectedHotel && !plannedHotelSlug}
+              onPress={() => {
+                if (!selectedHotel && !plannedHotelSlug) return;
+                const qs = [
+                  checkIn ? `checkIn=${encodeURIComponent(checkIn)}` : "",
+                  checkOut ? `checkOut=${encodeURIComponent(checkOut)}` : "",
+                  `travelers=${travelers}`,
+                  "mode=hotel",
+                ]
+                  .filter(Boolean)
+                  .join("&");
+                const href = selectedHotel
+                  ? bottleHotelHref(selectedHotel)
+                  : `/bottleHotel/${plannedHotelSlug}`;
+                router.push((`${href}?${qs}`) as Href);
+              }}
+              testID="bottle-book-hotel-cta"
+            >
+              <Text style={styles.mixCtaText}>Continue to hotel</Text>
+            </Pressable>
+          </View>
+        ) : (
+          <>
+            <Text style={styles.section} testID="bottle-second-stay-intro">
+              Mix your stay
+            </Text>
+            <Text style={styles.lead}>
+              One tap pairs your hotel nights with a verified outdoor stay — final price before payment. No
+              booking fee.
+            </Text>
 
-        {formError ? (
-          <Text style={styles.formError} testID="bottle-form-error">
-            {formError}
-          </Text>
-        ) : null}
+            {formError ? (
+              <Text style={styles.formError} testID="bottle-form-error">
+                {formError}
+              </Text>
+            ) : null}
 
-        <Pressable
-          style={[styles.mixCta, !canMix && styles.mixCtaDisabled]}
-          disabled={!canMix}
-          onPress={() => void mixSleepingExperiences()}
-          accessibilityRole="button"
-          accessibilityLabel="Mix My Sleeping Experiences"
-          testID="travel-bottle-mix-cta"
-        >
-          <Text style={styles.mixCtaText}>{mixing ? "Mixing…" : "Mix My Sleeping Experiences"}</Text>
-        </Pressable>
+            <Pressable
+              style={[styles.mixCta, !canMix && styles.mixCtaDisabled]}
+              disabled={!canMix}
+              onPress={() => void mixSleepingExperiences()}
+              accessibilityRole="button"
+              accessibilityLabel="Mix your stay"
+              testID="travel-bottle-mix-cta"
+            >
+              <Text style={styles.mixCtaText}>{mixing ? "Mixing…" : "Mix your stay"}</Text>
+            </Pressable>
+          </>
+        )}
 
         {searched && catalogError ? (
         <View style={styles.errorBanner} testID="bottle-catalog-error">
@@ -1192,6 +1328,18 @@ const styles = StyleSheet.create({
     paddingTop: 28,
     paddingBottom: 8,
   },
+  modeRow: { flexDirection: "row", gap: 10, marginTop: 16 },
+  modeChip: {
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: "#D4CBBE",
+    backgroundColor: "#FFFCF7",
+  },
+  modeChipOn: { backgroundColor: "#1A1510", borderColor: "#1A1510" },
+  modeChipText: { fontSize: 14, fontWeight: "700", color: "#3A3228" },
+  modeChipTextOn: { color: "#FFFCF7" },
   kicker: {
     fontSize: 11,
     fontWeight: "800",
@@ -1308,7 +1456,8 @@ const styles = StyleSheet.create({
   mixCtaDisabled: { opacity: 0.4 },
   askPanel: { paddingHorizontal: 20, gap: 16, marginTop: 8 },
   askPanelRow: { flexDirection: "row", alignItems: "flex-start" },
-  askField: { flex: 1, minWidth: 200 },
+  askField: { width: "100%" },
+  askFieldRow: { flex: 1, minWidth: 200, width: "auto" },
   askInput: {
     marginTop: 8,
     borderWidth: 1,

@@ -33,8 +33,6 @@ import {
   offerMarketplaceColumns,
 } from "@/lib/imageRatios";
 import { useUpperTabHost } from "@/contexts/UpperTabHostContext";
-import SmartTravelerListingCouponRow from "@/components/SmartTravelerListingCoupon";
-import { resolveSmartTravelerListingCoupon } from "@/lib/guest-workspace/smartTravelerListingCode";
 
 const GRID_GAP = 14;
 const GRID_PAD = 16;
@@ -222,10 +220,6 @@ function LocalFindCard({
   editorial?: boolean;
 }) {
   const imageH = Math.max(200, Math.min(320, width));
-  const listingCoupon = resolveSmartTravelerListingCoupon({
-    ...place,
-    isEditorial: editorial,
-  });
   return (
     <Pressable
       style={({ pressed }) => [
@@ -295,11 +289,9 @@ function LocalFindCard({
             Participating offer: {place.guestPrivilege.label}
           </Text>
         ) : null}
-        <SmartTravelerListingCouponRow
-          coupon={listingCoupon}
-          compact
-          testID={`st-card-coupon-${place.id}`}
-        />
+        <Text style={styles.couponHint} numberOfLines={1}>
+          {editorial ? "Preview inside profile" : "Coupon inside profile"}
+        </Text>
       </View>
     </Pressable>
   );
@@ -488,5 +480,12 @@ const styles = StyleSheet.create({
     color: color.muted,
     marginTop: 8,
     lineHeight: 16,
+  },
+  couponHint: {
+    fontSize: 11,
+    fontWeight: "700",
+    color: color.muted,
+    marginTop: 10,
+    letterSpacing: 0.2,
   },
 });

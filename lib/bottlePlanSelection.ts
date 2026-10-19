@@ -1,0 +1,167 @@
+/**
+ * Travel in a Bottle — persist guest hotel + trip params across profile / mix / refresh.
+ */
+import type { AthensDiscoveryHotel } from "@/lib/guest-workspace/athensHotelPlaces";
+
+export type BottlePlanSelection = {
+  destination: string;
+  checkIn: string;
+  checkOut: string;
+  travelers: number;
+  hotelNights: number;
+  outdoorNights: number;
+  placeId?: string;
+  hotelSlug?: string;
+  hotelName?: string;
+  partner?: boolean;
+};
+
+const KEY = "banditour.bottle.plan.v1";
+
+function storage(): Storage | null {
+  try {
+    if (typeof window !== "undefined" && window.sessionStorage) return window.sessionStorage;
+  } catch {
+    /* private mode */
+  }
+  return null;
+}
+
+export function readBottlePlanSelection(): BottlePlanSelection | null {
+  const raw = storage()?.getItem(KEY);
+  if (!raw) return null;
+  try {
+    return JSON.parse(raw) as BottlePlanSelection;
+  } catch {
+    return null;
+  }
+}
+
+export function writeBottlePlanSelection(sel: BottlePlanSelection): void {
+  storage()?.setItem(KEY, JSON.stringify(sel));
+}
+
+export function selectionFromHotel(
+  hotel: AthensDiscoveryHotel,
+  partial: Pick<BottlePlanSelection, "destination" | "checkIn" | "checkOut" | "travelers" | "hotelNights" | "outdoorNights">,
+): BottlePlanSelection {
+  const partnerSlug = hotel.slug || (hotel.partner ? hotel.placeId.replace(/^partner:/, "") : undefined);
+  return {
+    ...partial,
+    placeId: hotel.placeId,
+    hotelSlug: partnerSlug,
+    hotelName: hotel.name,
+    partner: hotel.partner,
+  };
+}
+
+const SEARCH_KEYS = [
+  "destination",
+  "checkIn",
+  "checkOut",
+  "travelers",
+  "hotelNights",
+  "outdoorNights",
+  "placeId",
+  "hotelSlug",
+  "hotelName",
+] as const;
+
+function paramValue(raw: Record<string, string | string[] | undefined>, key: string): string {
+  const value = raw[key];
+  if (typeof value === "string") return value.trim();
+  if (Array.isArray(value)) {
+    const first = value.find((item) => typeof item === "string");
+    return first ? first.trim() : "";
+  }
+  return "";
+}
+
+/** Stable across renders. Search-param objects from the router are not. */
+export function bottlePlanParamKey(raw: Record<string, string | string[] | undefined>): string {
+  return SEARCH_KEYS.map((key) => paramValue(raw, key)).join("\u001f");
+}
+
+export function bottlePlanFromSearchParams(
+  raw: Record<string, string | string[] | undefined>,
+): BottlePlanSelection | null {
+  const urlName = paramValue(raw, "hotelName");
+  const urlPlace = paramValue(raw, "placeId");
+  const urlSlug = paramValue(raw, "hotelSlug");
+  let destination = paramValue(raw, "destination");
+  let checkIn = paramValue(raw, "checkIn");
+  let checkOut = paramValue(raw, "checkOut");
+  let travelers = paramValue(raw, "travelers");
+  let hotelNights = paramValue(raw, "hotelNights");
+  let outdoorNights = paramValue(raw, "outdoorNights");
+  let savedName = "";
+  let savedPlace = "";
+  let savedSlug = "";
+
+  if (!checkIn || !checkOut) {
+    const saved = readBottlePlanSelection();
+    if (!saved?.checkIn || !saved.checkOut) return null;
+    const savedNamesAnotherHotel =
+      (urlName && saved.hotelName && saved.hotelName !== urlName) ||
+      (urlPlace && saved.placeId && saved.placeId !== urlPlace) ||
+      (urlSlug && saved.hotelSlug && saved.hotelSlug !== urlSlug);
+    if (savedNamesAnotherHotel) return null;
+    checkIn = saved.checkIn;
+    checkOut = saved.checkOut;
+    destination = destination || saved.destination;
+    travelers = travelers || String(saved.travelers);
+    hotelNights = hotelNights || String(saved.hotelNights);
+    outdoorNights = outdoorNights || String(saved.outdoorNights);
+    if (!urlName) {
+      savedName = saved.hotelName || "";
+      savedPlace = saved.placeId || "";
+      savedSlug = saved.hotelSlug || "";
+    }
+  }
+
+  const hotelName = urlName || savedName;
+  const placeId = urlPlace || savedPlace;
+  const hotelSlug = urlSlug || savedSlug;
+
+  return {
+    destination: destination || "Athens",
+    checkIn,
+    checkOut,
+    travelers: Math.max(1, Number(travelers) || 2),
+    hotelNights: Math.max(1, Number(hotelNights) || 2),
+    outdoorNights: Math.max(1, Number(outdoorNights) || 1),
+    placeId: placeId || undefined,
+    hotelSlug: hotelSlug || undefined,
+    hotelName: hotelName || undefined,
+    partner: hotelSlug.length > 0,
+  };
+}
+
+export function bottlePlanSearchKey(sel: BottlePlanSelection): string {
+  return [
+    sel.destination,
+    sel.checkIn,
+    sel.checkOut,
+    String(sel.travelers),
+    String(sel.hotelNights),
+    String(sel.outdoorNights),
+    sel.placeId || "",
+    sel.hotelSlug || "",
+    sel.hotelName || "",
+  ].join("\u001f");
+}
+
+export function mixSearchParams(sel: BottlePlanSelection): Record<string, string> {
+  const qs: Record<string, string> = {
+    destination: sel.destination,
+    checkIn: sel.checkIn,
+    checkOut: sel.checkOut,
+    travelers: String(sel.travelers),
+    hotelNights: String(sel.hotelNights),
+    outdoorNights: String(sel.outdoorNights),
+  };
+  if (sel.placeId) qs.placeId = sel.placeId;
+  if (sel.hotelName) qs.hotelName = sel.hotelName;
+  if (sel.hotelSlug) qs.hotelSlug = sel.hotelSlug;
+  return qs;
+}

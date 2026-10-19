@@ -26,6 +26,8 @@ import { useAppBackScreenOptions } from '@/hooks/useAppBackScreenOptions';
 import { getBanditReviews } from '@/app/services/reviews';
 import { supabase } from '@/lib/supabase';
 import { ensureAnonymousSession } from '@/lib/pilotSession';
+import { BANDITS_ROWS_CACHE_KEY, warmBanditsHomeCache } from '@/lib/banditsHomeCache';
+import { readCacheStale } from '@/lib/appDataCache';
 import { resolveWhyFollowText } from '@/services/whyFollowCopy';
 import { getNotificationsBackendStatus } from '@/services/localFriend';
 
@@ -166,10 +168,17 @@ export default function BanditScreen() {
       return;
     }
     const banditIdStr = id;
+    let cancelled = false;
 
     const fetchBanditData = async () => {
       try {
         setLoading(true);
+        setError(null);
+
+        // Cold /bandit/{id} used to query before the anonymous session and
+        // list cache existed, so a real profile came back as not-found.
+        await ensureAnonymousSession().catch(() => undefined);
+        if (cancelled) return;
 
         // Resolve user identity once via cached helper (avoids serialized
         // auth lock latency).
@@ -177,11 +186,23 @@ export default function BanditScreen() {
         const uid = cachedUser?.id ?? null;
         setLikeUserId(uid);
 
-        // Kick off all the independent reads in parallel — the previous flow
-        // awaited bandit, tags, categories, reviews sequentially. We need
-        // `banditData` for analytics + fallback reviews, but tags/categories/
-        // reviews can race alongside it.
-        const banditPromise = getBanditById(banditIdStr, uid);
+        const readProfile = () => getBanditById(banditIdStr, uid);
+        let loaded = await readProfile();
+        if (!loaded) {
+          await warmBanditsHomeCache().catch(() => undefined);
+          if (cancelled) return;
+          loaded = await readProfile();
+        }
+        if (!loaded) {
+          const rows = readCacheStale<Array<{ bandit?: { id?: string } }>>(BANDITS_ROWS_CACHE_KEY);
+          const cached = rows?.find((row) => row.bandit?.id === banditIdStr)?.bandit;
+          if (cached && typeof cached === 'object' && 'name' in cached) {
+            loaded = cached as Bandit;
+          }
+        }
+
+        // Tags, categories, and reviews race alongside the resolved profile.
+        const banditPromise = Promise.resolve(loaded);
         const tagsPromise: Promise<any[]> = getBanditTags(banditIdStr).catch(() => []);
         const categoriesPromise: Promise<any[]> = getBanditEventCategories(banditIdStr).catch(() => []);
         const reviewsPromise: Promise<any[]> = getBanditReviews(banditIdStr).catch(() => []);
@@ -218,6 +239,7 @@ export default function BanditScreen() {
           galleryPromise,
         ]);
 
+        if (cancelled) return;
         if (!banditData) throw new Error('banDit not found');
         setBandit(banditData);
         setGalleryExtras(extras);
@@ -250,13 +272,18 @@ export default function BanditScreen() {
             : err && typeof err === 'object' && 'message' in err
               ? String((err as { message: unknown }).message)
               : 'This Local banDit is unavailable.';
-        setError(msg.includes('uuid') || msg.includes('22P02') ? 'This Local banDit is unavailable.' : msg);
+        if (!cancelled) {
+          setError(msg.includes('uuid') || msg.includes('22P02') ? 'This Local banDit is unavailable.' : msg);
+        }
       } finally {
-        setLoading(false);
+        if (!cancelled) setLoading(false);
       }
     };
 
-    fetchBanditData();
+    void fetchBanditData();
+    return () => {
+      cancelled = true;
+    };
   }, [id]);
 
   useEffect(() => {

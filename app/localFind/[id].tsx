@@ -13,6 +13,7 @@ import {
   View,
 } from "react-native";
 
+import { useAppState } from "@/contexts/AppStateContext";
 import { useAppBackScreenOptions } from "@/hooks/useAppBackScreenOptions";
 import {
   fetchLiveSmartTravelerDetail,
@@ -23,7 +24,12 @@ import { useGuestLifecycle } from "@/lib/guest-lifecycle/useGuestLifecycle";
 import { can } from "@/lib/guest-lifecycle/access";
 import { color, radius } from "@/lib/guestDesign";
 import { ImageRatio, imageFocusStyle } from "@/lib/imageRatios";
-import { redeemSmartTravelerBenefit, saveGuestObject } from "@/lib/workspace/actions";
+import {
+  fetchGuestReflection,
+  redeemSmartTravelerBenefit,
+  saveGuestObject,
+  type GuestReflectionClaim,
+} from "@/lib/workspace/actions";
 import SmartTravelerListingCouponRow from "@/components/SmartTravelerListingCoupon";
 import { resolveSmartTravelerListingCoupon } from "@/lib/guest-workspace/smartTravelerListingCode";
 
@@ -34,6 +40,7 @@ import { resolveSmartTravelerListingCoupon } from "@/lib/guest-workspace/smartTr
  */
 export default function LocalFindDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
+  const { getCurrentUser } = useAppState();
   const { width } = useWindowDimensions();
   const { access, isFullStay } = useGuestLifecycle();
   const stayPerks = can(access ?? "PRE_TRIP", "stay_smarttraveler_perks");
@@ -56,6 +63,9 @@ export default function LocalFindDetailScreen() {
     let cancelled = false;
     setLoading(true);
     setActionError(null);
+    setUnlocked(false);
+    setClaimCode(null);
+    setClaimStatus(null);
     void fetchLiveSmartTravelerDetail(id).then((live) => {
       if (cancelled) return;
       if (live) {
@@ -73,6 +83,33 @@ export default function LocalFindDetailScreen() {
       cancelled = true;
     };
   }, [id]);
+
+  useEffect(() => {
+    if (!place || isDemo) return;
+    let cancelled = false;
+    const offerId = smartTravelerRedeemObjectId(place);
+    void getCurrentUser().then((user) => {
+      const email = user?.email?.trim();
+      if (cancelled || !email) return;
+      return fetchGuestReflection(email).then((r) => {
+        if (cancelled || !r.ok) return;
+        const claims = (r.data?.claims || []) as GuestReflectionClaim[];
+        const hit = claims.find(
+          (c) =>
+            c.offerId === offerId ||
+            c.objectId === offerId ||
+            c.businessId === place.id,
+        );
+        if (!hit) return;
+        setUnlocked(true);
+        setClaimCode(hit.uniqueCode || hit.id || null);
+        setClaimStatus(hit.status || "pending");
+      });
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [place, isDemo, getCurrentUser]);
 
   const screenOptions = useAppBackScreenOptions({
     title: place?.businessName ?? "Local Find",
@@ -107,10 +144,23 @@ export default function LocalFindDetailScreen() {
     `${place.businessName} ${place.location} Athens`,
   );
   const redeemOfferId = smartTravelerRedeemObjectId(place);
-  const listingCoupon = resolveSmartTravelerListingCoupon({
-    ...place,
-    isEditorial: isDemo,
-  });
+  const listingCoupon = resolveSmartTravelerListingCoupon(
+    {
+      ...place,
+      isEditorial: isDemo,
+    },
+    {
+      stayUnlocked: stayPerks,
+      claimStatus: claimStatus,
+      hasActiveClaim: unlocked,
+    },
+  );
+  const showClaimCta =
+    !isDemo &&
+    Boolean(place.guestPrivilege) &&
+    stayPerks &&
+    !unlocked &&
+    listingCoupon.redemptionPhase !== "redeemed";
 
   return (
     <ScrollView style={styles.screen} contentContainerStyle={styles.content}>
@@ -187,7 +237,46 @@ export default function LocalFindDetailScreen() {
           <Text style={styles.privilegeDetail}>Map search for this place. Not a GPS reading.</Text>
         </Pressable>
 
-        <SmartTravelerListingCouponRow coupon={listingCoupon} testID="local-find-listing-coupon" />
+        <SmartTravelerListingCouponRow
+          coupon={listingCoupon}
+          profile
+          testID="local-find-listing-coupon"
+          showClaimCta={showClaimCta}
+          claimBusy={actionBusy}
+          onClaim={() => {
+            if (!place || unlocked || actionBusy || !showClaimCta) return;
+            setActionBusy(true);
+            setActionError(null);
+            void redeemSmartTravelerBenefit({
+              partnerId: place.id,
+              offerId: redeemOfferId,
+              title: place.guestPrivilege?.label || place.businessName,
+            }).then((r) => {
+              setActionBusy(false);
+              if (!r.ok) {
+                setActionError(r.detail);
+                return;
+              }
+              const claim = r.data?.claim as { id?: string; uniqueCode?: string; status?: string } | undefined;
+              setClaimCode(claim?.uniqueCode || claim?.id || null);
+              setClaimStatus(claim?.status || r.data?.claim?.status || "pending");
+              setUnlocked(true);
+            });
+          }}
+        />
+
+        {unlocked && claimCode && !isDemo ? (
+          <View style={styles.codeBlock} testID="local-find-claim-code">
+            <Text style={styles.codeEyebrow}>Show this code at the business</Text>
+            <Text style={styles.codeValue} selectable>
+              {claimCode}
+            </Text>
+            <Text style={styles.privilegeDetail}>
+              Merchant validates this claim in Partner Workspace. Server-issued — not the listing
+              preview code above.
+            </Text>
+          </View>
+        ) : null}
 
         {isDemo ? (
           <View style={styles.privilegeCard} testID="local-find-editorial">
@@ -197,71 +286,12 @@ export default function LocalFindDetailScreen() {
               support the business directly.
             </Text>
           </View>
-        ) : place.guestPrivilege ? (
+        ) : place.guestPrivilege && !stayPerks ? (
           <View style={styles.privilegeCard} testID="local-find-offer">
-            <Text style={styles.privilegeEyebrow}>Hotel Guest Special</Text>
-            <Text style={styles.privilegeTitle}>
-              {place.guestPrivilege.label}
+            <Text style={styles.lockHint}>
+              Claim a verified show-at-the-door code during an active hotel stay
+              {!isFullStay ? " — activate your stay to unlock this perk." : "."}
             </Text>
-            <Text style={styles.privilegeDetail}>
-              {place.guestPrivilege.detail}
-            </Text>
-            {!stayPerks ? (
-              <Text style={styles.lockHint}>
-                Claim a verified show-at-the-door code during an active hotel stay
-                {!isFullStay ? " — activate your stay to unlock this perk." : "."}
-              </Text>
-            ) : unlocked && claimCode ? (
-              <View style={styles.codeBlock} testID="local-find-claim-code">
-                <Text style={styles.codeEyebrow}>Show this code at the business</Text>
-                <Text style={styles.codeValue} selectable>
-                  {claimCode}
-                </Text>
-                <Text style={styles.unlocked}>
-                  {place.guestPrivilege.label}
-                  {claimStatus ? ` · ${claimStatus}` : " · pending merchant validation"}
-                </Text>
-                <Text style={styles.privilegeDetail}>
-                  Merchant validates this claim in Partner Workspace. Codes are server-issued — do not
-                  invent or reuse someone else’s code.
-                </Text>
-              </View>
-            ) : unlocked ? (
-              <Text style={styles.unlocked} testID="local-find-unlocked">
-                Ready to show at the door · {place.guestPrivilege.label}
-              </Text>
-            ) : (
-              <Pressable
-                style={[styles.unlockCta, actionBusy && styles.ctaDisabled]}
-                disabled={actionBusy}
-                onPress={() => {
-                  if (!place || unlocked || actionBusy) return;
-                  setActionBusy(true);
-                  setActionError(null);
-                  void redeemSmartTravelerBenefit({
-                    partnerId: place.id,
-                    offerId: redeemOfferId,
-                    title: place.guestPrivilege?.label || place.businessName,
-                  }).then((r) => {
-                    setActionBusy(false);
-                    if (!r.ok) {
-                      setActionError(r.detail);
-                      return;
-                    }
-                    const claim = r.data?.claim as { id?: string; uniqueCode?: string } | undefined;
-                    const code = claim?.uniqueCode || claim?.id || null;
-                    setClaimCode(code);
-                    setClaimStatus(r.data?.claim?.status || "pending");
-                    setUnlocked(true);
-                  });
-                }}
-                testID="local-find-claim-cta"
-              >
-                <Text style={styles.unlockCtaText}>
-                  {actionBusy ? "Claiming…" : "Claim discount code"}
-                </Text>
-              </Pressable>
-            )}
           </View>
         ) : null}
 
