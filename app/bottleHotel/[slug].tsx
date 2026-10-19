@@ -32,7 +32,7 @@ import {
   loadHotelBottleListing,
   type HotelBottleListing,
 } from "@/lib/guest-workspace/hotelBottleListing";
-import { mixSearchParams, writeBottlePlanSelection } from "@/lib/bottlePlanSelection";
+import { mixSearchParams, readBottlePlanSelection, writeBottlePlanSelection } from "@/lib/bottlePlanSelection";
 import { getHotelWhiteLabel, isKnownHotelSlug } from "@/lib/hotelWhiteLabel";
 import { workspaceGet } from "@/lib/workspace/client";
 
@@ -65,6 +65,8 @@ export default function BottleHotelDetailScreen() {
     checkIn?: string;
     checkOut?: string;
     travelers?: string;
+    hotelNights?: string;
+    outdoorNights?: string;
   }>();
   const rawSlug = typeof params.slug === "string" ? params.slug : "";
   const parsed = parseBottleHotelParam(rawSlug);
@@ -182,262 +184,78 @@ export default function BottleHotelDetailScreen() {
     if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) return 0;
     return Math.max(0, Math.round((end.getTime() - start.getTime()) / 86400000));
   }, [checkIn, checkOut]);
+  const placeId = parsed.kind === "place" ? parsed.id : undefined;
+  const hotelSlug = parsed.kind === "partner" ? parsed.id : undefined;
+  const savedPlan = readBottlePlanSelection();
+  const savedMatches = Boolean(
+    savedPlan &&
+      ((placeId && savedPlan.placeId === placeId) ||
+        (hotelSlug && savedPlan.hotelSlug === hotelSlug) ||
+        (name && savedPlan.hotelName === name)),
+  );
+  const urlHotelNights = Number(params.hotelNights);
+  const urlOutdoorNights = Number(params.outdoorNights);
+  const hotelNights =
+    urlHotelNights > 0
+      ? urlHotelNights
+      : savedMatches && savedPlan && savedPlan.hotelNights > 0
+        ? savedPlan.hotelNights
+        : totalNights >= 2
+          ? Math.min(2, totalNights - 1)
+          : 1;
+  const outdoorNights =
+    urlOutdoorNights > 0
+      ? urlOutdoorNights
+      : savedMatches && savedPlan && savedPlan.outdoorNights > 0
+        ? savedPlan.outdoorNights
+        : totalNights >= 2
+          ? Math.max(1, totalNights - hotelNights)
+          : 1;
+  const shownName =
+    placeHotel?.name ||
+    (parsed.kind === "partner" ? partnerName : "") ||
+    (savedMatches && savedPlan?.hotelName ? savedPlan.hotelName : "");
   const openMix = () => {
-    if (!checkIn || !checkOut || totalNights < 2) {
-      router.push("/travelBottle" as Href);
-      return;
-    }
-    const hotelNights = Math.min(2, totalNights - 1);
+    if (!shownName || !checkIn || !checkOut) return;
     const sel = {
-      destination: "Athens",
+      destination: savedPlan?.destination || "Athens",
       checkIn,
       checkOut,
       travelers,
       hotelNights,
-      outdoorNights: totalNights - hotelNights,
-      placeId: parsed.kind === "place" ? parsed.id : undefined,
-      hotelSlug: parsed.kind === "partner" ? parsed.id : undefined,
-      hotelName: name,
+      outdoorNights,
+      placeId,
+      hotelSlug,
+      hotelName: shownName,
       partner: parsed.kind === "partner",
     };
     writeBottlePlanSelection(sel);
     const qs = new URLSearchParams({ ...mixSearchParams(sel), autorun: "1" });
     router.push(`/bottleMix?${qs.toString()}` as Href);
   };
-  const backToPlan = () => {
-    if (name && checkIn && checkOut) {
-      const hotelNights = totalNights >= 2 ? Math.min(2, totalNights - 1) : 1;
-      writeBottlePlanSelection({
-        destination: "Athens",
-        checkIn,
-        checkOut,
-        travelers,
-        hotelNights,
-        outdoorNights: totalNights >= 2 ? totalNights - hotelNights : 1,
-        placeId: parsed.kind === "place" ? parsed.id : undefined,
-        hotelSlug: parsed.kind === "partner" ? parsed.id : undefined,
-        hotelName: name,
-        partner: parsed.kind === "partner",
-      });
-    }
-    router.push("/travelBottle" as Href);
-  };
-
   return (
     <ScrollView style={styles.screen} contentContainerStyle={styles.content} testID="bottle-hotel-detail">
       <Stack.Screen options={screenOptions} />
-      {viewer ? (
-        <Modal visible animationType="fade" onRequestClose={() => setViewer(null)}>
-          <View style={styles.lightbox}>
-            <Pressable onPress={() => setViewer(null)} style={styles.lightboxBar}>
-              <Text style={styles.lightboxBack}>← Back</Text>
-            </Pressable>
-            <Pressable
-              style={styles.lightboxStage}
-              onPress={() =>
-                setViewer({
-                  ...viewer,
-                  index: (viewer.index + 1) % viewer.frames.length,
-                })
-              }
-            >
-              <FrameImage frame={viewer.frames[viewer.index]} style={styles.lightboxImage} />
-            </Pressable>
-          </View>
-        </Modal>
-      ) : null}
-
-      <View style={[styles.page, wide && styles.pageWide]} testID={`bottle-hotel-detail-${parsed.id}`}>
-        <Text style={styles.kicker}>Travel in a Bottle · First hotel</Text>
-        <Text style={styles.title} testID="bottle-hotel-detail-name">
-          {name}
-        </Text>
-        <Text style={styles.meta}>
-          {area} · {datesLabel} · {travelers} traveler{travelers === 1 ? "" : "s"}
-        </Text>
-        <Text style={styles.publish} testID="bottle-hotel-detail-publish">
-          {placeHotel
-            ? "Athens lodging · discovery listing"
-            : listing?.workspacePublishStatus === "published"
-              ? "Partner hotel"
-              : "Athens boutique partner"}
-        </Text>
-
-        {frames.length > 0 ? (
-          <ScrollView
-            horizontal
-            showsHorizontalScrollIndicator={false}
-            contentContainerStyle={styles.galleryRow}
-            testID="bottle-hotel-detail-gallery"
-          >
-            {frames.map((frame, index) => (
-              <Pressable
-                key={frame.key}
-                onPress={() => setViewer({ frames, index, title: name })}
-                accessibilityRole="button"
-              >
-                <FrameImage frame={frame} style={styles.galleryImage} />
-              </Pressable>
-            ))}
-          </ScrollView>
+      <View style={[styles.page, wide && styles.pageWide]}>
+        {frames[0] ? (
+          <FrameImage frame={frames[0]} style={styles.hero} />
         ) : (
-          <View style={styles.galleryEmpty}>
-            <Text style={styles.galleryEmptyTitle}>{name}</Text>
-            <Text style={styles.galleryEmptyBody}>
-              Photos appear when available from the hotel or Google listing.
-            </Text>
-          </View>
+          <View style={styles.hero} />
         )}
-
-        <View style={styles.block}>
-          <Text style={styles.blockTitle}>About this stay</Text>
-          <Text style={styles.body} testID="bottle-hotel-detail-summary">
-            {summary}
-          </Text>
-        </View>
-
-        <View style={styles.facts}>
-          <Fact label="Address" value={placeHotel?.address || listing?.address || area} />
-          {placeHotel?.rating != null ? (
-            <Fact
-              label="Guest rating"
-              value={`★ ${placeHotel.rating.toFixed(1)}${
-                placeHotel.userRatingCount ? ` · ${placeHotel.userRatingCount} reviews` : ""
-              }`}
-            />
-          ) : null}
-          <Fact
-            label="Rates"
-            value={
-              rateLabel
-                ? `From ${rateLabel} / night`
-                : "No contracted room rate for these dates. This hotel is not bookable here until inventory is authorized."
-            }
-          />
-          {placeHotel?.phone ? <Fact label="Phone" value={placeHotel.phone} /> : null}
-        </View>
-
-        {listing?.services?.length ? (
-          <View style={styles.block} testID="bottle-hotel-detail-amenities">
-            <Text style={styles.blockTitle}>Amenities</Text>
-            <View style={styles.chips}>
-              {listing.services.map((s) => (
-                <View key={s} style={styles.chip}>
-                  <Text style={styles.chipText}>{s}</Text>
-                </View>
-              ))}
-            </View>
-          </View>
-        ) : null}
-
-        {listing?.roomTypes?.length ? (
-          <View style={styles.block} testID="bottle-hotel-detail-rooms">
-            <Text style={styles.blockTitle}>Rooms</Text>
-            {listing.roomTypes.map((room) => (
-              <View key={room.id} style={styles.roomCard}>
-                <Text style={styles.roomName}>{room.name}</Text>
-                {room.occupancy ? <Text style={styles.roomMeta}>Sleeps {room.occupancy}</Text> : null}
-                {room.description ? <Text style={styles.body}>{room.description}</Text> : null}
-              </View>
-            ))}
-          </View>
-        ) : placeHotel ? (
-          <View style={styles.block}>
-            <Text style={styles.blockTitle}>Rooms & availability</Text>
-            <Text style={styles.gapNote}>
-              Room types and live availability come from the hotel’s booking channel — Google discovery does
-              not invent inventory.
-            </Text>
-          </View>
-        ) : null}
-
-        {listing?.policies?.length ? (
-          <View style={styles.block}>
-            <Text style={styles.blockTitle}>Policies</Text>
-            {listing.policies.map((p) => (
-              <Text key={p} style={styles.policyLine}>
-                {p}
-              </Text>
-            ))}
-          </View>
-        ) : null}
-
-        {reviews.length ? (
-          <View style={styles.block} testID="bottle-hotel-reviews">
-            <Text style={styles.blockTitle}>Recent reviews</Text>
-            {reviews.map((r, i) => (
-              <View key={`${r.author}-${i}`} style={styles.roomCard}>
-                <Text style={styles.roomName}>
-                  {r.author || "Guest"}
-                  {r.rating != null ? ` · ★ ${r.rating}` : ""}
-                </Text>
-                <Text style={styles.body}>{r.text}</Text>
-              </View>
-            ))}
-          </View>
-        ) : null}
-
-        <Text style={styles.attribution}>{attribution}</Text>
-
-        <View style={styles.ctaStack}>
-          {avail?.bookable && avail.rooms?.some((r) => r.totalCents != null) ? (
-            <Pressable
-              style={styles.cta}
-              testID="bottle-hotel-book-banditour"
-              onPress={() => {
-                const room = avail.rooms!.find((r) => r.totalCents != null);
-                if (!room || !checkIn || !checkOut) return;
-                const qs = new URLSearchParams({
-                  slug: parsed.id,
-                  checkIn,
-                  checkOut,
-                  travelers: String(travelers),
-                  roomId: room.id,
-                });
-                router.push(`/bottleBookHotel?${qs.toString()}` as Href);
-              }}
-            >
-              <Text style={styles.ctaText}>
-                {`Book through banDiTour · €${Math.round((avail.rooms.find((r) => r.totalCents != null)?.totalCents || 0) / 100)} · no fee`}
-              </Text>
-            </Pressable>
-          ) : placeHotel ? (
-            <Text style={styles.gapNote} testID="bottle-hotel-nonbookable">
-              Discoverable on Places — not bookable in banDiTour until this hotel is contracted with live
-              inventory.
-            </Text>
-          ) : avail && !avail.bookable ? (
-            <Text style={styles.gapNote} testID="bottle-hotel-no-inventory">
-              Partner hotel — rooms for these dates are not available to book yet
-              {avail.reason ? ` (${avail.reason})` : ""}.
-            </Text>
-          ) : null}
-          {mapUrl && !avail?.bookable ? (
-            <Pressable
-              style={styles.ctaGhost}
-              onPress={() => void Linking.openURL(mapUrl)}
-              accessibilityRole="link"
-              testID="bottle-hotel-map-link"
-            >
-              <Text style={styles.ctaGhostText}>Open in Google Maps</Text>
-            </Pressable>
-          ) : null}
-          <Pressable
-            style={styles.ctaGhost}
-            onPress={openMix}
-            accessibilityRole="button"
-            testID="bottle-hotel-mix-cta"
-          >
-            <Text style={styles.ctaGhostText}>Mix with a second sleep</Text>
-          </Pressable>
-          <Pressable
-            style={styles.ctaGhost}
-            onPress={backToPlan}
-            testID="bottle-hotel-back-to-plan"
-          >
-            <Text style={styles.ctaGhostText}>Back to Bottle plan</Text>
-          </Pressable>
-        </View>
+        <Text style={styles.title} testID="bottle-hotel-detail-name">
+          {shownName}
+        </Text>
+        <Text style={styles.meta} testID="bottle-hotel-plan">
+          {datesLabel} · {hotelNights} hotel + {outdoorNights} outdoor
+        </Text>
+        <Pressable
+          style={styles.cta}
+          onPress={openMix}
+          accessibilityRole="button"
+          testID="bottle-hotel-mix-cta"
+        >
+          <Text style={styles.ctaText}>MIX MY STAY</Text>
+        </Pressable>
       </View>
     </ScrollView>
   );
@@ -448,6 +266,13 @@ const styles = StyleSheet.create({
   content: { paddingBottom: 56 },
   page: { width: "100%", maxWidth: 920, alignSelf: "center", paddingHorizontal: 16, paddingTop: 16 },
   pageWide: { paddingHorizontal: 24 },
+  hero: {
+    width: "100%",
+    height: 280,
+    borderRadius: 16,
+    backgroundColor: "#E8E2D8",
+    marginBottom: 16,
+  },
   kicker: {
     fontSize: 11,
     fontWeight: "800",

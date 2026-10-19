@@ -39,7 +39,7 @@ import {
 } from "@/lib/guest-workspace/athensHotelPlaces";
 import { loadHotelBottleListing, type HotelBottleListing } from "@/lib/guest-workspace/hotelBottleListing";
 import {
-  mixSearchParams,
+  hotelProfileQuery,
   readBottlePlanSelection,
   selectionFromHotel,
   writeBottlePlanSelection,
@@ -261,7 +261,6 @@ function HotelStayPresentation({
   nightsLabel,
   datesLabel,
   onViewHotel,
-  onBuildMix,
 }: {
   listing: HotelBottleListing | null;
   fallbackName: string;
@@ -269,7 +268,6 @@ function HotelStayPresentation({
   nightsLabel: string;
   datesLabel: string;
   onViewHotel: () => void;
-  onBuildMix: () => void;
 }) {
   const name = listing?.whiteLabel?.title || listing?.displayName || fallbackName;
   const area = listing?.location || city;
@@ -380,14 +378,6 @@ function HotelStayPresentation({
         <View style={styles.hotelCtas}>
           <Pressable style={styles.hotelCta} onPress={onViewHotel} accessibilityRole="button" testID="bottle-view-hotel">
             <Text style={styles.hotelCtaText}>Full hotel profile</Text>
-          </Pressable>
-          <Pressable
-            style={styles.hotelCtaGhost}
-            onPress={onBuildMix}
-            accessibilityRole="button"
-            testID="bottle-build-mix-from-plan"
-          >
-            <Text style={styles.hotelCtaGhostText}>Build My Mix</Text>
           </Pressable>
         </View>
       </View>
@@ -825,30 +815,6 @@ export function BottleProductScreen() {
         <View style={styles.intro} testID="bottle-entry">
           <Text style={styles.kicker}>Travel in a Bottle</Text>
           <Text style={styles.title}>A little hotel. A little wild.</Text>
-          <Text style={styles.lead}>
-            Book a hotel, or mix hotel nights with an outdoor stay — one journey, final price before you pay. No
-            booking fee.
-          </Text>
-          <View style={styles.modeRow} testID="bottle-journey-mode">
-            <Pressable
-              testID="bottle-mode-hotel"
-              style={[styles.modeChip, journeyMode === "hotel" && styles.modeChipOn]}
-              onPress={() => setJourneyMode("hotel")}
-              accessibilityRole="button"
-              accessibilityState={{ selected: journeyMode === "hotel" }}
-            >
-              <Text style={[styles.modeChipText, journeyMode === "hotel" && styles.modeChipTextOn]}>Book a hotel</Text>
-            </Pressable>
-            <Pressable
-              testID="bottle-mode-mix"
-              style={[styles.modeChip, journeyMode === "mix" && styles.modeChipOn]}
-              onPress={() => setJourneyMode("mix")}
-              accessibilityRole="button"
-              accessibilityState={{ selected: journeyMode === "mix" }}
-            >
-              <Text style={[styles.modeChipText, journeyMode === "mix" && styles.modeChipTextOn]}>Mix your stay</Text>
-            </Pressable>
-          </View>
         </View>
 
         <View style={[styles.askPanel, mode !== "mobile" && styles.askPanelRow]} testID="bottle-questions">
@@ -1004,15 +970,16 @@ export function BottleProductScreen() {
               const openProfile = () => {
                 setSelectedHotel(h);
                 setDestination("Athens");
-                const qs = [
-                  checkIn ? `checkIn=${encodeURIComponent(checkIn)}` : "",
-                  checkOut ? `checkOut=${encodeURIComponent(checkOut)}` : "",
-                  `travelers=${travelers}`,
-                ]
-                  .filter(Boolean)
-                  .join("&");
-                const href = bottleHotelHref(h);
-                router.push((`${href}?${qs}`) as Href);
+                const plan = selectionFromHotel(h, {
+                  destination: "Athens",
+                  checkIn,
+                  checkOut,
+                  travelers,
+                  hotelNights,
+                  outdoorNights: outdoorNights || 1,
+                });
+                writeBottlePlanSelection(plan);
+                router.push((`${bottleHotelHref(h)}?${hotelProfileQuery(plan)}`) as Href);
               };
               return (
                 <Pressable
@@ -1089,21 +1056,7 @@ export function BottleProductScreen() {
           }
           onViewHotel={() => {
             if (!selectedHotel && !plannedHotelSlug) return;
-            const qs = [
-              checkIn ? `checkIn=${encodeURIComponent(checkIn)}` : "",
-              checkOut ? `checkOut=${encodeURIComponent(checkOut)}` : "",
-              `travelers=${travelers}`,
-            ]
-              .filter(Boolean)
-              .join("&");
-            const href = selectedHotel
-              ? bottleHotelHref(selectedHotel)
-              : `/bottleHotel/${plannedHotelSlug}`;
-            router.push((`${href}?${qs}`) as Href);
-          }}
-          onBuildMix={() => {
-            if (!selectedHotel && !plannedHotelSlug) return;
-            const base = selectedHotel
+            const plan = selectedHotel
               ? selectionFromHotel(selectedHotel, {
                   destination,
                   checkIn,
@@ -1120,112 +1073,16 @@ export function BottleProductScreen() {
                   hotelNights,
                   outdoorNights: outdoorNights || 1,
                   hotelSlug: plannedHotelSlug,
-                  hotelName: hotelName || "Athens hotel",
+                  hotelName: hotelName || "",
                   partner: true,
                 };
-            writeBottlePlanSelection(base);
-            const qs = new URLSearchParams({ ...mixSearchParams(base), autorun: "1" });
-            router.push(`/bottleMix?${qs.toString()}` as Href);
+            if (!plan.hotelName || /play/i.test(plan.hotelName) && selectedHotel && !/play/i.test(selectedHotel.name)) return;
+            writeBottlePlanSelection(plan);
+            const href = selectedHotel ? bottleHotelHref(selectedHotel) : `/bottleHotel/${plannedHotelSlug}`;
+            router.push((`${href}?${hotelProfileQuery(plan)}`) as Href);
           }}
         />
 
-        <View style={styles.planPanel} testID="bottle-external-stays">
-          <Text style={styles.planKicker}>Second sleep</Text>
-          <Text style={styles.planLead}>
-            Airbnb-style stays outside the hotel — verified hosts only. Mix uses these when dates and capacity
-            match.
-          </Text>
-          {externalStays.length === 0 ? (
-            <View testID="bottle-external-empty">
-              <Text style={styles.empty}>
-                Verified second sleeps are joining the Bottle network. When hosts publish live listings with
-                photos, dates, and prices, they appear here and in your Mix.
-              </Text>
-              {demoStayCount > 0 ? (
-                <Text style={styles.planLead} testID="bottle-demo-stay-note">
-                  Host tools are ready — bookable inventory waits on published listings.
-                </Text>
-              ) : null}
-            </View>
-          ) : (
-            externalStays.map((stay) => <ExternalStayRow key={stay.id} stay={stay} />)
-          )}
-        </View>
-
-        {journeyMode === "hotel" ? (
-          <View style={styles.planPanel} testID="bottle-hotel-only-cta">
-            <Text style={styles.planKicker}>Book a hotel</Text>
-            <Text style={styles.planLead}>
-              Open a partner hotel profile, choose a room when inventory is contracted, and pay through
-              banDiTour. Discovery listings stay non-bookable until inventory is authorized. No booking fee.
-            </Text>
-            <Pressable
-              style={[styles.mixCta, !selectedHotel && !plannedHotelSlug && styles.mixCtaDisabled]}
-              disabled={!selectedHotel && !plannedHotelSlug}
-              onPress={() => {
-                if (!selectedHotel && !plannedHotelSlug) return;
-                const qs = [
-                  checkIn ? `checkIn=${encodeURIComponent(checkIn)}` : "",
-                  checkOut ? `checkOut=${encodeURIComponent(checkOut)}` : "",
-                  `travelers=${travelers}`,
-                  "mode=hotel",
-                ]
-                  .filter(Boolean)
-                  .join("&");
-                const href = selectedHotel
-                  ? bottleHotelHref(selectedHotel)
-                  : `/bottleHotel/${plannedHotelSlug}`;
-                router.push((`${href}?${qs}`) as Href);
-              }}
-              testID="bottle-book-hotel-cta"
-            >
-              <Text style={styles.mixCtaText}>Continue to hotel</Text>
-            </Pressable>
-          </View>
-        ) : (
-          <>
-            <Text style={styles.section} testID="bottle-second-stay-intro">
-              Mix your stay
-            </Text>
-            <Text style={styles.lead}>
-              One tap pairs your hotel nights with a verified outdoor stay — final price before payment. No
-              booking fee.
-            </Text>
-
-            {formError ? (
-              <Text style={styles.formError} testID="bottle-form-error">
-                {formError}
-              </Text>
-            ) : null}
-
-            <Pressable
-              style={[styles.mixCta, !canMix && styles.mixCtaDisabled]}
-              disabled={!canMix}
-              onPress={() => void mixSleepingExperiences()}
-              accessibilityRole="button"
-              accessibilityLabel="Mix your stay"
-              testID="travel-bottle-mix-cta"
-            >
-              <Text style={styles.mixCtaText}>{mixing ? "Mixing…" : "Mix your stay"}</Text>
-            </Pressable>
-          </>
-        )}
-
-        {searched && catalogError ? (
-        <View style={styles.errorBanner} testID="bottle-catalog-error">
-          <Text style={styles.errorBannerTitle}>Couldn’t reach Workspace</Text>
-          <Text style={styles.errorBannerBody}>{catalogError}</Text>
-          <Pressable
-            style={styles.retryBtn}
-            disabled={mixing}
-            onPress={() => void mixSleepingExperiences()}
-            accessibilityRole="button"
-            accessibilityLabel="Retry mixing sleeping experiences"
-          >
-            <Text style={styles.retryBtnText}>Retry mix</Text>
-          </Pressable>
-        </View>
-      ) : null}
 
       {searched && showingSample && !catalogError ? (
         <View style={styles.sampleBanner} testID="bottle-sample-banner">

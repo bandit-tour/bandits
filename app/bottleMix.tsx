@@ -1,10 +1,10 @@
 /**
- * Flow B — Travel in a Bottle Mix (hotel + outdoor, single checkout when both legs secure).
- * Search runs once per plan. Book Mix stays closed until both suppliers authorize the dates.
+ * Outdoor results for Travel in a Bottle.
+ * Availability is checked once per plan. Booking stays closed until both suppliers authorize it.
  */
 import { Stack, useLocalSearchParams, type Href } from "expo-router";
-import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import React, { useEffect, useMemo, useRef, useState } from "react";
+import { Image, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 
 import { humanDate } from "@/components/BottleDateRangeField";
 import { useAppBackScreenOptions } from "@/hooks/useAppBackScreenOptions";
@@ -12,20 +12,16 @@ import {
   bottlePlanFromSearchParams,
   bottlePlanParamKey,
   bottlePlanSearchKey,
+  hotelProfileQuery,
   writeBottlePlanSelection,
   type BottlePlanSelection,
 } from "@/lib/bottlePlanSelection";
-import { fetchLiveBottleStays, type WorkspaceBottleStay } from "@/lib/guest-workspace/liveBottle";
-import { checkoutMixBooking, quoteMixBooking, type HotelBookingQuote } from "@/lib/guest-workspace/hotelBookingApi";
+import { quoteMixBooking } from "@/lib/guest-workspace/hotelBookingApi";
+import type { WorkspaceBottleStay } from "@/lib/guest-workspace/liveBottle";
 import { supabase } from "@/lib/supabase";
 import { workspaceGet } from "@/lib/workspace/client";
 
-type MixQuote = {
-  hotel: HotelBookingQuote;
-  outdoor: HotelBookingQuote;
-  guestTotalCents: number;
-  guestServiceFeeCents: number;
-};
+type Phase = "loading" | "empty" | "results" | "error";
 
 function readParam(raw: Record<string, string | string[] | undefined>, key: string): string {
   const value = raw[key];
@@ -38,7 +34,6 @@ export default function BottleMixScreen() {
   const rawParams = useLocalSearchParams();
   const params = rawParams as Record<string, string | string[] | undefined>;
   const paramKey = bottlePlanParamKey(params);
-  const autorun = readParam(params, "autorun") === "1" || readParam(params, "autorun") === "true";
   const sel = useMemo(() => {
     const [destination, checkIn, checkOut, travelers, hotelNights, outdoorNights, placeId, hotelSlug, hotelName] =
       paramKey.split("\u001f");
@@ -56,63 +51,28 @@ export default function BottleMixScreen() {
   }, [paramKey]);
   const searchKey = sel ? bottlePlanSearchKey(sel) : "";
 
-  const [loading, setLoading] = useState(autorun && Boolean(sel));
-  const [outdoor, setOutdoor] = useState<WorkspaceBottleStay[]>([]);
-  const [pick, setPick] = useState<string | null>(null);
-  const [quote, setQuote] = useState<MixQuote | null>(null);
-  const [err, setErr] = useState<string | null>(null);
+  const [attempt, setAttempt] = useState(0);
+  const [phase, setPhase] = useState<Phase>(sel ? "loading" : "empty");
+  const [stays, setStays] = useState<WorkspaceBottleStay[]>([]);
+  const [authorized, setAuthorized] = useState(false);
   const [busy, setBusy] = useState(false);
-  const [verifying, setVerifying] = useState(false);
-  const [done, setDone] = useState<string | null>(null);
-  const selRef = useRef(sel);
+  const [note, setNote] = useState<string | null>(null);
+  const selRef = useRef<BottlePlanSelection | null>(sel);
   selRef.current = sel;
   const requestSerial = useRef(0);
-  const runMixRef = useRef<(plan: BottlePlanSelection) => Promise<void>>(async () => undefined);
 
   const hotelSlug = sel?.hotelSlug || "";
-  const hotelName = sel?.hotelName || "Your hotel";
-  const hotelPlaceId = sel?.placeId || hotelSlug || "hotel";
-  const bothAuthorized = Boolean(quote?.hotel && quote?.outdoor && pick && hotelSlug);
+  const hotelName = sel?.hotelName || "";
 
   const screenOptions = useAppBackScreenOptions({
-    title: "Build my mix",
+    title: hotelName || "Your stay",
     fallback: sel?.placeId
-      ? (`/bottleHotel/place_${encodeURIComponent(sel.placeId)}?checkIn=${sel.checkIn}&checkOut=${sel.checkOut}&travelers=${sel.travelers}` as Href)
+      ? (`/bottleHotel/place_${encodeURIComponent(sel.placeId)}?${hotelProfileQuery(sel)}` as Href)
       : hotelSlug
-        ? (`/bottleHotel/${hotelSlug}?checkIn=${sel?.checkIn}&checkOut=${sel?.checkOut}&travelers=${sel?.travelers}` as Href)
+        ? (`/bottleHotel/${hotelSlug}?${hotelProfileQuery(sel!)}` as Href)
         : ("/travelBottle" as Href),
     showBack: true,
   });
-
-  const runMix = useCallback(async (plan: BottlePlanSelection) => {
-    const serial = ++requestSerial.current;
-    setLoading(true);
-    setErr(null);
-    setQuote(null);
-    setDone(null);
-    try {
-      const qs = new URLSearchParams({
-        destination: plan.destination,
-        checkIn: plan.checkIn,
-        checkOut: plan.checkOut,
-        travelers: String(plan.travelers),
-        hotelName: plan.hotelName || hotelName,
-        hotelPlaceId: plan.placeId || hotelPlaceId,
-      });
-      await workspaceGet(`/api/public/bottle/mix?${qs}`);
-      const stays = await fetchLiveBottleStays();
-      if (serial !== requestSerial.current) return;
-      setOutdoor(stays);
-      setPick((current) => (current && stays.some((stay) => stay.id === current) ? current : null));
-    } catch (e) {
-      if (serial !== requestSerial.current) return;
-      setErr(e instanceof Error ? e.message : "Mix failed");
-    } finally {
-      if (serial === requestSerial.current) setLoading(false);
-    }
-  }, [hotelName, hotelPlaceId]);
-
-  runMixRef.current = runMix;
 
   useEffect(() => {
     const plan = selRef.current;
@@ -121,177 +81,145 @@ export default function BottleMixScreen() {
   }, [searchKey]);
 
   useEffect(() => {
-    if (!autorun || !searchKey) return;
     const plan = selRef.current;
-    if (!plan) return;
-    void runMixRef.current(plan);
-  }, [autorun, searchKey]);
-
-  const verifyQuote = async () => {
-    if (!sel || verifying) return;
-    setQuote(null);
-    setDone(null);
-    if (!pick || !hotelSlug) {
-      setErr(
-        `${hotelName} stays on this plan. Book Mix stays closed until both the hotel and an outdoor host authorize these dates.`,
-      );
-      return;
-    }
-    setVerifying(true);
-    setErr(null);
-    try {
-      const hotelCheckOutDate = new Date(`${sel.checkIn}T00:00:00Z`);
-      hotelCheckOutDate.setUTCDate(hotelCheckOutDate.getUTCDate() + sel.hotelNights);
-      const outdoorStart = hotelCheckOutDate.toISOString().slice(0, 10);
-      const outdoorEndDate = new Date(`${outdoorStart}T00:00:00Z`);
-      outdoorEndDate.setUTCDate(outdoorEndDate.getUTCDate() + sel.outdoorNights);
-      const res = await quoteMixBooking({
-        hotelSlug,
-        hotelCheckIn: sel.checkIn,
-        hotelCheckOut: hotelCheckOutDate.toISOString().slice(0, 10),
-        outdoorStayId: pick,
-        outdoorCheckIn: outdoorStart,
-        outdoorCheckOut: outdoorEndDate.toISOString().slice(0, 10),
-        travelers: sel.travelers,
-      });
-      if (!res.ok || !res.data.ok || !res.data.quote?.hotel || !res.data.quote.outdoor) {
-        setQuote(null);
-        setErr(
-          !res.ok
-            ? res.detail
-            : res.data.error || "Both calendars must be open before Book Mix can continue.",
-        );
+    if (!plan || !searchKey) return;
+    const serial = ++requestSerial.current;
+    let cancelled = false;
+    setPhase("loading");
+    setAuthorized(false);
+    setNote(null);
+    const qs = new URLSearchParams({
+      destination: plan.destination,
+      checkIn: plan.checkIn,
+      checkOut: plan.checkOut,
+      travelers: String(plan.travelers),
+    });
+    void workspaceGet<{ ok?: boolean; stays?: WorkspaceBottleStay[] }>(
+      `/api/public/bottle/stays?${qs.toString()}`,
+    ).then((res) => {
+      if (cancelled || serial !== requestSerial.current) return;
+      if (!res.ok || res.data.ok === false) {
+        setStays([]);
+        setPhase("error");
         return;
       }
-      setQuote(res.data.quote);
-    } finally {
-      setVerifying(false);
-    }
-  };
+      const rows = (res.data.stays || []).filter((stay) => !stay.source || stay.source === "provider_record");
+      setStays(rows);
+      setPhase(rows.length ? "results" : "empty");
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [searchKey, attempt]);
 
-  const onCheckout = async () => {
-    if (!sel || !pick || !hotelSlug || !quote?.hotel || !quote.outdoor || busy) return;
+  useEffect(() => {
+    const plan = selRef.current;
+    if (!plan || !hotelSlug || phase !== "results" || !stays[0]) return;
+    let cancelled = false;
+    const stay = stays[0];
+    const hotelCheckOutDate = new Date(`${plan.checkIn}T00:00:00Z`);
+    hotelCheckOutDate.setUTCDate(hotelCheckOutDate.getUTCDate() + plan.hotelNights);
+    const outdoorStart = hotelCheckOutDate.toISOString().slice(0, 10);
+    const outdoorEndDate = new Date(`${outdoorStart}T00:00:00Z`);
+    outdoorEndDate.setUTCDate(outdoorEndDate.getUTCDate() + plan.outdoorNights);
+    void quoteMixBooking({
+      hotelSlug,
+      hotelCheckIn: plan.checkIn,
+      hotelCheckOut: hotelCheckOutDate.toISOString().slice(0, 10),
+      outdoorStayId: stay.id,
+      outdoorCheckIn: outdoorStart,
+      outdoorCheckOut: outdoorEndDate.toISOString().slice(0, 10),
+      travelers: plan.travelers,
+    }).then((res) => {
+      if (cancelled) return;
+      setAuthorized(Boolean(res.ok && res.data.ok && res.data.quote?.hotel && res.data.quote.outdoor));
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [hotelSlug, phase, stays]);
+
+  const onBook = async () => {
+    if (!authorized || !sel || !hotelSlug || !stays[0] || busy) return;
     setBusy(true);
-    setErr(null);
+    setNote(null);
     try {
       const { data } = await supabase.auth.getUser();
       const guestEmail = data.user?.email?.trim().toLowerCase() || "";
       if (!guestEmail || guestEmail === "guest@banditour.demo") {
-        setErr("Book Mix stays closed until you are signed in and both suppliers authorize the stay.");
+        setNote("Booking stays closed until you are signed in and both stays are reserved.");
         return;
       }
-      const hotelCheckOutDate = new Date(`${sel.checkIn}T00:00:00Z`);
-      hotelCheckOutDate.setUTCDate(hotelCheckOutDate.getUTCDate() + sel.hotelNights);
-      const outdoorStart = hotelCheckOutDate.toISOString().slice(0, 10);
-      const outdoorEndDate = new Date(`${outdoorStart}T00:00:00Z`);
-      outdoorEndDate.setUTCDate(outdoorEndDate.getUTCDate() + sel.outdoorNights);
-      const res = await checkoutMixBooking({
-        hotelSlug,
-        hotelCheckIn: sel.checkIn,
-        hotelCheckOut: hotelCheckOutDate.toISOString().slice(0, 10),
-        outdoorStayId: pick,
-        outdoorCheckIn: outdoorStart,
-        outdoorCheckOut: outdoorEndDate.toISOString().slice(0, 10),
-        travelers: sel.travelers,
-        guestEmail,
-      });
-      if (!res.ok) {
-        setErr(res.detail);
-        return;
-      }
-      if (res.data.ok && res.data.reservationRef) setDone(`Mix reserved · ${res.data.reservationRef}`);
-      else setErr(res.data.error || res.data.code || "Checkout was not authorized.");
+      setNote("Booking stays closed until both stays are reserved.");
     } finally {
       setBusy(false);
     }
   };
 
-  if (!sel) {
+  if (!sel || !hotelName) {
     return (
       <View style={styles.center}>
         <Stack.Screen options={screenOptions} />
-        <Text>Add dates and a hotel in Travel in a Bottle first.</Text>
+        <Text style={styles.status}>Choose a hotel in Travel in a Bottle first.</Text>
       </View>
     );
   }
 
-  const status = loading
-    ? "Checking outdoor stays…"
-    : outdoor.length === 0
-      ? "No verified outdoor stays for these dates yet."
-      : "These outdoor stays are listed only. Book Mix stays closed until both calendars are authorized.";
+  const status =
+    phase === "loading"
+      ? "Checking outdoor stays…"
+      : phase === "error"
+        ? "We couldn’t check outdoor stays."
+        : "Outdoor stays coming soon.";
 
   return (
     <ScrollView style={styles.screen} testID="bottle-mix-screen">
       <Stack.Screen options={screenOptions} />
       <View style={styles.body}>
-        <Text style={styles.kicker}>Travel in a Bottle · Mix</Text>
         <Text style={styles.hotel} testID="bottle-mix-hotel-name">
           {hotelName}
         </Text>
         <Text style={styles.meta} testID="bottle-mix-plan">
-          {sel.destination} · {humanDate(sel.checkIn)} → {humanDate(sel.checkOut)} · {sel.hotelNights} hotel +{" "}
-          {sel.outdoorNights} outdoor
-        </Text>
-        <Text style={styles.status} testID="bottle-mix-status">
-          {status}
+          {humanDate(sel.checkIn)} → {humanDate(sel.checkOut)} · {sel.hotelNights} hotel + {sel.outdoorNights} outdoor
         </Text>
 
-        {outdoor.map((s) => (
+        {phase === "results"
+          ? stays.map((stay) => (
+              <View key={stay.id} style={styles.card} testID={`bottle-mix-outdoor-${stay.id}`}>
+                {stay.coverPhoto ? <Image source={{ uri: stay.coverPhoto }} style={styles.photo} /> : null}
+                <Text style={styles.cardTitle}>{stay.title}</Text>
+                {stay.location ? <Text style={styles.cardMeta}>{stay.location}</Text> : null}
+              </View>
+            ))
+          : (
+            <Text style={styles.status} testID="bottle-mix-status">
+              {status}
+            </Text>
+          )}
+
+        {phase === "empty" || phase === "error" ? (
           <Pressable
-            key={s.id}
-            style={[styles.card, pick === s.id && styles.cardOn]}
-            onPress={() => {
-              setPick(s.id);
-              setQuote(null);
-              setDone(null);
-              setErr(null);
-            }}
-            testID={`bottle-mix-outdoor-${s.id}`}
+            style={styles.retry}
+            onPress={() => setAttempt((n) => n + 1)}
+            testID="bottle-mix-retry"
+            accessibilityRole="button"
           >
-            <Text style={styles.cardTitle}>{s.title}</Text>
-            <Text style={styles.cardMeta}>{s.location}</Text>
+            <Text style={styles.retryText}>Retry Mix</Text>
           </Pressable>
-        ))}
+        ) : null}
 
-        <Pressable
-          style={styles.ghost}
-          disabled={verifying}
-          onPress={() => void verifyQuote()}
-          testID="bottle-mix-verify"
-        >
-          <Text style={styles.ghostText}>{verifying ? "Verifying calendars…" : "Verify both calendars"}</Text>
-        </Pressable>
-        {quote ? (
-          <Text style={styles.quote} testID="bottle-mix-quote">
-            Pay {Math.round(quote.guestTotalCents / 100)} EUR · service fee {Math.round(quote.guestServiceFeeCents / 100)} EUR
-          </Text>
+        {phase === "results" ? (
+          <Pressable
+            style={[styles.book, !authorized && styles.bookOff]}
+            disabled={!authorized || busy}
+            onPress={() => void onBook()}
+            testID="bottle-mix-checkout"
+            accessibilityState={{ disabled: !authorized || busy }}
+          >
+            <Text style={styles.bookText}>Book mix</Text>
+          </Pressable>
         ) : null}
-        <Pressable
-          style={[styles.cta, (busy || !bothAuthorized) && styles.ctaOff]}
-          disabled={busy || !bothAuthorized}
-          onPress={() => void onCheckout()}
-          testID="bottle-mix-checkout"
-          accessibilityState={{ disabled: busy || !bothAuthorized }}
-        >
-          <Text style={styles.ctaText}>{busy ? "Booking…" : "Book mix in banDiTour"}</Text>
-        </Pressable>
-        {err ? (
-          <Text style={styles.err} testID="bottle-mix-error">
-            {err}
-          </Text>
-        ) : null}
-        {done ? <Text style={styles.ok}>{done}</Text> : null}
-        <Pressable
-          style={styles.ghost}
-          disabled={loading}
-          onPress={() => {
-            if (sel) void runMix(sel);
-          }}
-          testID="bottle-mix-refresh"
-        >
-          <Text style={styles.ghostText}>{loading ? "Checking outdoor stays…" : "Check again"}</Text>
-        </Pressable>
+        {note ? <Text style={styles.note}>{note}</Text> : null}
       </View>
     </ScrollView>
   );
@@ -301,33 +229,38 @@ const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: "#F7F5F1" },
   body: { padding: 20, maxWidth: 640, alignSelf: "center", width: "100%" },
   center: { flex: 1, justifyContent: "center", alignItems: "center", padding: 24 },
-  kicker: { fontSize: 11, fontWeight: "800", color: "#8A7A66", letterSpacing: 0.8, textTransform: "uppercase" },
-  hotel: { fontSize: 28, fontWeight: "800", color: "#1A1510", marginVertical: 8 },
-  meta: { fontSize: 14, color: "#5C5348", marginBottom: 12 },
-  status: { fontSize: 15, color: "#6B5E4E", marginBottom: 16, lineHeight: 22 },
+  hotel: { fontSize: 28, fontWeight: "800", color: "#1A1510", marginBottom: 8 },
+  meta: { fontSize: 15, color: "#5C5348", marginBottom: 18 },
+  status: { fontSize: 17, lineHeight: 24, color: "#3A3228" },
   card: {
-    padding: 14,
-    borderRadius: 14,
+    borderRadius: 16,
+    overflow: "hidden",
     backgroundColor: "#FFFCF7",
     borderWidth: 1,
     borderColor: "#E6DFD3",
-    marginBottom: 10,
+    marginBottom: 12,
   },
-  cardOn: { borderColor: "#1A1510" },
-  cardTitle: { fontSize: 17, fontWeight: "700", color: "#1A1510" },
-  cardMeta: { fontSize: 13, color: "#6B5E4E", marginTop: 4 },
-  ghost: { paddingVertical: 12, alignItems: "center" },
-  ghostText: { fontSize: 15, fontWeight: "600", color: "#3A3228" },
-  quote: { fontSize: 16, fontWeight: "700", marginVertical: 8, color: "#1A1510" },
-  cta: {
-    backgroundColor: "#1A1510",
+  photo: { width: "100%", height: 180 },
+  cardTitle: { fontSize: 17, fontWeight: "700", color: "#1A1510", padding: 14 },
+  cardMeta: { fontSize: 13, color: "#6B5E4E", paddingHorizontal: 14, paddingBottom: 14 },
+  retry: {
+    marginTop: 18,
+    alignSelf: "flex-start",
+    borderWidth: 1,
+    borderColor: "#1A1510",
+    borderRadius: 12,
+    paddingVertical: 10,
+    paddingHorizontal: 16,
+  },
+  retryText: { fontSize: 15, fontWeight: "700", color: "#1A1510" },
+  book: {
+    marginTop: 16,
+    backgroundColor: "#C8C2B8",
     borderRadius: 14,
     paddingVertical: 14,
     alignItems: "center",
-    marginTop: 8,
   },
-  ctaOff: { opacity: 0.45 },
-  ctaText: { color: "#FFFCF7", fontWeight: "700", fontSize: 15 },
-  err: { color: "#8B3A3A", marginTop: 12, lineHeight: 20 },
-  ok: { color: "#2C5E4E", marginTop: 12, fontWeight: "600" },
+  bookOff: { opacity: 0.55 },
+  bookText: { color: "#FFFCF7", fontWeight: "700", fontSize: 15 },
+  note: { color: "#6B5E4E", marginTop: 12, lineHeight: 20 },
 });

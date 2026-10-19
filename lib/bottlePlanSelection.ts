@@ -151,6 +151,16 @@ export function bottlePlanSearchKey(sel: BottlePlanSelection): string {
   ].join("\u001f");
 }
 
+export function hotelProfileQuery(sel: Pick<BottlePlanSelection, "checkIn" | "checkOut" | "travelers" | "hotelNights" | "outdoorNights">): string {
+  const qs = new URLSearchParams();
+  if (sel.checkIn) qs.set("checkIn", sel.checkIn);
+  if (sel.checkOut) qs.set("checkOut", sel.checkOut);
+  qs.set("travelers", String(sel.travelers));
+  qs.set("hotelNights", String(sel.hotelNights));
+  qs.set("outdoorNights", String(sel.outdoorNights));
+  return qs.toString();
+}
+
 export function mixSearchParams(sel: BottlePlanSelection): Record<string, string> {
   const qs: Record<string, string> = {
     destination: sel.destination,
