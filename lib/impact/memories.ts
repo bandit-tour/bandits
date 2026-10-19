@@ -8,7 +8,33 @@
  */
 import { Platform } from "react-native";
 
+import { supabase } from "@/lib/supabase";
 import { deleteTravelMediaFromStorage, persistTravelMedia } from "@/lib/travel-memory/media";
+
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/** Identity hydrates after first paint. Photos must follow the signed-in owner, not the placeholder. */
+export async function resolveImpactMemoryOwner(fallback: string): Promise<string> {
+  const direct = String(fallback || "").trim();
+  if (UUID.test(direct)) return direct;
+  const readSession = async () => {
+    try {
+      const { data } = await supabase.auth.getSession();
+      return data.session?.user?.id || "";
+    } catch {
+      return "";
+    }
+  };
+  const immediate = await readSession();
+  if (immediate) return immediate;
+  const deadline = Date.now() + 3000;
+  while (Date.now() < deadline) {
+    await new Promise((resolve) => setTimeout(resolve, 200));
+    const id = await readSession();
+    if (id) return id;
+  }
+  return direct || "guest";
+}
 
 const KEY = "@bandits_impact_memories_v1";
 const MAX_PHOTOS = 8;
@@ -116,7 +142,7 @@ export async function addImpactMemory(input: {
     throw new Error("You can keep up to 8 private photos.");
   }
   const id = `im_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
-  const signedIn = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(userId);
+  const signedIn = UUID.test(userId);
   let uri = input.uri;
   let storagePath: string | null = null;
   let mimeType = input.mimeType || "image/jpeg";
@@ -128,9 +154,10 @@ export async function addImpactMemory(input: {
       mimeType,
       storagePath: null,
     });
-    uri = persisted.uri;
     storagePath = persisted.storagePath || null;
     mimeType = persisted.mimeType || mimeType;
+    // Keep a device copy so refresh does not depend on a signed URL. The bucket copy is the private original.
+    uri = input.uri.startsWith("data:") || input.uri.startsWith("file:") ? input.uri : persisted.uri;
   } catch (err) {
     if (!input.uri.startsWith("data:") && !input.uri.startsWith("file:")) {
       throw err instanceof Error ? err : new Error("Could not save that photo.");

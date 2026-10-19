@@ -10,6 +10,7 @@ import {
   blobToJpegDataUrl,
   deleteImpactMemory,
   listImpactMemories,
+  resolveImpactMemoryOwner,
   setImpactMemoryVisibility,
   type ImpactMemory,
 } from "@/lib/impact/memories";
@@ -46,14 +47,22 @@ export function PassportBook({
   const [busy, setBusy] = useState(false);
   const inputRef = useRef<HTMLInputElement | null>(null);
   const onFileRef = useRef<(file: Blob) => void>(() => undefined);
+  const ownerRef = useRef(userId);
+  const listGen = useRef(0);
 
-  const reload = useCallback(async () => {
-    setMemories(await listImpactMemories(userId));
-  }, [userId]);
+  const loadFor = useCallback(async (preferred: string) => {
+    const token = ++listGen.current;
+    const owner = await resolveImpactMemoryOwner(preferred);
+    const rows = await listImpactMemories(owner);
+    if (token !== listGen.current) return owner;
+    ownerRef.current = owner;
+    setMemories(rows);
+    return owner;
+  }, []);
 
   useEffect(() => {
-    void reload();
-  }, [reload]);
+    void loadFor(userId);
+  }, [loadFor, userId]);
 
   const saveBlob = useCallback(
     async (blob: Blob) => {
@@ -61,8 +70,11 @@ export function PassportBook({
       setNote(null);
       try {
         const uri = await blobToJpegDataUrl(blob);
-        await addImpactMemory({ userId, uri, mimeType: "image/jpeg" });
-        await reload();
+        const owner = await resolveImpactMemoryOwner(userId);
+        ownerRef.current = owner;
+        await addImpactMemory({ userId: owner, uri, mimeType: "image/jpeg" });
+        listGen.current += 1;
+        setMemories(await listImpactMemories(owner));
         setNote("Saved privately. This photo is not attendance and did not add Drops.");
       } catch (err) {
         setNote(err instanceof Error ? err.message : "Could not save that photo.");
@@ -70,7 +82,7 @@ export function PassportBook({
         setBusy(false);
       }
     },
-    [reload, userId],
+    [userId],
   );
 
   onFileRef.current = (file) => {
@@ -120,12 +132,15 @@ export function PassportBook({
     setBusy(true);
     setNote(null);
     try {
+      const owner = await resolveImpactMemoryOwner(userId);
+      ownerRef.current = owner;
       await addImpactMemory({
-        userId,
+        userId: owner,
         uri: asset.uri,
         mimeType: asset.mimeType || "image/jpeg",
       });
-      await reload();
+      listGen.current += 1;
+      setMemories(await listImpactMemories(owner));
       setNote("Saved privately. This photo is not attendance and did not add Drops.");
     } catch (err) {
       setNote(err instanceof Error ? err.message : "Could not save that photo.");
@@ -136,13 +151,15 @@ export function PassportBook({
 
   const onToggle = async (memory: ImpactMemory) => {
     const next = memory.visibility === "hidden" ? "shown" : "hidden";
-    await setImpactMemoryVisibility(userId, memory.id, next);
-    await reload();
+    const owner = ownerRef.current;
+    await setImpactMemoryVisibility(owner, memory.id, next);
+    setMemories(await listImpactMemories(owner));
   };
 
   const onDelete = async (memory: ImpactMemory) => {
-    await deleteImpactMemory(userId, memory.id);
-    await reload();
+    const owner = ownerRef.current;
+    await deleteImpactMemory(owner, memory.id);
+    setMemories(await listImpactMemories(owner));
     setNote("Photo deleted.");
   };
 
