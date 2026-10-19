@@ -41,7 +41,7 @@ export const OCTOPUS_CONCIERGE_OFFER = {
   priceLabel: "€19",
   priceCents: 1900,
   currency: "EUR",
-  periodLabel: "/ stay · up to 5 requests",
+  periodLabel: "/ stay · up to 5 requests within 7 days",
   valueLine: "Your Local banDit becomes your personal local operator for the stay.",
   persuasionLine: (firstName: string) =>
     `You ask. ${firstName} gets it done — reservations, tickets, rides, deliveries and the things that normally waste your travel time.`,

@@ -580,7 +580,7 @@ export default function PremiumConciergeScreen() {
       entitlement?.state !== "unavailable" &&
       Boolean(guestEmail);
     const compactBenefits = [
-      `Up to 5 requests with ${first} this stay`,
+      `Up to 5 requests with ${first} within 7 days`,
       "Tables, tickets and transfers handled for you",
       "City Guide stays free - this is paid execution",
     ] as const;

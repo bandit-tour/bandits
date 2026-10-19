@@ -80,7 +80,7 @@ function inferCategory(row: WorkspaceLocalExperience): GuestExperience["category
 }
 
 /** Session / orch tokens sometimes appended to otherwise real provider titles. */
-const ORCH_HASH_SUFFIX = /\s(mu[a-z0-9]{6,10}|mt[a-z0-9]{5,10}|muy[a-z0-9]{5,10})$/i;
+const ORCH_HASH_SUFFIX = /\s(mu[a-z0-9]{6,10}|mv[a-z0-9]{6,10}|mt[a-z0-9]{5,10}|muy[a-z0-9]{5,10})$/i;
 
 function cleanProviderTitle(title: string): string {
   return String(title || "")
@@ -184,7 +184,7 @@ export function mapWorkspaceDetail(row: WorkspaceLocalExperience, base: GuestExp
     gallery,
     hostProfile: {
       id: row.partnerId || row.hostEmail || "host_live",
-      name: row.hostName || "Local host",
+      name: base.host || "Local host",
       photoUrl: gallery[0]!,
       expertise: "Local experience",
       bio: row.description || base.story,
