@@ -1,4 +1,5 @@
 import { getEventVenueGalleryOrdered } from '@/lib/eventVenueGallery';
+import { eventMapCoordinates } from '@/lib/mapCoordinates';
 import { Database } from '@/lib/database.types';
 import {
   isGooglePlacesDerivedPhotoUrl,
@@ -17,6 +18,9 @@ export type VibeStop = {
   category: string;
   vibeLine: string;
   address: string;
+  lat: number | null;
+  lng: number | null;
+  placeId: string | null;
   imageCandidates: string[];
   eventId?: string;
   spotId?: string;
@@ -97,6 +101,9 @@ export function buildVibeStopsFromEvents(
       [event.address, event.neighborhood, event.city].filter(Boolean).join(', '),
     ),
     imageCandidates: eventImageCandidates(event),
+    lat: eventMapCoordinates(event)?.lat ?? null,
+    lng: eventMapCoordinates(event)?.lng ?? null,
+    placeId: String((event as { google_place_id?: string | null }).google_place_id ?? '').trim() || null,
     eventId: event.id,
   }));
 }
@@ -136,6 +143,10 @@ export function buildVibeStopsFromSpots(spots: SpotRow[], startOrder: number, ma
     const s = spots[i];
     const imgs = spotTrustedImageCandidates(s);
     const desc = s.description?.trim();
+    const spotCoords =
+      s.location_lat != null && s.location_lng != null
+        ? eventMapCoordinates({ location_lat: s.location_lat, location_lng: s.location_lng })
+        : null;
     out.push({
       key: `spot-${s.id}`,
       kind: 'spot',
@@ -145,6 +156,9 @@ export function buildVibeStopsFromSpots(spots: SpotRow[], startOrder: number, ma
       vibeLine: desc ? truncateVibe(desc) : 'A local-coded stop on this thread.',
       address: repairDisplayText([s.address, s.city].filter(Boolean).join(', ') || ''),
       imageCandidates: imgs,
+      lat: spotCoords?.lat ?? null,
+      lng: spotCoords?.lng ?? null,
+      placeId: String(s.google_place_id ?? '').trim() || null,
       spotId: s.id,
     });
   }

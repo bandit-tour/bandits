@@ -84,6 +84,7 @@ let MapContainer: any = null;
 let TileLayer: any = null;
 let Marker: any = null;
 let Popup: any = null;
+let Polyline: any = null;
 let L: any = null;
 
 interface MapViewProps {
@@ -99,6 +100,14 @@ interface MapViewProps {
   children?: React.ReactNode;
   miniMode?: boolean;
   banditId?: string;
+  seedEvents?: Event[];
+  preferSeed?: boolean;
+  embedded?: boolean;
+  selectedEventId?: string | null;
+  onSelectEvent?: (event: Event) => void;
+  markerLabels?: Record<string, string>;
+  showRouteLine?: boolean;
+  initialCamera?: { latitude: number; longitude: number; zoom: number } | null;
 }
 
 export default function LeafletMapView({
@@ -108,7 +117,15 @@ export default function LeafletMapView({
   onRegionChange,
   children,
   miniMode = false,
-  banditId
+  banditId,
+  seedEvents,
+  preferSeed = false,
+  embedded = false,
+  selectedEventId = null,
+  onSelectEvent,
+  markerLabels,
+  showRouteLine = false,
+  initialCamera = null,
 }: MapViewProps) {
   const eventListRef = useRef<EventListRef>(null);
   const [leafletLoaded, setLeafletLoaded] = useState(false);
@@ -121,7 +138,11 @@ export default function LeafletMapView({
   /** Same hook + shared `getEvents` path as native (`LeafletMapView.native.tsx`). */
   const { events, loading, error, banditId: mapBanditId } = useMapEventsHook(
     undefined,
-    scopedBanditId ? { banditId: scopedBanditId } : undefined,
+    {
+      ...(scopedBanditId ? { banditId: scopedBanditId } : {}),
+      ...(seedEvents ? { seedEvents } : {}),
+      ...(preferSeed || seedEvents ? { preferSeed: true } : {}),
+    },
   );
 
   const activeBanditId = mapBanditId || scopedBanditId;
@@ -130,7 +151,8 @@ export default function LeafletMapView({
   const handleMarkerPress = (event: any) => {
     const idx = events.findIndex((e) => e.id === event.id);
     if (idx >= 0) setActiveEventIndex(idx);
-    eventListRef.current?.scrollToEvent(event.id);
+    if (onSelectEvent) onSelectEvent(event);
+    if (!embedded) eventListRef.current?.scrollToEvent(event.id);
   };
 
   const focusMapOnEvent = useCallback(
@@ -195,6 +217,7 @@ export default function LeafletMapView({
         TileLayer = reactLeaflet.TileLayer;
         Marker = reactLeaflet.Marker;
         Popup = reactLeaflet.Popup;
+        Polyline = reactLeaflet.Polyline;
         L = leaflet.default;
 
         // Fix for default marker icons in webpack
@@ -276,13 +299,30 @@ export default function LeafletMapView({
 
   const createCustomIcon = (eventId: string) => {
     if (!L) return null;
+    const label = markerLabels?.[eventId];
     const color = eventColorById.get(eventId) ?? '#C0392B';
-    /** Mini-mode markers are larger and bolder so the dots are clearly visible at 80×80. */
-    const size = miniMode ? 14 : 20;
-    const borderWidth = miniMode ? 2 : 2;
+    const selected = selectedEventId === eventId;
+    const size = label ? 28 : miniMode ? 14 : selected ? 24 : 20;
+    const borderWidth = selected ? 3 : 2;
 
     return L.divIcon({
-      html: `
+      html: label
+        ? `
+        <div style="
+          width: ${size}px;
+          height: ${size}px;
+          background-color: ${selected ? '#111111' : '#E03131'};
+          color: #ffffff;
+          border: ${borderWidth}px solid white;
+          border-radius: 50%;
+          box-shadow: 0 2px 6px rgba(0,0,0,0.45);
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          font: 700 13px/1 -apple-system, Segoe UI, sans-serif;
+        ">${label}</div>
+      `
+        : `
         <div style="
           width: ${size}px;
           height: ${size}px;
@@ -308,6 +348,58 @@ export default function LeafletMapView({
     [events],
   );
 
+  const routeLatLngs = useMemo(() => {
+    if (!showRouteLine) return [] as [number, number][];
+    const rows = events
+      .map((event) => {
+        const coords = eventMapCoordinates(event);
+        if (!coords) return null;
+        const n = Number(markerLabels?.[event.id] ?? '');
+        return { coords, n: Number.isFinite(n) ? n : 999 };
+      })
+      .filter((row): row is { coords: { lat: number; lng: number }; n: number } => row != null)
+      .sort((a, b) => a.n - b.n);
+    return rows.map((row) => [row.coords.lat, row.coords.lng] as [number, number]);
+  }, [events, markerLabels, showRouteLine]);
+
+  const didFitRef = useRef(false);
+  const lastFlownIdRef = useRef<string | null>(null);
+  const skipInitialFlyRef = useRef(Boolean(initialCamera));
+  useEffect(() => {
+    if (!embedded || !mapInstance || didFitRef.current) return;
+    if (initialCamera) {
+      didFitRef.current = true;
+      return;
+    }
+    const pts = events
+      .map((event) => eventMapCoordinates(event))
+      .filter((coords): coords is { lat: number; lng: number } => coords != null);
+    if (pts.length === 0) return;
+    didFitRef.current = true;
+    mapInstance.fitBounds(
+      pts.map((p) => [p.lat, p.lng]),
+      { padding: [28, 28], maxZoom: 15 },
+    );
+  }, [embedded, events, initialCamera, mapInstance]);
+
+  useEffect(() => {
+    if (!embedded || !mapInstance || !selectedEventId) return;
+    if (skipInitialFlyRef.current) {
+      skipInitialFlyRef.current = false;
+      lastFlownIdRef.current = selectedEventId;
+      return;
+    }
+    if (lastFlownIdRef.current === selectedEventId) return;
+    const event = events.find((e) => e.id === selectedEventId);
+    const coords = event ? eventMapCoordinates(event) : null;
+    if (!coords) return;
+    lastFlownIdRef.current = selectedEventId;
+    mapInstance.flyTo([coords.lat, coords.lng], Math.max(mapInstance.getZoom?.() ?? 14, 15), {
+      animate: true,
+      duration: 0.45,
+    });
+  }, [embedded, events, mapInstance, selectedEventId]);
+
   const mapBounds = useMemo(() => {
     const { center, zoom } = boundsFromMapEvents(
       events,
@@ -325,6 +417,7 @@ export default function LeafletMapView({
       onRegionChange({
         latitude: center.lat,
         longitude: center.lng,
+        zoom,
         latitudeDelta: 0.01 / Math.pow(2, zoom - 10),
         longitudeDelta: 0.01 / Math.pow(2, zoom - 10),
       });
@@ -349,31 +442,39 @@ export default function LeafletMapView({
 
   if (!leafletLoaded) {
     return (
-      <View style={styles.container}>
-        <View style={styles.mapContainer}>
+      <View style={embedded ? styles.embeddedContainer : styles.container}>
+        <View style={embedded ? styles.embeddedMap : styles.mapContainer}>
           <View style={styles.loadingContainer}>
             <div style={{ textAlign: 'center', padding: '20px' }}>Loading map...</div>
           </View>
         </View>
-        <EventList
-          ref={eventListRef}
-          events={events}
-          loading={loading}
-          error={error}
-          banditId={activeBanditId as string}
-          variant="horizontal"
-          showButton={false}
-          imageHeight={154}
-          contentContainerStyle={styles.eventsContainer}
-        />
+        {!embedded ? (
+          <EventList
+            ref={eventListRef}
+            events={events}
+            loading={loading}
+            error={error}
+            banditId={activeBanditId as string}
+            variant="horizontal"
+            showButton={false}
+            imageHeight={154}
+            contentContainerStyle={styles.eventsContainer}
+          />
+        ) : null}
       </View>
     );
   }
 
+  const mapCenter =
+    embedded && initialCamera
+      ? ([initialCamera.latitude, initialCamera.longitude] as [number, number])
+      : mapBounds.center;
+  const mapZoom = embedded && initialCamera ? initialCamera.zoom : mapBounds.zoom;
+
   return (
-    <View style={miniMode ? styles.miniContainer : styles.container}>
+    <View style={embedded ? styles.embeddedContainer : miniMode ? styles.miniContainer : styles.container}>
       {/* Map - Full container in mini mode, top 40% in normal mode */}
-      <View style={miniMode ? styles.miniMapContainer : styles.mapContainer}>
+      <View style={embedded ? styles.embeddedMap : miniMode ? styles.miniMapContainer : styles.mapContainer}>
         <link
           rel="stylesheet"
           href="https://unpkg.com/leaflet@1.7.1/dist/leaflet.css"
@@ -381,15 +482,16 @@ export default function LeafletMapView({
           crossOrigin=""
         />
         <MapContainer
-          key={`${mapBounds.center[0]}-${mapBounds.center[1]}-${mapBounds.zoom}-${events.length}`}
-          center={mapBounds.center}
-          zoom={mapBounds.zoom}
+          key={embedded ? `guide-map-${scopedBanditId ?? 'all'}` : `${mapBounds.center[0]}-${mapBounds.center[1]}-${mapBounds.zoom}-${events.length}`}
+          center={mapCenter}
+          zoom={mapZoom}
           style={{ height: '100%', width: '100%' }}
+          ref={setMapInstance}
           whenCreated={setMapInstance}
           zoomControl={!miniMode}
           dragging={!miniMode}
           touchZoom={!miniMode}
-          scrollWheelZoom={!miniMode}
+          scrollWheelZoom={!miniMode && !embedded}
           doubleClickZoom={!miniMode}
           boxZoom={!miniMode}
           attributionControl={!miniMode}
@@ -398,6 +500,13 @@ export default function LeafletMapView({
             attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
             url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
           />
+
+          {showRouteLine && routeLatLngs.length > 1 && Polyline ? (
+            <Polyline
+              positions={routeLatLngs}
+              pathOptions={{ color: '#E03131', weight: 4, opacity: 0.9 }}
+            />
+          ) : null}
 
           {/* Event markers */}
           {events.map((event) => {
@@ -440,8 +549,8 @@ export default function LeafletMapView({
         </MapContainer>
       </View>
 
-      {/* Bottom 60% - Events List (only in normal mode) */}
-      {!miniMode && (
+      {/* Bottom 60% - Events List (only on the full map screen) */}
+      {!miniMode && !embedded && (
         <View style={styles.recommendationsPanel}>
           <View style={styles.recommendationsHeader}>
             <Text style={styles.recommendationsTitle}>Map picks</Text>
@@ -501,6 +610,20 @@ const styles = StyleSheet.create({
     flex: 1,
     width: '100%',
     height: '100%',
+  },
+  embeddedContainer: {
+    flex: 1,
+    width: '100%',
+    height: '100%',
+    minHeight: 240,
+    borderRadius: 16,
+    overflow: 'hidden',
+  },
+  embeddedMap: {
+    flex: 1,
+    width: '100%',
+    height: '100%',
+    backgroundColor: '#e9ecef',
   },
   mapContainer: {
     height: '46%',

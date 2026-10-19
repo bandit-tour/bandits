@@ -1,5 +1,5 @@
 import { Stack, useLocalSearchParams, useRouter, type Href } from 'expo-router';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Linking,
@@ -13,11 +13,19 @@ import {
 } from 'react-native';
 
 import { getEvents } from '@/app/services/events';
-import { fetchGooglePlacePhotoUrl, isGooglePlacesDerivedPhotoUrl, normalizeEventImageUri } from '@/lib/placePhoto';
+import {
+  fetchGooglePlacePhotoUrls,
+  fetchTrustedPlaceIdPhotoUrls,
+  normalizeEventImageUri,
+} from '@/lib/placePhoto';
 import { Image as ExpoImage } from 'expo-image';
+import LeafletMapView from '@/components/LeafletMapView';
+import { ATHENS_CENTER } from '@/lib/mapCoordinates';
+import { readGuideView, writeGuideView, type GuideCamera } from '@/lib/guideViewMemory';
+import { ensureAnonymousSession } from '@/lib/pilotSession';
+import { buildTastefulCategoryIllustration } from '@/lib/recommendationImages';
 import { getSpotsByBanditId } from '@/services/spots';
 import { mergeVibeSequence, type VibeStop } from '@/services/vibeRoute';
-import { buildCategoryNeutralPlaceholder } from '@/lib/recommendationImages';
 import { Database } from '@/lib/database.types';
 import { supabase } from '@/lib/supabase';
 import { useAppBackScreenOptions } from '@/hooks/useAppBackScreenOptions';
@@ -27,83 +35,67 @@ type BanditRow = Database['public']['Tables']['bandit']['Row'];
 
 function VibeStopImage({ stop }: { stop: VibeStop }) {
   const [attempt, setAttempt] = useState(0);
-  const [remote, setRemote] = useState<string | null>(null);
-  const [remoteDone, setRemoteDone] = useState(false);
-
-  // Neutral category-specific SVG placeholder. Never an unrelated stock photo.
-  const neutralFallback = useMemo(
-    () => buildCategoryNeutralPlaceholder(stop.name, stop.category, `vibe-${stop.key}`),
-    [stop.name, stop.category, stop.key],
-  );
-
-  const uris = useMemo(() => {
-    const list = stop.imageCandidates.map((u) => String(u).trim()).filter(Boolean);
-    if (remote) list.push(remote);
-    list.push(neutralFallback);
-    return list;
-  }, [stop.imageCandidates, remote, neutralFallback]);
+  const [live, setLive] = useState<string[]>([]);
+  const [liveDone, setLiveDone] = useState(false);
+  const storedKey = stop.imageCandidates.join('|');
 
   useEffect(() => {
     setAttempt(0);
-    setRemote(null);
-  }, [stop.key]);
+    setLive([]);
+    setLiveDone(false);
+  }, [stop.key, storedKey]);
 
   useEffect(() => {
-    setRemoteDone(false);
     let cancelled = false;
     void (async () => {
       try {
-        if (stop.imageCandidates.length > 0) {
-          setRemoteDone(true);
-          return;
-        }
-        if (stop.kind === 'event' && stop.eventId) {
-          const { data } = await supabase.from('event').select('*').eq('id', stop.eventId).maybeSingle();
-          if (cancelled || !data) {
-            setRemoteDone(true);
-            return;
-          }
-          const ev = data as EventRow;
-          const url = await fetchGooglePlacePhotoUrl({
-            placeId: (ev as any).google_place_id ?? null,
-            name: ev.name,
-            address: ev.address,
-            city: ev.city,
-            neighborhood: ev.neighborhood,
+        let urls = stop.placeId ? await fetchTrustedPlaceIdPhotoUrls(stop.placeId, 4) : [];
+        if (urls.length === 0) {
+          urls = await fetchGooglePlacePhotoUrls({
+            placeId: stop.placeId,
+            name: stop.name,
+            address: stop.address,
+            city: 'Athens',
+            neighborhood: '',
+            limit: 4,
           });
-          const norm = url ? normalizeEventImageUri(url) ?? url : null;
-          if (norm && isGooglePlacesDerivedPhotoUrl(norm) && !cancelled) setRemote(norm);
-          setRemoteDone(true);
-          return;
         }
-        const url = await fetchGooglePlacePhotoUrl({
-          name: stop.name,
-          address: stop.address,
-          city: '',
-          neighborhood: '',
-        });
-        const norm = url ? normalizeEventImageUri(url) ?? url : null;
-        if (norm && isGooglePlacesDerivedPhotoUrl(norm) && !cancelled) setRemote(norm);
+        const cleaned = urls
+          .map((u) => normalizeEventImageUri(u) ?? u)
+          .filter((u) => /^https?:\/\//i.test(u));
+        if (!cancelled && cleaned.length > 0) setLive(cleaned);
       } catch (e) {
         console.warn('[VibeStopImage] place photo fetch failed', stop.key, e instanceof Error ? e.message : e);
       } finally {
-        setRemoteDone(true);
+        if (!cancelled) setLiveDone(true);
       }
     })();
     return () => {
       cancelled = true;
     };
-  }, [stop.key, stop.kind, stop.eventId, stop.name, stop.address, stop.imageCandidates.length]);
+  }, [stop.address, stop.key, stop.name, stop.placeId]);
 
-  const safeIndex = Math.min(attempt, Math.max(0, uris.length - 1));
-  const uri = uris[safeIndex] ?? neutralFallback;
-  const showLoader = stop.imageCandidates.length === 0 && !remoteDone && !remote;
+  useEffect(() => {
+    if (live.length > 0) setAttempt(0);
+  }, [live]);
 
-  if (showLoader) {
+  const realUris = live.length > 0 ? live : stop.imageCandidates;
+  const uri = realUris[attempt];
+  if (!uri) {
+    if (!liveDone) {
+      return (
+        <View style={[styles.stopImage, styles.vibeImageLoading]}>
+          <ActivityIndicator size="small" color="#888" />
+        </View>
+      );
+    }
     return (
-      <View style={[styles.stopImage, styles.vibeImageLoading]}>
-        <ActivityIndicator size="small" color="#888" />
-      </View>
+      <ExpoImage
+        source={{ uri: buildTastefulCategoryIllustration(stop.name, stop.category) }}
+        style={styles.stopImage}
+        contentFit="cover"
+        accessibilityLabel={`vibe-stop-fallback:${stop.key}`}
+      />
     );
   }
 
@@ -114,10 +106,9 @@ function VibeStopImage({ stop }: { stop: VibeStop }) {
       contentFit="cover"
       cachePolicy="memory-disk"
       transition={180}
-      recyclingKey={stop.key}
-      onError={() => {
-        if (attempt < uris.length - 1) setAttempt((a) => a + 1);
-      }}
+      recyclingKey={`${stop.key}:${attempt}`}
+      accessibilityLabel={`vibe-stop-photo:${stop.key}`}
+      onError={() => setAttempt((a) => a + 1)}
     />
   );
 }
@@ -139,6 +130,41 @@ export default function VibeRouteScreen() {
   const [error, setError] = useState<string | null>(null);
   const [bandit, setBandit] = useState<BanditRow | null>(null);
   const [stops, setStops] = useState<VibeStop[]>([]);
+  const [camera, setCamera] = useState<GuideCamera | null>(null);
+  const scrollRef = useRef<ScrollView>(null);
+  const restoredScroll = useRef(false);
+
+  const mappedStops = useMemo(
+    () => stops.filter((stop) => stop.lat != null && stop.lng != null),
+    [stops],
+  );
+  const routeEvents = useMemo(
+    () =>
+      mappedStops.map(
+        (stop) =>
+          ({
+            id: stop.eventId || stop.key,
+            name: stop.name,
+            address: stop.address,
+            genre: stop.category,
+            city: 'Athens',
+            location_lat: stop.lat,
+            location_lng: stop.lng,
+          }) as EventRow,
+      ),
+    [mappedStops],
+  );
+  const markerLabels = useMemo(() => {
+    const labels: Record<string, string> = {};
+    for (const stop of mappedStops) labels[stop.eventId || stop.key] = String(stop.order);
+    return labels;
+  }, [mappedStops]);
+
+  useEffect(() => {
+    if (!banditId) return;
+    const mem = readGuideView('vibe', banditId);
+    if (mem?.camera) setCamera(mem.camera);
+  }, [banditId]);
 
   useEffect(() => {
     if (!banditId) return;
@@ -147,6 +173,7 @@ export default function VibeRouteScreen() {
       try {
         setLoading(true);
         setError(null);
+        await ensureAnonymousSession().catch(() => undefined);
 
         const { data: b, error: bErr } = await supabase
           .from('bandit')
@@ -206,6 +233,12 @@ export default function VibeRouteScreen() {
     [banditId, router],
   );
 
+  const openRouteNavigation = useCallback(() => {
+    if (mappedStops.length === 0) return;
+    const path = mappedStops.map((stop) => `${stop.lat},${stop.lng}`).join('/');
+    Linking.openURL(`https://www.google.com/maps/dir/${path}`);
+  }, [mappedStops]);
+
   if (!banditId) {
     return (
       <View style={styles.centered}>
@@ -240,14 +273,64 @@ export default function VibeRouteScreen() {
     <>
       <Stack.Screen options={screenOptions} />
       <ScrollView
+        ref={scrollRef}
         style={styles.scroll}
         contentContainerStyle={[styles.scrollContent, isDesktopWeb && styles.scrollContentDesktop]}
+        onScroll={(e) => {
+          if (!banditId) return;
+          const y = e.nativeEvent.contentOffset.y;
+          if (y === 0 && !restoredScroll.current) return;
+          writeGuideView('vibe', banditId, { scrollY: y });
+        }}
+        scrollEventThrottle={32}
+        onLayout={() => {
+          if (restoredScroll.current || !banditId) return;
+          const mem = readGuideView('vibe', banditId);
+          if (!mem?.scrollY) return;
+          restoredScroll.current = true;
+          scrollRef.current?.scrollTo({ y: mem.scrollY, animated: false });
+        }}
       >
         <Text style={styles.kicker}>Routes</Text>
         <Text style={styles.headline}>{title}</Text>
         <Text style={styles.intro}>
-          Photographic stops in order — not a map dump.
+          Ordered stops with photographs, and the route on the map.
         </Text>
+
+        {mappedStops.length > 0 ? (
+          <View testID="vibe-route-map-and-photos">
+            <View testID="vibe-route-map" style={[styles.routeMap, { height: isDesktopWeb ? 380 : 300 }]}>
+              <LeafletMapView
+                embedded
+                preferSeed
+                showRouteLine
+                banditId={banditId}
+                seedEvents={routeEvents}
+                markerLabels={markerLabels}
+                initialCamera={camera}
+                initialRegion={ATHENS_CENTER}
+                onMapReady={() => {}}
+                onError={() => {}}
+                onRegionChange={(region) => {
+                  if (!banditId || typeof region?.zoom !== 'number') return;
+                  const next = {
+                    latitude: region.latitude,
+                    longitude: region.longitude,
+                    zoom: region.zoom,
+                  };
+                  setCamera(next);
+                  writeGuideView('vibe', banditId, { camera: next });
+                }}
+                onSelectEvent={() => {}}
+              />
+            </View>
+            {mappedStops.length > 0 ? (
+              <Pressable style={styles.navigateBtn} onPress={openRouteNavigation}>
+                <Text style={styles.navigateBtnText}>Navigate this route</Text>
+              </Pressable>
+            ) : null}
+          </View>
+        ) : null}
 
         {stops.length === 0 ? (
           <Text style={styles.empty}>
@@ -310,7 +393,27 @@ const styles = StyleSheet.create({
     fontSize: 15,
     color: 'rgba(255,255,255,0.7)',
     lineHeight: 22,
-    marginBottom: 22,
+    marginBottom: 16,
+  },
+  routeMap: {
+    width: '100%',
+    borderRadius: 16,
+    overflow: 'hidden',
+    marginBottom: 12,
+    backgroundColor: '#1A1A1A',
+  },
+  navigateBtn: {
+    alignSelf: 'flex-start',
+    backgroundColor: '#E03131',
+    borderRadius: 999,
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    marginBottom: 18,
+  },
+  navigateBtnText: {
+    color: '#FFFFFF',
+    fontWeight: '700',
+    fontSize: 14,
   },
   empty: { fontSize: 14, color: 'rgba(255,255,255,0.6)' },
   photoStop: {
@@ -326,7 +429,7 @@ const styles = StyleSheet.create({
   },
   photoBleed: {
     width: '100%',
-    aspectRatio: 4 / 5,
+    aspectRatio: 16 / 10,
     position: 'relative',
   },
   photoScrim: {

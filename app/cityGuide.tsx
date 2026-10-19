@@ -10,23 +10,24 @@ import { getEvents, getUserLikedEventIds, toggleEventLike } from '@/app/services
 import { getTrailsByBanditId, TrailWithStops } from '@/services/trails';
 import type { GeneratedTrail } from '@/services/aiTrails';
 import EventCategories from '@/components/EventCategories';
+import LeafletMapView from '@/components/LeafletMapView';
 import TrailCard from '@/components/TrailCard';
 import TrailDetailView from '@/components/TrailDetailView';
 import { EVENT_GENRES, EventGenre } from '@/constants/Genres';
 import { Database } from '@/lib/database.types';
 import { supabase } from '@/lib/supabase';
 import { trackEvent } from '@/lib/analytics';
-import { getSpotDetailHeroUri } from '@/lib/eventVenueGallery';
+import { getEventVenueGalleryOrdered } from '@/lib/eventVenueGallery';
 import {
   fetchGooglePlacePhotoUrls,
   fetchTrustedPlaceIdPhotoUrls,
   normalizeEventImageUri,
 } from '@/lib/placePhoto';
-import {
-  eventNeedsLivePlacesHeroRecovery,
-  markHeroUriFailed,
-  selectViewportVenueHeroUri,
-} from '@/lib/venueHeroRecovery';
+import { markHeroUriFailed } from '@/lib/venueHeroRecovery';
+import { buildTastefulCategoryIllustration } from '@/lib/recommendationImages';
+import { readGuideView, writeGuideView, type GuideCamera } from '@/lib/guideViewMemory';
+import { ATHENS_CENTER } from '@/lib/mapCoordinates';
+import { ensureAnonymousSession } from '@/lib/pilotSession';
 import { repairDisplayText } from '@/lib/repairTextEncoding';
 import { useAppBackScreenOptions } from '@/hooks/useAppBackScreenOptions';
 import type { Href } from 'expo-router';
@@ -34,6 +35,25 @@ import type { Href } from 'expo-router';
 type Bandit = Database['public']['Tables']['bandit']['Row'];
 type Event = Database['public']['Tables']['event']['Row'];
 type Spot = Database['public']['Tables']['spots']['Row'];
+
+function loadableCityGuidePhotoUris(event: Event): string[] {
+  const out: string[] = [];
+  for (const raw of getEventVenueGalleryOrdered(event)) {
+    const n = normalizeEventImageUri(raw) ?? String(raw ?? '').trim();
+    if (!n || !/^https?:\/\//i.test(n) || out.includes(n)) continue;
+    out.push(n);
+  }
+  return out;
+}
+
+function readableLoadError(err: unknown, fallback: string): string {
+  if (err instanceof Error && err.message && err.message !== '[object Object]') return err.message;
+  if (err && typeof err === 'object' && 'message' in err) {
+    const message = String((err as { message?: unknown }).message ?? '');
+    if (message && message !== '[object Object]') return message;
+  }
+  return fallback;
+}
 
 function normalizeGenre(raw: unknown): EventGenre | null {
   if (typeof raw !== 'string') return null;
@@ -108,13 +128,16 @@ export default function CityGuideScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [likedEventIds, setLikedEventIds] = useState<Set<string>>(new Set());
   const [activeRecommendationIndex, setActiveRecommendationIndex] = useState(0);
-  const [hiddenHeroEventIds, setHiddenHeroEventIds] = useState<Set<string>>(new Set());
+  const [selectedEventId, setSelectedEventId] = useState<string | null>(null);
+  const [camera, setCamera] = useState<GuideCamera | null>(null);
   /** Live Places refresh when MVP rows only store expired/incomplete Places resource URLs. */
   const [liveHeroByEventId, setLiveHeroByEventId] = useState<Record<string, string>>({});
   const [failedHeroUris, setFailedHeroUris] = useState<Record<string, true>>({});
   const [liveRecoveryDoneIds, setLiveRecoveryDoneIds] = useState<Record<string, true>>({});
-  const [heroRecoveryFailedIds, setHeroRecoveryFailedIds] = useState<Record<string, true>>({});
   const recommendationScrollRef = useRef<ScrollView>(null);
+  const pageScrollRef = useRef<ScrollView>(null);
+  const restoredScroll = useRef(false);
+  const hydratedGuide = useRef(false);
 
   const refreshLikedIds = useCallback(async () => {
     try {
@@ -169,6 +192,7 @@ export default function CityGuideScreen() {
     const fetchData = async () => {
       try {
         setLoading(true);
+        await ensureAnonymousSession().catch(() => undefined);
 
         const { data: banditData, error: banditError } = await supabase
           .from('bandit')
@@ -194,7 +218,7 @@ export default function CityGuideScreen() {
         setTrails(trailsData);
         setEvents(eventsData ?? []);
       } catch (err) {
-        const msg = err instanceof Error ? err.message : String(err);
+        const msg = readableLoadError(err, 'Could not load City Guide');
         const soft =
           /failed to fetch|network|load failed|timeout|abort/i.test(msg)
             ? 'Connection issue — pull to refresh or try again in a moment.'
@@ -282,23 +306,30 @@ export default function CityGuideScreen() {
   const cityGuideHeroUriById = useMemo(() => {
     const out: Record<string, string | null> = {};
     for (const e of filteredEvents) {
-      out[e.id] = selectViewportVenueHeroUri({
-        liveUri: liveHeroByEventId[e.id],
-        storedUri: getSpotDetailHeroUri(e),
-        failedUris: failedHeroUris,
-      });
+      const liveRaw = liveHeroByEventId[e.id];
+      const live = liveRaw ? normalizeEventImageUri(liveRaw) ?? liveRaw : '';
+      if (live && !failedHeroUris[live]) {
+        out[e.id] = live;
+        continue;
+      }
+      const stored = loadableCityGuidePhotoUris(e).find((u) => !failedHeroUris[u]) ?? null;
+      const waitingForFreshPlaces =
+        Boolean(stored?.includes('places.googleapis.com')) && !liveRecoveryDoneIds[e.id];
+      out[e.id] = waitingForFreshPlaces ? null : stored;
     }
     return out;
-  }, [filteredEvents, liveHeroByEventId, failedHeroUris]);
+  }, [failedHeroUris, filteredEvents, liveHeroByEventId, liveRecoveryDoneIds]);
 
   useEffect(() => {
     let cancelled = false;
     const needLive = filteredEvents.filter((e) => {
       if (liveRecoveryDoneIds[e.id]) return false;
-      return eventNeedsLivePlacesHeroRecovery(e, {
-        liveUri: liveHeroByEventId[e.id],
-        failedUris: failedHeroUris,
-      });
+      const liveRaw = liveHeroByEventId[e.id];
+      const live = liveRaw ? normalizeEventImageUri(liveRaw) ?? liveRaw : '';
+      if (live && !failedHeroUris[live]) return false;
+      const stored = loadableCityGuidePhotoUris(e).find((u) => !failedHeroUris[u]) ?? null;
+      if (!stored) return true;
+      return stored.includes('places.googleapis.com');
     });
     if (needLive.length === 0) return;
 
@@ -327,13 +358,10 @@ export default function CityGuideScreen() {
             const cleaned = urls
               .map((u) => normalizeEventImageUri(u) ?? u)
               .filter((u) => /^https?:\/\//i.test(u) && !failedHeroUris[u]);
-            if (cleaned.length === 0) {
-              setHeroRecoveryFailedIds((prev) => ({ ...prev, [event.id]: true }));
-              continue;
-            }
+            if (cleaned.length === 0) continue;
             heroUpdates[event.id] = cleaned[0];
           } catch {
-            setHeroRecoveryFailedIds((prev) => ({ ...prev, [event.id]: true }));
+            /* keep the card on the illustration once recovery is marked done */
           }
         }
         if (!cancelled) {
@@ -357,8 +385,16 @@ export default function CityGuideScreen() {
   }, [filteredEvents.length, activeRecommendationIndex]);
 
   useEffect(() => {
-    setHiddenHeroEventIds(new Set());
-  }, [filteredEvents]);
+    const id = effectiveBanditId;
+    if (!id || hydratedGuide.current) return;
+    hydratedGuide.current = true;
+    const mem = readGuideView('city', id);
+    if (!mem) return;
+    if (!genreParam && mem.genre) setSelectedGenre(mem.genre);
+    if (mem.selectedEventId) setSelectedEventId(mem.selectedEventId);
+    if (mem.cardIndex) setActiveRecommendationIndex(mem.cardIndex);
+    if (mem.camera) setCamera(mem.camera);
+  }, [effectiveBanditId, genreParam]);
 
   const eventCategories = useMemo(() => {
     const categoryCounts: { [key: string]: number } = {};
@@ -429,16 +465,24 @@ export default function CityGuideScreen() {
     const offsetX = clamped * (recommendationCardWidth + recommendationGap);
     recommendationScrollRef.current.scrollTo({ x: offsetX, animated: true });
     setActiveRecommendationIndex(clamped);
+    const next = filteredEvents[clamped];
+    if (next) {
+      setSelectedEventId(next.id);
+      writeGuideView('city', bandit.id, { selectedEventId: next.id, cardIndex: clamped, genre: selectedGenre });
+    }
   };
 
   const renderRecommendationCard = (event: Event, index: number) => {
     const fromGallery = cityGuideHeroUriById[event.id] ?? null;
-    const showHero = Boolean(fromGallery) && !hiddenHeroEventIds.has(event.id);
     const locationLine = [event.neighborhood, event.city].filter(Boolean).join(' · ') || 'Athens';
     const vibeLine = repairDisplayText(
       (event.description?.trim() || 'Curated local pick from your banDit guide.').slice(0, 110),
     );
     const openSpot = () => {
+      setSelectedEventId(event.id);
+      if (bandit?.id) {
+        writeGuideView('city', bandit.id, { selectedEventId: event.id, cardIndex: index, genre: selectedGenre });
+      }
       const hero = fromGallery ? encodeURIComponent(fromGallery) : '';
       const qs = [
         `banditId=${encodeURIComponent(bandit.id)}`,
@@ -448,11 +492,15 @@ export default function CityGuideScreen() {
         .join('&');
       router.push(`/spot/${event.id}?${qs}` as never);
     };
+    const selected = selectedEventId === event.id;
     return (
       <Pressable
         key={event.id}
+        nativeID={`city-guide-card-${event.id}`}
+        testID={`city-guide-card-${event.id}`}
         style={[
           styles.recommendationCard,
+          selected && styles.recommendationCardSelected,
           {
             width: recommendationCardWidth,
             marginRight: isDesktopWeb ? 0 : index === filteredEvents.length - 1 ? 0 : recommendationGap,
@@ -461,62 +509,33 @@ export default function CityGuideScreen() {
         ]}
         onPress={openSpot}
       >
-        {showHero && fromGallery ? (
+        {fromGallery ? (
           <RecommendationHeroImage
             sourceUri={fromGallery}
             eventId={event.id}
             onInvalid={() => {
-              const failed = fromGallery;
-              if (failed) {
-                setFailedHeroUris((prev) => markHeroUriFailed(prev, failed));
-              }
-              setHiddenHeroEventIds((prev) => {
-                const next = new Set(prev);
-                next.add(event.id);
-                return next;
-              });
+              setFailedHeroUris((prev) => markHeroUriFailed(prev, fromGallery));
               setLiveHeroByEventId((prev) => {
-                if (!prev[event.id]) return prev;
+                const current = prev[event.id];
+                if (!current) return prev;
+                const normalized = normalizeEventImageUri(current) ?? current;
+                if (current !== fromGallery && normalized !== fromGallery) return prev;
                 const next = { ...prev };
                 delete next[event.id];
                 return next;
               });
-              void (async () => {
-                const placeId = (event as { google_place_id?: string | null }).google_place_id ?? null;
-                let urls = placeId ? await fetchTrustedPlaceIdPhotoUrls(placeId, 4) : [];
-                if (urls.length === 0) {
-                  urls = await fetchGooglePlacePhotoUrls({
-                    placeId,
-                    name: String(event.name ?? ''),
-                    address: String(event.address ?? ''),
-                    city: String(event.city ?? ''),
-                    neighborhood: String(event.neighborhood ?? ''),
-                    limit: 4,
-                  });
-                }
-                const n = urls
-                  .map((u) => normalizeEventImageUri(u) ?? u)
-                  .find((u) => /^https?:\/\//i.test(u) && u !== failed);
-                if (!n) {
-                  setHeroRecoveryFailedIds((prev) => ({ ...prev, [event.id]: true }));
-                  return;
-                }
-                setHiddenHeroEventIds((prev) => {
-                  const next = new Set(prev);
-                  next.delete(event.id);
-                  return next;
-                });
-                setLiveHeroByEventId((prev) => ({ ...prev, [event.id]: n }));
-              })();
             }}
           />
-        ) : heroRecoveryFailedIds[event.id] ? (
-          <View style={styles.heroPendingApproval}>
-            <Text style={styles.heroPendingApprovalText}>Photo unavailable</Text>
-          </View>
+        ) : liveRecoveryDoneIds[event.id] ? (
+          <ExpoImage
+            source={{ uri: buildTastefulCategoryIllustration(event.name || 'Local place', event.genre) }}
+            style={styles.recommendationImage}
+            contentFit="cover"
+            accessibilityLabel={`recommendation-fallback:${event.id}`}
+          />
         ) : (
           <View style={styles.heroPendingApproval}>
-            <Text style={styles.heroPendingApprovalText}>Loading photo…</Text>
+            <ActivityIndicator color="#666" />
           </View>
         )}
         <View style={styles.recommendationBody}>
@@ -547,9 +566,23 @@ export default function CityGuideScreen() {
       <Stack.Screen options={cityGuideHeaderOptions} />
 
       <ScrollView
+        ref={pageScrollRef}
         style={styles.container}
         contentContainerStyle={styles.scrollContent}
         refreshControl={cityGuideRefresh}
+        scrollEventThrottle={32}
+        onScroll={(e) => {
+          const y = e.nativeEvent.contentOffset.y;
+          if (y === 0 && !restoredScroll.current) return;
+          writeGuideView('city', bandit.id, { scrollY: y });
+        }}
+        onLayout={() => {
+          if (restoredScroll.current) return;
+          const mem = readGuideView('city', bandit.id);
+          if (!mem?.scrollY) return;
+          restoredScroll.current = true;
+          pageScrollRef.current?.scrollTo({ y: mem.scrollY, animated: false });
+        }}
       >
         {/* Header — personal curated, not generic City Guide dump */}
         <Text style={styles.headerText}>{athensTitle}</Text>
@@ -599,7 +632,11 @@ export default function CityGuideScreen() {
             <EventCategories
               categories={eventCategories}
               selectedGenre={selectedGenre}
-              onCategoryPress={(genre) => setSelectedGenre(selectedGenre === genre ? '' : genre)}
+              onCategoryPress={(genre) => {
+              const next = selectedGenre === genre ? '' : genre;
+              setSelectedGenre(next);
+              writeGuideView('city', bandit.id, { genre: next });
+            }}
             />
           </>
         )}
@@ -661,7 +698,42 @@ export default function CityGuideScreen() {
           )}
         </View>
 
-        {/* Recommendations carousel */}
+        {/* Map + photographic cards — this banDit's places, not Explore. */}
+        <View testID="city-guide-map-and-cards" style={styles.mapAndCards}>
+          <Text style={styles.recommendationsTitle}>{`${firstName}'s map`}</Text>
+          <Text style={styles.recommendationsHint}>
+            Every mapped place in this guide. A pin and its card stay together.
+          </Text>
+          <View testID="city-guide-map" style={[styles.guideMapFrame, { height: isDesktopWeb ? 380 : 300 }]}>
+            <LeafletMapView
+              embedded
+              preferSeed
+              banditId={bandit.id}
+              seedEvents={filteredEvents}
+              selectedEventId={selectedEventId}
+              initialCamera={camera}
+              initialRegion={ATHENS_CENTER}
+              onMapReady={() => {}}
+              onError={() => {}}
+              onRegionChange={(region) => {
+                if (typeof region?.zoom !== 'number') return;
+                const next: GuideCamera = {
+                  latitude: region.latitude,
+                  longitude: region.longitude,
+                  zoom: region.zoom,
+                };
+                setCamera(next);
+                writeGuideView('city', bandit.id, { camera: next });
+              }}
+              onSelectEvent={(event) => {
+                setSelectedEventId(event.id);
+                const idx = filteredEvents.findIndex((row) => row.id === event.id);
+                if (idx >= 0) scrollToRecommendationIndex(idx);
+                writeGuideView('city', bandit.id, { selectedEventId: event.id, cardIndex: Math.max(0, idx) });
+              }}
+            />
+          </View>
+
         <View style={styles.recommendationsSection}>
           <View style={styles.recommendationsHeadRow}>
             <Text style={styles.recommendationsTitle}>
@@ -738,6 +810,7 @@ export default function CityGuideScreen() {
               ) : null}
             </>
           )}
+        </View>
         </View>
 
       </ScrollView>
@@ -903,6 +976,20 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.12,
     shadowRadius: 10,
     elevation: 3,
+  },
+  recommendationCardSelected: {
+    borderColor: '#E03131',
+    borderWidth: 2,
+  },
+  mapAndCards: {
+    marginTop: 8,
+  },
+  guideMapFrame: {
+    width: '100%',
+    borderRadius: 16,
+    overflow: 'hidden',
+    marginBottom: 16,
+    backgroundColor: '#E9ECEF',
   },
   recommendationImage: {
     width: '100%',

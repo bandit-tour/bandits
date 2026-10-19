@@ -26,6 +26,10 @@ interface MapViewProps {
   miniMode?: boolean;
   banditId?: string;
   seedEvents?: Event[];
+  preferSeed?: boolean;
+  embedded?: boolean;
+  selectedEventId?: string | null;
+  onSelectEvent?: (event: Event) => void;
 }
 
 export default function LeafletMapView({
@@ -34,6 +38,10 @@ export default function LeafletMapView({
   onRegionChange,
   banditId: banditIdProp,
   seedEvents,
+  preferSeed = false,
+  embedded = false,
+  selectedEventId = null,
+  onSelectEvent,
 }: MapViewProps) {
   const eventListRef = useRef<EventListRef>(null);
   const webViewRef = useRef<WebView>(null);
@@ -49,8 +57,9 @@ export default function LeafletMapView({
     () => ({
       ...(scopedBanditId ? { banditId: scopedBanditId } : {}),
       ...(seedEvents?.length ? { seedEvents } : {}),
+      ...(preferSeed || seedEvents ? { preferSeed: true } : {}),
     }),
-    [scopedBanditId, seedEvents],
+    [scopedBanditId, seedEvents, preferSeed],
   );
 
   const { events, loading, error, banditId: mapBanditId } = useMapEvents(undefined, mapOptions);
@@ -94,6 +103,11 @@ export default function LeafletMapView({
   );
 
   useEffect(() => {
+    if (!selectedEventId || !mapReady) return;
+    applySelection(selectedEventId, false);
+  }, [applySelection, mapReady, selectedEventId]);
+
+  useEffect(() => {
     if (!mapReady || !webViewRef.current) return;
     const payload = JSON.stringify(markersData);
     if (payload === catalogPayloadRef.current) return;
@@ -121,7 +135,10 @@ export default function LeafletMapView({
           break;
         case 'markerClick': {
           const clickedEvent = events.find((e) => e.id === data.eventId);
-          if (clickedEvent) applySelection(clickedEvent.id, true);
+          if (clickedEvent) {
+            applySelection(clickedEvent.id, !embedded);
+            onSelectEvent?.(clickedEvent);
+          }
           break;
         }
         case 'regionChange':
@@ -142,8 +159,8 @@ export default function LeafletMapView({
   };
 
   return (
-    <View style={styles.container}>
-      <View style={styles.mapContainer}>
+    <View style={embedded ? styles.embeddedContainer : styles.container}>
+      <View style={embedded ? styles.embeddedMap : styles.mapContainer}>
         <WebView
           key={webViewKey}
           ref={webViewRef}
@@ -169,6 +186,7 @@ export default function LeafletMapView({
         ) : null}
       </View>
 
+      {!embedded ? (
       <EventList
         ref={eventListRef}
         events={events}
@@ -181,6 +199,7 @@ export default function LeafletMapView({
         contentContainerStyle={styles.eventsContainer}
         onEventPress={focusMapOnEvent}
       />
+      ) : null}
     </View>
   );
 }
@@ -193,8 +212,22 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
   },
+  embeddedContainer: {
+    flex: 1,
+    width: '100%',
+    height: '100%',
+    minHeight: 240,
+    borderRadius: 16,
+    overflow: 'hidden',
+  },
   mapContainer: {
     height: '40%',
+    backgroundColor: '#f0f0f0',
+    position: 'relative',
+  },
+  embeddedMap: {
+    flex: 1,
+    height: '100%',
     backgroundColor: '#f0f0f0',
     position: 'relative',
   },

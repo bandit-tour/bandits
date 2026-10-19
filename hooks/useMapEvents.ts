@@ -21,6 +21,11 @@ export type UseMapEventsOptions = {
   banditId?: string | null;
   /** Pre-loaded rows (Explore list cache) — skips network when provided. */
   seedEvents?: Event[];
+  /**
+   * City Guide / Vibe Route: render exactly these rows, including an empty list.
+   * Skips the Explore catalog fetch so a banDit's own places stay on their map.
+   */
+  preferSeed?: boolean;
 };
 
 export interface MapBounds {
@@ -104,6 +109,7 @@ export function useMapEvents(
   const { selectedCity } = useCity();
   const router = useRouter();
   const seedFromProp = options?.seedEvents;
+  const preferSeed = options?.preferSeed === true;
   const seedEvents =
     seedFromProp && seedFromProp.length > 0
       ? seedFromProp
@@ -150,12 +156,28 @@ export function useMapEvents(
     }
   }, [effectiveBanditId, selectedCity, seedEvents.length]);
 
-  const seedSig = useMemo(
-    () => (seedFromProp?.length ? `${seedFromProp.length}:${seedFromProp[0]?.id}:${seedFromProp[seedFromProp.length - 1]?.id}` : ''),
-    [seedFromProp],
-  );
+  const seedSig = useMemo(() => {
+    if (!seedFromProp?.length) return '';
+    if (preferSeed) return seedFromProp.map((e) => e.id).join(',');
+    return `${seedFromProp.length}:${seedFromProp[0]?.id}:${seedFromProp[seedFromProp.length - 1]?.id}`;
+  }, [preferSeed, seedFromProp]);
 
   useEffect(() => {
+    if (preferSeed) {
+      const seed = seedFromProp ?? [];
+      setEvents(seed);
+      hasPaintedEventsRef.current = seed.length > 0;
+      setLoading(false);
+      let cancelled = false;
+      void InteractionManager.runAfterInteractions(() => {
+        void enrichEventsForMap(seed).then((enriched) => {
+          if (!cancelled) startTransition(() => setEvents(enriched));
+        });
+      });
+      return () => {
+        cancelled = true;
+      };
+    }
     if (seedFromProp && seedFromProp.length > 0) {
       setEvents(seedFromProp);
       hasPaintedEventsRef.current = true;
@@ -163,7 +185,7 @@ export function useMapEvents(
       return;
     }
     void fetchEvents();
-  }, [fetchEvents, seedFromProp, seedSig]);
+  }, [fetchEvents, preferSeed, seedFromProp, seedSig]);
 
   const calculateOptimalMapBounds = (initialRegion: {
     latitude: number;

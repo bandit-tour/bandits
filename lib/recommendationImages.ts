@@ -302,6 +302,33 @@ function buildCategoryPlaceholderSvg(theme: CategoryTheme, name: string): string
     + `</svg>`;
 }
 
+/**
+ * Last-resort illustration when a venue has no loadable photograph.
+ * Category icon on a quiet field — never venue initials, never a stock photo.
+ */
+export function buildTastefulCategoryIllustration(
+  nameRaw: string,
+  category: string | null | undefined,
+): string {
+  const key = normalizeVenueCategoryKey(category);
+  const theme = CATEGORY_THEMES[key];
+  const label = escapeXmlText(theme.label);
+  const icon = escapeXmlText(theme.icon);
+  const svg =
+    `<svg xmlns='http://www.w3.org/2000/svg' width='1200' height='800' viewBox='0 0 1200 800'>` +
+    `<defs><linearGradient id='g' x1='0' y1='0' x2='1' y2='1'>` +
+    `<stop offset='0%' stop-color='${theme.bg1}'/>` +
+    `<stop offset='100%' stop-color='${theme.bg2}'/>` +
+    `</linearGradient></defs>` +
+    `<rect width='1200' height='800' fill='url(#g)'/>` +
+    `<circle cx='600' cy='340' r='118' fill='rgba(255,255,255,0.82)'/>` +
+    `<text x='600' y='392' text-anchor='middle' font-size='112'>${icon}</text>` +
+    `<text x='600' y='530' text-anchor='middle' font-family='-apple-system,Segoe UI,Roboto,Arial,sans-serif' font-size='28' font-weight='700' fill='${theme.accent}' letter-spacing='3'>${label}</text>` +
+    `</svg>`;
+  void nameRaw;
+  return `data:image/svg+xml;utf8,${encodeURIComponent(svg)}`;
+}
+
 /** Category-aware neutral placeholder. Never returns a third-party stock URL. */
 export function buildCategoryNeutralPlaceholder(
   nameRaw: string,
