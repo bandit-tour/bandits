@@ -33,6 +33,7 @@ import {
   type HotelBottleListing,
 } from "@/lib/guest-workspace/hotelBottleListing";
 import { mixSearchParams, readBottlePlanSelection, writeBottlePlanSelection } from "@/lib/bottlePlanSelection";
+import { PLAY_THEATROU_ORIGIN } from "@/lib/guest-workspace/shopGeo";
 import { getHotelWhiteLabel, isKnownHotelSlug } from "@/lib/hotelWhiteLabel";
 import { workspaceGet } from "@/lib/workspace/client";
 
@@ -51,26 +52,31 @@ function FrameImage({ frame, style }: { frame: Frame; style: object }) {
 function HotelMap({
   lat,
   lng,
+  query,
   label,
 }: {
   lat?: number | null;
   lng?: number | null;
+  query?: string | null;
   label: string;
 }) {
-  const hasPin = typeof lat === "number" && typeof lng === "number";
-  if (!hasPin) return null;
+  const pin = typeof lat === "number" && typeof lng === "number" ? `${lat},${lng}` : "";
+  const q = pin || (query || "").trim();
+  if (!q || /^athens$/i.test(q)) return null;
   if (Platform.OS === "web") {
     return (
       <View style={styles.mapFrame} testID="bottle-hotel-map">
         {React.createElement("iframe", {
           title: `${label} map`,
-          src: `https://maps.google.com/maps?q=${lat},${lng}&z=15&output=embed`,
+          src: `https://maps.google.com/maps?q=${encodeURIComponent(q)}&z=15&output=embed`,
           style: { border: 0, width: "100%", height: "100%" },
         })}
       </View>
     );
   }
-  const url = `https://www.google.com/maps/search/?api=1&query=${lat},${lng}`;
+  const url = pin
+    ? `https://www.google.com/maps/search/?api=1&query=${lat},${lng}`
+    : `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(q)}`;
   return (
     <Pressable onPress={() => void Linking.openURL(url)} testID="bottle-hotel-map" accessibilityRole="link">
       <Text style={styles.mapLink}>Map</Text>
@@ -369,6 +375,9 @@ export default function BottleHotelDetailScreen() {
             {placeHotel.userRatingCount ? ` · ${placeHotel.userRatingCount} reviews` : ""}
           </Text>
         ) : null}
+        <Text style={styles.meta} testID="bottle-hotel-address">
+          {placeHotel?.address || listing?.address || (parsed.id === "play-theatrou" ? "Psyrri, Athens" : area)}
+        </Text>
         <Text style={styles.meta} testID="bottle-hotel-plan">
           {datesLabel} · {hotelNights} hotel + {outdoorNights} outdoor
         </Text>
@@ -410,7 +419,12 @@ export default function BottleHotelDetailScreen() {
         ) : null}
         <View style={styles.block}>
           <Text style={styles.blockTitle}>Location</Text>
-          <HotelMap lat={placeHotel?.lat} lng={placeHotel?.lng} label={shownName || name} />
+          <HotelMap
+            lat={placeHotel?.lat ?? (parsed.id === "play-theatrou" ? PLAY_THEATROU_ORIGIN.lat : null)}
+            lng={placeHotel?.lng ?? (parsed.id === "play-theatrou" ? PLAY_THEATROU_ORIGIN.lng : null)}
+            query={placeHotel?.address || listing?.address || (parsed.id === "play-theatrou" ? "Psyrri, Athens" : "")}
+            label={shownName || name}
+          />
           {mapUrl && (placeHotel?.lat == null || placeHotel?.lng == null) ? (
             <Pressable onPress={() => void Linking.openURL(mapUrl)} testID="bottle-hotel-map" accessibilityRole="link">
               <Text style={styles.mapLink}>Open map</Text>
