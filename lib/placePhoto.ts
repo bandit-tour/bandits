@@ -873,6 +873,28 @@ export async function fetchGooglePlacePhotoUrls(args: {
   }
 }
 
+/** Browser-safe refresh: Places Details runs on our API so CORS does not drop the photo. */
+export async function fetchServerPlacePhotoUrls(
+  placeId: string | null | undefined,
+  limit = 4,
+): Promise<string[]> {
+  const id = String(placeId ?? '')
+    .trim()
+    .replace(/^places\//i, '');
+  if (!id || typeof fetch !== 'function') return [];
+  try {
+    const res = await fetch(
+      `/api/place-photos?placeId=${encodeURIComponent(id)}&limit=${Math.max(1, Math.min(4, limit))}`,
+    );
+    if (!res.ok) return [];
+    const json = (await res.json()) as { urls?: unknown };
+    const urls = Array.isArray(json?.urls) ? json.urls : [];
+    return urls.filter((u): u is string => typeof u === 'string' && /^https?:\/\//i.test(u));
+  } catch {
+    return [];
+  }
+}
+
 /**
  * MVP City Guide / Place detail: when `event.google_place_id` is already the curated
  * venue link, trust it and load Places photography without re-running text-search
@@ -882,6 +904,8 @@ export async function fetchTrustedPlaceIdPhotoUrls(
   placeId: string | null | undefined,
   limit = 8,
 ): Promise<string[]> {
+  const fromServer = await fetchServerPlacePhotoUrls(placeId, limit);
+  if (fromServer.length > 0) return fromServer;
   try {
     const apiKey = getMapsApiKey();
     const id = normalizeStoredPlaceId(String(placeId ?? ''));
