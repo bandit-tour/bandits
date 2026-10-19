@@ -7,6 +7,7 @@ import { Stack, useLocalSearchParams, useRouter, type Href } from "expo-router";
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { Image, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 
+import { BottlePreviewJourney } from "@/components/BottlePreviewJourney";
 import { humanDate } from "@/components/BottleDateRangeField";
 import { useAppBackScreenOptions } from "@/hooks/useAppBackScreenOptions";
 import {
@@ -127,7 +128,6 @@ export default function BottleMixScreen() {
   const [note, setNote] = useState<string | null>(null);
   const [guestName, setGuestName] = useState("");
   const [email, setEmail] = useState("");
-  const [testShown, setTestShown] = useState(false);
   const [history, setHistory] = useState<BottleBookingRecord[]>([]);
   const selRef = useRef<BottlePlanSelection | null>(sel);
   selRef.current = sel;
@@ -138,6 +138,7 @@ export default function BottleMixScreen() {
   const selectedStay = pick?.kind === "verified" ? stays.find((stay) => stay.id === pick.id) || null : null;
   const selectedInspiration =
     pick?.kind === "inspiration" ? OUTDOOR_INSPIRATION.find((row) => row.id === pick.id) || null : null;
+  const selectedDemo = pick?.kind === "demo" ? demos.find((row) => row.id === pick.id) || null : null;
 
   const screenOptions = useAppBackScreenOptions({
     title: hotelName || "Your stay",
@@ -254,9 +255,13 @@ export default function BottleMixScreen() {
     router.replace(`/bottleMix?${new URLSearchParams(mixSearchParams(next)).toString()}` as Href);
   };
 
-  const choose = (outdoorPick: BottleOutdoorPick) => {
+  const openOutdoor = (outdoorPick: BottleOutdoorPick) => {
     if (!sel) return;
-    persist({ ...sel, outdoorPick });
+    const next = { ...sel, outdoorPick };
+    writeBottlePlanSelection(next);
+    router.push(
+      `/bottleOutdoor/${encodeURIComponent(outdoorPick.id)}?${new URLSearchParams(mixSearchParams(next)).toString()}` as Href,
+    );
   };
 
   const shiftNights = (delta: number) => {
@@ -270,16 +275,6 @@ export default function BottleMixScreen() {
   const emailOk = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim().toLowerCase());
   const nameOk = guestName.trim().length >= 2;
   const canPay = Boolean(authorized && quote && selectedStay && emailOk && nameOk && !busy);
-  const canShowTest = Boolean(pick?.kind === "test" && nameOk && emailOk && sel?.checkIn && sel.checkOut);
-
-  useEffect(() => {
-    setTestShown(false);
-  }, [pick?.kind, pick?.id]);
-
-  const showTestConfirmation = () => {
-    if (!canShowTest) return;
-    setTestShown(true);
-  };
 
   const onBook = async () => {
     if (!canPay || !sel || !selectedStay || pick?.kind !== "verified") return;
@@ -354,10 +349,13 @@ export default function BottleMixScreen() {
   const outdoorTitle =
     selectedStay?.title ||
     selectedInspiration?.title ||
-    (pick?.kind === "test" ? "TEST FIXTURE" : "Choose an outdoor stay");
+    selectedDemo?.title ||
+    (pick?.kind === "test" ? "TEST FIXTURE" : pick?.kind === "demo" ? "Demo seed" : "Choose an outdoor stay");
   const checkoutBlock = pick
     ? pick.kind === "inspiration"
       ? "Sample inspiration is not bookable. Checkout is off. No reservation will be created."
+      : pick.kind === "demo"
+        ? "This demo seed is not production inventory. Checkout is off. No reservation will be created."
       : pick.kind === "test"
         ? "TEST FIXTURE — not a host, calendar, or price. Checkout is off. No reservation will be created."
         : !sel.checkIn || !sel.checkOut
@@ -435,7 +433,7 @@ export default function BottleMixScreen() {
               <Pressable
                 key={stay.id}
                 style={[styles.card, selected && styles.cardOn]}
-                onPress={() => choose({ kind: "verified", id: stay.id })}
+                onPress={() => openOutdoor({ kind: "verified", id: stay.id })}
                 testID={`bottle-mix-outdoor-${stay.id}`}
                 accessibilityRole="button"
                 accessibilityState={{ selected }}
@@ -460,11 +458,17 @@ export default function BottleMixScreen() {
           <Text style={styles.section}>Workspace demo seeds</Text>
           <Text style={styles.cardMeta}>These records are labelled demo. They are not verified hosts and cannot be reserved.</Text>
           {demos.map((demo) => (
-            <View key={demo.id} style={styles.card}>
+            <Pressable
+              key={demo.id}
+              style={styles.card}
+              onPress={() => openOutdoor({ kind: "demo", id: demo.id })}
+              testID={`bottle-mix-demo-${demo.id}`}
+              accessibilityRole="button"
+            >
               <Text style={styles.cardTitle}>{demo.title || demo.id}</Text>
               {demo.location ? <Text style={styles.cardMeta}>{demo.location}</Text> : null}
               <Text style={styles.inspiration}>{demo.labelled || "DEMO — not production inventory"}</Text>
-            </View>
+            </Pressable>
           ))}
         </View>
       ) : null}
@@ -480,7 +484,7 @@ export default function BottleMixScreen() {
             <Pressable
               key={row.id}
               style={[styles.card, selected && styles.cardOn]}
-              onPress={() => choose({ kind: "inspiration", id: row.id })}
+              onPress={() => openOutdoor({ kind: "inspiration", id: row.id })}
               testID={`bottle-outdoor-inspiration-${row.id}`}
               accessibilityRole="button"
               accessibilityState={{ selected }}
@@ -498,7 +502,7 @@ export default function BottleMixScreen() {
 
       <Pressable
         style={[styles.card, styles.testCard, pick?.kind === "test" && styles.cardOn]}
-        onPress={() => choose({ kind: "test", id: TEST_FIXTURE_ID })}
+        onPress={() => openOutdoor({ kind: "test", id: TEST_FIXTURE_ID })}
         testID="bottle-outdoor-test-fixture"
         accessibilityRole="button"
         accessibilityState={{ selected: pick?.kind === "test" }}
@@ -536,19 +540,7 @@ export default function BottleMixScreen() {
               {checkoutBlock}
             </Text>
           )}
-          {pick.kind === "test" ? (
-            <View testID="bottle-mix-test-summary">
-              <Text style={styles.summaryLine}>{hotelName}</Text>
-              <Text style={styles.cardMeta}>Outdoor stay: TEST FIXTURE</Text>
-              <Text style={styles.cardMeta}>
-                {sel.checkIn && sel.checkOut
-                  ? `${humanDate(sel.checkIn)} → ${humanDate(sel.checkOut)} · ${sel.hotelNights} hotel + ${sel.outdoorNights} outdoor · ${sel.travelers} guests`
-                  : "Dates are required for this TEST summary."}
-              </Text>
-              <Text style={styles.cardMeta}>No price. This is not supplier inventory.</Text>
-            </View>
-          ) : null}
-          {authorized || pick.kind === "test" ? (
+          {pick.kind === "verified" && authorized && quote ? (
             <>
               <TextInput
                 value={guestName}
@@ -562,49 +554,32 @@ export default function BottleMixScreen() {
                 onChangeText={setEmail}
                 autoCapitalize="none"
                 keyboardType="email-address"
-                placeholder={pick.kind === "test" ? "Email for this TEST screen" : "Email for this booking"}
+                placeholder="Email for this booking"
                 style={styles.input}
                 testID="bottle-mix-email"
               />
+              <Pressable
+                style={[styles.book, !canPay && styles.bookOff]}
+                disabled={!canPay}
+                onPress={() => void onBook()}
+                testID="bottle-mix-checkout"
+                accessibilityRole="button"
+                accessibilityState={{ disabled: !canPay }}
+              >
+                <Text style={styles.bookText}>{busy ? "Booking…" : "Book mix"}</Text>
+              </Pressable>
             </>
           ) : null}
-          {pick.kind === "test" ? (
-            <Pressable
-              style={[styles.book, !canShowTest && styles.bookOff]}
-              disabled={!canShowTest}
-              onPress={showTestConfirmation}
-              testID="bottle-mix-test-continue"
-              accessibilityRole="button"
-              accessibilityState={{ disabled: !canShowTest }}
-            >
-              <Text style={styles.bookText}>Show TEST confirmation</Text>
-            </Pressable>
-          ) : (
-            <Pressable
-              style={[styles.book, !canPay && styles.bookOff]}
-              disabled={!canPay}
-              onPress={() => void onBook()}
-              testID="bottle-mix-checkout"
-              accessibilityRole="button"
-              accessibilityState={{ disabled: !canPay }}
-            >
-              <Text style={styles.bookText}>{busy ? "Booking…" : "Book mix"}</Text>
-            </Pressable>
-          )}
-          {pick.kind === "test" && testShown ? (
-            <View style={styles.testConfirm} testID="bottle-mix-test-confirmation">
-              <Text style={styles.summaryLine}>TEST FIXTURE</Text>
-              <Text style={styles.cardMeta}>This is not a real booking.</Text>
-              <Text style={styles.cardMeta}>
-                No card was charged. No supplier reservation was created. Nothing was saved.
-              </Text>
-              <Text style={styles.summaryLine}>{hotelName}</Text>
-              <Text style={styles.cardMeta}>Outdoor stay: TEST FIXTURE</Text>
-              <Text style={styles.cardMeta}>
-                {humanDate(sel.checkIn)} → {humanDate(sel.checkOut)} · {sel.hotelNights} hotel + {sel.outdoorNights} outdoor · {sel.travelers} guests
-              </Text>
-              <Text style={styles.cardMeta}>Guest {guestName.trim()}</Text>
-            </View>
+          {pick.kind !== "verified" ? (
+            <BottlePreviewJourney
+              hotelName={hotelName}
+              outdoorLabel={outdoorTitle}
+              checkIn={sel.checkIn}
+              checkOut={sel.checkOut}
+              hotelNights={sel.hotelNights}
+              outdoorNights={sel.outdoorNights}
+              travelers={sel.travelers}
+            />
           ) : null}
         </View>
       ) : null}

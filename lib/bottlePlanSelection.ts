@@ -4,7 +4,7 @@
 import type { AthensDiscoveryHotel } from "@/lib/guest-workspace/athensHotelPlaces";
 
 export type BottleOutdoorPick = {
-  kind: "verified" | "inspiration" | "test";
+  kind: "verified" | "inspiration" | "test" | "demo";
   id: string;
 };
 
@@ -97,7 +97,7 @@ const SEARCH_KEYS = [
 ] as const;
 
 function outdoorPickFrom(kind: string, id: string): BottleOutdoorPick | undefined {
-  if ((kind === "verified" || kind === "inspiration" || kind === "test") && id) {
+  if ((kind === "verified" || kind === "inspiration" || kind === "test" || kind === "demo") && id) {
     return { kind, id };
   }
   return undefined;
