@@ -7,6 +7,7 @@ import { Stack, useLocalSearchParams, useRouter, type Href } from "expo-router";
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { Image, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 
+import { BottleJourneySteps } from "@/components/BottleJourneySteps";
 import { BottlePreviewJourney } from "@/components/BottlePreviewJourney";
 import { humanDate } from "@/components/BottleDateRangeField";
 import { useAppBackScreenOptions } from "@/hooks/useAppBackScreenOptions";
@@ -49,8 +50,6 @@ const OUTDOOR_INSPIRATION = BOTTLE_MATCHES.map((match) => ({
   type: match.second.type || "Outdoor stay",
   imageUrl: match.second.imageUrl,
 })).filter((row) => /^https?:\/\//i.test(row.imageUrl));
-
-const TEST_FIXTURE_ID = "bottle-test-fixture";
 
 function eur(cents: number) {
   return new Intl.NumberFormat(undefined, { style: "currency", currency: "EUR", maximumFractionDigits: 0 }).format(
@@ -115,6 +114,7 @@ export default function BottleMixScreen() {
   }, [paramKey]);
   const searchKey = sel ? bottlePlanSearchKey(sel) : "";
   const pick = sel?.outdoorPick || null;
+  const stage = params.stage === "book" ? "book" : params.stage === "review" ? "review" : "";
 
   const [attempt, setAttempt] = useState(0);
   const [phase, setPhase] = useState<Phase>(sel ? "loading" : "empty");
@@ -347,18 +347,12 @@ export default function BottleMixScreen() {
   const totalNights = stayNights(sel.checkIn, sel.checkOut);
   const legs = sel.checkIn && sel.checkOut ? legDates(sel) : null;
   const outdoorTitle =
-    selectedStay?.title ||
-    selectedInspiration?.title ||
-    selectedDemo?.title ||
-    (pick?.kind === "test" ? "TEST FIXTURE" : pick?.kind === "demo" ? "Demo seed" : "Choose an outdoor stay");
+    selectedStay?.title || selectedInspiration?.title || selectedDemo?.title || "Second sleep";
+  const outdoorImage = selectedStay?.coverPhoto || selectedInspiration?.imageUrl || "";
   const checkoutBlock = pick
-    ? pick.kind === "inspiration"
-      ? "Sample inspiration is not bookable. Checkout is off. No reservation will be created."
-      : pick.kind === "demo"
-        ? "This demo seed is not production inventory. Checkout is off. No reservation will be created."
-      : pick.kind === "test"
-        ? "TEST FIXTURE — not a host, calendar, or price. Checkout is off. No reservation will be created."
-        : !sel.checkIn || !sel.checkOut
+    ? pick.kind !== "verified"
+      ? "This concept cannot be reserved."
+      : !sel.checkIn || !sel.checkOut
           ? "Add dates to check both calendars. Checkout is off."
           : !hotelSlug
             ? "This hotel has no contracted calendar, so both stays cannot be reserved together. Checkout is off."
@@ -367,11 +361,132 @@ export default function BottleMixScreen() {
               : authorized
                 ? null
                 : quoteReason || "Both calendars are not open. Checkout is off."
-    : "Select an outdoor stay to continue. Checkout stays off until both calendars are verified.";
+    : "Select a second sleep to continue.";
+
+  if ((stage === "review" || stage === "book") && pick) {
+    const openBook = () => {
+      const qs = new URLSearchParams(mixSearchParams(sel));
+      qs.set("stage", "book");
+      router.push(`/bottleMix?${qs.toString()}` as Href);
+    };
+    return (
+      <ScrollView style={styles.screen} contentContainerStyle={styles.body} testID="bottle-review-screen">
+        <Stack.Screen options={screenOptions} />
+        <BottleJourneySteps active={stage === "book" ? 4 : 3} />
+        <Text style={styles.hotel} testID="bottle-mix-hotel-name">
+          {hotelName}
+        </Text>
+        <Text style={styles.meta} testID="bottle-mix-plan">
+          {sel.checkIn && sel.checkOut
+            ? `${humanDate(sel.checkIn)} → ${humanDate(sel.checkOut)} · ${sel.hotelNights} hotel + ${sel.outdoorNights} outdoor · ${sel.travelers} guests`
+            : `${sel.travelers} guests`}
+        </Text>
+        <View style={styles.pair} testID="bottle-review-summary">
+          <View style={styles.pairCol}>
+            <Text style={styles.section}>Hotel</Text>
+            <Text style={styles.summaryLine}>{hotelName}</Text>
+            <Text style={styles.cardMeta}>{sel.hotelNights} nights</Text>
+            {legs ? (
+              <Text style={styles.cardMeta}>
+                {humanDate(legs.hotelCheckIn)} → {humanDate(legs.hotelCheckOut)}
+              </Text>
+            ) : null}
+          </View>
+          <View style={styles.pairCol}>
+            <Text style={styles.section}>Second sleep</Text>
+            {outdoorImage ? <Image source={{ uri: outdoorImage }} style={styles.pairPhoto} /> : null}
+            <Text style={styles.summaryLine}>{outdoorTitle}</Text>
+            <Text style={styles.cardMeta}>{sel.outdoorNights} nights</Text>
+            {legs ? (
+              <Text style={styles.cardMeta}>
+                {humanDate(legs.outdoorCheckIn)} → {humanDate(legs.outdoorCheckOut)}
+              </Text>
+            ) : null}
+          </View>
+        </View>
+        <Text style={styles.cardMeta}>{sel.travelers} guests</Text>
+        {authorized && quote ? (
+          <View testID="bottle-mix-total">
+            <Text style={styles.summaryLine}>Total {eur(quote.guestTotalCents)}</Text>
+            <Text style={styles.cardMeta}>Guest fee {eur(quote.guestServiceFeeCents)}</Text>
+          </View>
+        ) : (
+          <Text style={styles.status} testID="bottle-mix-checkout-reason">
+            {pick.kind === "verified" ? checkoutBlock : "Concept only. No supplier price."}
+          </Text>
+        )}
+        {stage === "review" && (pick.kind !== "verified" || (authorized && quote)) ? (
+          <Pressable style={styles.book} onPress={openBook} testID="bottle-review-continue" accessibilityRole="button">
+            <Text style={styles.bookText}>Book Stay</Text>
+          </Pressable>
+        ) : null}
+        {stage === "book" && pick.kind !== "verified" ? (
+          <BottlePreviewJourney
+            hotelName={hotelName}
+            outdoorLabel={outdoorTitle}
+            checkIn={sel.checkIn}
+            checkOut={sel.checkOut}
+            hotelNights={sel.hotelNights}
+            outdoorNights={sel.outdoorNights}
+            travelers={sel.travelers}
+          />
+        ) : null}
+        {stage === "book" && pick.kind === "verified" && authorized && quote ? (
+          <>
+            <TextInput
+              value={guestName}
+              onChangeText={setGuestName}
+              placeholder="Guest name"
+              style={styles.input}
+              testID="bottle-mix-guest-name"
+            />
+            <TextInput
+              value={email}
+              onChangeText={setEmail}
+              autoCapitalize="none"
+              keyboardType="email-address"
+              placeholder="Email for this booking"
+              style={styles.input}
+              testID="bottle-mix-email"
+            />
+            <Pressable
+              style={[styles.book, !canPay && styles.bookOff]}
+              disabled={!canPay}
+              onPress={() => void onBook()}
+              testID="bottle-mix-checkout"
+              accessibilityRole="button"
+              accessibilityState={{ disabled: !canPay }}
+            >
+              <Text style={styles.bookText}>{busy ? "Booking…" : "Book Stay"}</Text>
+            </Pressable>
+          </>
+        ) : null}
+        {note ? (
+          <Text style={styles.note} testID="bottle-mix-confirmed">
+            {note}
+          </Text>
+        ) : null}
+        <View testID="bottle-booking-history">
+          <Text style={styles.section}>Your bookings</Text>
+          {history.length === 0 ? (
+            <Text style={styles.cardMeta}>No confirmed Bottle reservations on this device.</Text>
+          ) : (
+            history.map((row) => (
+              <Text key={row.reservationRef} style={styles.cardMeta}>
+                {row.hotelName}
+                {row.outdoorTitle ? ` · ${row.outdoorTitle}` : ""}
+              </Text>
+            ))
+          )}
+        </View>
+      </ScrollView>
+    );
+  }
 
   return (
     <ScrollView style={styles.screen} contentContainerStyle={styles.body} testID="bottle-mix-screen">
       <Stack.Screen options={screenOptions} />
+      <BottleJourneySteps active={2} />
       <Text style={styles.hotel} testID="bottle-mix-hotel-name">
         {hotelName}
       </Text>
@@ -380,18 +495,6 @@ export default function BottleMixScreen() {
           ? `${humanDate(sel.checkIn)} → ${humanDate(sel.checkOut)} · ${sel.hotelNights} hotel + ${sel.outdoorNights} outdoor · ${sel.travelers} guests`
           : `${sel.travelers} guests · add dates to split nights`}
       </Text>
-
-      <View style={styles.summary} testID="bottle-mix-summary">
-        <Text style={styles.summaryLine}>
-          {sel.hotelNights} nights at {hotelName} · {outdoorTitle}
-        </Text>
-        {legs ? (
-          <Text style={styles.cardMeta}>
-            Hotel {humanDate(legs.hotelCheckIn)} → {humanDate(legs.hotelCheckOut)} · Outdoor {humanDate(legs.outdoorCheckIn)} →{" "}
-            {humanDate(legs.outdoorCheckOut)}
-          </Text>
-        ) : null}
-      </View>
 
       {totalNights >= 2 ? (
         <View style={styles.split} testID="bottle-mix-night-split">
@@ -421,8 +524,7 @@ export default function BottleMixScreen() {
       ) : null}
       {phase === "empty" ? (
         <Text style={styles.status} testID="bottle-mix-status">
-          No verified outdoor host has published nights for this search. Bookings are not available until a host does.
-          The designs below are sample inspiration, not stays you can reserve.
+          No outdoor host has published nights for these dates. The ideas below are concepts, not stays you can reserve.
         </Text>
       ) : null}
       {phase === "results" ? (
@@ -453,30 +555,8 @@ export default function BottleMixScreen() {
         </View>
       ) : null}
 
-      {demos.length ? (
-        <View testID="bottle-mix-demo">
-          <Text style={styles.section}>Workspace demo seeds</Text>
-          <Text style={styles.cardMeta}>These records are labelled demo. They are not verified hosts and cannot be reserved.</Text>
-          {demos.map((demo) => (
-            <Pressable
-              key={demo.id}
-              style={styles.card}
-              onPress={() => openOutdoor({ kind: "demo", id: demo.id })}
-              testID={`bottle-mix-demo-${demo.id}`}
-              accessibilityRole="button"
-            >
-              <Text style={styles.cardTitle}>{demo.title || demo.id}</Text>
-              {demo.location ? <Text style={styles.cardMeta}>{demo.location}</Text> : null}
-              <Text style={styles.inspiration}>{demo.labelled || "DEMO — not production inventory"}</Text>
-            </Pressable>
-          ))}
-        </View>
-      ) : null}
-
-      <Text style={styles.section}>Sample inspiration</Text>
-      <Text style={styles.cardMeta}>
-        Editorial designs from Travel in a Bottle. Not hosts, calendars, or prices.
-      </Text>
+      <Text style={styles.section}>Concepts</Text>
+      <Text style={styles.cardMeta}>Ideas for a second sleep. Not places you can book.</Text>
       <View testID="bottle-mix-inspiration">
         {OUTDOOR_INSPIRATION.map((row) => {
           const selected = pick?.kind === "inspiration" && pick.id === row.id;
@@ -494,24 +574,11 @@ export default function BottleMixScreen() {
               <Text style={styles.cardMeta}>
                 {row.type} · {row.location}
               </Text>
-              <Text style={styles.inspiration}>Inspiration · not bookable</Text>
+              <Text style={styles.inspiration}>Concept · not bookable</Text>
             </Pressable>
           );
         })}
       </View>
-
-      <Pressable
-        style={[styles.card, styles.testCard, pick?.kind === "test" && styles.cardOn]}
-        onPress={() => openOutdoor({ kind: "test", id: TEST_FIXTURE_ID })}
-        testID="bottle-outdoor-test-fixture"
-        accessibilityRole="button"
-        accessibilityState={{ selected: pick?.kind === "test" }}
-      >
-        <Text style={styles.cardTitle}>TEST FIXTURE</Text>
-        <Text style={styles.cardMeta}>
-          Isolated screen check only. This is not a host, a calendar, or a price, and it cannot become a reservation.
-        </Text>
-      </Pressable>
 
       {phase === "error" ? (
         <Pressable style={styles.retry} onPress={() => setAttempt((n) => n + 1)} testID="bottle-mix-retry" accessibilityRole="button">
@@ -519,95 +586,6 @@ export default function BottleMixScreen() {
         </Pressable>
       ) : null}
 
-      {pick ? (
-        <View style={styles.summary} testID="bottle-mix-booking">
-          <Text style={styles.section}>Reservation summary</Text>
-          <Text style={styles.summaryLine}>{hotelName}</Text>
-          <Text style={styles.cardMeta}>
-            {sel.hotelNights} hotel nights · {sel.outdoorNights} outdoor nights · {sel.travelers} guests
-          </Text>
-          <Text style={styles.cardMeta}>{outdoorTitle}</Text>
-          {authorized && quote ? (
-            <View testID="bottle-mix-total">
-              <Text style={styles.summaryLine}>Total {eur(quote.guestTotalCents)}</Text>
-              <Text style={styles.cardMeta}>Service fee {eur(quote.guestServiceFeeCents)}</Text>
-              {selectedStay?.cancellation ? <Text style={styles.cardMeta}>{selectedStay.cancellation}</Text> : (
-                <Text style={styles.cardMeta}>Cancellation terms appear when the supplier publishes them.</Text>
-              )}
-            </View>
-          ) : (
-            <Text style={styles.status} testID="bottle-mix-checkout-reason">
-              {checkoutBlock}
-            </Text>
-          )}
-          {pick.kind === "verified" && authorized && quote ? (
-            <>
-              <TextInput
-                value={guestName}
-                onChangeText={setGuestName}
-                placeholder="Guest name"
-                style={styles.input}
-                testID="bottle-mix-guest-name"
-              />
-              <TextInput
-                value={email}
-                onChangeText={setEmail}
-                autoCapitalize="none"
-                keyboardType="email-address"
-                placeholder="Email for this booking"
-                style={styles.input}
-                testID="bottle-mix-email"
-              />
-              <Pressable
-                style={[styles.book, !canPay && styles.bookOff]}
-                disabled={!canPay}
-                onPress={() => void onBook()}
-                testID="bottle-mix-checkout"
-                accessibilityRole="button"
-                accessibilityState={{ disabled: !canPay }}
-              >
-                <Text style={styles.bookText}>{busy ? "Booking…" : "Book mix"}</Text>
-              </Pressable>
-            </>
-          ) : null}
-          {pick.kind !== "verified" ? (
-            <BottlePreviewJourney
-              hotelName={hotelName}
-              outdoorLabel={outdoorTitle}
-              checkIn={sel.checkIn}
-              checkOut={sel.checkOut}
-              hotelNights={sel.hotelNights}
-              outdoorNights={sel.outdoorNights}
-              travelers={sel.travelers}
-            />
-          ) : null}
-        </View>
-      ) : null}
-
-      {note ? (
-        <Text style={styles.note} testID="bottle-mix-confirmed">
-          {note}
-        </Text>
-      ) : null}
-
-      <View testID="bottle-booking-history">
-        <Text style={styles.section}>Booking history</Text>
-        {history.length === 0 ? (
-          <Text style={styles.cardMeta}>No confirmed Bottle reservations on this device.</Text>
-        ) : (
-          history.map((row) => (
-            <View key={row.reservationRef} style={styles.card}>
-              <Text style={styles.cardTitle}>
-                {row.testFixture ? "TEST reservation" : "Confirmed"} · {row.reservationRef}
-              </Text>
-              <Text style={styles.cardMeta}>
-                {row.hotelName}
-                {row.outdoorTitle ? ` · ${row.outdoorTitle}` : ""} · {row.flow}
-              </Text>
-            </View>
-          ))
-        )}
-      </View>
     </ScrollView>
   );
 }
@@ -643,6 +621,9 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
   stepText: { fontSize: 18, fontWeight: "700", color: "#1A1510" },
+  pair: { flexDirection: "row", gap: 12, marginBottom: 12 },
+  pairCol: { flex: 1 },
+  pairPhoto: { width: "100%", height: 120, borderRadius: 12, marginBottom: 8, backgroundColor: "#E8E2D8" },
   verified: { fontSize: 13, fontWeight: "700", color: "#1A1510", paddingHorizontal: 14, paddingBottom: 8 },
   inspiration: {
     fontSize: 12,

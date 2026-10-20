@@ -96,6 +96,30 @@ const SEARCH_KEYS = [
   "outdoorId",
 ] as const;
 
+function tripNights(checkIn: string, checkOut: string): number {
+  if (!checkIn || !checkOut) return 0;
+  const start = new Date(`${checkIn}T00:00:00Z`);
+  const end = new Date(`${checkOut}T00:00:00Z`);
+  if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) return 0;
+  return Math.max(0, Math.round((end.getTime() - start.getTime()) / 86400000));
+}
+
+/** Keep a split that matches the selected dates. Otherwise use 2 hotel nights and the rest outdoors. */
+export function fitNightSplit(checkIn: string, checkOut: string, hotelNights: number, outdoorNights: number) {
+  const span = tripNights(checkIn, checkOut);
+  if (span >= 2 && hotelNights >= 1 && outdoorNights >= 1 && hotelNights + outdoorNights === span) {
+    return { hotelNights, outdoorNights };
+  }
+  if (span >= 2) {
+    const hotel = Math.min(2, span - 1);
+    return { hotelNights: hotel, outdoorNights: span - hotel };
+  }
+  return {
+    hotelNights: Math.max(1, hotelNights || 1),
+    outdoorNights: Math.max(1, outdoorNights || 1),
+  };
+}
+
 function outdoorPickFrom(kind: string, id: string): BottleOutdoorPick | undefined {
   if ((kind === "verified" || kind === "inspiration" || kind === "test" || kind === "demo") && id) {
     return { kind, id };
@@ -162,14 +186,15 @@ export function bottlePlanFromSearchParams(
   const outdoorPick =
     outdoorPickFrom(paramValue(raw, "outdoorKind"), paramValue(raw, "outdoorId")) ||
     (saved && !savedNamesAnotherHotel ? saved.outdoorPick : undefined);
+  const fitted = fitNightSplit(checkIn, checkOut, Math.max(1, Number(hotelNights) || 1), Math.max(1, Number(outdoorNights) || 1));
 
   return sanitizeBottlePlanSelection({
     destination: destination || "Athens",
     checkIn,
     checkOut,
     travelers: Math.max(1, Number(travelers) || 2),
-    hotelNights: Math.max(1, Number(hotelNights) || 1),
-    outdoorNights: Math.max(1, Number(outdoorNights) || 1),
+    hotelNights: fitted.hotelNights,
+    outdoorNights: fitted.outdoorNights,
     placeId: placeId || undefined,
     hotelSlug: hotelSlug || undefined,
     hotelName: hotelName || undefined,

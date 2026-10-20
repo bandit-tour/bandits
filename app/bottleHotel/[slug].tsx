@@ -21,6 +21,7 @@ import {
   View,
 } from "react-native";
 
+import { BottleJourneySteps } from "@/components/BottleJourneySteps";
 import { humanDate } from "@/components/BottleDateRangeField";
 import { useAppBackScreenOptions } from "@/hooks/useAppBackScreenOptions";
 import {
@@ -33,7 +34,7 @@ import {
   loadHotelBottleListing,
   type HotelBottleListing,
 } from "@/lib/guest-workspace/hotelBottleListing";
-import { mixSearchParams, readBottlePlanSelection, writeBottlePlanSelection, type BottlePlanSelection } from "@/lib/bottlePlanSelection";
+import { fitNightSplit, mixSearchParams, readBottlePlanSelection, writeBottlePlanSelection, type BottlePlanSelection } from "@/lib/bottlePlanSelection";
 import { PLAY_THEATROU_ORIGIN } from "@/lib/guest-workspace/shopGeo";
 import { getHotelWhiteLabel, isKnownHotelSlug } from "@/lib/hotelWhiteLabel";
 import { workspaceGet } from "@/lib/workspace/client";
@@ -253,22 +254,17 @@ export default function BottleHotelDetailScreen() {
   );
   const urlHotelNights = Number(params.hotelNights);
   const urlOutdoorNights = Number(params.outdoorNights);
-  const hotelNights =
-    savedMatches && savedPlan && savedPlan.hotelNights > 0
-      ? savedPlan.hotelNights
-      : urlHotelNights > 0
-        ? urlHotelNights
-        : totalNights >= 2
-          ? Math.min(2, totalNights - 1)
-          : 1;
-  const outdoorNights =
-    savedMatches && savedPlan && savedPlan.outdoorNights > 0
-      ? savedPlan.outdoorNights
-      : urlOutdoorNights > 0
-        ? urlOutdoorNights
-        : totalNights >= 2
-          ? Math.max(1, totalNights - hotelNights)
-          : 1;
+  const savedSplitFits = Boolean(
+    savedMatches &&
+      savedPlan &&
+      totalNights >= 2 &&
+      savedPlan.hotelNights + savedPlan.outdoorNights === totalNights &&
+      savedPlan.hotelNights >= 1 &&
+      savedPlan.outdoorNights >= 1,
+  );
+  const urlSplit = fitNightSplit(checkIn, checkOut, urlHotelNights, urlOutdoorNights);
+  const hotelNights = savedSplitFits && savedPlan ? savedPlan.hotelNights : urlSplit.hotelNights;
+  const outdoorNights = savedSplitFits && savedPlan ? savedPlan.outdoorNights : urlSplit.outdoorNights;
   const shownName =
     placeHotel?.name ||
     (parsed.kind === "partner" ? partnerTitle : "") ||
@@ -414,6 +410,7 @@ export default function BottleHotelDetailScreen() {
         <Text style={styles.publish} testID="bottle-hotel-availability">
           {availabilityLabel}
         </Text>
+        <BottleJourneySteps active={1} />
         <Pressable
           style={[styles.cta, !canMix && styles.ctaOff]}
           onPress={openMix}

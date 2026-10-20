@@ -7,7 +7,7 @@ import { Stack, useLocalSearchParams, useRouter, type Href } from "expo-router";
 import React, { useEffect, useMemo, useState } from "react";
 import { Modal, Platform, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 
-import { BottlePreviewJourney } from "@/components/BottlePreviewJourney";
+import { BottleJourneySteps } from "@/components/BottleJourneySteps";
 import { humanDate } from "@/components/BottleDateRangeField";
 import { useAppBackScreenOptions } from "@/hooks/useAppBackScreenOptions";
 import {
@@ -18,7 +18,7 @@ import {
   type BottleOutdoorPick,
   type BottlePlanSelection,
 } from "@/lib/bottlePlanSelection";
-import { getBottleMatchById } from "@/lib/guest-workspace/productWorlds";
+import { conceptJourneyLine, getBottleMatchById } from "@/lib/guest-workspace/productWorlds";
 import type { WorkspaceBottleStay } from "@/lib/guest-workspace/liveBottle";
 import { workspaceGet } from "@/lib/workspace/client";
 
@@ -111,11 +111,11 @@ export default function BottleOutdoorProfileScreen() {
 
   const title =
     kind === "test"
-      ? "TEST FIXTURE"
+      ? "Concept"
       : kind === "inspiration"
-        ? sample?.second.name || "Sample stay"
+        ? sample?.second.name || "Concept"
         : kind === "demo"
-          ? demo?.title || "Demo seed"
+          ? demo?.title || "Concept"
           : stay?.title || "Outdoor stay";
   const photos =
     kind === "inspiration"
@@ -123,17 +123,19 @@ export default function BottleOutdoorProfileScreen() {
       : kind === "verified"
         ? [stay?.coverPhoto, ...(stay?.photos || [])].filter((url): url is string => Boolean(url && /^https?:\/\//i.test(url)))
         : [];
-  const previewLabel = kind === "test" ? "TEST FIXTURE" : title;
-  const addToMix = () => {
-    if (!plan?.hotelName || !stay) return;
-    const next: BottlePlanSelection = { ...plan, outdoorPick: { kind: "verified", id: stay.id } };
+  const reviewJourney = () => {
+    if (!plan?.hotelName) return;
+    const next: BottlePlanSelection = { ...plan, outdoorPick: { kind, id } };
     writeBottlePlanSelection(next);
-    router.replace(`/bottleMix?${new URLSearchParams(mixSearchParams(next)).toString()}` as Href);
+    const qs = new URLSearchParams(mixSearchParams(next));
+    qs.set("stage", "review");
+    router.push(`/bottleMix?${qs.toString()}` as Href);
   };
 
   return (
     <ScrollView style={styles.screen} contentContainerStyle={styles.body} testID="bottle-outdoor-profile">
       <Stack.Screen options={screenOptions} />
+      <BottleJourneySteps active={2} />
       <Pressable onPress={backToMix} testID="bottle-outdoor-back" accessibilityRole="button">
         <Text style={styles.back}>Back to Outdoor Stays</Text>
       </Pressable>
@@ -148,55 +150,41 @@ export default function BottleOutdoorProfileScreen() {
       <Text style={styles.title} testID="bottle-outdoor-name">
         {title}
       </Text>
-      {kind !== "verified" ? (
-        <Text style={styles.badge} testID="bottle-outdoor-sample-label">
-          {kind === "demo" ? "DEMO — not production inventory" : "Sample preview · not bookable"}
-        </Text>
-      ) : (
-        <Text style={styles.badge}>Verified outdoor stay</Text>
-      )}
+      <Text style={styles.badge} testID="bottle-outdoor-sample-label">
+        {kind === "verified" ? "Verified outdoor stay" : "Concept · not bookable"}
+      </Text>
 
       {photos.length ? (
         <View testID="bottle-outdoor-gallery">
-          {photos.map((uri) => (
+          {photos.map((uri, index) => (
             <Pressable key={uri} onPress={() => setZoom(uri)} accessibilityRole="button">
-              <ExpoImage source={{ uri }} style={styles.photo} contentFit="cover" />
+              <ExpoImage source={{ uri }} style={index === 0 ? styles.photoLead : styles.photo} contentFit="cover" />
             </Pressable>
           ))}
+          {kind !== "verified" ? (
+            <Text style={styles.bodyCopy}>Concept imagery. Not photographs of a host property.</Text>
+          ) : null}
         </View>
       ) : (
-        <Text style={styles.bodyCopy}>No supplier photo is published for this card.</Text>
+        <Text style={styles.bodyCopy}>No photo is published for this concept.</Text>
       )}
 
       {kind === "inspiration" && sample ? (
         <View testID="bottle-outdoor-details">
-          <Text style={styles.section}>Description</Text>
-          <Text style={styles.bodyCopy}>{sample.story}</Text>
-          <Text style={styles.section}>Sleeping arrangement</Text>
-          <Text style={styles.bodyCopy}>{sample.second.type || "Outdoor stay"}</Text>
+          <Text style={styles.bodyCopy} testID="bottle-outdoor-story">
+            {conceptJourneyLine({
+              hotelName: plan?.hotelName,
+              hotelNights: plan?.hotelNights,
+              outdoorNights: plan?.outdoorNights,
+              concept: sample.second.type || "second sleep",
+            })}
+          </Text>
+          {sample.second.location ? <Text style={styles.bodyCopy}>{sample.second.location}</Text> : null}
+          {sample.second.type ? <Text style={styles.bodyCopy}>{sample.second.type}</Text> : null}
           {sample.second.attributes?.length ? (
-            <>
-              <Text style={styles.section}>Amenities</Text>
-              {sample.second.attributes.map((item) => (
-                <Text key={item} style={styles.bodyCopy}>
-                  {item}
-                </Text>
-              ))}
-            </>
+            <Text style={styles.bodyCopy}>{sample.second.attributes.join(" · ")}</Text>
           ) : null}
-          <Text style={styles.section}>Location</Text>
-          <Text style={styles.bodyCopy}>{sample.second.location}</Text>
-          <Text style={styles.bodyCopy}>No verified map pin. This preview does not publish coordinates.</Text>
-          {sample.second.host ? (
-            <>
-              <Text style={styles.section}>Catalog text</Text>
-              <Text style={styles.bodyCopy}>
-                {sample.second.host}. Sample copy from the editorial catalog. Not a verified host.
-              </Text>
-            </>
-          ) : null}
-          <Text style={styles.section}>Calendar and price</Text>
-          <Text style={styles.bodyCopy}>No supplier calendar or price. This preview cannot be booked.</Text>
+          <Text style={styles.bodyCopy}>No supplier calendar or price. This concept cannot be booked.</Text>
         </View>
       ) : null}
 
@@ -260,40 +248,18 @@ export default function BottleOutdoorProfileScreen() {
               ) : (
                 <Text style={styles.bodyCopy}>No supplier calendar is published for this listing.</Text>
               )}
-              <Pressable style={styles.button} onPress={addToMix} testID="bottle-outdoor-add-to-mix" accessibilityRole="button">
-                <Text style={styles.buttonText}>Add to My Mix</Text>
+              <Pressable style={styles.button} onPress={reviewJourney} testID="bottle-outdoor-review" accessibilityRole="button">
+                <Text style={styles.buttonText}>Review Journey</Text>
               </Pressable>
             </>
           ) : null}
         </View>
       ) : null}
 
-      {kind === "demo" ? (
-        <View testID="bottle-outdoor-details">
-          <Text style={styles.bodyCopy}>{demo?.labelled || "DEMO — not production inventory"}</Text>
-          {demo?.location ? <Text style={styles.bodyCopy}>{demo.location}</Text> : null}
-          <Text style={styles.bodyCopy}>No host, price, photos, or calendar are published for this demo seed.</Text>
-        </View>
-      ) : null}
-
-      {kind === "test" ? (
-        <View testID="bottle-outdoor-details">
-          <Text style={styles.bodyCopy}>
-            Isolated screen check. This is not a host, a calendar, or a price, and it cannot become a reservation.
-          </Text>
-        </View>
-      ) : null}
-
-      {plan?.hotelName && kind !== "verified" ? (
-        <BottlePreviewJourney
-          hotelName={plan.hotelName}
-          outdoorLabel={previewLabel}
-          checkIn={plan.checkIn}
-          checkOut={plan.checkOut}
-          hotelNights={plan.hotelNights}
-          outdoorNights={plan.outdoorNights}
-          travelers={plan.travelers}
-        />
+      {kind !== "verified" && plan?.hotelName ? (
+        <Pressable style={styles.button} onPress={reviewJourney} testID="bottle-outdoor-review" accessibilityRole="button">
+          <Text style={styles.buttonText}>Review Journey</Text>
+        </Pressable>
       ) : null}
 
       {zoom ? (
@@ -327,7 +293,8 @@ const styles = StyleSheet.create({
     marginBottom: 6,
   },
   bodyCopy: { fontSize: 15, lineHeight: 22, color: "#2C261E", marginBottom: 4 },
-  photo: { width: "100%", height: 240, borderRadius: 16, marginBottom: 10, backgroundColor: "#E8E2D8" },
+  photoLead: { width: "100%", height: 320, borderRadius: 16, marginBottom: 10, backgroundColor: "#E8E2D8" },
+  photo: { width: "100%", height: 180, borderRadius: 16, marginBottom: 10, backgroundColor: "#E8E2D8" },
   button: {
     marginTop: 16,
     backgroundColor: "#1A1510",

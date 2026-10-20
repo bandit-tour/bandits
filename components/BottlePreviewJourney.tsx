@@ -37,14 +37,9 @@ export function BottlePreviewJourney({
 
   return (
     <View testID="bottle-preview-journey">
-      <Text style={styles.kicker}>Preview Booking Journey</Text>
-      <Text style={styles.body}>
-        This walks the booking screens for a sample. Payment is off. No reservation is created.
-      </Text>
-      <Text style={styles.line}>{hotelName}</Text>
-      <Text style={styles.body}>Outdoor stay: {outdoorLabel}</Text>
+      <Text style={styles.kicker}>Book Stay</Text>
+      <Text style={styles.body}>Preview only. Payment is off. No reservation is created.</Text>
       <Text style={styles.body}>{when}</Text>
-      <Text style={styles.body}>No price. This is not supplier inventory.</Text>
       <TextInput
         value={guestName}
         onChangeText={setGuestName}
@@ -69,7 +64,7 @@ export function BottlePreviewJourney({
         accessibilityRole="button"
         accessibilityState={{ disabled: !ready }}
       >
-        <Text style={styles.buttonText}>Preview Booking Journey</Text>
+        <Text style={styles.buttonText}>Preview this stay</Text>
       </Pressable>
       {shown ? (
         <View style={styles.confirm} testID="bottle-preview-confirmation">

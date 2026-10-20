@@ -2173,7 +2173,6 @@ export const BOTTLE_MATCHES: BottleMatch[] = [
         "https://images.unsplash.com/photo-1449158743715-0a90ebb6d2d8?auto=format&fit=crop&w=1200&q=80",
       gallery: [
         "https://images.unsplash.com/photo-1478131143081-80f7f84ca84d?auto=format&fit=crop&w=900&q=80",
-        "https://images.unsplash.com/photo-1510798831971-5959226ce2ef?auto=format&fit=crop&w=900&q=80",
         "https://images.unsplash.com/photo-1448375240586-882707db888b?auto=format&fit=crop&w=900&q=80",
       ],
     },
@@ -2182,7 +2181,7 @@ export const BOTTLE_MATCHES: BottleMatch[] = [
     travelTime: "45 min",
     distance: "38 km",
     departure: "After breakfast",
-    story: "3 nights in the city. 2 nights somewhere unforgettable — pine canopy above Athens.",
+    story: "Forest lodging concept. Not a host property.",
     cta: "View journey",
     availabilityCta: "Check availability",
     journeyNights: 5,
@@ -2201,11 +2200,10 @@ export const BOTTLE_MATCHES: BottleMatch[] = [
       rating: 4.88,
       attributes: ["🌊 Sea view", "🌅 Sunset", "🏛 Temple nearby"],
       imageUrl:
-        "https://images.unsplash.com/photo-1520250497591-112f2f40a3f4?auto=format&fit=crop&w=1200&q=80",
+        "https://images.unsplash.com/photo-1507525428034-b723cf961d3e?auto=format&fit=crop&w=1200&q=80",
       gallery: [
-        "https://images.unsplash.com/photo-1499793983690-e29dafd473d5?auto=format&fit=crop&w=900&q=80",
-        "https://images.unsplash.com/photo-1507525428034-b723cf961d3e?auto=format&fit=crop&w=900&q=80",
         "https://images.unsplash.com/photo-1471922694854-ff1b63b20054?auto=format&fit=crop&w=900&q=80",
+        "https://images.unsplash.com/photo-1468413253725-0d5181091126?auto=format&fit=crop&w=900&q=80",
       ],
     },
     filterTags: ["Sea", "Luxury", "Romantic", "Family"],
@@ -2213,7 +2211,7 @@ export const BOTTLE_MATCHES: BottleMatch[] = [
     travelTime: "70 min",
     distance: "65 km",
     departure: "Afternoon transfer",
-    story: "Pair your hotel with the Aegean — city mornings, temple light at night.",
+    story: "A stay by the sea, drawn as a concept. Not a host property.",
     cta: "View journey",
     availabilityCta: "Check availability",
     journeyNights: 5,
@@ -2232,11 +2230,9 @@ export const BOTTLE_MATCHES: BottleMatch[] = [
       rating: 4.85,
       attributes: ["🍷 Wine tasting", "🌿 Vines", "🛋 Quiet nights"],
       imageUrl:
-        "https://images.unsplash.com/photo-1500382017468-9049fed747ef?auto=format&fit=crop&w=1200&q=80",
+        "https://images.unsplash.com/photo-1506377247377-2a5b3b417ebb?auto=format&fit=crop&w=1200&q=80",
       gallery: [
         "https://images.unsplash.com/photo-1510812431401-41d2bd2722f3?auto=format&fit=crop&w=900&q=80",
-        "https://images.unsplash.com/photo-1474722883778-792e7990302e?auto=format&fit=crop&w=900&q=80",
-        "https://images.unsplash.com/photo-1560493676-04071c5f467b?auto=format&fit=crop&w=900&q=80",
       ],
     },
     filterTags: ["Wine", "Nature", "Romantic", "Luxury"],
@@ -2244,7 +2240,7 @@ export const BOTTLE_MATCHES: BottleMatch[] = [
     travelTime: "1h 25m",
     distance: "110 km",
     departure: "Late morning",
-    story: "Add a second stay among the vines — hotel energy, then wine-country quiet.",
+    story: "Wine-country quiet, drawn as a concept. Not a host property.",
     cta: "View journey",
     availabilityCta: "Check availability",
     journeyNights: 4,
@@ -2263,11 +2259,9 @@ export const BOTTLE_MATCHES: BottleMatch[] = [
       rating: 4.9,
       attributes: ["⛵ Deck sleep", "🌟 Stars", "🧭 Skipper"],
       imageUrl:
-        "https://images.unsplash.com/photo-1544551763-46a013bb70d5?auto=format&fit=crop&w=1200&q=80",
+        "https://images.unsplash.com/photo-1540946485063-a40da27545f8?auto=format&fit=crop&w=1200&q=80",
       gallery: [
-        "https://images.unsplash.com/photo-1567899378494-47b22a2ae96a?auto=format&fit=crop&w=900&q=80",
         "https://images.unsplash.com/photo-1505118380757-91f5f5632de0?auto=format&fit=crop&w=900&q=80",
-        "https://images.unsplash.com/photo-1468413253725-0d5181091126?auto=format&fit=crop&w=900&q=80",
       ],
     },
     filterTags: ["Sea", "Adventure", "Romantic", "Luxury"],
@@ -2275,7 +2269,7 @@ export const BOTTLE_MATCHES: BottleMatch[] = [
     travelTime: "35 min",
     distance: "22 km",
     departure: "Before sunset",
-    story: "Hotel + night on the water — one journey, two ways to sleep.",
+    story: "A night on the water, drawn as a concept. Not a host property.",
     cta: "View journey",
     availabilityCta: "Check availability",
     journeyNights: 4,
@@ -2294,10 +2288,9 @@ export const BOTTLE_MATCHES: BottleMatch[] = [
       rating: 4.78,
       attributes: ["🏔 Mountains", "💻 Desk view", "🐕 Pet friendly"],
       imageUrl:
-        "https://images.unsplash.com/photo-1518732714860-b62714ce0c59?auto=format&fit=crop&w=1200&q=80",
+        "https://images.unsplash.com/photo-1518780664697-55e3ad937233?auto=format&fit=crop&w=1200&q=80",
       gallery: [
         "https://images.unsplash.com/photo-1464822759023-fed622ff2c3b?auto=format&fit=crop&w=900&q=80",
-        "https://images.unsplash.com/photo-1486870591958-9b9d0d1dda2d?auto=format&fit=crop&w=900&q=80",
         "https://images.unsplash.com/photo-1506905925346-21bda4d32df4?auto=format&fit=crop&w=900&q=80",
       ],
     },
@@ -2306,7 +2299,7 @@ export const BOTTLE_MATCHES: BottleMatch[] = [
     travelTime: "2h 10m",
     distance: "180 km",
     departure: "Morning",
-    story: "2 nights in Athens. 3 nights at altitude — space to work and wander.",
+    story: "Mountain lodging concept. Not a host property.",
     cta: "View journey",
     availabilityCta: "Check availability",
     journeyNights: 5,
@@ -2327,9 +2320,8 @@ export const BOTTLE_MATCHES: BottleMatch[] = [
       imageUrl:
         "https://images.unsplash.com/photo-1504280390367-361c6d9f38f4?auto=format&fit=crop&w=1200&q=80",
       gallery: [
-        "https://images.unsplash.com/photo-1478131143081-80f7f84ca84d?auto=format&fit=crop&w=900&q=80",
         "https://images.unsplash.com/photo-1537905569824-f89f14cceb68?auto=format&fit=crop&w=900&q=80",
-        "https://images.unsplash.com/photo-1523987355523-c7b5b0dd90a7?auto=format&fit=crop&w=900&q=80",
+        "https://images.unsplash.com/photo-1478131143081-80f7f84ca84d?auto=format&fit=crop&w=900&q=80",
       ],
     },
     filterTags: ["Nature", "Family", "Adventure", "Pet Friendly"],
@@ -2337,7 +2329,7 @@ export const BOTTLE_MATCHES: BottleMatch[] = [
     travelTime: "55 min",
     distance: "48 km",
     departure: "After lunch",
-    story: "Pair the hotel with canvas under olives — soft nights after the city.",
+    story: "Canvas under open sky, drawn as a concept. Not a host property.",
     cta: "View journey",
     availabilityCta: "Check availability",
     journeyNights: 5,
@@ -2356,11 +2348,10 @@ export const BOTTLE_MATCHES: BottleMatch[] = [
       rating: 4.91,
       attributes: ["🪵 Stone cabin", "🔥 Fireplace", "🏔 Mountain view"],
       imageUrl:
-        "https://images.unsplash.com/photo-1449824913935-59a10b8d2000?auto=format&fit=crop&w=1200&q=80",
+        "https://images.unsplash.com/photo-1542718610-a1d656d1884c?auto=format&fit=crop&w=1200&q=80",
       gallery: [
-        "https://images.unsplash.com/photo-1518732714860-b62714ce0c59?auto=format&fit=crop&w=900&q=80",
         "https://images.unsplash.com/photo-1464822759023-fed622ff2c3b?auto=format&fit=crop&w=900&q=80",
-        "https://images.unsplash.com/photo-1486870591958-9b9d0d1dda2d?auto=format&fit=crop&w=900&q=80",
+        "https://images.unsplash.com/photo-1506905925346-21bda4d32df4?auto=format&fit=crop&w=900&q=80",
       ],
     },
     filterTags: ["Mountains", "Nature", "Romantic", "Luxury"],
@@ -2368,7 +2359,7 @@ export const BOTTLE_MATCHES: BottleMatch[] = [
     travelTime: "2h 00m",
     distance: "155 km",
     departure: "Morning",
-    story: "3 nights at PLAY Theatrou. 2 nights in a mountain cabin — two ways to sleep, one journey.",
+    story: "A mountain cabin concept. Not a host property.",
     cta: "View journey",
     availabilityCta: "Check availability",
     journeyNights: 5,
@@ -2394,11 +2385,33 @@ export function isSampleBottleMatch(match: Pick<BottleMatch, "id" | "inventorySo
 export function withLiveHotelName(match: BottleMatch, hotelName: string): BottleMatch {
   const name = hotelName.trim();
   if (!name) return match;
+  const story = nameIsSelectedPlay(name) ? match.story || "" : (match.story || "").replace(/PLAY Theatrou/gi, name);
   return {
     ...match,
     hotel: { ...match.hotel, name },
-    story: (match.story || "").replace(/PLAY Theatrou/gi, name),
+    story,
   };
+}
+
+function nameIsSelectedPlay(name: string): boolean {
+  return /play theatrou|play athens/i.test(name);
+}
+
+/** Night line from the current plan. Never invents a hotel or a night count. */
+export function conceptJourneyLine(input: {
+  hotelName?: string;
+  hotelNights?: number;
+  outdoorNights?: number;
+  concept?: string;
+}): string {
+  const hotel = (input.hotelName || "").trim();
+  const concept = (input.concept || "second sleep").toLowerCase();
+  const hotelNights = input.hotelNights && input.hotelNights > 0 ? input.hotelNights : 0;
+  const outdoorNights = input.outdoorNights && input.outdoorNights > 0 ? input.outdoorNights : 0;
+  if (!hotel || !hotelNights || !outdoorNights) return "Choose a hotel and dates to describe this journey.";
+  const hotelWord = hotelNights === 1 ? "night" : "nights";
+  const outdoorWord = outdoorNights === 1 ? "night" : "nights";
+  return `${hotelNights} ${hotelWord} at ${hotel}. ${outdoorNights} ${outdoorWord} in this ${concept}.`;
 }
 
 /** Apply planned hotel nights from pre-trip date selection. */

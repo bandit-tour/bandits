@@ -26,6 +26,7 @@ import {
   type HotelBottleListing,
 } from "@/lib/guest-workspace/hotelBottleListing";
 import {
+  conceptJourneyLine,
   getBottleMatchById,
   isSampleBottleMatch,
   journeyNightsLabel,
@@ -175,7 +176,7 @@ export default function JourneyDetailScreen() {
     connectedStay?: string;
   }>();
   const { width } = useWindowDimensions();
-  const [hotelName, setHotelName] = useState("");
+  const [hotelName, setHotelName] = useState(() => readBottlePlanSelection()?.hotelName || "");
   const [hotelListing, setHotelListing] = useState<HotelBottleListing | null>(null);
   const [liveRow, setLiveRow] = useState<WorkspaceBottleStay | null>(null);
   const [liveMatch, setLiveMatch] = useState<BottleMatch | undefined>(undefined);
@@ -233,11 +234,17 @@ export default function JourneyDetailScreen() {
         })();
     if (!base) return undefined;
     const withHotel = plannedHotelNights ? withPlannedHotelNights(base, plannedHotelNights) : base;
-    if (secondNights != null && secondNights > 0) {
+    const saved = readBottlePlanSelection();
+    const outdoorFromPlan =
+      saved && saved.hotelName && hotelName && saved.hotelName === hotelName && saved.outdoorNights > 0
+        ? saved.outdoorNights
+        : null;
+    const outdoorNights = secondNights != null && secondNights > 0 ? secondNights : outdoorFromPlan;
+    if (outdoorNights != null && outdoorNights > 0) {
       return {
         ...withHotel,
-        second: { ...withHotel.second, nights: secondNights },
-        journeyNights: withHotel.hotel.nights + secondNights,
+        second: { ...withHotel.second, nights: outdoorNights },
+        journeyNights: withHotel.hotel.nights + outdoorNights,
       };
     }
     return withHotel;
@@ -281,7 +288,13 @@ export default function JourneyDetailScreen() {
     (u, i, arr) => u && /^https?:\/\//i.test(u) && arr.indexOf(u) === i,
   );
   const secondFrames: Frame[] = secondUrls.map((uri) => ({ key: uri, remote: uri }));
-  const hotelTitle = hotelName || hotelListing?.displayName || match.hotel.name;
+  const hotelTitle = hotelName || readBottlePlanSelection()?.hotelName || hotelListing?.displayName || "Your hotel";
+  const journeyLead = conceptJourneyLine({
+    hotelName: hotelTitle,
+    hotelNights: match.hotel.nights,
+    outdoorNights: second.nights,
+    concept: second.type || "second sleep",
+  });
   const hotelArea = hotelListing?.location || match.hotel.city || "Athens";
   const rawHotelCopy = String(hotelListing?.description || "").trim();
   const hotelSummary =
@@ -399,13 +412,13 @@ export default function JourneyDetailScreen() {
         <View style={styles.block}>
           <Text style={styles.blockTitle}>Second stay</Text>
           <Text style={styles.placeName}>{second.name}</Text>
-          <Text style={styles.blockLead}>{match.story}</Text>
+          <Text style={styles.blockLead}>{journeyLead}</Text>
           <PhotoGrid
             frames={secondFrames}
             label={sample ? "Sample illustrations" : "Stay photos"}
             note={
               sample
-                ? "Editorial sample images for this pairing. They are not another hotel’s branding, and they are not a confirmed property gallery."
+                ? "Concept imagery. Not photographs of a host property."
                 : undefined
             }
             testID="journey-second-gallery"
@@ -414,7 +427,7 @@ export default function JourneyDetailScreen() {
           <View style={styles.facts}>
             <Fact label="Nights" value={nightLabel(second.nights)} />
             <Fact label="Place" value={second.location || "—"} />
-            <Fact label="Price from" value={match.priceLabel} />
+            {!sample && liveRow?.priceCentsPerNight ? <Fact label="Price from" value={match.priceLabel} /> : null}
             {typeof liveRow?.maxGuests === "number" ? (
               <Fact label="Guests" value={String(liveRow.maxGuests)} />
             ) : null}
