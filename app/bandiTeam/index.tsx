@@ -13,7 +13,6 @@ import {
   View,
 } from 'react-native';
 
-import AppEscapeNav from '@/components/AppEscapeNav';
 import { useCity } from '@/contexts/CityContext';
 import { useAppBackScreenOptions } from '@/hooks/useAppBackScreenOptions';
 import { usePremiumRefreshControl } from '@/lib/mobilePullToRefresh';
@@ -96,8 +95,6 @@ export default function BandiTeamHubScreen({ tabActive = true }: HubProps) {
         contentContainerStyle={styles.scroll}
         refreshControl={hubRefreshControl}
       >
-        <AppEscapeNav />
-
         <Text style={styles.brand}>bandiTEAM</Text>
         <Text style={styles.title}>Good locals look out for each other.</Text>
         <Text style={styles.subtitle}>

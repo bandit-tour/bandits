@@ -23,7 +23,6 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { BottleSubmitVideo } from '@/components/BottleSubmitVideo';
 import { ReportPhotoViewer } from '@/components/ReportPhotoViewer';
-import AppEscapeNav from '@/components/AppEscapeNav';
 import { useAppBackScreenOptions } from '@/hooks/useAppBackScreenOptions';
 import { getUniqueCities } from '@/app/services/bandits';
 import { getUniqueNeighborhoods } from '@/app/services/events';
@@ -356,7 +355,6 @@ export default function BandiTeamReportScreen() {
           refreshControl={reportListRefresh}
         >
           <View style={styles.inner}>
-            <AppEscapeNav compact />
             <Text style={styles.screenTitle}>Share a Warning</Text>
             <Text style={styles.screenSubtitle}>
               Tell others what to watch for. Your note is reviewed before it goes live.
