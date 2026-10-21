@@ -9,6 +9,16 @@
       "source": "/alerts",
       "destination": "/scam-alerts",
       "permanent": false
+    },
+    {
+      "source": "/banditeam",
+      "destination": "/bandiTeam",
+      "permanent": false
+    },
+    {
+      "source": "/banditeam/:path*",
+      "destination": "/bandiTeam/:path*",
+      "permanent": false
     }
   ],
   "rewrites": [

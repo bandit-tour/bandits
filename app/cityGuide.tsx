@@ -335,6 +335,9 @@ export default function CityGuideScreen() {
     return out;
   }, [failedHeroUris, filteredEvents, liveHeroByEventId, liveRecoveryDoneIds]);
 
+  // Refresh expired Places URLs once per event id. Do not depend on liveHero /
+  // recoveryDone state — those updates used to remount this effect and cancel
+  // later batches (Proveleggios never got a fresh photo while Cookoomela did).
   useEffect(() => {
     let cancelled = false;
     const needLive = filteredEvents.filter((e) => {
@@ -349,14 +352,11 @@ export default function CityGuideScreen() {
     if (needLive.length === 0) return;
 
     void (async () => {
-      const heroUpdates: Record<string, string> = {};
-      const doneUpdates: Record<string, true> = {};
       for (let i = 0; i < needLive.length; i += 4) {
         if (cancelled) return;
         const batch = needLive.slice(i, i + 4);
         const refreshed = await Promise.all(
           batch.map(async (event) => {
-            doneUpdates[event.id] = true;
             try {
               const placeId = (event as { google_place_id?: string | null }).google_place_id ?? null;
               let urls = placeId ? await fetchTrustedPlaceIdPhotoUrls(placeId, 4) : [];
@@ -373,29 +373,31 @@ export default function CityGuideScreen() {
               const cleaned = urls
                 .map((u) => normalizeEventImageUri(u) ?? u)
                 .filter((u) => /^https?:\/\//i.test(u) && !failedHeroUris[u]);
-              return cleaned[0] ? ([event.id, cleaned[0]] as const) : null;
+              return { id: event.id, url: cleaned[0] || null };
             } catch {
-              return null;
+              return { id: event.id, url: null as string | null };
             }
           }),
         );
         if (cancelled) return;
+        const heroUpdates: Record<string, string> = {};
+        const doneUpdates: Record<string, true> = {};
         for (const row of refreshed) {
-          if (row) heroUpdates[row[0]] = row[1];
+          doneUpdates[row.id] = true;
+          if (row.url) heroUpdates[row.id] = row.url;
         }
-        if (!cancelled) {
-          if (Object.keys(heroUpdates).length > 0) {
-            setLiveHeroByEventId((prev) => ({ ...prev, ...heroUpdates }));
-          }
-          setLiveRecoveryDoneIds((prev) => ({ ...prev, ...doneUpdates }));
+        if (Object.keys(heroUpdates).length > 0) {
+          setLiveHeroByEventId((prev) => ({ ...prev, ...heroUpdates }));
         }
+        setLiveRecoveryDoneIds((prev) => ({ ...prev, ...doneUpdates }));
       }
     })();
 
     return () => {
       cancelled = true;
     };
-  }, [filteredEvents, liveHeroByEventId, failedHeroUris, liveRecoveryDoneIds]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- intentionally omit liveHero/recoveryDone
+  }, [filteredEvents, failedHeroUris]);
 
   useEffect(() => {
     if (activeRecommendationIndex >= filteredEvents.length) {
