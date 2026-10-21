@@ -23,12 +23,11 @@ import { usePremiumRefreshControl } from "@/lib/mobilePullToRefresh";
 import { resolveMenuAuthSnapshot } from "@/lib/pilotDeskGate";
 import { getHotelEntry } from "@/lib/pilotSession";
 import { logNativeNav } from "@/lib/nativeNavLog";
-import { REGISTERED_BANDIT } from "@/lib/guest-workspace/registeredBanditIds";
 import { supabase } from "@/lib/supabase";
 
 const LOGO = require("@/assets/icons/logobanditourapp.png");
-/** Menu → Local Insider sales for the sole PRODUCTION Octopus seller (Neo). */
-const LOCAL_INSIDER_HREF = `/premium/${REGISTERED_BANDIT.neo}` as Href;
+/** Menu opens the Local Insider dashboard. The purchased provider comes from Commerce, not a hardcoded id. */
+const LOCAL_INSIDER_HREF = "/premium" as Href;
 
 type MenuCard = {
   key: string;

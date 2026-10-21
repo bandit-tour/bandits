@@ -55,6 +55,27 @@ function readableLoadError(err: unknown, fallback: string): string {
   return fallback;
 }
 
+/**
+ * `.single()` asks PostgREST for exactly one JSON object. With no guest session
+ * the bandit policy returns zero rows and the guide dies on that error before
+ * any card is drawn. `limit(1)` returns a row or an empty list, and a short
+ * retry covers the anonymous sign-in rate limit.
+ */
+async function loadBanditRow(id: string, isCancelled: () => boolean): Promise<Bandit | null> {
+  for (let attempt = 0; attempt < 8; attempt += 1) {
+    if (isCancelled()) return null;
+    await ensureAnonymousSession().catch(() => undefined);
+    if (isCancelled()) return null;
+    const { data, error } = await supabase.from('bandit').select('*').eq('id', id).limit(1);
+    const row = Array.isArray(data) ? data[0] : null;
+    if (row?.id) return row;
+    const code = error && typeof error === 'object' && 'code' in error ? String(error.code) : '';
+    if (error && code !== 'PGRST116') throw error;
+    if (attempt < 7) await new Promise((resolve) => setTimeout(resolve, 8000));
+  }
+  throw new Error('Could not load City Guide');
+}
+
 function normalizeGenre(raw: unknown): EventGenre | null {
   if (typeof raw !== 'string') return null;
   const normalized = raw.trim().toLowerCase();
@@ -187,18 +208,13 @@ export default function CityGuideScreen() {
   useEffect(() => {
     if (!effectiveBanditId) return;
 
+    let cancelled = false;
     const fetchData = async () => {
       try {
         setLoading(true);
-        await ensureAnonymousSession().catch(() => undefined);
-
-        const { data: banditData, error: banditError } = await supabase
-          .from('bandit')
-          .select('*')
-          .eq('id', effectiveBanditId)
-          .single();
-
-        if (banditError) throw banditError;
+        setError(null);
+        const banditData = await loadBanditRow(effectiveBanditId, () => cancelled);
+        if (cancelled || !banditData) return;
         setBandit(banditData);
         void trackEvent({
           eventName: 'city_guide_opened',
@@ -212,13 +228,15 @@ export default function CityGuideScreen() {
           getTrailsByBanditId(effectiveBanditId),
           getEvents({ banditId: effectiveBanditId }), // primary city guide source
         ]);
+        if (cancelled) return;
         setAllSpots(spotsData);
         setTrails(trailsData);
         setEvents(eventsData ?? []);
       } catch (err) {
+        if (cancelled) return;
         const msg = readableLoadError(err, 'Could not load City Guide');
         const soft =
-          /failed to fetch|network|load failed|timeout|abort/i.test(msg)
+          /failed to fetch|network|load failed|timeout|abort|JSON object requested/i.test(msg)
             ? 'Connection issue — pull to refresh or try again in a moment.'
             : msg || 'Could not load City Guide';
         setError(soft);
@@ -226,11 +244,14 @@ export default function CityGuideScreen() {
         setTrails([]);
         setEvents([]);
       } finally {
-        setLoading(false);
+        if (!cancelled) setLoading(false);
       }
     };
 
-    fetchData();
+    void fetchData();
+    return () => {
+      cancelled = true;
+    };
   }, [effectiveBanditId]);
 
   const onToggleEventLike = useCallback(
@@ -260,11 +281,7 @@ export default function CityGuideScreen() {
     if (!effectiveBanditId) return;
     setRefreshing(true);
     try {
-      const { data: banditData } = await supabase
-        .from('bandit')
-        .select('*')
-        .eq('id', effectiveBanditId)
-        .single();
+      const banditData = await loadBanditRow(effectiveBanditId, () => false);
       if (banditData) setBandit(banditData);
       const [spotsData, trailsData, eventsData] = await Promise.all([
         getSpotsByBanditId(effectiveBanditId),

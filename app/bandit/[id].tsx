@@ -582,14 +582,14 @@ export default function BanditScreen() {
                   testID="bandit-journey-local-insider"
                 />
               </View>
-            ) : premiumVis?.verificationPending && premiumVis.octopusVerified !== true ? (
+            ) : premiumVis?.aiOperated === true && premiumVis.octopusVerified !== true ? (
               <OctopusConciergeExperience
                 embedded
                 banditId={String(bandit.id)}
                 banditName={String(bandit.name || 'Local banDit')}
                 portraitUri={String(bandit.image_url || bandit.face_image_url || '')}
                 checkoutEnabled={false}
-                verificationPending
+                aiOperated
               />
             ) : null}
 

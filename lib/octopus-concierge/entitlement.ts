@@ -172,6 +172,7 @@ export type OctopusCheckoutResult =
       orderId: string;
       sessionId?: string;
       source: "commerce";
+      alreadyEntitled?: boolean;
     }
   | {
       ok: true;
@@ -232,6 +233,7 @@ export async function startOctopusConciergeCheckout(input: {
     order?: { id?: string; status?: string };
     payment_confirmed?: boolean;
     paymentConfirmed?: boolean;
+    already_entitled?: boolean;
     errors?: string[];
     error?: string;
   }>(
@@ -288,6 +290,7 @@ export async function startOctopusConciergeCheckout(input: {
       orderId,
       sessionId: data.session_id ?? data.sessionId,
       source: "commerce",
+      alreadyEntitled: data.already_entitled === true,
     };
   }
 
@@ -309,6 +312,23 @@ export async function startOctopusConciergeCheckout(input: {
   };
 }
 
+/** €9 One Request is not founder-approved. Do not start a charge. */
+export async function startOneRequestCheckout(_input: {
+  guestId: string | null;
+  banditId: string;
+  guestEmail?: string | null;
+  stayId?: string | null;
+  service?: string;
+  note: string;
+}): Promise<OctopusCheckoutResult & { requestId?: string }> {
+  void _input;
+  return {
+    ok: false,
+    reason: "commerce_error",
+    detail: "One Request €9 is not approved. Stay Pass is €19 for 5 requests over 7 days.",
+  };
+}
+
 /** After Stripe hosted Checkout success URL — confirm session and grant Stay Pass. */
 export async function confirmOctopusCheckoutSession(input: {
   sessionId: string;
@@ -321,7 +341,7 @@ export async function confirmOctopusCheckoutSession(input: {
   const sessionId = String(input.sessionId || "").trim();
   const banditId = String(input.banditId || "").trim();
   const guestEmail = requireGuestEmail(input.guestEmail);
-  if (!sessionId || !banditId) {
+  if (!sessionId) {
     return { ok: false, detail: "Missing checkout session." };
   }
   if (!guestEmail) {
@@ -401,6 +421,11 @@ export type ConciergeTrackRequest = {
     evidenceNote?: string | null;
     supplierName?: string | null;
   } | null;
+  progress?: Array<{ step: string; label: string; state: "done" | "active" | "pending" | "blocked" }>;
+  thirdPartyCostCents?: number | null;
+  thirdPartyApproved?: boolean;
+  needsGuestDetail?: boolean;
+  creditRestored?: boolean;
 };
 
 /** Operator "completed" without fulfillment evidence must NOT become guest CONFIRMED. */
@@ -517,6 +542,12 @@ export function mergeTrackIntoTasks(
         confirmation: confirmation ?? existing.confirmation,
         evidence: evidenceBits.length ? evidenceBits : existing.evidence,
         updatedAt: row.decidedAt || now,
+        progress: row.progress || existing.progress,
+        messages: row.messages || existing.messages,
+        thirdPartyCostCents: row.thirdPartyCostCents ?? existing.thirdPartyCostCents,
+        thirdPartyApproved: row.thirdPartyApproved ?? existing.thirdPartyApproved,
+        needsGuestDetail: row.needsGuestDetail ?? existing.needsGuestDetail,
+        creditRestored: row.creditRestored ?? existing.creditRestored,
       });
     } else {
       byId.set(id, {
@@ -538,6 +569,12 @@ export function mergeTrackIntoTasks(
         evidence: evidenceBits,
         createdAt: row.createdAt || now,
         updatedAt: row.decidedAt || row.createdAt || now,
+        progress: row.progress,
+        messages: row.messages,
+        thirdPartyCostCents: row.thirdPartyCostCents ?? null,
+        thirdPartyApproved: row.thirdPartyApproved === true,
+        needsGuestDetail: row.needsGuestDetail === true,
+        creditRestored: row.creditRestored === true,
       });
     }
   }
@@ -628,4 +665,76 @@ export async function submitConciergeRequestToWorkspace(input: {
         ? result.data.stayPass.requests_remaining
         : null;
   return { ok: true, requestId: id, requestsRemaining: remaining };
+}
+
+export async function replyToConciergeRequest(input: {
+  banditId: string;
+  requestId: string;
+  message: string;
+  guestEmail?: string | null;
+}): Promise<{ ok: true } | { ok: false; detail: string }> {
+  const guestEmail = requireGuestEmail(input.guestEmail);
+  if (!guestEmail) return { ok: false, detail: "Sign in required" };
+  const result = await workspacePost<{ ok?: boolean; error?: string }>(
+    "/api/bandit/premium",
+    {
+      action: "concierge_reply",
+      banditId: input.banditId,
+      requestId: input.requestId,
+      message: input.message,
+    },
+    guestEmail,
+  );
+  if (!result.ok) return { ok: false, detail: result.detail };
+  if (result.data.ok === false) return { ok: false, detail: result.data.error || "Reply failed" };
+  return { ok: true };
+}
+
+export async function cancelConciergeRequest(input: {
+  banditId: string;
+  requestId: string;
+  guestEmail?: string | null;
+}): Promise<{ ok: true; requestsRemaining?: number | null } | { ok: false; detail: string }> {
+  const guestEmail = requireGuestEmail(input.guestEmail);
+  if (!guestEmail) return { ok: false, detail: "Sign in required" };
+  const result = await workspacePost<{
+    ok?: boolean;
+    error?: string;
+    stayPass?: { requestsRemaining?: number | null };
+  }>(
+    "/api/bandit/premium",
+    {
+      action: "restore_request",
+      banditId: input.banditId,
+      requestId: input.requestId,
+      reason: "cancelled",
+    },
+    guestEmail,
+  );
+  if (!result.ok) return { ok: false, detail: result.detail };
+  if (result.data.ok === false) return { ok: false, detail: result.data.error || "Cancel failed" };
+  return { ok: true, requestsRemaining: result.data.stayPass?.requestsRemaining ?? null };
+}
+
+export async function approveConciergeQuote(input: {
+  banditId: string;
+  requestId: string;
+  approve: boolean;
+  guestEmail?: string | null;
+}): Promise<{ ok: true } | { ok: false; detail: string }> {
+  const guestEmail = requireGuestEmail(input.guestEmail);
+  if (!guestEmail) return { ok: false, detail: "Sign in required" };
+  const result = await workspacePost<{ ok?: boolean; error?: string }>(
+    "/api/bandit/premium",
+    {
+      action: "approve_third_party",
+      banditId: input.banditId,
+      requestId: input.requestId,
+      approve: input.approve,
+    },
+    guestEmail,
+  );
+  if (!result.ok) return { ok: false, detail: result.detail };
+  if (result.data.ok === false) return { ok: false, detail: result.data.error || "Approval failed" };
+  return { ok: true };
 }

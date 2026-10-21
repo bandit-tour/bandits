@@ -30,7 +30,10 @@ import {
   isSubstantiveConciergeNote,
   mergeTrackIntoTasks,
   resolveConciergeOperatorType,
+  approveConciergeQuote,
+  cancelConciergeRequest,
   confirmOctopusCheckoutSession,
+  replyToConciergeRequest,
   resolveOctopusConciergeEntitlement,
   startOctopusConciergeCheckout,
   submitConciergeRequestToWorkspace,
@@ -168,6 +171,7 @@ export default function PremiumConciergeScreen() {
   const [trackHydration, setTrackHydration] = useState<"idle" | "ok" | "missing">("idle");
 
   const [askText, setAskText] = useState("");
+  const [detailDraft, setDetailDraft] = useState("");
   const [tasks, setTasks] = useState<ConciergeTask[]>([]);
   const [activeAction, setActiveAction] = useState<string | null>(null);
   const [sentMsg, setSentMsg] = useState<string | null>(null);
@@ -358,6 +362,15 @@ export default function PremiumConciergeScreen() {
       setCheckoutMsg("Sign in to unlock Your Local Insider.");
       return;
     }
+    const aiOk = visibility?.aiOperated === true || visibility?.authorizationClass === "AI_SERVICE";
+    if (
+      !aiOk &&
+      (visibility?.verificationPending === true || visibility?.octopusVerified !== true)
+    ) {
+      setCheckoutMsg("Stay Pass checkout is closed until this Local banDit is commercially ready.");
+      setBanditAuthorized(false);
+      return;
+    }
     // Eligibility gate — never leave Unlock stuck on Confirming for ineligible sellers.
     if (!visibility?.showPremiumInsights || !visibility.commerceOperational) {
       setCheckoutMsg(
@@ -387,10 +400,13 @@ export default function PremiumConciergeScreen() {
       if (settled) return;
       if (!result.ok) {
         setCheckoutMsg(result.detail);
+        setSentMsg(result.detail);
         return;
       }
       if (result.paymentConfirmed) {
-        setCheckoutMsg("Stay Pass already active — refreshing access…");
+        const msg = "Stay Pass confirmed — refreshing access…";
+        setCheckoutMsg(msg);
+        setSentMsg(msg);
         if (settled) return;
         await refreshEntitlement();
         return;
@@ -545,6 +561,63 @@ export default function PremiumConciergeScreen() {
     setTimeout(() => setSentMsg(null), 4500);
   };
 
+  const sendDetail = (requestId: string) => {
+    if (!id || !guestEmail) return;
+    const text = detailDraft.trim();
+    if (text.length < 8) {
+      setSentMsg("Add a bit more detail — this reply does not use another request.");
+      return;
+    }
+    void replyToConciergeRequest({
+      banditId: id,
+      requestId,
+      message: text,
+      guestEmail,
+    }).then((r) => {
+      if (!r.ok) {
+        setSentMsg(r.detail);
+        return;
+      }
+      setDetailDraft("");
+      setSentMsg("Sent on this request — no extra Stay Pass credit used.");
+      void refreshTrack();
+    });
+  };
+
+  const cancelRequest = (requestId: string) => {
+    if (!id || !guestEmail) return;
+    void cancelConciergeRequest({ banditId: id, requestId, guestEmail }).then((r) => {
+      if (!r.ok) {
+        setSentMsg(r.detail);
+        return;
+      }
+      if (typeof r.requestsRemaining === "number") {
+        setEntitlement((prev) => (prev ? { ...prev, requestsRemaining: r.requestsRemaining } : prev));
+        setSentMsg(`Cancelled. ${r.requestsRemaining} requests left.`);
+      } else {
+        setSentMsg("Cancelled. Your Stay Pass credit is restored.");
+      }
+      void refreshEntitlement();
+      void refreshTrack();
+    });
+  };
+
+  const approveQuote = (requestId: string, approve: boolean) => {
+    if (!id || !guestEmail) return;
+    void approveConciergeQuote({ banditId: id, requestId, approve, guestEmail }).then((r) => {
+      if (!r.ok) {
+        setSentMsg(r.detail);
+        return;
+      }
+      setSentMsg(
+        approve
+          ? "Quote approved. Supplier payment is separate — nothing is booked until the supplier confirms."
+          : "Quote declined. No supplier payment was taken.",
+      );
+      void refreshTrack();
+    });
+  };
+
   const startAction = (action: (typeof BOOK_ACTIONS)[number]) => {
     if (!entitlement || !assertConciergeOpsAllowed(entitlement)) return;
     setActiveAction(action.service);
@@ -573,14 +646,18 @@ export default function PremiumConciergeScreen() {
         <View style={styles.loadingWrap}>
           <ActivityIndicator color={color.brand} />
           <Text style={styles.loadingText}>
-            {claimingPaid ? "Confirming payment…" : "Checking Premium Insights access…"}
+            {claimingPaid ? "Confirming payment…" : "Checking Stay Pass access…"}
           </Text>
         </View>
       </View>
     );
   }
 
-  if (visibility?.verificationPending === true && visibility.octopusVerified !== true) {
+  if (
+    visibility?.aiOperated === true &&
+    visibility.octopusVerified !== true &&
+    visibility.showPremiumInsights !== true
+  ) {
     return (
       <View style={styles.salesScreen}>
         <Stack.Screen options={salesHeader} />
@@ -589,7 +666,7 @@ export default function PremiumConciergeScreen() {
           banditName={banditName}
           portraitUri={banditPortrait}
           checkoutEnabled={false}
-          verificationPending
+          aiOperated
         />
       </View>
     );
@@ -604,13 +681,11 @@ export default function PremiumConciergeScreen() {
             Your Local Insider not available
           </Text>
           <Text style={styles.salesLead}>
-            {`${first} still offers free City Guide and Ask Me. Octopus Concierge appears only when this Local banDit is Octopus Verified.`}
+            {`${first} still offers free City Guide and Ask Me. Stay Pass opens when this Local banDit is commercially ready.`}
           </Text>
           <Text style={styles.secureHint} testID="local-insider-ineligible-detail">
-            {visibility?.authorizationClass === "NONE" || !visibility?.showPremiumInsights
-              ? "This Local banDit is not commercially authorized for Stay Pass."
-              : visibility.blockers?.[0] ||
-                "Purchases open only for Octopus Verified Local banDits."}
+            {visibility?.blockers?.[0] ||
+              "This Local banDit is not commercially authorized for Stay Pass."}
           </Text>
         </View>
       </View>
@@ -657,6 +732,11 @@ export default function PremiumConciergeScreen() {
                 : `Your Stay Pass with ${first} has ended. Renew for this stay.`
               : `Go beyond recommendations. ${first} helps make things happen.`}
           </Text>
+          {visibility?.aiOperated || visibility?.authorizationClass === "AI_SERVICE" ? (
+            <Text style={styles.secureHint} testID="ai-operated-disclosure">
+              Digital local guide · not a person on call. Bookings need real confirmation.
+            </Text>
+          ) : null}
 
           <View style={styles.priceBlock}>
             <Text style={styles.price}>{OCTOPUS_CONCIERGE_OFFER.priceLabel}</Text>
@@ -683,9 +763,7 @@ export default function PremiumConciergeScreen() {
                 {checkoutBusy
                   ? checkoutMsg?.startsWith("Confirming")
                     ? checkoutMsg
-                    : visibility?.authorizationClass === "TEST_DEMO"
-                      ? "Confirming TEST payment…"
-                      : "Confirming payment…"
+                    : "Confirming payment…"
                   : entitlementEnded
                     ? `Renew Stay Pass — ${OCTOPUS_CONCIERGE_OFFER.priceLabel}`
                     : `Unlock Your Local Insider — ${OCTOPUS_CONCIERGE_OFFER.priceLabel}`}
@@ -699,7 +777,7 @@ export default function PremiumConciergeScreen() {
               <Text style={styles.distinction}>
                 {guestEmail
                   ? entitlement?.detail ||
-                    "Purchases open after Workspace commerce and a verified stay are ready. City Guide and Ask Me stay free."
+                    "Stay Pass opens when this Local banDit is commercially ready. City Guide and Ask Me stay free."
                   : "Sign in with your Guest account to purchase Stay Pass. City Guide and Ask Me stay free."}
               </Text>
             </View>
@@ -707,8 +785,8 @@ export default function PremiumConciergeScreen() {
 
           <Text style={styles.secureHint}>
             {visibility?.authorizationClass === "TEST_DEMO"
-              ? "QA TEST_DEMO · Stripe TEST Checkout · LIVE off · not a PRODUCTION seller"
-              : "Secure Stripe Checkout (TEST) · unlocks after payment · third-party costs billed separately"}
+              ? "Preview checkout · payments stay in test mode · City Guide stays free"
+              : "Secure checkout · unlocks after payment · third-party costs billed separately"}
           </Text>
 
           {checkoutMsg ? (
@@ -741,13 +819,20 @@ export default function PremiumConciergeScreen() {
           <Text style={styles.opsKicker}>PREMIUM INSIGHTS</Text>
         </View>
         <Text style={styles.opsIdentity}>{banditName}</Text>
-        {operatorResolution ? (
-          <Text style={styles.opsOperatorType} testID="concierge-operator-type">
-            {operatorResolution.operatorType === "UNDECLARED"
-              ? "Operator type not declared by Workspace — Concierge is request-queue based, not a chatbot."
-              : `Operator: ${operatorResolution.guestLabel}`}
+        {visibility?.aiOperated || visibility?.authorizationClass === "AI_SERVICE" ? (
+          <Text style={styles.opsOperatorType} testID="ai-operated-disclosure">
+            Digital local guide · not a person on call
           </Text>
-        ) : null}
+        ) : operatorResolution?.operatorType === "HUMAN" ||
+          operatorResolution?.operatorType === "HYBRID" ? (
+          <Text style={styles.opsOperatorType} testID="concierge-operator-type">
+            {`Concierge with ${first} · request-based, not a chatbot`}
+          </Text>
+        ) : (
+          <Text style={styles.opsOperatorType} testID="concierge-operator-type">
+            Concierge is request-based, not a chatbot
+          </Text>
+        )}
         <Text style={styles.opsTagline}>
           {remaining != null
             ? `${first}'s Athens is unlocked — ${remaining} request${remaining === 1 ? "" : "s"} left this stay.`
@@ -757,9 +842,37 @@ export default function PremiumConciergeScreen() {
           <Text style={styles.opsDisclosure}>{`Stay Pass expires ${stayPassExpiry}.`}</Text>
         ) : null}
         <Text style={styles.opsDisclosure}>
-          Stay Pass (€19) covers coordination. Third-party costs (tables, tickets, rides, delivery) need your explicit
-          approval before money moves — never from chat text alone.
+          Stay Pass (€19) covers coordination. Each purchase adds 5 requests for 7 days and keeps requests you already
+          have. Third-party costs need your approval before any extra payment.
         </Text>
+        <Pressable
+          style={styles.verifyLink}
+          onPress={() => void onUnlock()}
+          accessibilityRole="button"
+          testID="stay-pass-add-five"
+        >
+          <Text style={styles.verifyLinkText}>Add 5 more requests · €19</Text>
+        </Pressable>
+
+        {remaining === 0 ? (
+          <View style={styles.depletedBox} testID="stay-pass-depleted">
+            <Text style={styles.depletedTitle}>No requests left this stay</Text>
+            <Text style={styles.depletedLead}>
+              Add another Stay Pass pack — €19 for 5 requests over 7 days. Requests you already hold stay until their own expiry.
+            </Text>
+            <Pressable
+              style={[styles.unlockCta, checkoutBusy && styles.unlockCtaBusy]}
+              onPress={() => void onUnlock()}
+              disabled={checkoutBusy}
+              accessibilityRole="button"
+              testID="stay-pass-renew-cta"
+            >
+              <Text style={styles.unlockCtaText}>
+                {`Add Stay Pass — ${OCTOPUS_CONCIERGE_OFFER.priceLabel}`}
+              </Text>
+            </Pressable>
+          </View>
+        ) : null}
 
         <View style={styles.askCard}>
           <Text style={styles.askTitle}>Ask My banDit</Text>
@@ -796,7 +909,7 @@ export default function PremiumConciergeScreen() {
           ))}
         </View>
 
-        <Text style={styles.opsSection}>Active Requests</Text>
+        <Text style={styles.opsSection}>Your requests</Text>
         {trackHydration === "missing" ? (
           <Text style={styles.emptyTasks} testID="concierge-track-missing">
             Request updates unavailable right now — pull to retry or ask again later.
@@ -806,21 +919,57 @@ export default function PremiumConciergeScreen() {
           <Text style={styles.emptyTasks}>No active requests yet — ask {first} anything above.</Text>
         ) : (
           activeTasks.map((r) => (
-            <Pressable key={r.id} style={styles.requestRow} testID={`concierge-active-${r.id}`}>
+            <View key={r.id} style={styles.requestRow} testID={`concierge-active-${r.id}`}>
               <View style={{ flex: 1 }}>
                 <Text style={styles.requestTitle}>
-                  {r.request.length > 48 ? `${r.request.slice(0, 48)}…` : r.request}
+                  {r.request.length > 72 ? `${r.request.slice(0, 72)}…` : r.request}
                 </Text>
+                {r.progress?.length ? (
+                  <Text style={styles.requestWhen} testID={`concierge-progress-${r.id}`}>
+                    {r.progress.map((step) => `${step.state === "done" ? "●" : step.state === "active" ? "○" : "·"} ${step.label}`).join("  ")}
+                  </Text>
+                ) : null}
                 {r.providerReply ? (
                   <Text style={styles.requestWhen} testID={`concierge-reply-${r.id}`}>
                     {r.providerReply}
                   </Text>
-                ) : (
-                  <Text style={styles.requestWhen}>{r.updatedAt.slice(0, 16).replace("T", " ")}</Text>
-                )}
+                ) : null}
+                {typeof r.thirdPartyCostCents === "number" && r.thirdPartyCostCents > 0 && !r.thirdPartyApproved ? (
+                  <View>
+                    <Text style={styles.requestWhen} testID={`concierge-quote-${r.id}`}>
+                      {`Supplier quote €${(r.thirdPartyCostCents / 100).toFixed(2)} — approval does not confirm a booking.`}
+                    </Text>
+                    <Pressable onPress={() => approveQuote(r.id, true)} testID={`concierge-approve-${r.id}`}>
+                      <Text style={styles.verifyLinkText}>Approve quote</Text>
+                    </Pressable>
+                    <Pressable onPress={() => approveQuote(r.id, false)}>
+                      <Text style={styles.verifyLinkText}>Decline quote</Text>
+                    </Pressable>
+                  </View>
+                ) : null}
+                {r.needsGuestDetail ? (
+                  <View>
+                    <TextInput
+                      style={styles.askInput}
+                      placeholder="What should your Local Insider arrange?"
+                      placeholderTextColor={color.muted}
+                      value={detailDraft}
+                      onChangeText={setDetailDraft}
+                      testID={`concierge-detail-${r.id}`}
+                    />
+                    <Pressable onPress={() => sendDetail(r.id)} testID={`concierge-detail-send-${r.id}`}>
+                      <Text style={styles.verifyLinkText}>Send details — no extra credit</Text>
+                    </Pressable>
+                  </View>
+                ) : null}
+                {r.status !== "completed" && r.status !== "confirmed" && !r.creditRestored ? (
+                  <Pressable onPress={() => cancelRequest(r.id)} testID={`concierge-cancel-${r.id}`}>
+                    <Text style={styles.verifyLinkText}>Cancel and restore this request</Text>
+                  </Pressable>
+                ) : null}
               </View>
               <Text style={styles.status}>{guestFacingConciergeStatus(r.status, first)}</Text>
-            </Pressable>
+            </View>
           ))
         )}
 
@@ -838,6 +987,28 @@ export default function PremiumConciergeScreen() {
                   <Text style={styles.requestWhen} testID={`concierge-status-reply-${r.id}`}>
                     {r.providerReply}
                   </Text>
+                ) : null}
+              </View>
+              <Text style={styles.status}>{guestFacingConciergeStatus(r.status, first)}</Text>
+            </View>
+          ))
+        )}
+
+        <Text style={styles.opsSection}>History</Text>
+        {tasks.length === 0 ? (
+          <Text style={styles.emptyTasks}>No concierge history yet.</Text>
+        ) : (
+          tasks.map((r) => (
+            <View key={`hist_${r.id}`} style={styles.requestRow} testID={`concierge-history-${r.id}`}>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.requestTitle}>{r.request.length > 72 ? `${r.request.slice(0, 72)}…` : r.request}</Text>
+                {(r.messages || []).map((m) => (
+                  <Text key={m.id || `${m.at}-${m.body}`} style={styles.requestWhen}>
+                    {`${m.from === "guest" ? "You" : first}: ${m.body}`}
+                  </Text>
+                ))}
+                {!r.messages?.length && r.providerReply ? (
+                  <Text style={styles.requestWhen}>{r.providerReply}</Text>
                 ) : null}
               </View>
               <Text style={styles.status}>{guestFacingConciergeStatus(r.status, first)}</Text>
@@ -1165,6 +1336,39 @@ const styles = StyleSheet.create({
     color: color.muted,
     fontSize: 12,
     lineHeight: 17,
+  },
+  depletedBox: {
+    marginBottom: 16,
+    padding: 16,
+    borderRadius: 16,
+    backgroundColor: color.surface,
+    borderWidth: 1,
+    borderColor: color.hairline,
+  },
+  depletedTitle: {
+    color: color.ink,
+    fontSize: 16,
+    fontWeight: "800",
+  },
+  depletedLead: {
+    marginTop: 6,
+    marginBottom: 4,
+    color: color.inkSoft,
+    fontSize: 14,
+    lineHeight: 20,
+  },
+  oneRequestCta: {
+    marginTop: 8,
+    borderRadius: 14,
+    paddingVertical: 14,
+    alignItems: "center",
+    borderWidth: 1,
+    borderColor: color.ink,
+  },
+  oneRequestCtaText: {
+    color: color.ink,
+    fontWeight: "700",
+    fontSize: 15,
   },
   askCard: {
     backgroundColor: color.surface,

@@ -181,8 +181,9 @@ function BanditHeaderImpl({
 
   const showPremiumInsights = premiumVis?.showPremiumInsights === true;
   const showOctopusBadge = premiumVis?.octopusVerified === true;
+  const showAiOperated = premiumVis?.aiOperated === true && showOctopusBadge !== true;
   const showVerificationPending =
-    premiumVis?.verificationPending === true && showOctopusBadge !== true;
+    !showAiOperated && premiumVis?.verificationPending === true && showOctopusBadge !== true;
   const octopusIsTestDemo = premiumVis?.authorizationClass === "TEST_DEMO";
   const octopusBadgeLabel = octopusIsTestDemo ? "Octopus Verified™ (TEST)" : "Octopus Verified™";
 
@@ -378,6 +379,13 @@ function BanditHeaderImpl({
       <Text style={styles.profileLocation} numberOfLines={1} testID="bandit-profile-city">
         {locationLine}
       </Text>
+      {showAiOperated ? (
+        <Text style={styles.profileLocation} testID="ai-service-disclosure">
+          {premiumVis?.showPremiumInsights
+            ? "Digital local guide · not a person on call"
+            : "Stay Pass opens after this Local banDit is ready."}
+        </Text>
+      ) : null}
 
       {/* Live status / inspiration — visible on identity, not buried in More */}
       <View
@@ -446,7 +454,7 @@ function BanditHeaderImpl({
           </Pressable>
 
           {/* Your Local Insider — eligible only; guest-facing name (not “Premium Insights”). */}
-          {showPremiumInsights || showVerificationPending ? (
+          {showPremiumInsights || showAiOperated || showVerificationPending ? (
             <Pressable
               style={({ pressed, hovered }: any) => [
                 styles.conciergeBtn,
@@ -456,34 +464,48 @@ function BanditHeaderImpl({
               onPress={openPremiumInsights}
               accessibilityRole="button"
               accessibilityLabel={
-                showVerificationPending
-                  ? `Verification Pending · Octopus Concierge · ${displayFirstName}`
-                  : octopusIsTestDemo
-                    ? `Your Local Insider TEST · ${displayFirstName}`
-                    : `Your Local Insider · ${displayFirstName}`
+                showAiOperated
+                  ? `Octopus Concierge · ${displayFirstName}`
+                  : showVerificationPending
+                    ? `Verification Pending · Octopus Concierge · ${displayFirstName}`
+                    : octopusIsTestDemo
+                      ? `Your Local Insider TEST · ${displayFirstName}`
+                      : `Your Local Insider · ${displayFirstName}`
               }
-              testID={showVerificationPending ? "bandit-octopus-pending-cta" : "bandit-premium-insights-cta"}
+              testID={
+                showAiOperated
+                  ? "bandit-ai-operated-cta"
+                  : showVerificationPending
+                    ? "bandit-octopus-pending-cta"
+                    : "bandit-premium-insights-cta"
+              }
             >
               <LocalBanditOctopusIcon style={styles.conciergeIcon} />
               <View style={styles.conciergeCopy}>
                 <Text style={styles.conciergeEyebrow}>
-                  {showVerificationPending
-                    ? "VERIFICATION PENDING"
-                    : octopusIsTestDemo
-                      ? "YOUR LOCAL INSIDER · TEST"
-                      : "YOUR LOCAL INSIDER"}
+                  {showAiOperated
+                    ? "OCTOPUS CONCIERGE"
+                    : showVerificationPending
+                      ? "VERIFICATION PENDING"
+                      : octopusIsTestDemo
+                        ? "YOUR LOCAL INSIDER · TEST"
+                        : "YOUR LOCAL INSIDER"}
                 </Text>
                 <Text style={styles.conciergePrimary} numberOfLines={1}>
-                  {showVerificationPending
+                  {showAiOperated || showVerificationPending
                     ? `${displayFirstName}'s Octopus Concierge`
                     : `Unlock ${displayFirstName}'s Athens`}
                 </Text>
                 <Text style={styles.conciergeSecondary} numberOfLines={1}>
-                  {showVerificationPending
-                    ? `€19 · 5 requests · 7 days · checkout closed`
-                    : octopusIsTestDemo
-                      ? `QA TEST_DEMO · not PRODUCTION · ${displayFirstName}`
-                      : `Octopus Concierge · ${displayFirstName} handles it`}
+                  {showAiOperated
+                    ? premiumVis?.showPremiumInsights
+                      ? "€19 · 5 requests · 7 days"
+                      : "Stay Pass closed"
+                    : showVerificationPending
+                      ? "€19 · 5 requests · 7 days · checkout closed"
+                      : octopusIsTestDemo
+                        ? `Stay Pass preview · ${displayFirstName}`
+                        : `Octopus Concierge · ${displayFirstName} handles it`}
                 </Text>
               </View>
             </Pressable>

@@ -69,6 +69,12 @@ export type ConciergeTask = {
   evidence: string[];
   createdAt: string;
   updatedAt: string;
+  progress?: Array<{ step: string; label: string; state: "done" | "active" | "pending" | "blocked" }>;
+  messages?: Array<{ id?: string; from?: string; body?: string; at?: string }>;
+  thirdPartyCostCents?: number | null;
+  thirdPartyApproved?: boolean;
+  needsGuestDetail?: boolean;
+  creditRestored?: boolean;
 };
 
 /** Guest-safe status labels (never engine jargon). */

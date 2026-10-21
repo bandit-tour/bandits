@@ -173,15 +173,24 @@ export default function VibeRouteScreen() {
       try {
         setLoading(true);
         setError(null);
-        await ensureAnonymousSession().catch(() => undefined);
-
-        const { data: b, error: bErr } = await supabase
-          .from('bandit')
-          .select('*')
-          .eq('id', banditId)
-          .single();
-        if (bErr || !b) throw new Error('Could not load local banDit.');
-        setBandit(b as BanditRow);
+        let b: BanditRow | null = null;
+        for (let attempt = 0; attempt < 8; attempt += 1) {
+          await ensureAnonymousSession().catch(() => undefined);
+          const res = await supabase.from('bandit').select('*').eq('id', banditId).limit(1);
+          const row = Array.isArray(res.data) ? res.data[0] : null;
+          if (row?.id) {
+            b = row as BanditRow;
+            break;
+          }
+          const code =
+            res.error && typeof res.error === 'object' && 'code' in res.error
+              ? String(res.error.code)
+              : '';
+          if (res.error && code !== 'PGRST116') throw res.error;
+          if (attempt < 7) await new Promise((resolve) => setTimeout(resolve, 8000));
+        }
+        if (!b) throw new Error('Could not load local banDit.');
+        setBandit(b);
 
         const events = await getEvents({ banditId });
         const eventList = (events || []) as EventRow[];

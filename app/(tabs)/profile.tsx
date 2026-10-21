@@ -179,6 +179,19 @@ export default function ProfileHubScreen() {
         </View>
       </View>
 
+      <Pressable
+        style={styles.insiderCard}
+        onPress={() => go("/premium" as Href)}
+        testID="profile-local-insider"
+        accessibilityRole="button"
+      >
+        <Text style={styles.insiderKicker}>YOUR LOCAL INSIDER</Text>
+        <Text style={styles.insiderTitle}>Octopus Concierge</Text>
+        <Text style={styles.insiderLead}>
+          Open your Stay Pass, remaining requests, and verified Local banDits. €19 · 5 requests · 7 days.
+        </Text>
+      </Pressable>
+
       {/* MY MOMENT — daily social status (bottle discovery) */}
       <Text style={styles.sectionTitle}>My Moment</Text>
       <Text style={styles.sectionLead}>Your status today — may appear on a bottle scan</Text>
@@ -651,6 +664,31 @@ const styles = StyleSheet.create({
     color: "#6B6358",
     marginTop: 4,
     marginBottom: 14,
+  },
+
+  insiderCard: {
+    backgroundColor: "#1C1814",
+    borderRadius: 22,
+    padding: 20,
+    marginBottom: 22,
+  },
+  insiderKicker: {
+    fontSize: 11,
+    fontWeight: "800",
+    letterSpacing: 1.2,
+    color: "#F0D7A0",
+  },
+  insiderTitle: {
+    fontSize: 22,
+    fontWeight: "800",
+    color: "#FFFFFF",
+    marginTop: 6,
+  },
+  insiderLead: {
+    fontSize: 14,
+    color: "rgba(255,255,255,0.72)",
+    marginTop: 8,
+    lineHeight: 20,
   },
 
   todayMomentCard: {

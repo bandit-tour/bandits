@@ -15,6 +15,8 @@ type Props = {
   /** Paid Stripe checkout. Pending providers keep this false. */
   checkoutEnabled: boolean;
   verificationPending?: boolean;
+  /** AI-operated Local banDit — quiet disclosure, never "human Verification Pending". */
+  aiOperated?: boolean;
   /** Inside an existing scroll view (profile). The premium route scrolls itself. */
   embedded?: boolean;
 };
@@ -30,6 +32,7 @@ export default function OctopusConciergeExperience({
   portraitUri,
   checkoutEnabled,
   verificationPending = false,
+  aiOperated = false,
   embedded = false,
 }: Props) {
   const { width } = useWindowDimensions();
@@ -78,7 +81,8 @@ export default function OctopusConciergeExperience({
     resolvedPortrait && (resolvedPortrait.startsWith("http://") || resolvedPortrait.startsWith("https://"))
       ? resolvedPortrait
       : null;
-  const pending = verificationPending === true && checkoutEnabled !== true;
+  const isAi = aiOperated === true;
+  const pending = !isAi && verificationPending === true && checkoutEnabled !== true;
 
   const body = (
     <View
@@ -109,6 +113,12 @@ export default function OctopusConciergeExperience({
         {`Go beyond recommendations. ${first} helps make things happen.`}
       </Text>
 
+      {isAi ? (
+        <Text style={styles.pendingCopy} testID="ai-operated-disclosure">
+          Digital local guide · not a person on call. Bookings need real confirmation.
+        </Text>
+      ) : null}
+
       {pending ? (
         <View style={styles.pendingBox} testID="octopus-verification-pending">
           <Text style={styles.pendingLabel}>Verification Pending</Text>
@@ -135,25 +145,31 @@ export default function OctopusConciergeExperience({
         <View style={styles.gated} testID="local-insider-checkout-disabled">
           <Text style={styles.gatedLabel}>Checkout closed</Text>
           <Text style={styles.gatedCopy}>
-            {pending
-              ? `${OCTOPUS_CONCIERGE_OFFER.priceLabel} checkout is closed while ${first} is Verification Pending.`
-              : "Purchases open only for an Octopus Verified Local banDit."}
+            {isAi
+              ? "Stay Pass opens when this Local banDit is commercially ready. City Guide stays free."
+              : pending
+                ? `${OCTOPUS_CONCIERGE_OFFER.priceLabel} checkout is closed while ${first} is Verification Pending.`
+                : "Purchases open only for an Octopus Verified Local banDit."}
           </Text>
         </View>
       )}
 
       <Text style={styles.section} testID="concierge-remaining">
-        {pending
-          ? "0 requests remaining — balance opens after verification and a paid Stay Pass."
-          : "Request balance follows this Local banDit's Stay Pass."}
+        {isAi && !checkoutEnabled
+          ? "Request balance opens with a paid Stay Pass when fulfillment is ready."
+          : pending
+            ? "0 requests remaining — balance opens after verification and a paid Stay Pass."
+            : "Request balance follows this Local banDit's Stay Pass."}
       </Text>
 
       <View style={styles.askCard} testID="concierge-request-disabled">
         <Text style={styles.askTitle}>{`Ask ${first}`}</Text>
         <Text style={styles.askHint}>
-          {pending
-            ? "Request submission is visible and stays disabled until this Local banDit is verified."
-            : "Send a request once Stay Pass is active."}
+          {isAi && !checkoutEnabled
+            ? "Requests stay closed until Stay Pass fulfillment is ready."
+            : pending
+              ? "Request submission is visible and stays disabled until this Local banDit is verified."
+              : "Send a request once Stay Pass is active."}
         </Text>
         <TextInput
           editable={false}

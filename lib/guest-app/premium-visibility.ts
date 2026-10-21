@@ -15,11 +15,13 @@ export type BanditPremiumVisibility = {
   freeAskMe: true;
   cityGuide: true;
   blockers?: string[];
-  /** PRODUCTION | TEST_DEMO | NONE — from Workspace visibility API. */
-  authorizationClass?: "PRODUCTION" | "TEST_DEMO" | "NONE";
+  /** PRODUCTION | AI_SERVICE | TEST_DEMO | NONE — from Workspace visibility API. */
+  authorizationClass?: "PRODUCTION" | "AI_SERVICE" | "TEST_DEMO" | "NONE";
   /** Concierge preview enrolled. Not Octopus Verified. Checkout stays closed. */
   verificationPending?: boolean;
   conciergePreview?: boolean;
+  /** Paid AI-operated Local banDit — not an identity-verified human. */
+  aiOperated?: boolean;
 };
 
 const cache = new Map<string, { at: number; value: BanditPremiumVisibility }>();
@@ -78,25 +80,36 @@ export async function fetchBanditPremiumVisibility(
 
   const cls = result.data.authorizationClass;
   const authorizationClass =
-    cls === "PRODUCTION" || cls === "TEST_DEMO" || cls === "NONE" ? cls : undefined;
+    cls === "PRODUCTION" || cls === "AI_SERVICE" || cls === "TEST_DEMO" || cls === "NONE"
+      ? cls
+      : undefined;
+  // Workspace may still flag the ten AI personas as verificationPending.
+  // Guest UI must not call that "human Verification Pending" — treat as AI-operated.
+  const enrolledAiPreview =
+    result.data.octopusVerified !== true &&
+    (result.data.aiOperated === true ||
+      authorizationClass === "AI_SERVICE" ||
+      result.data.conciergePreview === true ||
+      result.data.verificationPending === true);
+  const aiOperated = enrolledAiPreview;
 
   const value: BanditPremiumVisibility = {
     banditId: id,
-    octopusVerified: result.data.octopusVerified === true,
+    octopusVerified: result.data.octopusVerified === true && !aiOperated,
     octopusLevel: result.data.octopusLevel ?? null,
     showPremiumInsights: result.data.showPremiumInsights === true,
     commerceOperational: result.data.commerceOperational === true,
     freeAskMe: true,
     cityGuide: true,
     blockers: result.data.blockers,
-    authorizationClass,
-    verificationPending: result.data.verificationPending === true && result.data.octopusVerified !== true,
-    conciergePreview:
-      (result.data.conciergePreview === true || result.data.verificationPending === true) &&
-      result.data.octopusVerified !== true,
+    authorizationClass: aiOperated && !authorizationClass ? "AI_SERVICE" : authorizationClass,
+    aiOperated,
+    // Never show human "Verification Pending" for AI-operated Local banDits.
+    verificationPending: false,
+    conciergePreview: aiOperated,
   };
-  // Cache a real sellable or pending answer. Do not pin a transient unpaid miss.
-  if (value.showPremiumInsights || value.verificationPending) {
+  // Cache a real sellable or AI-preview answer. Do not pin a transient unpaid miss.
+  if (value.showPremiumInsights || value.aiOperated) {
     cache.set(id, { at: Date.now(), value });
   }
   return value;

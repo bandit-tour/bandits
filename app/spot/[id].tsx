@@ -30,6 +30,7 @@ import {
 } from '@/lib/placePhoto';
 import { isStaleOrEphemeralVenueHero } from '@/lib/venueHeroRecovery';
 import { supabase } from '@/lib/supabase';
+import { ensureAnonymousSession } from '@/lib/pilotSession';
 import ReviewCard from '@/components/ReviewCard';
 import { VenueScamWarningsSection } from '@/components/VenueScamWarningsSection';
 import { trackEvent } from '@/lib/analytics';
@@ -54,6 +55,20 @@ type SpotReview = {
   created_at?: string;
   user_name: string;
 };
+
+/** Same PostgREST trap as City Guide: `.single()` throws when the guest session is not ready. */
+async function loadSpotEvent(eventId: string): Promise<Spot> {
+  for (let attempt = 0; attempt < 8; attempt += 1) {
+    await ensureAnonymousSession().catch(() => undefined);
+    const { data, error } = await supabase.from('event').select('*').eq('id', eventId).limit(1);
+    const row = Array.isArray(data) ? data[0] : null;
+    if (row?.id) return row;
+    const code = error && typeof error === 'object' && 'code' in error ? String(error.code) : '';
+    if (error && code !== 'PGRST116') throw error;
+    if (attempt < 7) await new Promise((resolve) => setTimeout(resolve, 8000));
+  }
+  throw new Error('Failed to load spot');
+}
 
 export default function SpotDetailScreen() {
   const { id: rawId, banditId: rawBanditId, heroUri: rawHeroUri } = useLocalSearchParams<{
@@ -177,13 +192,7 @@ export default function SpotDetailScreen() {
         if (silent) setRefreshing(true);
         else setLoading(true);
         placesRecoveryStarted.current = false;
-        const { data, error: err } = await supabase
-          .from('event')
-          .select('*')
-          .eq('id', id as string)
-          .single();
-
-        if (err) throw err;
+        const data = await loadSpotEvent(id as string);
         setSpot(data);
         void trackEvent({
           eventName: 'spot_opened',
