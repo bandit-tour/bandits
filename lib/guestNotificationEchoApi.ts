@@ -36,10 +36,21 @@ export type GuestEchoLocalFriendApiPayload = {
   message: string;
 };
 
+/** QR hotel welcome → Chat opening (bandit/Local Friend side). Idempotent on threadRootId. */
+export type GuestEchoHotelQrWelcomeApiPayload = {
+  kind: 'hotel_qr_welcome';
+  threadRootId: string;
+  title: string;
+  message: string;
+};
+
+export type GuestEchoApiPayload =
+  | GuestEchoAskApiPayload
+  | GuestEchoLocalFriendApiPayload
+  | GuestEchoHotelQrWelcomeApiPayload;
+
 /** Inserts the traveler-visible notification row via Vercel (service role); used when Supabase guest insert hits RLS. */
-export async function insertGuestEchoViaApi(
-  payload: GuestEchoAskApiPayload | GuestEchoLocalFriendApiPayload,
-): Promise<void> {
+export async function insertGuestEchoViaApi(payload: GuestEchoApiPayload): Promise<void> {
   const base = notifyApiOrigin();
   if (!base) {
     throw new Error('notifications_api_missing');

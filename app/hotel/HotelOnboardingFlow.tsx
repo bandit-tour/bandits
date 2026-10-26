@@ -3,6 +3,7 @@ import type { AlumaOnboardingStepDef } from '@/lib/alumaOnboarding';
 import type { HotelSlug } from '@/lib/hotelWhiteLabel';
 import { getHotelWhiteLabelOrDefault } from '@/lib/hotelWhiteLabel';
 import { bootstrapMainAppSession, persistHotelEntry, syncPilotHotelProfileIfNeeded } from '@/lib/pilotSession';
+import { ensureQrWelcomeChat } from '@/lib/qrWelcomeChat';
 import { getGuestFlipSignal, loadSignalBank } from '@/lib/signals';
 import { useAndroidWebBackGuard } from '@/lib/useAndroidWebBackGuard';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -75,6 +76,11 @@ export function HotelOnboardingFlow({
   const [iphonePlayCtaVisible, setIphonePlayCtaVisible] = useState(false);
   const fade = useRef(new Animated.Value(1)).current;
   const transitionLock = useRef(false);
+  const welcomeChatSeededRef = useRef(false);
+  const flipMetaRef = useRef<{ deliveryId: string | null; threadNotificationId: string | null }>({
+    deliveryId: null,
+    threadNotificationId: null,
+  });
   const isIphoneWeb =
     Platform.OS === 'web' &&
     typeof navigator !== 'undefined' &&
@@ -90,6 +96,22 @@ export function HotelOnboardingFlow({
         const skip = await shouldSkipIntro();
         if (cancelled) return;
         if (skip) {
+          /** Rescan / reopen: never duplicate; still ensure prior QR line is in Chat. */
+          try {
+            const { readGuestFlipSignalCache } = await import('@/lib/signals');
+            const flip = await readGuestFlipSignalCache();
+            const welcome = String(flip?.body || '').trim();
+            if (welcome) {
+              void ensureQrWelcomeChat({
+                hotelSlug,
+                welcomeMessage: welcome,
+                deliveryId: flip?.deliveryId ?? null,
+                threadNotificationId: flip?.threadNotificationId ?? null,
+              }).catch(() => undefined);
+            }
+          } catch {
+            /* best-effort */
+          }
           router.replace('/home');
           return;
         }
@@ -98,6 +120,7 @@ export function HotelOnboardingFlow({
           await syncPilotHotelProfileIfNeeded();
           await persistHotelEntry(hotelSlug, 'guest_universal');
           let line = '';
+          flipMetaRef.current = { deliveryId: null, threadNotificationId: null };
           if (prefilledSignalLine?.trim()) {
             line = prefilledSignalLine.trim();
           } else if (resolveSignalLine) {
@@ -105,12 +128,26 @@ export function HotelOnboardingFlow({
           } else {
             const flip = await getGuestFlipSignal(hotelSlug);
             line = flip.body?.trim() || '';
+            flipMetaRef.current = {
+              deliveryId: flip.deliveryId ?? null,
+              threadNotificationId: flip.threadNotificationId ?? null,
+            };
             if (!line) {
               const bank = await loadSignalBank();
               line = bank[Math.floor(Math.random() * Math.max(bank.length, 1))]?.body?.trim() || '';
             }
           }
-          if (!cancelled) setSignalBody(line || 'Trust the street with no sign.');
+          const welcome = line || 'Trust the street with no sign.';
+          if (!cancelled) setSignalBody(welcome);
+          if (!cancelled && !welcomeChatSeededRef.current) {
+            welcomeChatSeededRef.current = true;
+            void ensureQrWelcomeChat({
+              hotelSlug,
+              welcomeMessage: welcome,
+              deliveryId: flipMetaRef.current.deliveryId,
+              threadNotificationId: flipMetaRef.current.threadNotificationId,
+            }).catch(() => undefined);
+          }
         } catch {
           if (!cancelled) setSignalBody('Trust the street with no sign.');
         }
@@ -139,6 +176,15 @@ export function HotelOnboardingFlow({
       await bootstrapMainAppSession();
       await syncPilotHotelProfileIfNeeded();
       await persistHotelEntry(hotelSlug, 'guest_universal');
+      const welcome = signalBody.trim();
+      if (welcome) {
+        void ensureQrWelcomeChat({
+          hotelSlug,
+          welcomeMessage: welcome,
+          deliveryId: flipMetaRef.current.deliveryId,
+          threadNotificationId: flipMetaRef.current.threadNotificationId,
+        }).catch(() => undefined);
+      }
       await markOnboardingComplete();
       const bid = String(exploreBanditId || '').trim();
       if (bid) {
@@ -149,7 +195,7 @@ export function HotelOnboardingFlow({
     } finally {
       setBusy(false);
     }
-  }, [busy, exploreBanditId, hotelSlug, markOnboardingComplete, router]);
+  }, [busy, exploreBanditId, hotelSlug, markOnboardingComplete, router, signalBody]);
 
   const advance = useCallback(() => {
     if (busy || transitionLock.current) return;

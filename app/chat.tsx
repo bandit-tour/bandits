@@ -45,6 +45,10 @@ import { markChatSurfaceOpened } from '@/lib/osAppBadge';
 import { syncOsAppIconBadge } from '@/lib/pushNotifications';
 import { useAppBackScreenOptions } from '@/hooks/useAppBackScreenOptions';
 import { APP_HOME_HREF } from '@/lib/appNavigation';
+import { sendGuestChatReplyViaApi } from '@/lib/guestChatReplyApi';
+import { HOTEL_QR_GUEST_REPLY_REF, HOTEL_QR_WELCOME_REF } from '@/lib/qrWelcomeChat';
+import { sendGuestChatReplyViaApi } from '@/lib/guestChatReplyApi';
+import { HOTEL_QR_GUEST_REPLY_REF, HOTEL_QR_WELCOME_REF } from '@/lib/qrWelcomeChat';
 import { syncLatestArrivalNotificationMessageFromDelivery } from '@/lib/syncArrivalNotification';
 import { supabase } from '@/lib/supabase';
 import {
@@ -612,7 +616,14 @@ export default function ChatScreen() {
             refFromAnchor
               ? refFromAnchor
               : '';
+          const isHotelQrOrSignalThread =
+            isSignalBottleInboxType(effectiveType) ||
+            anchorRefType === HOTEL_QR_WELCOME_REF ||
+            routeRefType === HOTEL_QR_WELCOME_REF;
+          const signalThreadRoot =
+            isHotelQrOrSignalThread && refFromAnchor ? String(refFromAnchor).trim() : '';
           const rootThreadId =
+            signalThreadRoot ||
             operatorRootFromEcho ||
             (viewAsGuest && String(refId || refFromAnchor || '').trim()
               ? String(refId || refFromAnchor).trim()
@@ -677,14 +688,52 @@ export default function ChatScreen() {
               (identity?.opening_message || '').trim() || aMsg || pMsg || fallbackOpen;
           }
 
-          const { data: replies } = await supabase
-            .from('notifications')
-            .select('*')
-            .eq('user_id', user.id)
-            .eq('type', 'bandit_reply')
-            .eq('reference_id', rootThreadId)
-            .in('reference_type', replyTypes)
-            .order('created_at', { ascending: true });
+          /** Delivery / hotel-welcome UUID for guest follow-ups; opening notif id for classic operator replies. */
+          const deliveryOrWelcomeRoot = String(refFromAnchor || refId || '').trim();
+          const isQrOrSignalThread =
+            isSignalBottleInboxType(effectiveType) || anchorRefType === HOTEL_QR_WELCOME_REF;
+
+          const [{ data: replies }, { data: repliesByDelivery }, { data: guestFollowUps }] =
+            await Promise.all([
+              supabase
+                .from('notifications')
+                .select('*')
+                .eq('user_id', user.id)
+                .eq('type', 'bandit_reply')
+                .eq('reference_id', rootThreadId)
+                .in('reference_type', replyTypes)
+                .order('created_at', { ascending: true }),
+              isQrOrSignalThread && deliveryOrWelcomeRoot && deliveryOrWelcomeRoot !== rootThreadId
+                ? supabase
+                    .from('notifications')
+                    .select('*')
+                    .eq('user_id', user.id)
+                    .eq('type', 'bandit_reply')
+                    .eq('reference_id', deliveryOrWelcomeRoot)
+                    .in('reference_type', replyTypes)
+                    .order('created_at', { ascending: true })
+                : Promise.resolve({ data: [] as unknown[] }),
+              isQrOrSignalThread && deliveryOrWelcomeRoot
+                ? supabase
+                    .from('notifications')
+                    .select('id, message, created_at, reference_type')
+                    .eq('user_id', user.id)
+                    .eq('type', 'local_friend')
+                    .eq('reference_id', deliveryOrWelcomeRoot)
+                    .eq('reference_type', HOTEL_QR_GUEST_REPLY_REF)
+                    .order('created_at', { ascending: true })
+                : Promise.resolve({ data: [] as unknown[] }),
+            ]);
+
+          const replyById = new Map<string, { id: string; created_at?: string; message?: string }>();
+          for (const row of [...(replies || []), ...(repliesByDelivery || [])] as Array<{
+            id: string;
+            created_at?: string;
+            message?: string;
+          }>) {
+            if (row?.id) replyById.set(String(row.id), row);
+          }
+          const mergedReplies = [...replyById.values()];
 
           const thread: ChatMessage[] = [];
           const guestAskFirstBubble =
@@ -693,7 +742,20 @@ export default function ChatScreen() {
               (guestRootType === 'bandit_question' ||
                 /** Opening from a `bandit_reply` route still belongs to a guest-originated Ask thread. */
                 effectiveType === 'bandit_reply'));
-          if (openBody.trim() || (replies || []).length > 0) {
+          const followUpRows = [
+            ...mergedReplies.map((row) => ({ ...row, _role: 'bandit' as const })),
+            ...((guestFollowUps || []) as Array<{
+              id: string;
+              created_at?: string;
+              message?: string;
+              reference_type?: string;
+            }>).map((row) => ({ ...row, _role: 'user' as const })),
+          ].sort(
+            (a, b) =>
+              new Date(String(a.created_at || 0)).getTime() - new Date(String(b.created_at || 0)).getTime(),
+          );
+
+          if (openBody.trim() || followUpRows.length > 0) {
             if (openBody.trim()) {
               const rawOpeningSender = String((aTitle || pTitle || '').trim());
               const openingSender = guestAskFirstBubble
@@ -707,14 +769,14 @@ export default function ChatScreen() {
                 sentAt: new Date().toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' }),
               });
             }
-            (replies || []).forEach((row: { id: string; created_at?: string; message?: string }) => {
+            followUpRows.forEach((row) => {
               const created = String(row.created_at || '');
               const sentAt = created
                 ? new Date(created).toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' })
                 : 'Sent';
               thread.push({
-                id: `r-${row.id}`,
-                role: 'bandit',
+                id: row._role === 'user' ? `u-${row.id}` : `r-${row.id}`,
+                role: row._role,
                 body: String(row.message || ''),
                 sentAt,
               });
@@ -1173,17 +1235,39 @@ export default function ChatScreen() {
         setTimeout(() => listRef.current?.scrollToEnd({ animated: true }), 80);
         return;
       }
-      const now = new Date();
-      const sentAt = now.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' });
-      const next: ChatMessage = {
-        id: `u-${now.getTime()}`,
-        role: 'user',
-        body: t,
-        sentAt,
-      };
-      setMessages((prev) => [...prev, next]);
-      setDraft('');
-      setTimeout(() => listRef.current?.scrollToEnd({ animated: true }), 80);
+
+      /** QR welcome / signal bottle threads — durable guest reply → Local Friend / banDiTEAM. */
+      const isWelcomeChatThread =
+        isSignalBottleInboxType(nType) ||
+        routeRefType === HOTEL_QR_WELCOME_REF ||
+        routeRefType === HOTEL_QR_GUEST_REPLY_REF;
+      const welcomeThreadRoot = String(refId || '').trim();
+      if (isWelcomeChatThread && welcomeThreadRoot.length >= 32) {
+        try {
+          const { replyId } = await sendGuestChatReplyViaApi({
+            threadRootId: welcomeThreadRoot,
+            message: t,
+          });
+          const now = new Date();
+          const sentAt = now.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' });
+          setMessages((prev) => [
+            ...prev,
+            { id: replyId ? `u-${replyId}` : `u-${now.getTime()}`, role: 'user', body: t, sentAt },
+          ]);
+          setDraft('');
+          setTimeout(() => listRef.current?.scrollToEnd({ animated: true }), 80);
+          requestNotificationsRefresh();
+          void loadThread(true);
+        } catch (e) {
+          Alert.alert('Send failed', e instanceof Error ? e.message : 'Try again.');
+        }
+        return;
+      }
+
+      Alert.alert(
+        'Cannot send',
+        'This conversation is not open for replies yet. Open Local Friend from Menu to start a new request.',
+      );
     })();
   }, [
     draft,

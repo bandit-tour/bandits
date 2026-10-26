@@ -7,6 +7,7 @@ import {
   getDismissedNotificationIds,
   isChatThreadStillDismissed,
 } from '@/lib/dismissedThreads';
+import { HOTEL_QR_GUEST_REPLY_REF, HOTEL_QR_WELCOME_REF } from '@/lib/qrWelcomeChat';
 import { readGuestFlipSignalCache } from '@/lib/signals';
 import { isDeletedThreadRef } from '@/lib/threadDelete';
 import { supabase } from '@/lib/supabase';
@@ -53,7 +54,7 @@ export function threadKeyForRow(n: NotifRow): string | null {
   const rt = String(n.reference_type || '').trim();
   const ref = String(n.reference_id || '').trim();
 
-  if (isSignalBottleInboxType(t)) {
+  if (isSignalBottleInboxType(t) || rt === HOTEL_QR_WELCOME_REF) {
     if (ref) return `signal:${ref}`;
     return `signal-notif:${n.id}`;
   }
@@ -61,6 +62,11 @@ export function threadKeyForRow(n: NotifRow): string | null {
   if (t === 'bandit_reply' && ref && BANDIT_REPLY_REFS.has(rt)) {
     if (rt === OCEAN_THREAD_REPLY_REF) return `ocean:${ref}`;
     return `reply:${ref}`;
+  }
+
+  /** Guest follow-ups on QR welcome / signal threads stay on the same Chat thread. */
+  if (t === 'local_friend' && rt === HOTEL_QR_GUEST_REPLY_REF && ref) {
+    return `signal:${ref}`;
   }
 
   if (t === 'local_friend' && (rt === 'local_friend_guest_echo' || rt === 'local_friend_request')) {

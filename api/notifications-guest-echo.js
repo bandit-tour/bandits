@@ -138,13 +138,35 @@ module.exports = async function handler(req, res) {
       reference_type: 'local_friend_guest_echo',
       is_read: false,
     };
+  } else if (kind === 'hotel_qr_welcome') {
+    /** Opening Chat bubble from Local Friend — same text shown under the hotel QR. */
+    const { data: existing } = await admin
+      .from('notifications')
+      .select('id')
+      .eq('user_id', uid)
+      .eq('reference_id', threadRootId)
+      .eq('reference_type', 'hotel_qr_welcome')
+      .limit(1)
+      .maybeSingle();
+    if (existing?.id) {
+      return res.status(200).json({ ok: true, already: true, notificationId: existing.id });
+    }
+    row = {
+      user_id: uid,
+      type: 'signal_peer_delivery',
+      title: title || 'Local Friend',
+      message,
+      reference_id: threadRootId,
+      reference_type: 'hotel_qr_welcome',
+      is_read: false,
+    };
   } else {
     return res.status(400).json({ error: 'Unsupported kind' });
   }
 
-  const { error } = await admin.from('notifications').insert(row);
+  const { data: inserted, error } = await admin.from('notifications').insert(row).select('id').maybeSingle();
   if (error) {
     return res.status(500).json({ error: error.message || 'Could not insert notification' });
   }
-  return res.status(200).json({ ok: true });
+  return res.status(200).json({ ok: true, notificationId: inserted?.id || null });
 };

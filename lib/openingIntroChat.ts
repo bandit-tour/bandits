@@ -1,10 +1,13 @@
 /**
  * After the original full-screen intro, seed a Chat-visible mystery welcome
  * so the teaser is not Notifications-only.
+ * Prefer hotel QR path (`ensureQrWelcomeChat`) when the guest enters via QR —
+ * that delivers the exact line shown under the bottle into Chat.
  */
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 import { insertGuestEchoViaApi } from '@/lib/guestNotificationEchoApi';
+import { deterministicUuidFromSeed } from '@/lib/qrWelcomeChat';
 import { resolveTravelerSession } from '@/lib/pilotSession';
 
 const SEEDED_KEY = '@bandits_intro_mystery_chat_v1';
@@ -17,9 +20,9 @@ export async function ensureIntroMysteryChatSeed(): Promise<{ ok: boolean; detai
     const traveler = await resolveTravelerSession();
     if (!traveler?.userId) return { ok: false, detail: 'no_session' };
 
-    const threadRootId = `intro_mystery_${traveler.userId}`;
+    const threadRootId = deterministicUuidFromSeed(`intro_mystery_${traveler.userId}`);
     await insertGuestEchoViaApi({
-      kind: 'local_friend',
+      kind: 'hotel_qr_welcome',
       threadRootId,
       title: 'Message in a bottle',
       message:

@@ -19,6 +19,8 @@
       "infoPlist": {
         "ITSAppUsesNonExemptEncryption": false,
         "NSLocationWhenInUseUsageDescription": "bandiTour uses your location while the app is open to suggest nearby places, events, and safety alerts—only when you are close.",
+        "NSCameraUsageDescription": "bandiTour uses the camera so you can take a profile or travel-memory photo.",
+        "NSPhotoLibraryUsageDescription": "bandiTour uses your photo library so you can choose a profile or travel-memory photo.",
         "UIBackgroundModes": ["remote-notification"]
       },
       "config": {
