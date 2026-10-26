@@ -47,8 +47,6 @@ import { useAppBackScreenOptions } from '@/hooks/useAppBackScreenOptions';
 import { APP_HOME_HREF } from '@/lib/appNavigation';
 import { sendGuestChatReplyViaApi } from '@/lib/guestChatReplyApi';
 import { HOTEL_QR_GUEST_REPLY_REF, HOTEL_QR_WELCOME_REF } from '@/lib/qrWelcomeChat';
-import { sendGuestChatReplyViaApi } from '@/lib/guestChatReplyApi';
-import { HOTEL_QR_GUEST_REPLY_REF, HOTEL_QR_WELCOME_REF } from '@/lib/qrWelcomeChat';
 import { syncLatestArrivalNotificationMessageFromDelivery } from '@/lib/syncArrivalNotification';
 import { supabase } from '@/lib/supabase';
 import {
@@ -619,7 +617,9 @@ export default function ChatScreen() {
           const isHotelQrOrSignalThread =
             isSignalBottleInboxType(effectiveType) ||
             anchorRefType === HOTEL_QR_WELCOME_REF ||
-            routeRefType === HOTEL_QR_WELCOME_REF;
+            anchorRefType === HOTEL_QR_GUEST_REPLY_REF ||
+            routeRefType === HOTEL_QR_WELCOME_REF ||
+            routeRefType === HOTEL_QR_GUEST_REPLY_REF;
           const signalThreadRoot =
             isHotelQrOrSignalThread && refFromAnchor ? String(refFromAnchor).trim() : '';
           const rootThreadId =
@@ -661,18 +661,35 @@ export default function ChatScreen() {
             if (guestRootType === 'bandit_question') {
               openBody = bodyAfterAskMeAboutLine(openBody) || openBody;
             }
-          } else if (isSignalBottleInboxType(effectiveType)) {
-            const deliveryId = String(refFromAnchor || '').trim();
+          } else if (isHotelQrOrSignalThread) {
+            const deliveryId = String(refFromAnchor || refId || '').trim();
+            /** Prefer the durable QR welcome / signal opening — not a later guest follow-up body. */
+            let welcomeOpening = '';
+            if (deliveryId.length >= 32 && user?.id) {
+              const { data: welcomeRow } = await supabase
+                .from('notifications')
+                .select('message')
+                .eq('user_id', user.id)
+                .eq('reference_id', deliveryId)
+                .eq('type', 'signal_peer_delivery')
+                .in('reference_type', [HOTEL_QR_WELCOME_REF, 'signal_delivery', 'signal_delivery_peer'])
+                .order('created_at', { ascending: true })
+                .limit(1)
+                .maybeSingle();
+              welcomeOpening = String((welcomeRow as { message?: string } | null)?.message || '').trim();
+            }
             const canonical =
               deliveryId.length >= 32
                 ? await resolveCanonicalSignalThreadByDelivery(deliveryId, user.id).catch(() => null)
                 : null;
             const lineFromDelivery = deliveryId ? await fetchSignalLineForDelivery(deliveryId).catch(() => null) : null;
+            const anchorIsGuestFollowUp = anchorRefType === HOTEL_QR_GUEST_REPLY_REF;
             openBody =
               (identity?.opening_message || '').trim() ||
+              welcomeOpening ||
               (canonical?.signal_text || '').trim() ||
               firstBubbleBodyForType('signal_peer_delivery', aMsg || pMsg, aTitle || pTitle) ||
-              (aMsg || pMsg).trim() ||
+              (!anchorIsGuestFollowUp ? (aMsg || pMsg).trim() : '') ||
               (lineFromDelivery || '').trim() ||
               '';
           } else if (effectiveType === 'bandit_question') {
@@ -690,8 +707,7 @@ export default function ChatScreen() {
 
           /** Delivery / hotel-welcome UUID for guest follow-ups; opening notif id for classic operator replies. */
           const deliveryOrWelcomeRoot = String(refFromAnchor || refId || '').trim();
-          const isQrOrSignalThread =
-            isSignalBottleInboxType(effectiveType) || anchorRefType === HOTEL_QR_WELCOME_REF;
+          const isQrOrSignalThread = isHotelQrOrSignalThread;
 
           const [{ data: replies }, { data: repliesByDelivery }, { data: guestFollowUps }] =
             await Promise.all([
@@ -1240,7 +1256,8 @@ export default function ChatScreen() {
       const isWelcomeChatThread =
         isSignalBottleInboxType(nType) ||
         routeRefType === HOTEL_QR_WELCOME_REF ||
-        routeRefType === HOTEL_QR_GUEST_REPLY_REF;
+        routeRefType === HOTEL_QR_GUEST_REPLY_REF ||
+        (nType === 'local_friend' && routeRefType === HOTEL_QR_GUEST_REPLY_REF);
       const welcomeThreadRoot = String(refId || '').trim();
       if (isWelcomeChatThread && welcomeThreadRoot.length >= 32) {
         try {

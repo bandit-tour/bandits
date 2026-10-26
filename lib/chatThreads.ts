@@ -163,22 +163,29 @@ function buildSummariesFromRows(rows: NotifRow[]): ChatThreadSummary[] {
   for (const [threadKey, { rows: group }] of byKey.entries()) {
     group.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
     const latest = group[0]!;
+    /** Prefer QR welcome / signal opening row for /chat params so follow-ups stay on one thread. */
+    const openRow =
+      group.find(
+        (r) =>
+          isSignalBottleInboxType(r.type) ||
+          String(r.reference_type || '').trim() === HOTEL_QR_WELCOME_REF,
+      ) || latest;
     const unreadCount = group.filter((r) => !r.is_read).length;
     const floatId = threadKey.startsWith('ocean:') ? threadKey.slice(6) : undefined;
 
     summaries.push({
       threadKey,
       floatId,
-      title: titleForThread(latest),
+      title: titleForThread(openRow),
       preview: previewForThread(latest),
       lastAt: latest.created_at,
       unreadCount,
-      openNotificationId: latest.id,
-      openNotificationType: latest.type,
-      openReferenceId: String(latest.reference_id || ''),
-      openReferenceType: String(latest.reference_type || ''),
-      openTitle: latest.title || '',
-      openMessage: latest.message || '',
+      openNotificationId: openRow.id,
+      openNotificationType: openRow.type,
+      openReferenceId: String(openRow.reference_id || ''),
+      openReferenceType: String(openRow.reference_type || ''),
+      openTitle: openRow.title || '',
+      openMessage: openRow.message || '',
     });
   }
 
