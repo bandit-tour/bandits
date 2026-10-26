@@ -147,8 +147,8 @@ export async function ensureQrWelcomeChat(
   try {
     await bootstrapMainAppSession().catch(() => undefined);
     const traveler = await resolveTravelerSession();
-    if (!traveler?.userId) return { ok: false, detail: 'no_session' };
-    const userId = traveler.userId;
+    const userId = String(traveler?.user?.id || '').trim();
+    if (!userId) return { ok: false, detail: 'no_session' };
 
     const threadRootId = deliveryId || deterministicUuidFromSeed(`qr-welcome:${userId}:${hotelSlug}`);
 

@@ -18,9 +18,10 @@ export async function ensureIntroMysteryChatSeed(): Promise<{ ok: boolean; detai
     if (already === '1') return { ok: true, detail: 'already_seeded' };
 
     const traveler = await resolveTravelerSession();
-    if (!traveler?.userId) return { ok: false, detail: 'no_session' };
+    const userId = String(traveler?.user?.id || '').trim();
+    if (!userId) return { ok: false, detail: 'no_session' };
 
-    const threadRootId = deterministicUuidFromSeed(`intro_mystery_${traveler.userId}`);
+    const threadRootId = deterministicUuidFromSeed(`intro_mystery_${userId}`);
     await insertGuestEchoViaApi({
       kind: 'hotel_qr_welcome',
       threadRootId,
