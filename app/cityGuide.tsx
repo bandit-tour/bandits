@@ -435,11 +435,30 @@ export default function CityGuideScreen() {
   }, [banditIdParam, effectiveBanditId, bandit?.id]);
 
   const firstName = (bandit?.name || 'Local').trim().split(/\s+/)[0] || 'Local';
-  const athensTitle = `${firstName}'s Athens`;
+  /** Guide city follows the banDit's own places (Athens by default; Piraeus-only guides read "Piraeus"). */
+  const guideCity = useMemo(() => {
+    const counts = new Map<string, number>();
+    for (const e of events) {
+      const raw = String(e.city ?? '').trim();
+      if (!raw) continue;
+      const c = /^athina$/i.test(raw) ? 'Athens' : raw;
+      counts.set(c, (counts.get(c) ?? 0) + 1);
+    }
+    let best = 'Athens';
+    let bestN = 0;
+    for (const [c, n] of counts) {
+      if (n > bestN) {
+        best = c;
+        bestN = n;
+      }
+    }
+    return best;
+  }, [events]);
+  const athensTitle = `${firstName}'s ${guideCity}`;
   const placeCount = filteredEvents.length;
   const voiceLine =
     repairDisplayText(String(bandit?.description || '').trim()).slice(0, 160) ||
-    `Welcome to ${firstName}'s Athens — places locals actually go, not a tourism dump.`;
+    `Welcome to ${firstName}'s ${guideCity} — places locals actually go, not a tourism dump.`;
 
   const cityGuideHeaderOptions = useAppBackScreenOptions({
     title: bandit ? athensTitle : 'City Guide',
@@ -611,7 +630,7 @@ export default function CityGuideScreen() {
         <Text style={styles.placesCountLine}>
           {placeCount > 0
             ? `${firstName}'s ${placeCount} places · photo-led · ${firstName}'s voice`
-            : `${firstName}'s curated Athens`}
+            : `${firstName}'s curated ${guideCity}`}
         </Text>
 
         {/* Bandit Profile Section — full-bleed portrait, not 88px circle */}
@@ -639,7 +658,7 @@ export default function CityGuideScreen() {
                   source={require('@/assets/images/play_athens_bg.png')}
                   style={styles.heroPortrait}
                   resizeMode="cover"
-                  accessibilityLabel="Athens"
+                  accessibilityLabel={guideCity}
                 />
               );
             })()}
@@ -684,7 +703,7 @@ export default function CityGuideScreen() {
           <Text style={styles.aiPunchline}>{`${firstName}'s midnight loop`}</Text>
           <Text style={styles.aiPunchlineText}>
             No bus tours. No best‑of lists.
-            Just a loose thread into the parts of Athens locals don’t post about.
+            {`Just a loose thread into the parts of ${guideCity} locals don’t post about.`}
           </Text>
           <Pressable
             onPress={() => {

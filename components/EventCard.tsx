@@ -579,10 +579,12 @@ function EventCardImpl({
           ) : (
             <VenuePhotoFallback name={String(event.name || '')} genre={event.genre} />
           )}
+          {typeof event.rating === 'number' && event.rating > 0 ? (
           <View style={styles.ratingContainer} pointerEvents="none">
-            <Text style={styles.ratingText}>{(event.rating || 0).toFixed(1)}</Text>
+            <Text style={styles.ratingText}>{event.rating.toFixed(1)}</Text>
             <Text style={styles.starText}>★</Text>
           </View>
+          ) : null}
         </Pressable>
         {showRecommendations && recommendingBandits.length > 0 && (
           <View style={styles.recommendationsContainer} pointerEvents="box-none">
@@ -657,10 +659,12 @@ function EventCardImpl({
           ) : (
             <VenuePhotoFallback name={String(event.name || '')} genre={event.genre} />
           )}
+          {typeof event.rating === 'number' && event.rating > 0 ? (
           <View style={styles.ratingContainer} pointerEvents="none">
-            <Text style={styles.ratingText}>{(event.rating || 0).toFixed(1)}</Text>
+            <Text style={styles.ratingText}>{event.rating.toFixed(1)}</Text>
             <Text style={styles.starText}>★</Text>
           </View>
+          ) : null}
 
           {showRecommendations && recommendingBandits.length > 0 && (
             <View style={styles.recommendationsContainer} pointerEvents={recommendationsPointerEvents}>
@@ -744,9 +748,9 @@ function EventCardImpl({
     <>
         <View style={styles.eventHeader}>
           <Text style={styles.eventName}>{repairDisplayText(event.name || '')}</Text>
-          {!showImageRegion ? (
+          {!showImageRegion && typeof event.rating === 'number' && event.rating > 0 ? (
             <View style={styles.ratingContainerInline} pointerEvents="none">
-              <Text style={styles.ratingText}>{(event.rating || 0).toFixed(1)}</Text>
+              <Text style={styles.ratingText}>{event.rating.toFixed(1)}</Text>
               <Text style={styles.starText}>★</Text>
             </View>
           ) : null}

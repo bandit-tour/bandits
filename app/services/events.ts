@@ -5,6 +5,7 @@ import { ensureAnonymousSession } from '@/lib/pilotSession';
 import { isAuthOrMissingError } from '@/lib/postgrestAuth';
 import { resolveGooglePlaceBusinessData } from '@/lib/placePhoto';
 import { supabase } from '@/lib/supabase';
+import { fetchAuthorizedWorkspaceExplore, mergeWorkspaceExplore } from '@/lib/workspaceExplore';
 
 type Event = Database['public']['Tables']['event']['Row'];
 type EventInsert = Database['public']['Tables']['event']['Insert'];
@@ -215,6 +216,21 @@ export async function getEvents(filters: EventFilters = {}): Promise<Event[]> {
   }
 
   let events = data || [];
+
+  // Workspace-authorized Explore records (empty until editorial + licensing + authorization gates pass).
+  if (!filters.banditId) {
+    try {
+      const authorized = await fetchAuthorizedWorkspaceExplore({
+        genre: filters.genre,
+        city: filters.city,
+        neighborhood: filters.neighborhood,
+        searchQuery: filters.searchQuery,
+      });
+      events = mergeWorkspaceExplore(events, authorized);
+    } catch {
+      /* Workspace unreachable — Supabase catalog still renders. */
+    }
+  }
 
   // Apply location-based filter after fetching (client-side filtering)
   if (filters.userLat && filters.userLng) {
