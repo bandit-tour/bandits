@@ -76,15 +76,64 @@ export async function trackEvent(args: {
     };
 
     if (analyticsInsertBlocked) return;
-    const { error } = await supabase.from('analytics_events').insert(payload);
-    if (error && (error.code === '42501' || /row-level security/i.test(error.message || ''))) {
-      // RLS rejects this session's inserts. Stop retrying every event (one rejected request per session,
-      // not one per tap) and surface it once. Events are NOT being recorded until the policy/session is fixed.
-      analyticsInsertBlocked = true;
-      console.warn('[analytics] insert rejected by RLS; analytics disabled for this session', error.code);
+
+    // `analytics_events` accepts inserts only from signed-in (incl. anonymous-auth) sessions (RLS `to authenticated`).
+    // With no session yet the request would run as the anon role and be rejected (42501). Wait for the session
+    // instead of sending a request that cannot succeed; no database policy change is needed.
+    if (!user?.id) {
+      queuePendingEvent(payload);
+      return;
     }
+
+    await insertAnalyticsEvent(payload);
   } catch {
     // Analytics should never block product flows.
   }
+}
+
+type AnalyticsPayload = {
+  user_id: string | null;
+  event_name: AnalyticsEventName;
+  reference_type: string | null;
+  reference_id: string | null;
+};
+
+const MAX_PENDING_EVENTS = 40;
+const pendingEvents: AnalyticsPayload[] = [];
+let sessionWaiterRegistered = false;
+
+async function insertAnalyticsEvent(payload: AnalyticsPayload): Promise<void> {
+  if (analyticsInsertBlocked) return;
+  const { error } = await supabase.from('analytics_events').insert(payload);
+  if (error && (error.code === '42501' || /row-level security/i.test(error.message || ''))) {
+    // RLS rejects even a signed-in session's inserts. Stop retrying every event (one rejected request per session,
+    // not one per tap) and surface it once. Events are NOT being recorded until the policy/session is fixed.
+    analyticsInsertBlocked = true;
+    pendingEvents.length = 0;
+    console.warn('[analytics] insert rejected by RLS; analytics disabled for this session', error.code);
+  }
+}
+
+function queuePendingEvent(payload: AnalyticsPayload): void {
+  if (pendingEvents.length >= MAX_PENDING_EVENTS) pendingEvents.shift();
+  pendingEvents.push(payload);
+  if (sessionWaiterRegistered) return;
+  sessionWaiterRegistered = true;
+  // One long-lived listener: flush the queue the first time a session with a user exists.
+  supabase.auth.onAuthStateChange((_event, session) => {
+    const uid = authUserIdForAnalytics(session?.user?.id);
+    if (!uid || pendingEvents.length === 0) return;
+    const batch = pendingEvents.splice(0, pendingEvents.length);
+    setTimeout(() => void (async () => {
+      for (const ev of batch) {
+        if (analyticsInsertBlocked) return;
+        try {
+          await insertAnalyticsEvent({ ...ev, user_id: uid });
+        } catch {
+          // Analytics should never block product flows.
+        }
+      }
+    })(), 0);
+  });
 }
 
