@@ -70,6 +70,9 @@ type AppStateContextType = {
 
 const AppStateContext = createContext<AppStateContextType | undefined>(undefined);
 
+/** Flips false once the server reports user_profile.avatar_url missing (migration 018 not applied there). */
+let userProfileHasAvatarColumn = true;
+
 /**
  * Mirror of the equivalent helper in `app/(tabs)/notifications.tsx`. We keep
  * the function around for symmetry but always return `false`: Ask Me /
@@ -211,10 +214,22 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
     const meta = (user.user_metadata || {}) as Record<string, unknown>;
     const metaName = typeof meta.full_name === 'string' ? meta.full_name : typeof meta.name === 'string' ? meta.name : '';
     const metaAvatar = typeof meta.avatar_url === 'string' ? meta.avatar_url.trim() : '';
-    let row: { name?: string; avatar_url?: string | null } | null = null;
+    type IdentityProfileRow = { name?: string; avatar_url?: string | null };
+    let row = null as IdentityProfileRow | null;
     try {
-      const res = await supabase.from('user_profile').select('name, avatar_url').eq('id', user.id).maybeSingle();
-      row = res.data as typeof row;
+      if (userProfileHasAvatarColumn) {
+        const res = await supabase.from('user_profile').select('name, avatar_url').eq('id', user.id).maybeSingle();
+        if (res.error && (res.error.code === '42703' || /avatar_url/i.test(res.error.message || ''))) {
+          // Server schema predates migration 018 (avatar_url). Fall back to name-only and stop re-asking.
+          userProfileHasAvatarColumn = false;
+        } else {
+          row = res.data as IdentityProfileRow | null;
+        }
+      }
+      if (!userProfileHasAvatarColumn) {
+        const res = await supabase.from('user_profile').select('name').eq('id', user.id).maybeSingle();
+        row = res.data as IdentityProfileRow | null;
+      }
     } catch (e) {
       console.warn('[AppState] refreshIdentity user_profile:', e instanceof Error ? e.message : e);
     }

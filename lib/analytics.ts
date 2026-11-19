@@ -40,6 +40,7 @@ export type AnalyticsEventName =
   | 'bottle_planning_opened';
 
 const sessionOnceKeys = new Set<string>();
+let analyticsInsertBlocked = false;
 
 /** `analytics_events.user_id` is uuid — never send "" (nullish coalescing preserves empty string). */
 function authUserIdForAnalytics(id: unknown): string | null {
@@ -74,7 +75,14 @@ export async function trackEvent(args: {
       reference_id: args.referenceId ?? null,
     };
 
-    await supabase.from('analytics_events').insert(payload);
+    if (analyticsInsertBlocked) return;
+    const { error } = await supabase.from('analytics_events').insert(payload);
+    if (error && (error.code === '42501' || /row-level security/i.test(error.message || ''))) {
+      // RLS rejects this session's inserts. Stop retrying every event (one rejected request per session,
+      // not one per tap) and surface it once. Events are NOT being recorded until the policy/session is fixed.
+      analyticsInsertBlocked = true;
+      console.warn('[analytics] insert rejected by RLS; analytics disabled for this session', error.code);
+    }
   } catch {
     // Analytics should never block product flows.
   }
