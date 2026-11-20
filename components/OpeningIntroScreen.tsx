@@ -1,4 +1,10 @@
-import { BOTTLE_POSTER, BOTTLE_VIDEO } from '@/lib/openingIntroAssets';
+import {
+  BOTTLE_POSTER,
+  BOTTLE_VIDEO,
+  INTRO_BANDANA_RED,
+  INTRO_BRAND_ICON_MARK,
+  INTRO_BRAND_WORDMARK,
+} from '@/lib/openingIntroAssets';
 import { LinearGradient } from 'expo-linear-gradient';
 import { StatusBar } from 'expo-status-bar';
 import { useVideoPlayer, VideoView } from 'expo-video';
@@ -7,6 +13,7 @@ import {
   Animated,
   Dimensions,
   Easing,
+  Image,
   Platform,
   Pressable,
   ScrollView,
@@ -16,9 +23,6 @@ import {
   View,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-
-/** On-screen intro brand line only; keep in sync with product. */
-const INTRO_BRAND = 'PLAY × bandiTour';
 
 type OpeningIntroScreenProps = {
   onEnter: () => void;
@@ -228,13 +232,29 @@ function IntroBottleVideo({ onComplete }: IntroBottleProps) {
   );
 }
 
+/**
+ * Official bandiTour identity for the opening only: octopus + bandana mark,
+ * original wordmark, light PLAY partnership line — keeps cinematic chrome.
+ */
 function IntroBrandKicker() {
   return (
-    <View
-      style={styles.brandKicker}
-      accessibilityLabel="PLAY and bandiTour"
-    >
-      <Text style={styles.kickerText}>{INTRO_BRAND}</Text>
+    <View style={styles.brandKicker} accessibilityLabel="bandiTour with PLAY">
+      <Image
+        source={INTRO_BRAND_ICON_MARK}
+        style={styles.brandIconMark}
+        resizeMode="contain"
+        accessibilityIgnoresInvertColors
+        accessibilityLabel="bandiTour octopus"
+      />
+      <Image
+        source={INTRO_BRAND_WORDMARK}
+        style={styles.brandWordmark}
+        resizeMode="contain"
+        accessibilityIgnoresInvertColors
+        accessibilityLabel="bandiTour"
+      />
+      <View style={styles.brandBandanaRule} />
+      <Text style={styles.kickerPartner}>with PLAY</Text>
     </View>
   );
 }
@@ -311,7 +331,7 @@ function CtaBody({ h, insets, onEnter, onSkip }: CtaBodyProps) {
 }
 
 /**
- * Three steps: (1) message + flip → (2) bottle video once → (3) CTA. Cross-fades between steps; single brand string.
+ * Three steps: (1) message + flip → (2) bottle video once → (3) CTA. Cross-fades between steps; official brand lockup.
  */
 export default function OpeningIntroScreen({ onEnter, onSkip }: OpeningIntroScreenProps) {
   const insets = useSafeAreaInsets();
@@ -535,17 +555,40 @@ const styles = StyleSheet.create({
   messageCta: { width: '100%', maxWidth: 360, alignItems: 'center' },
   brandKicker: {
     marginBottom: 28,
-    paddingVertical: 8,
-    paddingHorizontal: 16,
+    paddingVertical: 16,
+    paddingHorizontal: 20,
     borderWidth: StyleSheet.hairlineWidth,
-    borderColor: 'rgba(201, 167, 100, 0.5)',
-    borderRadius: 10,
+    borderColor: 'rgba(201, 167, 100, 0.45)',
+    borderRadius: 14,
+    alignItems: 'center',
+    backgroundColor: 'rgba(8, 6, 4, 0.55)',
+    maxWidth: 340,
+    width: '100%',
   },
-  kickerText: {
-    color: 'rgba(240, 215, 160, 0.98)',
-    fontSize: 13,
-    fontWeight: '800',
-    letterSpacing: 1.4,
+  brandIconMark: {
+    width: 88,
+    height: 88,
+    marginBottom: 12,
+  },
+  brandWordmark: {
+    width: 220,
+    height: 48,
+    marginBottom: 10,
+  },
+  brandBandanaRule: {
+    width: 44,
+    height: 2,
+    borderRadius: 1,
+    backgroundColor: INTRO_BANDANA_RED,
+    marginBottom: 10,
+    opacity: 0.92,
+  },
+  kickerPartner: {
+    color: 'rgba(240, 215, 160, 0.88)',
+    fontSize: 11,
+    fontWeight: '700',
+    letterSpacing: 1.6,
+    textTransform: 'uppercase',
   },
   textBlock: { alignItems: 'center', maxWidth: 420, marginBottom: 32 },
   headline: {

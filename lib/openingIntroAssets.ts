@@ -6,6 +6,17 @@ export const BOTTLE_VIDEO = require('@/assets/images/local-friend-bottle.mov');
 export const BOTTLE_POSTER = require('@/assets/images/brand/banditour-bottle-sky.png');
 
 /**
+ * Opening-intro brand marks only — official Partner / Workspace originals
+ * (copied into assets/images/brand/intro + public/assets/brand). Do not use
+ * these to replace app-wide iconography.
+ */
+export const INTRO_BRAND_WORDMARK = require('@/assets/images/brand/intro/logo-wordmark-dark-transparent.png');
+/** Octopus + pink bandana mark (bandana-arrow identity). */
+export const INTRO_BRAND_ICON_MARK = require('@/assets/images/brand/intro/icon-mark-transparent.png');
+/** Sampled from official icon-mark bandana — accent only on intro chrome. */
+export const INTRO_BANDANA_RED = '#E41A54';
+
+/**
  * PLAY hotel branding (`public/videos/play-intro.mp4`). Not used by the opening intro,
  * and not used by banDiTEAM / Local Friend submit playback.
  */
