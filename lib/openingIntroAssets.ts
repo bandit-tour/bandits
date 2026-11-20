@@ -1,4 +1,4 @@
-/**
+﻿/**
  * Native Mix / opening bottle clip.
  * Current bytes: 3D CGI message-in-bottle (not live ocean throw). See asset audit.
  */
@@ -13,8 +13,8 @@ export const BOTTLE_POSTER = require('@/assets/images/brand/banditour-bottle-sky
 export const INTRO_BRAND_WORDMARK = require('@/assets/images/brand/intro/logo-wordmark-dark-transparent.png');
 /** Octopus + pink bandana mark (bandana-arrow identity). */
 export const INTRO_BRAND_ICON_MARK = require('@/assets/images/brand/intro/icon-mark-transparent.png');
-/** Sampled from official icon-mark bandana — accent only on intro chrome. */
-export const INTRO_BANDANA_RED = '#E41A54';
+/** Official CTA/accent red from bandana-arrow lockup (not octopus bandana pink). */
+export const INTRO_BANDANA_RED = '#E72022';
 
 /**
  * PLAY hotel branding (`public/videos/play-intro.mp4`). Not used by the opening intro,
@@ -34,3 +34,4 @@ export const BOTTLE_INTRO_WEB_URI = '/videos/local-friend-bottle.mp4' as const;
  * (same family as native intro `BOTTLE_VIDEO`). Not PLAY branding; not live ocean throw.
  */
 export const BOTTLE_MIX_VIDEO_WEB_URI = '/videos/bottle-mix-loop.mp4' as const;
+

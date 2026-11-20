@@ -1,0 +1,28 @@
+﻿{
+    "assets":  {
+                   "wordmark":  "logo-wordmark-dark-transparent.png",
+                   "bandanaArrow":  "logo-lockup-light-transparent.png",
+                   "octopus":  "icon-mark-transparent.png",
+                   "ownership":  "Partner web/public/brand/ SOURCE OF TRUTH"
+               },
+    "redSource":  "logo-lockup-light-transparent.png bandana-arrow median true-red",
+    "deployments":  {
+                        "workspace":  "dpl_NYC6vQfsp4paMiRnx5YsKuuBLJnS",
+                        "guest":  "dpl_CZmpNmujnRDK6K3Jj7gHB2eyf4M4",
+                        "partner":  "dpl_A7zMESsmdZiWVE1hrDyDDry9Krtw"
+                    },
+    "senderAvatar":  "REQUIRES_FOUNDER_ACTION in Zoho Mail profile — HTML cannot control inbox avatar",
+    "stripeLive":  "OFF / untouched",
+    "urls":  {
+                 "workspace":  "https://banditour-workspace.vercel.app/",
+                 "guestIntro":  "https://bandits-two.vercel.app/?intro=1",
+                 "partner":  "https://banditours.com/"
+             },
+    "date":  "2026-11-20",
+    "guestInternalRedesign":  false,
+    "officialRed":  "#E72022",
+    "forbiddenPink":  [
+                          "#E01850",
+                          "#E41A54"
+                      ]
+}

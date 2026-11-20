@@ -37,7 +37,8 @@
     "db:fix-mojibake": "node scripts/db-fix-mojibake-globally.mjs",
     "db:apply-push-tokens": "node scripts/apply-migration-064-via-api.mjs",
     "db:apply-push-tokens:pg": "node scripts/apply-migration-064-pg.mjs",
-    "verify:push-production": "node scripts/verify-push-production-e2e.mjs"
+    "verify:push-production": "node scripts/verify-push-production-e2e.mjs",
+    "check:brand": "node scripts/check-brand-identity.mjs"
   },
   "dependencies": {
     "@expo/vector-icons": "^15.0.3",
