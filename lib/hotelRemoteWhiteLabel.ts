@@ -57,13 +57,32 @@ type CacheEntry = {
   fetchedAt: number;
 };
 
-const CACHE_TTL_MS = 5 * 60 * 1000;
+/** Match Partner public config Cache-Control (60s) — avoid stale cross-hotel / republish leakage. */
+const CACHE_TTL_MS = 60 * 1000;
 const memoryCache = new Map<string, CacheEntry>();
 
 function uriSource(url: string | undefined, fallback: ImageSourcePropType): ImageSourcePropType {
   const u = String(url || '').trim();
-  if (u && /^https?:\/\//i.test(u)) return { uri: u };
+  if (!u) return fallback;
+  // https assets OR Partner Platform data-URL uploads (Hotelier white-label V1)
+  if (/^https?:\/\//i.test(u) || /^data:image\/[a-z0-9.+-]+;base64,/i.test(u)) {
+    return { uri: u };
+  }
   return fallback;
+}
+
+/** Drop cached branding — call when switching hotel QR/stay context. */
+export function clearRemoteHotelWhiteLabelCache(slug?: string | null): void {
+  if (!slug) {
+    memoryCache.clear();
+    return;
+  }
+  const norm = normalizeHotelSlug(slug);
+  for (const key of [...memoryCache.keys()]) {
+    if (key === norm || key === slug || normalizeHotelSlug(key) === norm) {
+      memoryCache.delete(key);
+    }
+  }
 }
 
 function fallbackAssets(): Pick<
@@ -131,12 +150,15 @@ export function remotePayloadToWhiteLabel(
   };
 }
 
-export async function fetchRemoteHotelConfig(slug: string): Promise<RemoteHotelConfig | null> {
+export async function fetchRemoteHotelConfig(
+  slug: string,
+  opts?: { bypassCache?: boolean },
+): Promise<RemoteHotelConfig | null> {
   const norm = normalizeHotelSlug(slug);
   if (!norm) return null;
 
   const cached = memoryCache.get(norm);
-  if (cached && Date.now() - cached.fetchedAt < CACHE_TTL_MS) {
+  if (!opts?.bypassCache && cached && Date.now() - cached.fetchedAt < CACHE_TTL_MS) {
     return cached.config;
   }
 
@@ -145,9 +167,10 @@ export async function fetchRemoteHotelConfig(slug: string): Promise<RemoteHotelC
 
   for (const origin of bases) {
     try {
+      const bust = opts?.bypassCache ? `?t=${Date.now()}` : '';
       const res = await fetch(
-        `${origin}/api/public/hotels/${encodeURIComponent(norm)}/config`,
-        { headers: { Accept: 'application/json' } },
+        `${origin}/api/public/hotels/${encodeURIComponent(norm)}/config${bust}`,
+        { headers: { Accept: 'application/json' }, cache: 'no-store' },
       );
       if (!res.ok) continue;
       const json = (await res.json()) as {
