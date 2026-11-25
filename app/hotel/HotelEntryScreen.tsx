@@ -1,5 +1,8 @@
 import { getHotelWhiteLabelOrDefault, normalizeHotelSlug, type HotelWhiteLabelConfig } from '@/lib/hotelWhiteLabel';
-import { resolveHotelWhiteLabel } from '@/lib/hotelRemoteWhiteLabel';
+import {
+  clearRemoteHotelWhiteLabelCache,
+  resolveHotelWhiteLabel,
+} from '@/lib/hotelRemoteWhiteLabel';
 import { openStaffEmailLogin } from '@/lib/loginNavigation';
 import {
   HOTEL_BY_SLUG,
@@ -53,6 +56,8 @@ export function HotelEntryScreen({ slug: rawSlug }: HotelEntryScreenProps) {
   useEffect(() => {
     let cancelled = false;
     void (async () => {
+      // New QR / hotel slug must not reuse another hotel's in-memory branding.
+      clearRemoteHotelWhiteLabelCache();
       const resolved = await resolveHotelWhiteLabel(slugNorm, { allowPlayFallback: false });
       if (cancelled) return;
       const known =

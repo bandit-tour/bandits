@@ -78,7 +78,18 @@ export default async function handler(req, res) {
 
   const { data, error } = await sb.from('guest_live_events').insert(row).select('*').single();
   if (error) {
-    res.status(500).json({ ok: false, error: error.message });
+    const missingRelation =
+      error.code === '42P01' ||
+      /guest_live_events/i.test(String(error.message || '')) ||
+      /does not exist/i.test(String(error.message || ''));
+    res.status(missingRelation ? 503 : 500).json({
+      ok: false,
+      error: missingRelation ? 'guest_live_events_missing' : error.message,
+      code: error.code || null,
+      dependency: missingRelation
+        ? 'Apply supabase/migrations/065_guest_live_events.sql on production Supabase, then retry'
+        : 'guest_live_events insert',
+    });
     return;
   }
 
