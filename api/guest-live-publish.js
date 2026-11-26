@@ -194,7 +194,7 @@ async function projectApprovedBandit(sb, eventType, row) {
     const fields = {
       name: displayName,
       family_name: parts.slice(1).join(' ') || 'Local',
-      age: 0,
+      age: 1,
       city: clean(payload.city, 80) || 'Athens',
       occupation: 'Local banDit',
       image_url: '',
