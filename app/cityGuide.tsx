@@ -124,11 +124,21 @@ function RecommendationHeroImage({
 
 export default function CityGuideScreen() {
   const { width } = useWindowDimensions();
-  const params = useLocalSearchParams<{ banditId?: string; genre?: string }>();
+  const params = useLocalSearchParams<{ banditId?: string; genre?: string; guide?: string }>();
   const rawBanditId = params.banditId;
   const banditIdParam = Array.isArray(rawBanditId) ? rawBanditId[0] : rawBanditId;
   const rawGenre = params.genre;
   const genreParam = Array.isArray(rawGenre) ? rawGenre[0] : rawGenre;
+  const rawGuide = params.guide;
+  const guideId = (Array.isArray(rawGuide) ? rawGuide[0] : rawGuide || "").trim();
+  const [studioGuide, setStudioGuide] = useState<{
+    title: string;
+    body: string;
+    author: string;
+    city: string;
+    authorStory: string | null;
+  } | null>(null);
+  const [studioNote, setStudioNote] = useState(guideId ? "Loading this city guide…" : "");
 
   const router = useRouter();
   const [effectiveBanditId, setEffectiveBanditId] = useState<string | null>(
@@ -174,6 +184,43 @@ export default function CityGuideScreen() {
   );
 
   useEffect(() => {
+    if (!guideId) return;
+    let cancelled = false;
+    const started = Date.now();
+    setStudioNote("Loading this city guide…");
+    fetch(`https://banditour-workspace.vercel.app/api/public/city-guides/${encodeURIComponent(guideId)}`, {
+      cache: "no-store",
+    })
+      .then(async (res) => {
+        const json = await res.json().catch(() => null);
+        if (cancelled) return;
+        if (!res.ok || !json?.title) {
+          setStudioGuide(null);
+          setStudioNote("This city guide is not on the guest list.");
+          return;
+        }
+        setStudioGuide({
+          title: String(json.title),
+          body: String(json.body || ""),
+          author: String(json.author || "Local banDit"),
+          city: String(json.city || ""),
+          authorStory: json.authorStory ? String(json.authorStory) : null,
+        });
+        setStudioNote(`Opened in ${Date.now() - started} ms`);
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setStudioGuide(null);
+          setStudioNote("This city guide could not be opened.");
+        }
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [guideId]);
+
+  useEffect(() => {
+    if (guideId) return;
     if (banditIdParam) {
       setEffectiveBanditId(banditIdParam);
       return;
@@ -203,10 +250,10 @@ export default function CityGuideScreen() {
     return () => {
       cancelled = true;
     };
-  }, [banditIdParam]);
+  }, [banditIdParam, guideId]);
 
   useEffect(() => {
-    if (!effectiveBanditId) return;
+    if (guideId || !effectiveBanditId) return;
 
     let cancelled = false;
     const fetchData = async () => {
@@ -252,7 +299,7 @@ export default function CityGuideScreen() {
     return () => {
       cancelled = true;
     };
-  }, [effectiveBanditId]);
+  }, [effectiveBanditId, guideId]);
 
   const onToggleEventLike = useCallback(
     async (eventId: string) => {
@@ -465,6 +512,23 @@ export default function CityGuideScreen() {
     fallback: backFallback,
     showBack: true,
   });
+
+  if (guideId) {
+    return (
+      <>
+        <Stack.Screen options={{ ...cityGuideHeaderOptions, title: studioGuide?.title || "City Guide" }} />
+        <ScrollView style={styles.container} contentContainerStyle={styles.scrollContent}>
+          <Text style={styles.headerText}>{studioGuide?.title || "City Guide"}</Text>
+          <Text style={styles.placesCountLine}>
+            {studioGuide ? `${studioGuide.author}${studioGuide.city ? ` · ${studioGuide.city}` : ""}` : "My City Guides"}
+          </Text>
+          {studioGuide?.authorStory ? <Text style={styles.descriptionText}>{studioGuide.authorStory}</Text> : null}
+          {studioGuide?.body ? <Text style={styles.descriptionText}>{studioGuide.body}</Text> : null}
+          <Text style={styles.placesCountLine}>{studioNote}</Text>
+        </ScrollView>
+      </>
+    );
+  }
 
   if (loading) {
     return (
