@@ -179,11 +179,7 @@ export async function getHotelEntry(): Promise<HotelEntry | null> {
  */
 export async function ensureAnonymousSession(): Promise<void> {
   if (!isSupabaseConfigured()) return;
-  const now = Date.now();
   if (ensureAnonInFlight) return ensureAnonInFlight;
-  if (now - lastAnonAttemptMs < ANON_ATTEMPT_MIN_GAP_MS) return;
-  if (lastAnonFailureMs > 0 && now - lastAnonFailureMs < ANON_FAILURE_BACKOFF_MS) return;
-  lastAnonAttemptMs = now;
   try {
     ensureAnonInFlight = (async () => {
       // Prefer local session — avoids getUser() errors when the session was just cleared (logout).
@@ -191,6 +187,22 @@ export async function ensureAnonymousSession(): Promise<void> {
         data: { session: s0 },
       } = await supabase.auth.getSession();
       if (s0?.user) return;
+
+      const now = Date.now();
+      // Gap/backoff must not hide Explore when there is still no session (RLS empty catalog).
+      // Only throttle repeated retries after a recent attempt/failure once a session path has run.
+      const recentlyAttempted = lastAnonAttemptMs > 0 && now - lastAnonAttemptMs < ANON_ATTEMPT_MIN_GAP_MS;
+      const inFailureBackoff =
+        lastAnonFailureMs > 0 && now - lastAnonFailureMs < ANON_FAILURE_BACKOFF_MS;
+      if (recentlyAttempted || inFailureBackoff) {
+        const {
+          data: { session: still },
+        } = await supabase.auth.getSession();
+        if (still?.user) return;
+        // No session yet — do not skip; continue into anonymous sign-in.
+      }
+
+      lastAnonAttemptMs = now;
       // Hydration race: persisted email/password session may not be in memory yet — wait once before anon.
       await new Promise((r) => setTimeout(r, 220));
       const {

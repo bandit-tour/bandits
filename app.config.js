@@ -73,7 +73,25 @@ function resolveOperatorUserId(value) {
 }
 
 const resolvedOperatorUserId = resolveOperatorUserId(process.env.EXPO_PUBLIC_OPERATOR_USER_ID);
-const resolvedGoogleMapsKey = String(process.env.EXPO_PUBLIC_GOOGLE_MAPS_KEY ?? '').trim();
+
+/**
+ * Explore photo pipeline: never bake EXPO_PUBLIC_GOOGLE_MAPS_KEY="" over app.json.
+ * Prefer a real env value; otherwise use the key already stored in app.json (ios/android/extra).
+ */
+function resolveGoogleMapsKey(value) {
+  const fromEnv = typeof value === 'string' ? value.trim() : '';
+  if (fromEnv) return fromEnv;
+  const fromIos = String(appJson?.expo?.ios?.config?.googleMapsApiKey ?? '').trim();
+  if (fromIos) return fromIos;
+  const fromAndroid = String(appJson?.expo?.android?.config?.googleMaps?.apiKey ?? '').trim();
+  if (fromAndroid) return fromAndroid;
+  return String(
+    appJson?.expo?.extra?.EXPO_PUBLIC_GOOGLE_MAPS_KEY ??
+      appJson?.expo?.extra?.googleMapsApiKey ??
+      '',
+  ).trim();
+}
+const resolvedGoogleMapsKey = resolveGoogleMapsKey(process.env.EXPO_PUBLIC_GOOGLE_MAPS_KEY);
 /** Hotel #N white-label — Partner Platform public config (not Orchestra product UI). */
 const DEFAULT_PARTNER_PLATFORM_URL = 'https://www.banditours.com';
 function resolvePartnerPlatformUrl(value) {
@@ -97,6 +115,7 @@ process.env.EXPO_PUBLIC_PLAY_GUEST_ENTRY_URL = resolvedPlayGuestEntryUrl;
 process.env.EXPO_PUBLIC_APP_ADMIN_EMAILS = resolvedAppAdminEmails;
 process.env.EXPO_PUBLIC_OPERATOR_USER_ID = resolvedOperatorUserId;
 process.env.EXPO_PUBLIC_PARTNER_PLATFORM_URL = resolvedPartnerPlatformUrl;
+process.env.EXPO_PUBLIC_GOOGLE_MAPS_KEY = resolvedGoogleMapsKey;
 
 /** Ad Hoc preview profile predates Associated Domains; keep production/TestFlight entitlements intact. */
 const buildProfile = process.env.EAS_BUILD_PROFILE;
