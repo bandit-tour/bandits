@@ -186,7 +186,6 @@ export default function CityGuideScreen() {
   useEffect(() => {
     if (!guideId) return;
     let cancelled = false;
-    const started = Date.now();
     setStudioNote("Loading this city guide…");
     fetch(`https://banditour-workspace.vercel.app/api/public/city-guides/${encodeURIComponent(guideId)}`, {
       cache: "no-store",
@@ -206,7 +205,7 @@ export default function CityGuideScreen() {
           city: String(json.city || ""),
           authorStory: json.authorStory ? String(json.authorStory) : null,
         });
-        setStudioNote(`Opened in ${Date.now() - started} ms`);
+        setStudioNote("");
       })
       .catch(() => {
         if (!cancelled) {
@@ -518,13 +517,15 @@ export default function CityGuideScreen() {
       <>
         <Stack.Screen options={{ ...cityGuideHeaderOptions, title: studioGuide?.title || "City Guide" }} />
         <ScrollView style={styles.container} contentContainerStyle={styles.scrollContent}>
-          <Text style={styles.headerText}>{studioGuide?.title || "City Guide"}</Text>
-          <Text style={styles.placesCountLine}>
-            {studioGuide ? `${studioGuide.author}${studioGuide.city ? ` · ${studioGuide.city}` : ""}` : "My City Guides"}
-          </Text>
-          {studioGuide?.authorStory ? <Text style={styles.descriptionText}>{studioGuide.authorStory}</Text> : null}
-          {studioGuide?.body ? <Text style={styles.descriptionText}>{studioGuide.body}</Text> : null}
-          <Text style={styles.placesCountLine}>{studioNote}</Text>
+          <View style={{ width: "100%", maxWidth: 720, alignSelf: "flex-start", gap: 10 }}>
+            <Text style={styles.headerText}>{studioGuide?.title || "City Guide"}</Text>
+            <Text style={[styles.descriptionText, { fontWeight: "700" }]}>
+              {studioGuide ? `${studioGuide.author}${studioGuide.city ? ` · ${studioGuide.city}` : ""}` : "My City Guides"}
+            </Text>
+            {studioGuide?.authorStory ? <Text style={styles.descriptionText}>{studioGuide.authorStory}</Text> : null}
+            {studioGuide?.body ? <Text style={styles.descriptionText}>{studioGuide.body}</Text> : null}
+            {studioNote ? <Text style={styles.descriptionText}>{studioNote}</Text> : null}
+          </View>
         </ScrollView>
       </>
     );
