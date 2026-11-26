@@ -43,6 +43,17 @@ async function guestPlacesSearch(query: string, pageToken?: string | null): Prom
   nextPageToken: string | null;
   error?: string;
 }> {
+  // Financial safety — Case 78008922: zero live Places until founder re-enable.
+  const { isGooglePlacesLiveBlocked, GOOGLE_PLACES_INCIDENT } = await import(
+    "@/lib/placesFinancialGuard"
+  );
+  if (isGooglePlacesLiveBlocked()) {
+    return {
+      hotels: [],
+      nextPageToken: null,
+      error: `Places founder-disabled (Case ${GOOGLE_PLACES_INCIDENT.caseId}) — no live searchText`,
+    };
+  }
   const apiKey = getMapsApiKey();
   if (!apiKey) {
     return { hotels: [], nextPageToken: null, error: "Maps key missing on Guest App" };

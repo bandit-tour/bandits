@@ -453,54 +453,124 @@ function normalizeStoredPlaceId(raw: string): string {
 async function placesNewFetchPlace(placeIdBare: string, apiKey: string): Promise<any | null> {
   const id = normalizeStoredPlaceId(placeIdBare);
   if (!id) return null;
-  const url = `${PLACES_API_NEW_BASE}/places/${encodeURIComponent(id)}`;
-  try {
-    const resp = await fetch(url, {
-      headers: {
-        'X-Goog-Api-Key': apiKey,
-        // Place Details (New) field mask — photos + locality for enrichment
-        'X-Goog-FieldMask': 'id,displayName,formattedAddress,addressComponents,location,photos',
-      },
-    });
-    if (!resp.ok) return null;
-    try {
-      return await resp.json();
-    } catch {
-      return null;
+  // Financial safety — Case 78008922: zero live Places until founder re-enable.
+  const {
+    normalizePlacesGetKey,
+    placesGuardPrecheck,
+    placesGuardGetCached,
+    placesGuardGetInFlight,
+    placesGuardBegin,
+    placesGuardTrackInFlight,
+    placesGuardCacheResult,
+    placesGuardRecordSuccess,
+    placesGuardRecordFailure,
+  } = await import('@/lib/placesFinancialGuard');
+  const key = normalizePlacesGetKey(id);
+  const decision = placesGuardPrecheck(key);
+  if (!decision.allowed) {
+    if (decision.code === 'DUP_CACHE_HIT') {
+      return placesGuardGetCached<any | null>(key) ?? null;
     }
-  } catch (err) {
-    logPlacesFetchError(`placesNewFetchPlace(${id.slice(0, 12)}…)`, err);
+    const inflight = placesGuardGetInFlight<any | null>(key);
+    if (inflight) return inflight;
+    console.warn(`[placePhoto] placesNewFetchPlace blocked: ${decision.code} — ${decision.reason}`);
     return null;
   }
+  placesGuardBegin(key);
+  const run = (async () => {
+    const url = `${PLACES_API_NEW_BASE}/places/${encodeURIComponent(id)}`;
+    try {
+      const resp = await fetch(url, {
+        headers: {
+          'X-Goog-Api-Key': apiKey,
+          // Place Details (New) field mask — photos + locality for enrichment
+          'X-Goog-FieldMask': 'id,displayName,formattedAddress,addressComponents,location,photos',
+        },
+      });
+      if (!resp.ok) {
+        placesGuardRecordFailure(resp.status);
+        return null;
+      }
+      try {
+        const json = await resp.json();
+        placesGuardRecordSuccess();
+        placesGuardCacheResult(key, json);
+        return json;
+      } catch {
+        placesGuardRecordFailure();
+        return null;
+      }
+    } catch (err) {
+      placesGuardRecordFailure();
+      logPlacesFetchError(`placesNewFetchPlace(${id.slice(0, 12)}…)`, err);
+      return null;
+    }
+  })();
+  return placesGuardTrackInFlight(key, run);
 }
 
 async function placesNewSearchText(textQuery: string, apiKey: string): Promise<any[]> {
-  try {
-    const resp = await fetch(`${PLACES_API_NEW_BASE}/places:searchText`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'X-Goog-Api-Key': apiKey,
-        'X-Goog-FieldMask': 'places.id,places.displayName,places.formattedAddress,places.location,places.photos',
-      },
-      body: JSON.stringify({
-        textQuery,
-        languageCode: 'en',
-        regionCode: 'GR',
-      }),
-    });
-    if (!resp.ok) return [];
-    let json: any;
-    try {
-      json = await resp.json();
-    } catch {
-      return [];
+  // Financial safety — Case 78008922: zero live Places until founder re-enable.
+  const {
+    normalizePlacesSearchKey,
+    placesGuardPrecheck,
+    placesGuardGetCached,
+    placesGuardGetInFlight,
+    placesGuardBegin,
+    placesGuardTrackInFlight,
+    placesGuardCacheResult,
+    placesGuardRecordSuccess,
+    placesGuardRecordFailure,
+  } = await import('@/lib/placesFinancialGuard');
+  const key = normalizePlacesSearchKey(textQuery);
+  const decision = placesGuardPrecheck(key);
+  if (!decision.allowed) {
+    if (decision.code === 'DUP_CACHE_HIT') {
+      return placesGuardGetCached<any[]>(key) ?? [];
     }
-    return Array.isArray(json?.places) ? json.places : [];
-  } catch (err) {
-    logPlacesFetchError(`placesNewSearchText(${textQuery.slice(0, 48)}…)`, err);
+    const inflight = placesGuardGetInFlight<any[]>(key);
+    if (inflight) return inflight;
+    console.warn(`[placePhoto] placesNewSearchText blocked: ${decision.code} — ${decision.reason}`);
     return [];
   }
+  placesGuardBegin(key);
+  const run = (async () => {
+    try {
+      const resp = await fetch(`${PLACES_API_NEW_BASE}/places:searchText`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Goog-Api-Key': apiKey,
+          'X-Goog-FieldMask': 'places.id,places.displayName,places.formattedAddress,places.location,places.photos',
+        },
+        body: JSON.stringify({
+          textQuery,
+          languageCode: 'en',
+          regionCode: 'GR',
+        }),
+      });
+      if (!resp.ok) {
+        placesGuardRecordFailure(resp.status);
+        return [];
+      }
+      let json: any;
+      try {
+        json = await resp.json();
+      } catch {
+        placesGuardRecordFailure();
+        return [];
+      }
+      const places = Array.isArray(json?.places) ? json.places : [];
+      placesGuardRecordSuccess();
+      placesGuardCacheResult(key, places);
+      return places;
+    } catch (err) {
+      placesGuardRecordFailure();
+      logPlacesFetchError(`placesNewSearchText(${textQuery.slice(0, 48)}…)`, err);
+      return [];
+    }
+  })();
+  return placesGuardTrackInFlight(key, run);
 }
 
 function cityFromPlacesNewAddressComponents(place: any): string | null {
@@ -685,6 +755,16 @@ async function resolveGooglePlaceBusinessDataLegacy(args: {
   photoUrls: string[];
 } | null> {
   try {
+  // Financial safety — Case 78008922: BOTH Places APIs disabled (legacy findplace + details too).
+  const { isGooglePlacesLiveBlocked, GOOGLE_PLACES_INCIDENT } = await import(
+    '@/lib/placesFinancialGuard'
+  );
+  if (isGooglePlacesLiveBlocked()) {
+    console.warn(
+      `[placePhoto] legacy Places blocked (Case ${GOOGLE_PLACES_INCIDENT.caseId}) — no findplace/details`,
+    );
+    return null;
+  }
   const apiKey = args.apiKey;
   const query = [args.name, args.address, args.city, args.neighborhood].filter(Boolean).join(' ').trim();
   const expectedName = String(args.name ?? '').trim();
@@ -873,28 +953,6 @@ export async function fetchGooglePlacePhotoUrls(args: {
   }
 }
 
-/** Browser-safe refresh: Places Details runs on our API so CORS does not drop the photo. */
-export async function fetchServerPlacePhotoUrls(
-  placeId: string | null | undefined,
-  limit = 4,
-): Promise<string[]> {
-  const id = String(placeId ?? '')
-    .trim()
-    .replace(/^places\//i, '');
-  if (!id || typeof fetch !== 'function') return [];
-  try {
-    const res = await fetch(
-      `/api/place-photos?placeId=${encodeURIComponent(id)}&limit=${Math.max(1, Math.min(4, limit))}`,
-    );
-    if (!res.ok) return [];
-    const json = (await res.json()) as { urls?: unknown };
-    const urls = Array.isArray(json?.urls) ? json.urls : [];
-    return urls.filter((u): u is string => typeof u === 'string' && /^https?:\/\//i.test(u));
-  } catch {
-    return [];
-  }
-}
-
 /**
  * MVP City Guide / Place detail: when `event.google_place_id` is already the curated
  * venue link, trust it and load Places photography without re-running text-search
@@ -904,8 +962,6 @@ export async function fetchTrustedPlaceIdPhotoUrls(
   placeId: string | null | undefined,
   limit = 8,
 ): Promise<string[]> {
-  const fromServer = await fetchServerPlacePhotoUrls(placeId, limit);
-  if (fromServer.length > 0) return fromServer;
   try {
     const apiKey = getMapsApiKey();
     const id = normalizeStoredPlaceId(String(placeId ?? ''));
@@ -936,6 +992,11 @@ export async function resolveGooglePlaceBusinessData(args: {
   photoUrls: string[];
 } | null> {
   try {
+    const { isGooglePlacesLiveBlocked } = await import('@/lib/placesFinancialGuard');
+    if (isGooglePlacesLiveBlocked()) {
+      // Fail closed before any New/Legacy billable Maps call.
+      return null;
+    }
     const apiKey = getMapsApiKey();
     if (!apiKey) return null;
 
