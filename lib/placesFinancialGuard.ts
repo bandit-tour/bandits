@@ -275,9 +275,10 @@ export function simulateSearchTextStorm(opts: {
     }
     return { decisions, liveAllowed };
   } finally {
-    if (prev === undefined) delete process.env.EXPO_PUBLIC_GOOGLE_PLACES_FOUNDER_REENABLE;
+    // Metro/strict: do not use `delete process.env.*`
+    if (prev === undefined) process.env.EXPO_PUBLIC_GOOGLE_PLACES_FOUNDER_REENABLE = "";
     else process.env.EXPO_PUBLIC_GOOGLE_PLACES_FOUNDER_REENABLE = prev;
-    if (prevDisabled === undefined) delete process.env.EXPO_PUBLIC_GOOGLE_PLACES_DISABLED;
+    if (prevDisabled === undefined) process.env.EXPO_PUBLIC_GOOGLE_PLACES_DISABLED = "";
     else process.env.EXPO_PUBLIC_GOOGLE_PLACES_DISABLED = prevDisabled;
   }
 }
