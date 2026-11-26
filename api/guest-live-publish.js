@@ -198,7 +198,7 @@ async function projectApprovedBandit(sb, eventType, row) {
       city: clean(payload.city, 80) || 'Athens',
       occupation: 'Local banDit',
       image_url: '',
-      rating: 0,
+      rating: 1,
       description: story || null,
       why_follow: story || null,
     };
@@ -246,7 +246,7 @@ async function projectApprovedBandit(sb, eventType, row) {
       city: clean(payload.city, 80) || 'Athens',
       neighborhood: clean(payload.neighborhood, 80) || 'Athens',
       description: clean(payload.body || row.detail, 2000),
-      rating: 0,
+      rating: 1,
       image_url: '',
       link,
       google_place_id: null,
