@@ -963,6 +963,8 @@ export async function fetchTrustedPlaceIdPhotoUrls(
   limit = 8,
 ): Promise<string[]> {
   try {
+    const { isGooglePlacesLiveBlocked } = await import('@/lib/placesFinancialGuard');
+    if (isGooglePlacesLiveBlocked()) return [];
     const apiKey = getMapsApiKey();
     const id = normalizeStoredPlaceId(String(placeId ?? ''));
     if (!apiKey || !id) return [];
