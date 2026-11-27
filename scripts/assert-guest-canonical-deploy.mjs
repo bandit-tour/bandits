@@ -87,10 +87,29 @@ if (cwdNorm.includes("/documents/bandits") && !cwdNorm.includes("guest-explore-m
   );
 }
 
+const onVercel = process.env.VERCEL === "1" || Boolean(process.env.VERCEL_ENV);
 const remote = git("git remote get-url origin") || git("git config --get remote.origin.url");
 const remoteNorm = remote.replace(/\.git$/i, "").toLowerCase();
-if (!remoteNorm.includes("bandit-tour/bandits")) {
-  fail(`Incorrect git remote "${remote || "(none)"}". Expected github.com/bandit-tour/bandits.`);
+const vercelOwner = String(process.env.VERCEL_GIT_REPO_OWNER || "").trim().toLowerCase();
+const vercelSlug = String(process.env.VERCEL_GIT_REPO_SLUG || "").trim().toLowerCase();
+const vercelRepo =
+  vercelOwner && vercelSlug ? `${vercelOwner}/${vercelSlug}` : "";
+
+if (remoteNorm) {
+  if (!remoteNorm.includes("bandit-tour/bandits")) {
+    fail(`Incorrect git remote "${remote}". Expected github.com/bandit-tour/bandits.`);
+  }
+} else if (vercelRepo) {
+  if (vercelRepo !== "bandit-tour/bandits") {
+    fail(`Incorrect Vercel git repo "${vercelRepo}". Expected bandit-tour/bandits.`);
+  }
+} else if (onVercel) {
+  // Vercel build sandbox has no .git — project id check below is the hard lock.
+  console.warn(
+    "[GUEST DEPLOY GUARD] no local git remote on Vercel build; enforcing via VERCEL_PROJECT_ID + package/CANONICAL",
+  );
+} else {
+  fail(`Incorrect git remote "(none)". Expected github.com/bandit-tour/bandits.`);
 }
 
 const branch =
@@ -110,13 +129,19 @@ if (branch === "main" || branch === "master") {
 }
 
 if (requireProductionBranch) {
-  if (!branch || branch === "HEAD") {
-    fail(
-      `Production deploy requires an explicit ${CANONICAL.productionBranch} ref (got "${branch || "(empty)"}").`,
-    );
-  }
-  if (branch !== CANONICAL.productionBranch) {
+  if (branch && branch !== "HEAD" && branch !== CANONICAL.productionBranch) {
     fail(`Branch "${branch}" is not ${CANONICAL.productionBranch}. Production deploys rejected.`);
+  }
+  if (!branch || branch === "HEAD") {
+    // CLI / file upload to the locked bandits project: require matching project id (checked below).
+    if (!onVercel) {
+      fail(
+        `Production deploy requires an explicit ${CANONICAL.productionBranch} ref (got "${branch || "(empty)"}").`,
+      );
+    }
+    console.warn(
+      `[GUEST DEPLOY GUARD] Vercel production build without git ref — accepting only if project id is ${CANONICAL.vercelProjectId}`,
+    );
   }
 } else if (branch && branch !== "HEAD" && branch !== CANONICAL.productionBranch) {
   console.warn(
@@ -142,14 +167,20 @@ if (existsSync(vercelProjectPath)) {
   }
 }
 
-// When Vercel injects project id, reject mismatch.
+// When Vercel injects project id, reject mismatch. Production on Vercel MUST match.
 const vercelPid = process.env.VERCEL_PROJECT_ID || "";
 if (vercelPid && vercelPid !== CANONICAL.vercelProjectId) {
   fail(`VERCEL_PROJECT_ID="${vercelPid}" ≠ ${CANONICAL.vercelProjectId}. Wrong Vercel project.`);
 }
+if (isVercelProd && !vercelPid && !existsSync(vercelProjectPath)) {
+  fail("Production Vercel build missing VERCEL_PROJECT_ID and .vercel/project.json.");
+}
+if (isVercelProd && vercelPid && vercelPid !== CANONICAL.vercelProjectId) {
+  fail(`Production Vercel project mismatch: ${vercelPid}`);
+}
 
 console.log("[GUEST DEPLOY GUARD] OK");
-console.log(`  repo=${CANONICAL.githubRepo} branch=${branch || "(detached)"}`);
+console.log(`  repo=${CANONICAL.githubRepo} branch=${branch || "(vercel-file-upload)"}`);
 console.log(`  vercel=${CANONICAL.vercelProjectId}`);
 console.log(`  package=${pkg.name}`);
 process.exit(0);
