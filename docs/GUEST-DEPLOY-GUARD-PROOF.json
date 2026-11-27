@@ -1,0 +1,38 @@
+{
+  "at": "2026-11-27T18:31:03.170Z",
+  "guard": "scripts/assert-guest-canonical-deploy.mjs",
+  "cases": [
+    {
+      "name": "wrong-package-safekey",
+      "rejected": true,
+      "code": 1,
+      "snippet": " [GUEST DEPLOY GUARD] REJECTED SafeKey-contaminated tree (package.json name=\"safekey\"). Never deploy to bandits. Canonical: bandit-tour/bandits @ production/guest-app Vercel: bandits (prj_V9Fsr4pTjyGvIgalyD3JOUN0l2Dw) L"
+    },
+    {
+      "name": "wrong-remote",
+      "rejected": true,
+      "code": 1,
+      "snippet": " [GUEST DEPLOY GUARD] REJECTED Incorrect git remote \"https://github.com/other/wrong-repo.git\". Expected github.com/bandit-tour/bandits. Canonical: bandit-tour/bandits @ production/guest-app Vercel: bandits (prj_V9Fsr4pT"
+    },
+    {
+      "name": "branch-main",
+      "rejected": true,
+      "code": 1,
+      "snippet": " [GUEST DEPLOY GUARD] REJECTED Refusing deploy from \"main\" — GitHub main is SafeKey-contaminated. Use production/guest-app. Canonical: bandit-tour/bandits @ production/guest-app Vercel: bandits (prj_V9Fsr4pTjyGvIgalyD3J"
+    },
+    {
+      "name": "wrong-vercel-project",
+      "rejected": true,
+      "code": 1,
+      "snippet": " [GUEST DEPLOY GUARD] REJECTED Incorrect Vercel projectId \"prj_WRONG\". Expected prj_V9Fsr4pTjyGvIgalyD3JOUN0l2Dw (bandits). Canonical: bandit-tour/bandits @ production/guest-app Vercel: bandits (prj_V9Fsr4pTjyGvIgalyD3J"
+    },
+    {
+      "name": "canonical-ok",
+      "rejected": false,
+      "code": 0,
+      "snippet": "[GUEST DEPLOY GUARD] OK repo=bandit-tour/bandits branch=production/guest-app vercel=prj_V9Fsr4pTjyGvIgalyD3JOUN0l2Dw package=bandits "
+    }
+  ],
+  "allBadRejected": true,
+  "canonicalAccepted": true
+}

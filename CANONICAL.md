@@ -11,6 +11,20 @@
 | Vercel project | `bandits` (`prj_V9Fsr4pTjyGvIgalyD3JOUN0l2Dw`) |
 | Production alias | `https://bandits-two.vercel.app` |
 
+## Permanent deployment guard
+
+Enforced by `scripts/assert-guest-canonical-deploy.mjs` on every `npm run build` / Vercel `buildCommand`.
+
+Rejects:
+
+- GitHub `main` / `master` (SafeKey-contaminated)
+- Incorrect git remotes (not `bandit-tour/bandits`)
+- Incorrect Vercel project IDs / names
+- SafeKey-contaminated trees (`package.json` name `safekey`, Documents\bandits)
+- Missing `CANONICAL.md` / non-Expo product trees
+
+Production branch required when `VERCEL_ENV=production`.
+
 ## Do NOT deploy from
 
 | Path | Reason |
@@ -28,6 +42,13 @@
 | `Documents\bandits-octopus-10` @ `64e105d` + WIP | Octopus WIP; Places financial guard sourced from here |
 | `bandits-source-backups-20261126\` | Git bundles + META for all trees |
 
+## Cross-system notice
+
+Partner Platform and Workspace System rules point here:
+
+- Partner: `.cursor/rules/guest-app-canonical.mdc` + `web/src/lib/guest-app-canonical.ts`
+- Workspace: `.cursor/rules/guest-app-canonical.mdc` + `src/lib/guest-app/architecture-lock.ts`
+
 ## Platforms
 
 - Web: Expo export → `dist` (Vercel)
@@ -36,3 +57,7 @@
 ## Google Places
 
 Fail-closed via `lib/placesFinancialGuard.ts` (Case 78008922). No live Places until explicit founder re-enable.
+
+## Stripe
+
+Stripe LIVE remains OFF for Guest App commercial rails until founder enablement.

@@ -15,6 +15,7 @@ import {
 } from 'react-native';
 
 import BanditMiniMapPreview from '@/components/BanditMiniMapPreview';
+import { IdentityMark } from '@/components/IdentityMark';
 import LocalBanditOctopusIcon from '@/components/LocalBanditOctopusIcon';
 import EventCategories from './EventCategories';
 import {
@@ -57,8 +58,6 @@ interface BanditHeaderProps {
   /** When parent already loaded Workspace visibility, reuse it (profile page). */
   premiumVisibility?: BanditPremiumVisibility | null;
 }
-
-const LOCAL_FALLBACK = require('@/assets/images/play_athens_bg.png');
 
 function isHttpUri(value: unknown): value is string {
   if (typeof value !== 'string') return false;
@@ -139,7 +138,7 @@ function BanditHeaderImpl({
   const locationLine = cityName ? `${cityName} · Local banDit` : 'Local banDit';
   const followers = displayFollowerCount(String(id));
   const ratingLabel =
-    typeof rating === 'number' && rating > 0 ? rating.toFixed(1) : '—';
+    typeof rating === 'number' && rating > 0 ? rating.toFixed(1) : 'No reviews yet';
   const intro = shortIntro(description, isDesktop ? 180 : 140);
   /** Living status / inspiration — bottle→QR→digital loop voice on the profile. */
   const liveStatus = (() => {
@@ -217,9 +216,6 @@ function BanditHeaderImpl({
     if (live.length <= 1) setUseLocalFallback(true);
   };
 
-  const heroSource = (uri: string | null) =>
-    useLocalFallback || !uri ? LOCAL_FALLBACK : { uri };
-
   const openCityGuide = () => router.push(`/cityGuide?banditId=${id}` as any);
   const openPremiumInsights = () =>
     router.push(`/premium/${encodeURIComponent(String(id))}` as any);
@@ -250,18 +246,22 @@ function BanditHeaderImpl({
           accessibilityRole="button"
           accessibilityLabel={meetLabel}
         >
-          <ExpoImage
-            source={heroSource(primaryUri)}
-            contentFit="cover"
-            contentPosition={{ top: 0, left: '50%' }}
-            transition={180}
-            cachePolicy="memory-disk"
-            recyclingKey={`bandit-list:${id}`}
-            priority="high"
-            style={styles.listHeroImage}
-            onError={advanceHero}
-          />
-          <View style={styles.listScrim} />
+          {primaryUri && !useLocalFallback ? (
+            <ExpoImage
+              source={{ uri: primaryUri }}
+              contentFit="cover"
+              contentPosition={{ top: 0, left: '50%' }}
+              transition={180}
+              cachePolicy="memory-disk"
+              recyclingKey={`bandit-list:${id}`}
+              priority="high"
+              style={styles.listHeroImage}
+              onError={advanceHero}
+            />
+          ) : (
+            <IdentityMark name={String(name || '')} />
+          )}
+          {primaryUri && !useLocalFallback ? <View style={styles.listScrim} /> : null}
           <View style={styles.listOverlay}>
             {showOctopusBadge ? (
               <View style={styles.listVerifiedRow}>
@@ -306,23 +306,26 @@ function BanditHeaderImpl({
 
   const slideWidth = Math.min(width, layout.contentMax) - (isDesktop ? 48 : 32);
 
-  const renderCoverImage = (uri: string | null, key: string, style: any) => (
-    <ExpoImage
-      key={key}
-      source={heroSource(uri)}
-      contentFit="cover"
-      contentPosition="center"
-      transition={180}
-      cachePolicy="memory-disk"
-      recyclingKey={`bandit-detail:${id}:${key}`}
-      priority="high"
-      style={style}
-      onError={() => {
-        markGalleryUriFailed(uri);
-        advanceHero();
-      }}
-    />
-  );
+  const renderCoverImage = (uri: string | null, key: string, style: any) =>
+    uri && !useLocalFallback ? (
+      <ExpoImage
+        key={key}
+        source={{ uri }}
+        contentFit="cover"
+        contentPosition="center"
+        transition={180}
+        cachePolicy="memory-disk"
+        recyclingKey={`bandit-detail:${id}:${key}`}
+        priority="high"
+        style={style}
+        onError={() => {
+          markGalleryUriFailed(uri);
+          advanceHero();
+        }}
+      />
+    ) : (
+      <IdentityMark key={key} name={String(name || '')} style={style} fill={false} />
+    );
 
   const onGalleryScroll = (e: NativeSyntheticEvent<NativeScrollEvent>) => {
     const w = e.nativeEvent.layoutMeasurement.width || slideWidth;

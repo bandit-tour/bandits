@@ -17,6 +17,8 @@ import {
 } from 'react-native';
 
 import { getBanditsWithTags } from '@/app/services/bandits';
+import { IdentityMark } from '@/components/IdentityMark';
+import { IdentityMark } from '@/components/IdentityMark';
 import LocalBanditOctopusIcon from '@/components/LocalBanditOctopusIcon';
 import { Database } from '@/lib/database.types';
 import { color, firstNameOf, shortIntro, space } from '@/lib/guestDesign';
@@ -26,7 +28,6 @@ import {
 } from '@/lib/guest-app/premium-visibility';
 import { readCacheStale, seedAppDataCache } from '@/lib/appDataCache';
 
-const LOCAL_FALLBACK = require('@/assets/images/play_athens_bg.png');
 const LANE_CACHE_KEY = 'explore:bandit-lane:v1';
 const OCTOPUS_CACHE_KEY = 'explore:bandit-lane:octopus:v1';
 
@@ -174,14 +175,18 @@ export default function ExploreBanditLane({ onMeet, onSeeAll, excludeBanditId }:
                 accessibilityRole="button"
                 accessibilityLabel={`Meet ${first}`}
               >
-                <ExpoImage
-                  source={uri ? { uri } : LOCAL_FALLBACK}
-                  style={styles.photo}
-                  contentFit="cover"
-                  contentPosition={{ top: 0, left: '50%' }}
-                  transition={200}
-                  cachePolicy="memory-disk"
-                />
+                {uri ? (
+                  <ExpoImage
+                    source={{ uri }}
+                    style={styles.photo}
+                    contentFit="cover"
+                    contentPosition={{ top: 0, left: '50%' }}
+                    transition={200}
+                    cachePolicy="memory-disk"
+                  />
+                ) : (
+                  <IdentityMark name={String(b.name || '')} />
+                )}
                 <View style={styles.scrim} />
                 <View style={styles.copy}>
                   {verified ? (

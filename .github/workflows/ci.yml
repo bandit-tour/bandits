@@ -2,13 +2,38 @@ name: CI
 
 on:
   push:
-    branches: [main, master, "restore/**"]
+    branches: [main, master, "production/guest-app", "restore/**"]
   pull_request:
 
 jobs:
+  deploy-guard:
+    name: Canonical Guest App deploy guard
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+      - name: Reject SafeKey / wrong product on main
+        if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master'
+        run: |
+          NAME=$(node -p "require('./package.json').name")
+          echo "package name=$NAME"
+          if [ "$NAME" = "safekey" ] || echo "$NAME" | grep -qi safekey; then
+            echo "::error::main/master carries SafeKey — do not deploy to Vercel project bandits"
+            exit 1
+          fi
+          echo "main is not SafeKey-named, but production Guest App deploys still require production/guest-app"
+      - name: Assert canonical deploy guard
+        if: github.ref == 'refs/heads/production/guest-app' || github.base_ref == 'production/guest-app'
+        env:
+          GUEST_REQUIRE_PRODUCTION_BRANCH: "1"
+        run: node scripts/assert-guest-canonical-deploy.mjs
+
   skeleton:
     name: S0 CI skeleton
     runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/production/guest-app' || startsWith(github.ref, 'refs/heads/restore/') || github.event_name == 'pull_request'
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4

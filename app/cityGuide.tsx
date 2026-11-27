@@ -1,7 +1,7 @@
 import { useFocusEffect } from '@react-navigation/native';
 import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { ActivityIndicator, Image, Platform, Pressable, ScrollView, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
+import { ActivityIndicator, Platform, Pressable, ScrollView, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
 import { usePremiumRefreshControl } from '@/lib/mobilePullToRefresh';
 import { Image as ExpoImage } from 'expo-image';
 
@@ -10,6 +10,7 @@ import { getEvents, getUserLikedEventIds, toggleEventLike } from '@/app/services
 import { getTrailsByBanditId, TrailWithStops } from '@/services/trails';
 import type { GeneratedTrail } from '@/services/aiTrails';
 import EventCategories from '@/components/EventCategories';
+import { IdentityMark } from '@/components/IdentityMark';
 import LeafletMapView from '@/components/LeafletMapView';
 import TrailCard from '@/components/TrailCard';
 import TrailDetailView from '@/components/TrailDetailView';
@@ -124,11 +125,21 @@ function RecommendationHeroImage({
 
 export default function CityGuideScreen() {
   const { width } = useWindowDimensions();
-  const params = useLocalSearchParams<{ banditId?: string; genre?: string }>();
+  const params = useLocalSearchParams<{ banditId?: string; genre?: string; guide?: string }>();
   const rawBanditId = params.banditId;
   const banditIdParam = Array.isArray(rawBanditId) ? rawBanditId[0] : rawBanditId;
   const rawGenre = params.genre;
   const genreParam = Array.isArray(rawGenre) ? rawGenre[0] : rawGenre;
+  const rawGuide = params.guide;
+  const guideId = (Array.isArray(rawGuide) ? rawGuide[0] : rawGuide || "").trim();
+  const [studioGuide, setStudioGuide] = useState<{
+    title: string;
+    body: string;
+    author: string;
+    city: string;
+    authorStory: string | null;
+  } | null>(null);
+  const [studioNote, setStudioNote] = useState(guideId ? "Loading this city guide…" : "");
 
   const router = useRouter();
   const [effectiveBanditId, setEffectiveBanditId] = useState<string | null>(
@@ -172,6 +183,47 @@ export default function CityGuideScreen() {
       void refreshLikedIds();
     }, [refreshLikedIds]),
   );
+
+  useEffect(() => {
+    if (!guideId) return;
+    let cancelled = false;
+    const started = Date.now();
+    setStudioNote("Loading this city guide…");
+    const workspaceOrigin = (
+      process.env.EXPO_PUBLIC_WORKSPACE_URL ||
+      process.env.EXPO_PUBLIC_ORCHESTRA_OS_URL ||
+      "https://banditour-workspace.vercel.app"
+    ).replace(/\/$/, "");
+    fetch(`${workspaceOrigin}/api/public/city-guides/${encodeURIComponent(guideId)}`, {
+      cache: "no-store",
+    })
+      .then(async (res) => {
+        const json = await res.json().catch(() => null);
+        if (cancelled) return;
+        if (!res.ok || !json?.title) {
+          setStudioGuide(null);
+          setStudioNote("This city guide is not on the guest list.");
+          return;
+        }
+        setStudioGuide({
+          title: String(json.title),
+          body: String(json.body || ""),
+          author: String(json.author || "Local banDit"),
+          city: String(json.city || ""),
+          authorStory: json.authorStory ? String(json.authorStory) : null,
+        });
+        setStudioNote(`Opened in ${Date.now() - started} ms`);
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setStudioGuide(null);
+          setStudioNote("This city guide could not be opened.");
+        }
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [guideId]);
 
   useEffect(() => {
     if (banditIdParam) {
@@ -632,6 +684,16 @@ export default function CityGuideScreen() {
             ? `${firstName}'s ${placeCount} places · photo-led · ${firstName}'s voice`
             : `${firstName}'s curated ${guideCity}`}
         </Text>
+        {studioGuide ? (
+          <View style={{ marginBottom: 16 }}>
+            <Text style={styles.placesCountLine}>{studioGuide.title}</Text>
+            {studioGuide.authorStory ? (
+              <Text style={styles.descriptionText}>{studioGuide.authorStory}</Text>
+            ) : null}
+            {studioGuide.body ? <Text style={styles.descriptionText}>{studioGuide.body}</Text> : null}
+            {studioNote ? <Text style={styles.placesCountLine}>{studioNote}</Text> : null}
+          </View>
+        ) : null}
 
         {/* Bandit Profile Section — full-bleed portrait, not 88px circle */}
         <View style={styles.profileSection}>
@@ -654,11 +716,11 @@ export default function CityGuideScreen() {
                 );
               }
               return (
-                <Image
-                  source={require('@/assets/images/play_athens_bg.png')}
+                <IdentityMark
+                  name={String(bandit.name || firstName || '')}
                   style={styles.heroPortrait}
-                  resizeMode="cover"
-                  accessibilityLabel={guideCity}
+                  fill={false}
+                  label={`Photograph of ${firstName} is not on file`}
                 />
               );
             })()}

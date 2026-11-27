@@ -31,6 +31,8 @@ import {
 import { getBanditsWithTags } from '@/app/services/bandits';
 import ExploreBanditLane from '@/components/ExploreBanditLane';
 import { GuestDiscoveryCard } from '@/components/GuestDiscoveryCard';
+import { IdentityMark } from '@/components/IdentityMark';
+import { IdentityMark } from '@/components/IdentityMark';
 import LocalBanditOctopusIcon from '@/components/LocalBanditOctopusIcon';
 import { useCity } from '@/contexts/CityContext';
 import { Database } from '@/lib/database.types';
@@ -48,8 +50,6 @@ import { liveHotelDisplayName } from '@/lib/stay/liveHotelIdentity';
 import { ensureAnonymousSession, getHotelEntry, type HotelEntry } from '@/lib/pilotSession';
 import { usePremiumRefreshControl } from '@/lib/mobilePullToRefresh';
 import { bottleIsPrimaryInvite, bottlePrimaryInviteCopy } from '@/lib/upperTab';
-
-const LOCAL_FALLBACK = require('@/assets/images/play_athens_bg.png');
 
 type Bandit = Database['public']['Tables']['bandit']['Row'] & {
   bandit_tags?: { tags: { id: string; name: string } | null }[] | null;
@@ -350,18 +350,18 @@ export default function TripHomeScreen() {
           </View>
         ) : (
           <>
-            <ExpoImage
-              source={
-                featured && portraitUri(featured)
-                  ? { uri: portraitUri(featured)! }
-                  : LOCAL_FALLBACK
-              }
-              style={StyleSheet.absoluteFillObject}
-              contentFit="cover"
-              contentPosition={{ top: 0, left: '50%' }}
-              transition={220}
-              cachePolicy="memory-disk"
-            />
+            {featured && portraitUri(featured) ? (
+              <ExpoImage
+                source={{ uri: portraitUri(featured)! }}
+                style={StyleSheet.absoluteFillObject}
+                contentFit="cover"
+                contentPosition={{ top: 0, left: '50%' }}
+                transition={220}
+                cachePolicy="memory-disk"
+              />
+            ) : (
+              <IdentityMark name={String(featured?.name || '')} />
+            )}
             <View style={styles.heroTopGrad} />
             <View style={styles.heroBottomGrad} />
             <View style={styles.heroCopy}>
