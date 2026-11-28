@@ -32,7 +32,6 @@ import { getBanditsWithTags } from '@/app/services/bandits';
 import ExploreBanditLane from '@/components/ExploreBanditLane';
 import { GuestDiscoveryCard } from '@/components/GuestDiscoveryCard';
 import { IdentityMark } from '@/components/IdentityMark';
-import { IdentityMark } from '@/components/IdentityMark';
 import LocalBanditOctopusIcon from '@/components/LocalBanditOctopusIcon';
 import { useCity } from '@/contexts/CityContext';
 import { Database } from '@/lib/database.types';

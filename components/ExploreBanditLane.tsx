@@ -18,7 +18,6 @@ import {
 
 import { getBanditsWithTags } from '@/app/services/bandits';
 import { IdentityMark } from '@/components/IdentityMark';
-import { IdentityMark } from '@/components/IdentityMark';
 import LocalBanditOctopusIcon from '@/components/LocalBanditOctopusIcon';
 import { Database } from '@/lib/database.types';
 import { color, firstNameOf, shortIntro, space } from '@/lib/guestDesign';
